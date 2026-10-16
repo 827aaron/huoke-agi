@@ -193,7 +193,7 @@ export interface GrowthSettingInput {
     provider: null | string;
 }
 
-export type GrowthSettingKind = 'email' | 'llm' | 'proxy' | 'telegram' | 'web_search' | 'youtube';
+export type GrowthSettingKind = 'email' | 'embedding' | 'llm' | 'proxy' | 'telegram' | 'web_search' | 'youtube';
 
 export type GrowthSettingSource = 'database' | 'env' | 'none';
 

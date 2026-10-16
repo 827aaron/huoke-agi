@@ -1,4 +1,4 @@
-import { Info, KeyRound } from 'lucide-react';
+import { ChevronRight, Info, KeyRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -7,6 +7,7 @@ import type { GrowthSetting, GrowthSettingKind } from '@/features/growth/growth-
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Spinner } from '@/components/ui/spinner';
 import { growthApi } from '@/features/growth/growth-api';
 import { isAccountSignedIn } from '@/features/growth/growth-types';
@@ -127,7 +128,28 @@ function SettingsCredentials() {
                                     kind={kind}
                                     onChange={(next) => handleChange(kind, next)}
                                     setting={setting}
-                                />
+                                >
+                                    {kind === 'llm' && (
+                                        <Collapsible
+                                            className="border-t pt-3"
+                                            defaultOpen={settingState(byKind('embedding')) !== 'unset'}
+                                        >
+                                            <CollapsibleTrigger className="group flex items-center gap-1 text-sm font-medium">
+                                                <ChevronRight className="size-4 transition-transform group-data-[state=open]:rotate-90" />
+                                                {text.embeddingAdvanced}
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent className="mt-3">
+                                                <GrowthCredentialCard
+                                                    isTesting={testingKinds.has('embedding')}
+                                                    key={`embedding:${byKind('embedding')?.source ?? 'none'}:${byKind('embedding')?.provider ?? ''}`}
+                                                    kind="embedding"
+                                                    onChange={(next) => handleChange('embedding', next)}
+                                                    setting={byKind('embedding')}
+                                                />
+                                            </CollapsibleContent>
+                                        </Collapsible>
+                                    )}
+                                </GrowthCredentialCard>
                             );
                         })}
                     </>

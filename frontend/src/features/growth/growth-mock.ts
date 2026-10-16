@@ -333,6 +333,7 @@ const runs: GrowthRun[] = [
 
 const providersOf: Record<GrowthSettingKind, string[]> = {
     email: [],
+    embedding: ['openai', 'ollama', 'mistral', 'jina', 'huggingface', 'googleai', 'voyageai'],
     llm: ['openai', 'anthropic', 'gemini', 'deepseek', 'glm', 'kimi', 'qwen', 'minimax', 'mistral', 'xai', 'custom'],
     proxy: [],
     telegram: [],
@@ -364,6 +365,7 @@ let settings: GrowthSetting[] = [
         tested_at: ago(90),
         updated_at: ago(600),
     },
+    emptySetting('embedding'),
     emptySetting('telegram'),
     {
         ...emptySetting('web_search'),

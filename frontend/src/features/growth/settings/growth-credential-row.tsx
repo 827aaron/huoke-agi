@@ -1,5 +1,5 @@
 import { ChevronRight, Loader2, Mail, PlugZap, Save } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -36,6 +36,17 @@ export const LLM_PROVIDERS = [
     'mistral',
     'xai',
     'custom',
+] as const;
+
+// The embedders PentAGI ships; the vector memory and the knowledge base depend on one of them.
+export const EMBEDDING_PROVIDERS = [
+    'openai',
+    'ollama',
+    'mistral',
+    'jina',
+    'huggingface',
+    'googleai',
+    'voyageai',
 ] as const;
 
 export const SEARCH_PROVIDERS = ['tavily', 'google', 'perplexity', 'firecrawl', 'traversaal'] as const;
@@ -79,12 +90,19 @@ const selectLabel = (field: string, value: string): string | undefined =>
 const SELECT_DEFAULTS: Record<string, string> = { protocol: 'openai_chat', tls: 'starttls' };
 
 const isOverrideField = (kind: GrowthSettingKind, provider: null | string, field: string) =>
-    kind === 'llm' && provider !== 'custom' && LLM_OVERRIDE_FIELDS.has(field);
+    (kind === 'llm' && provider !== 'custom' && LLM_OVERRIDE_FIELDS.has(field)) ||
+    (kind === 'embedding' && LLM_OVERRIDE_FIELDS.has(field));
+
+// Empty embedding fields mean the built-in local embedder.
+const isOptionalField = (kind: GrowthSettingKind, provider: null | string, field: string) =>
+    OPTIONAL_FIELDS.has(field) || kind === 'embedding' || isOverrideField(kind, provider, field);
 
 const fieldsFor = (kind: GrowthSettingKind, provider: null | string): string[] => {
     switch (kind) {
         case 'email':
             return ['host', 'port', 'username', 'password', 'from', 'tls', 'notify_emails'];
+        case 'embedding':
+            return ['api_key', 'model', 'server_url'];
         case 'llm':
             return provider === 'custom'
                 ? ['server_url', 'protocol', 'model', 'api_key']
@@ -103,7 +121,13 @@ const fieldsFor = (kind: GrowthSettingKind, provider: null | string): string[] =
 };
 
 const fallbackProviders = (kind: GrowthSettingKind): readonly string[] =>
-    kind === 'llm' ? LLM_PROVIDERS : kind === 'web_search' ? SEARCH_PROVIDERS : [];
+    kind === 'llm'
+        ? LLM_PROVIDERS
+        : kind === 'embedding'
+          ? EMBEDDING_PROVIDERS
+          : kind === 'web_search'
+            ? SEARCH_PROVIDERS
+            : [];
 
 export type GrowthSettingState = 'connected' | 'invalid' | 'unset' | 'untested';
 
@@ -140,6 +164,8 @@ const statusLine = (kind: GrowthSettingKind, setting: GrowthSetting | undefined)
 };
 
 interface GrowthCredentialCardProps {
+    // Rendered at the bottom of the card, below its own actions.
+    children?: ReactNode;
     // Shown under the Telegram card once its credentials work but no account is signed in yet.
     isTelegramSignedIn?: boolean;
     isTesting?: boolean;
@@ -151,6 +177,7 @@ interface GrowthCredentialCardProps {
 // Nothing here asks for confirmation: Save stores and tests, Clear clears, Replace keeps the old key live
 // until the new one is saved.
 export function GrowthCredentialCard({
+    children,
     isTelegramSignedIn = true,
     isTesting: isAutoTesting = false,
     kind,
@@ -202,7 +229,7 @@ export function GrowthCredentialCard({
             const label = text.field[field]?.label ?? field;
 
             if (!value) {
-                if (!canKeepSaved && !OPTIONAL_FIELDS.has(field) && !isOverrideField(kind, provider, field)) {
+                if (!canKeepSaved && !isOptionalField(kind, provider, field)) {
                     nextErrors[field] = text.fieldRequired(label);
                 }
 
@@ -582,6 +609,7 @@ export function GrowthCredentialCard({
                         {text.telegramNextStep}
                     </Link>
                 )}
+                {children}
             </CardContent>
         </Card>
     );

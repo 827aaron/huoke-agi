@@ -12,6 +12,7 @@ const text = copy.helpKeys;
 // The guide numbers its top-level sections; each credentials card links here with its kind as the hash.
 const SECTION_OF_KIND: Record<string, string> = {
     email: '5.',
+    embedding: '1.',
     llm: '1.',
     proxy: '6.',
     telegram: '2.',
