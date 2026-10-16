@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import GrowthChatActions from '@/features/growth/progress/growth-chat-actions';
 import { StatusType } from '@/graphql/types';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { useFlow } from '@/providers/flow-provider';
 
@@ -144,7 +146,7 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
             }
 
             case StatusType.Running: {
-                return 'PentAGI is working... Click Stop to interrupt';
+                return copy.automation.working;
             }
 
             case StatusType.Waiting: {
@@ -306,15 +308,13 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
                             <Inbox />
                         </EmptyMedia>
                         <EmptyTitle>No active tasks</EmptyTitle>
-                        <EmptyDescription>
-                            Starting a new task may take some time as the PentAGI agent downloads the required Docker
-                            image
-                        </EmptyDescription>
+                        <EmptyDescription>{copy.automation.firstStartHint}</EmptyDescription>
                     </EmptyHeader>
                 </Empty>
             )}
 
             <div className="bg-background sticky bottom-0 p-px">
+                <GrowthChatActions />
                 <FlowForm
                     defaultValues={{
                         providerName: flowData?.flow?.provider?.name ?? '',

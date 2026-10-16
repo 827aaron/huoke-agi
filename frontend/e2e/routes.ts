@@ -41,15 +41,15 @@ export interface RouteTab {
 
 /** Order matters: the flow auto-opens Assistant, so tabs.spec pins that no entry is already open. */
 export const FLOW_DETAIL_TABS: RouteTab[] = [
-    { name: 'Dashboard', ready: (page) => page.getByText('Usage by Agent Type') },
-    { name: 'Assistant', ready: (page) => page.getByText('New assistant', { exact: true }) },
-    { name: 'Automation', ready: (page) => page.getByText('No active tasks') },
-    { name: 'Tasks', ready: (page) => page.getByText('E2E Task Alpha') },
-    { name: 'Agents', ready: (page) => page.getByText('E2E agent reconnaissance') },
-    { name: 'Searches', ready: (page) => page.getByText('E2E search for the CVE') },
-    { name: 'Vector Store', ready: (page) => page.getByText('E2E recall prior findings') },
-    { name: 'Files', ready: (page) => page.getByText(TABS_FILE_NAME) },
-    { name: 'Screenshots', ready: (page) => page.getByText(TABS_SCREENSHOT_URL) },
+    { name: '概览', ready: (page) => page.getByText('Usage by Agent Type') },
+    { name: '助手', ready: (page) => page.getByText('New assistant', { exact: true }) },
+    { name: '自动执行', ready: (page) => page.getByText('No active tasks') },
+    { name: '任务', ready: (page) => page.getByText('E2E Task Alpha') },
+    { name: '智能体', ready: (page) => page.getByText('E2E agent reconnaissance') },
+    { name: '搜索记录', ready: (page) => page.getByText('E2E search for the CVE') },
+    { name: '记忆库', ready: (page) => page.getByText('E2E recall prior findings') },
+    { name: '文件', ready: (page) => page.getByText(TABS_FILE_NAME) },
+    { name: '截图', ready: (page) => page.getByText(TABS_SCREENSHOT_URL) },
 ];
 
 /**
@@ -73,11 +73,11 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         // fix, each scoped to the tab whose panel owns it so it cannot silence the rule elsewhere.
         a11yWaivers: [
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ },
-            { rule: 'aria-progressbar-name', tabs: ['Tasks'], target: /\.bg-primary\\\/20/ },
-            { rule: 'button-name', tabs: ['Files'], target: /tooltip-trigger.*size-8\[data-slot="button"\]/ },
-            { rule: 'target-size', tabs: ['Files'], target: /text-blue-400|button\[aria-label="Select / },
+            { rule: 'aria-progressbar-name', tabs: ['任务'], target: /\.bg-primary\\\/20/ },
+            { rule: 'button-name', tabs: ['文件'], target: /tooltip-trigger.*size-8\[data-slot="button"\]/ },
+            { rule: 'target-size', tabs: ['文件'], target: /text-blue-400|button\[aria-label="Select / },
             // The same file-manager row metadata waived on /resources — the Files tab embeds it.
-            { rule: 'color-contrast', tabs: ['Files'], target: /text-muted-foreground\\?\/80/ },
+            { rule: 'color-contrast', tabs: ['文件'], target: /text-muted-foreground\\?\/80/ },
             {
                 rule: 'scrollable-region-focusable',
                 tabs: ['Dashboard', 'Files'],

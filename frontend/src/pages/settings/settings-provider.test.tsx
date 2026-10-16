@@ -1041,15 +1041,15 @@ describe('SettingsProvider level refused alongside tools', () => {
     });
 
     it.each([
-        ['primaryAgent', /Primary Agent/],
-        ['assistant', /Assistant/],
-        ['generator', /Generator/],
-        ['refiner', /Refiner/],
-        ['searcher', /Searcher/],
-        ['enricher', /Enricher/],
-        ['coder', /Coder/],
-        ['installer', /Installer/],
-        ['pentester', /Pentester/],
+        ['primaryAgent', /主控/],
+        ['assistant', /助手/],
+        ['generator', /规划员/],
+        ['refiner', /调整员/],
+        ['searcher', /搜索员/],
+        ['enricher', /补全员/],
+        ['coder', /程序员/],
+        ['installer', /安装员/],
+        ['pentester', /潜客研究员/],
     ])('refuses the effort to %s, whose calls carry tools', async (key, button) => {
         renderWith({ [key]: agent('gpt-5.6-sol', { effort: 'medium' }), simple: agent('gpt-e2e') }, button);
 
@@ -1062,8 +1062,8 @@ describe('SettingsProvider level refused alongside tools', () => {
 
     it.each([
         ['simpleJson', /Simple Json/],
-        ['adviser', /Adviser/],
-        ['reflector', /Reflector/],
+        ['adviser', /顾问/],
+        ['reflector', /反思员/],
     ])('leaves the effort to %s, whose calls carry no tools', async (key, button) => {
         renderWith({ [key]: agent('gpt-5.6-sol', { effort: 'medium' }), simple: agent('gpt-e2e') }, button);
 

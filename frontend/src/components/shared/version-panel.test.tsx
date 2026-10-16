@@ -38,9 +38,9 @@ function info(overrides: Partial<VersionInfoFragmentFragment> = {}): VersionInfo
     };
 }
 
-const trigger = () => screen.getByRole('button', { name: /PentAGI v2\.1\.0/ });
+const trigger = () => screen.getByRole('button', { name: /客来 AGI v2\.1\.0/ });
 
-function renderPanel({ isOpen = true, title = 'PentAGI' } = {}) {
+function renderPanel({ isOpen = true, title = '客来 AGI' } = {}) {
     return render(
         <SidebarProvider defaultOpen={isOpen}>
             <VersionPanel
@@ -60,7 +60,7 @@ describe('VersionPanel', () => {
         provider.value = { isLoading: true, versionInfo: null };
         renderPanel();
 
-        expect(screen.getByText('PentAGI')).toBeInTheDocument();
+        expect(screen.getByText('客来 AGI')).toBeInTheDocument();
         expect(screen.getByTestId('probe-icon')).toBeInTheDocument();
         expect(screen.getByTestId('skeleton')).toBeInTheDocument();
         expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -77,7 +77,7 @@ describe('VersionPanel', () => {
     it('keeps the icon and the title, and no placeholder, when the query settles without an answer', () => {
         renderPanel();
 
-        expect(screen.getByText('PentAGI')).toBeInTheDocument();
+        expect(screen.getByText('客来 AGI')).toBeInTheDocument();
         expect(screen.getByTestId('probe-icon')).toBeInTheDocument();
         expect(screen.queryByTestId('skeleton')).not.toBeInTheDocument();
         expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -162,11 +162,11 @@ describe('VersionPanel', () => {
 
         const dialog = await screen.findByRole('menu');
 
-        expect(dialog).toHaveTextContent('PentAGI v2.1.0');
+        expect(dialog).toHaveTextContent('客来 AGI v2.1.0');
         expect(dialog).toHaveTextContent('build b1d7c0de');
         expect(dialog).toHaveTextContent('stable');
         expect(dialog).toHaveTextContent('New version v2.4.0 is available');
-        expect(dialog).toHaveTextContent('Run the installer tool on the host where PentAGI is deployed');
+        expect(dialog).toHaveTextContent('Run the installer tool on the host where KeLai AGI is deployed');
         expect(dialog).toHaveTextContent('Installed');
         expect(dialog).toHaveTextContent('Available');
         expect(dialog).toHaveTextContent('Checked');
@@ -221,7 +221,7 @@ describe('VersionPanel', () => {
         };
         renderPanel();
 
-        await user.click(screen.getByRole('button', { name: /PentAGI v2\.1\.0-ce/ }));
+        await user.click(screen.getByRole('button', { name: /客来 AGI v2\.1\.0-ce/ }));
 
         expect(await screen.findByRole('menu')).toHaveTextContent('build b1d7c0de');
     });
@@ -231,7 +231,7 @@ describe('VersionPanel', () => {
         provider.value = { isLoading: false, versionInfo: info({ current: 'ce.h93e99748' }) };
         renderPanel();
 
-        await user.click(screen.getByRole('button', { name: /PentAGI ce/ }));
+        await user.click(screen.getByRole('button', { name: /客来 AGI ce/ }));
 
         expect(await screen.findByRole('menu')).toHaveTextContent('build b1d7c0de');
     });
@@ -329,7 +329,7 @@ describe('describeVersion', () => {
         const presentation = describeVersion(info());
 
         expect(presentation.indicator).toBe('none');
-        expect(presentation.tooltip).toBe('PentAGI v2.1.0 is up to date.');
+        expect(presentation.tooltip).toBe('客来 AGI v2.1.0 已是最新版本');
         expect(presentation.detail).toContain('preview channel');
         expect(presentation.action).toBeNull();
     });

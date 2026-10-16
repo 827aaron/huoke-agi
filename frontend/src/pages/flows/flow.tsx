@@ -46,11 +46,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import FlowCentralTabs from '@/features/flows/flow-central-tabs';
 import FlowTabs from '@/features/flows/flow-tabs';
 import { useFlowDetailNavigation } from '@/features/flows/use-flow-detail-navigation';
+import GrowthProgressBar from '@/features/growth/progress/growth-progress-bar';
 import { RenameFlowDocument, ResultType, StatusType } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { FLOW_TAB_VALUES, useFlowSideTab, useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
 import { useIsOwnFlow } from '@/hooks/use-is-own-flow';
 import { copyToClipboard } from '@/lib/clipboard';
+import { statusLabel } from '@/lib/copy';
 import { Log } from '@/lib/log';
 import { downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 import { routes } from '@/lib/routes';
@@ -215,7 +217,7 @@ function Flow() {
     }
 
     const tabsCard = (
-        <div className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
+        <div className="flex h-full max-w-full flex-col rounded-none border-0">
             <div className="flex-1 overflow-auto py-4 pr-0 pl-4">
                 <FlowTabs
                     activeTab={activeTabsTab}
@@ -236,7 +238,7 @@ function Flow() {
                                     <>
                                         <FlowStatusIcon
                                             status={flow.status}
-                                            tooltip={formatName(flow.status)}
+                                            tooltip={statusLabel(flow.status)}
                                         />
 
                                         <ProviderIcon
@@ -409,7 +411,8 @@ function Flow() {
                     sheetTitle="Flows"
                 />
             )}
-            <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1">
+            <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1 flex-col">
+                <GrowthProgressBar />
                 {isFlowLoading && (
                     <div className="bg-background/50 absolute inset-0 z-50 flex items-center justify-center">
                         <Spinner
@@ -418,34 +421,36 @@ function Flow() {
                         />
                     </div>
                 )}
-                {isDesktop ? (
-                    <ResizablePanelGroup
-                        className="w-full"
-                        orientation="horizontal"
-                    >
-                        <ResizablePanel
-                            defaultSize="50%"
-                            minSize={390}
+                <div className="flex min-h-0 w-full flex-1">
+                    {isDesktop ? (
+                        <ResizablePanelGroup
+                            className="w-full"
+                            orientation="horizontal"
                         >
-                            <div className="flex h-[calc(100dvh-3rem)] max-w-full flex-col rounded-none border-0">
-                                <div className="flex-1 overflow-auto py-4 pr-0 pl-4">
-                                    <FlowCentralTabs />
+                            <ResizablePanel
+                                defaultSize="50%"
+                                minSize={390}
+                            >
+                                <div className="flex h-full max-w-full flex-col rounded-none border-0">
+                                    <div className="flex-1 overflow-auto py-4 pr-0 pl-4">
+                                        <FlowCentralTabs />
+                                    </div>
                                 </div>
-                            </div>
-                        </ResizablePanel>
-                        <ResizableHandle withHandle>
-                            <GripVertical className="size-4" />
-                        </ResizableHandle>
-                        <ResizablePanel
-                            defaultSize="50%"
-                            minSize={390}
-                        >
-                            {tabsCard}
-                        </ResizablePanel>
-                    </ResizablePanelGroup>
-                ) : (
-                    tabsCard
-                )}
+                            </ResizablePanel>
+                            <ResizableHandle withHandle>
+                                <GripVertical className="size-4" />
+                            </ResizableHandle>
+                            <ResizablePanel
+                                defaultSize="50%"
+                                minSize={390}
+                            >
+                                {tabsCard}
+                            </ResizablePanel>
+                        </ResizablePanelGroup>
+                    ) : (
+                        tabsCard
+                    )}
+                </div>
             </div>
             <ConfirmationDialog
                 cancelText="Cancel"

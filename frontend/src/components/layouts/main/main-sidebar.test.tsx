@@ -105,7 +105,7 @@ describe('MainSidebar version badge', () => {
     it('shows the running version under the product name, with the update indicator', () => {
         renderSidebar();
 
-        expect(screen.getByRole('button', { name: /PentAGI v2\.1\.0/ })).toHaveTextContent('v2.1.0');
+        expect(screen.getByRole('button', { name: /客来 AGI v2\.1\.0/ })).toHaveTextContent('v2.1.0');
         expect(screen.getByTestId('version-indicator-update')).toBeInTheDocument();
         expect(screen.getByTestId('version-attention-dot')).toBeInTheDocument();
     });
@@ -116,7 +116,7 @@ describe('MainSidebar settings entry points', () => {
         const user = userEvent.setup();
         renderSidebar();
 
-        await user.click(screen.getByRole('link', { name: 'Settings' }));
+        await user.click(screen.getByRole('link', { name: '设置' }));
 
         expect(screen.getByTestId('probe-origin')).toHaveTextContent('/dashboard');
     });
@@ -136,12 +136,12 @@ describe('MainSidebar rows that carry an action', () => {
     it('marks the row so its label keeps clear of the action button', () => {
         renderSidebar();
 
-        expect(screen.getByRole('link', { name: 'Flows' }).closest('li')).toHaveAttribute('data-has-action', 'true');
+        expect(screen.getByRole('link', { name: '获客项目' }).closest('li')).toHaveAttribute('data-has-action', 'true');
     });
 
     it('leaves a row without an action unmarked, so its label spans the full width', () => {
         renderSidebar();
 
-        expect(screen.getByRole('link', { name: 'Dashboard' }).closest('li')).not.toHaveAttribute('data-has-action');
+        expect(screen.getByRole('link', { name: '概览' }).closest('li')).not.toHaveAttribute('data-has-action');
     });
 });

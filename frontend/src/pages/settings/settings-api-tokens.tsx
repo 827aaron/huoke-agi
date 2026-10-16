@@ -888,7 +888,7 @@ function SettingsAPITokens() {
                             </EmptyMedia>
                             <EmptyTitle>No API tokens configured</EmptyTitle>
                             <EmptyDescription>
-                                Create your first API token to access PentAGI programmatically
+                                Create your first API token to access KeLai AGI programmatically
                             </EmptyDescription>
                         </EmptyHeader>
                         <EmptyContent>

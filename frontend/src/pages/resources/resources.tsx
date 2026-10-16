@@ -372,7 +372,7 @@ function Resources() {
     const noResourcesState = (
         <FileDropZone
             actionLabel="Upload files"
-            description="Upload documents so PentAGI agents can reference them during your flows. You can also drag & drop files anywhere in this panel."
+            description="Upload documents so KeLai AGI agents can reference them during your flows. You can also drag & drop files anywhere in this panel."
             hint="Up to 300 MB per file · 2 GB per upload"
             isDragging={isDragging}
             isUploading={upload.isUploading}

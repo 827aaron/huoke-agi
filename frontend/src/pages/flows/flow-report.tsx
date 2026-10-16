@@ -92,7 +92,9 @@ function FlowReport() {
         return (
             <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
                 <div className="flex min-h-screen flex-col items-center justify-center p-8">
-                    <Logo className="animate-logo-spin mb-8 size-16 text-white" />
+                    <div className="mb-8">
+                        <Logo className="size-16" />
+                    </div>
                     <div className="flex flex-col gap-4 text-center">
                         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
                             {state === 'loading' ? 'Loading Report...' : 'Generating PDF...'}
@@ -100,7 +102,7 @@ function FlowReport() {
                         <div className="mx-auto size-8 animate-spin rounded-full border-b-2 border-blue-600" />
                         <p className="max-w-md text-gray-600 dark:text-gray-400">
                             {state === 'loading'
-                                ? 'Please wait while we prepare your penetration testing report.'
+                                ? 'Please wait while we prepare your lead acquisition report.'
                                 : 'Creating your PDF document. This may take a few moments.'}
                         </p>
                     </div>
@@ -113,7 +115,9 @@ function FlowReport() {
         return (
             <div className="min-h-screen bg-linear-to-br from-red-50 via-white to-orange-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
                 <div className="flex min-h-screen flex-col items-center justify-center p-8">
-                    <Logo className="mb-8 size-16" />
+                    <div className="mb-8">
+                        <Logo className="size-16" />
+                    </div>
                     <div className="flex flex-col gap-4 text-center">
                         <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400">Error Loading Report</h1>
                         <p className="max-w-md text-gray-600 dark:text-gray-400">

@@ -6,6 +6,7 @@ import {
     KnowledgeDocumentDocument,
     SettingsProvidersDocument,
 } from '@/graphql/types';
+import { copy } from '@/lib/copy';
 
 import { apolloTitle } from './apollo-title';
 import { formatPromptId } from './format-prompt-id';
@@ -36,7 +37,8 @@ export type TitleResolver = ((params: RouteParams) => string) | ComponentType<{ 
 export const routeTitles = {
     account: { title: 'Account' },
     apiTokens: { title: 'API Tokens' },
-    dashboard: { title: 'Dashboard' },
+    credentials: { title: copy.credentials.title },
+    dashboard: { title: copy.nav.dashboard },
     flow: {
         title: apolloTitle({
             document: FlowDocument,
@@ -46,7 +48,8 @@ export const routeTitles = {
         }),
     },
     flowReport: { title: 'Flow report' },
-    flows: { title: 'Flows' },
+    flows: { title: copy.nav.flows },
+    growthProfile: { title: copy.profile.title },
     knowledge: {
         title: apolloTitle({
             document: KnowledgeDocumentDocument,
@@ -57,13 +60,12 @@ export const routeTitles = {
     },
     knowledges: { title: 'Knowledges' },
     login: { title: 'Login' },
-    newFlow: { title: 'New flow' },
+    newFlow: { title: copy.newFlow.pageTitle },
     oauth: { title: 'OAuth' },
     prompt: {
         title: (params: RouteParams) => (params.promptId ? formatPromptId(params.promptId) : 'Prompt'),
     },
     prompts: { title: 'Prompts' },
-
     provider: {
         title: apolloTitle({
             document: SettingsProvidersDocument,
@@ -85,6 +87,8 @@ export const routeTitles = {
     providers: { title: 'Providers' },
 
     resources: { title: 'Resources' },
+
+    telegram: { title: copy.telegram.title },
 
     template: {
         title: apolloTitle({

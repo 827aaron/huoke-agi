@@ -43,6 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useResourcesUpload } from '@/features/resources/use-resources-upload';
 import { useAppForm } from '@/hooks/use-app-form';
+import { copy } from '@/lib/copy';
 import { getProviderDisplayName } from '@/models/provider';
 import { useProviders } from '@/providers/providers-provider';
 import { useResources } from '@/providers/resources-provider';
@@ -79,7 +80,7 @@ export function FlowForm({
     isSubmitting,
     onCancel,
     onSubmit,
-    placeholder = 'Describe what you would like PentAGI to test...',
+    placeholder = copy.newFlow.placeholder,
     type,
 }: FlowFormProps) {
     const { providers, setSelectedProvider } = useProviders();

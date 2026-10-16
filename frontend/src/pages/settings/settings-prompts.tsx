@@ -42,6 +42,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { Spinner } from '@/components/ui/spinner';
 import { DeletePromptDocument, SettingsPromptsDocument } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { agentLabel } from '@/lib/copy';
 import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
 import { routes } from '@/lib/routes';
 
@@ -258,7 +259,7 @@ function SettingsPrompts() {
             const hasCustomHuman = humanType ? userDefined.some((p) => p.type === humanType) : false;
 
             const agentData: AgentPromptTableData = {
-                displayName: formatPromptId(key),
+                displayName: agentLabel(key, formatPromptId(key)),
                 hasHuman: !!(prompts as AgentPrompts)?.human,
                 hasSystem: !!(prompts as AgentPrompts)?.system,
                 humanStatus: (prompts as AgentPrompts)?.human ? (hasCustomHuman ? 'Custom' : 'Default') : 'N/A',
@@ -294,7 +295,7 @@ function SettingsPrompts() {
             const hasCustomTool = userDefined.some((p) => p.type === toolType);
 
             const toolData: ToolPromptTableData = {
-                displayName: formatPromptId(key),
+                displayName: agentLabel(key, formatPromptId(key)),
                 name: key,
                 promptType: toolType,
                 status: (prompt as DefaultPrompt)?.template ? (hasCustomTool ? 'Custom' : 'Default') : 'N/A',

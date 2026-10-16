@@ -4,6 +4,7 @@ import { CheckCircle2, CircleDashed, CircleX, Clock, Loader2, PlayCircle } from 
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusType } from '@/graphql/types';
+import { statusLabel } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { formatName } from '@/lib/utils/format';
 
@@ -39,7 +40,7 @@ function FlowTaskStatusIcon({ className, status, tooltip }: FlowTaskStatusIconPr
     return (
         <Tooltip>
             <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
-            <TooltipContent>{formatName(tooltip)}</TooltipContent>
+            <TooltipContent>{statusLabel(tooltip)}</TooltipContent>
         </Tooltip>
     );
 }

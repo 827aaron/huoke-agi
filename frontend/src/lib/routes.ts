@@ -37,6 +37,8 @@ export const routes = {
     settings: {
         account: '/settings/account',
         apiTokens: '/settings/api-tokens',
+        credentials: '/settings/credentials',
+        growthProfile: '/settings/business-profile',
         newProvider: ({ id, type }: { id?: string; type?: string } = {}) =>
             withQuery('/settings/providers/new', { id, type }),
         prompt: (name: string) => `/settings/prompts/${name}`,
@@ -44,6 +46,7 @@ export const routes = {
         provider: (id: string) => `/settings/providers/${id}`,
         providers: '/settings/providers',
         root: '/settings',
+        telegram: '/settings/telegram',
     },
 
     template: (id: number | string) => `/templates/${id}`,

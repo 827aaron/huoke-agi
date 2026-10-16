@@ -74,6 +74,7 @@ import {
 } from '@/graphql/types';
 import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { agentLabel } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
@@ -1288,7 +1289,7 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                                     <AccordionTrigger className="group text-left hover:no-underline">
                                         <div className="mr-3 flex w-full items-center justify-between gap-3">
                                             <span className="font-semibold group-hover:underline">
-                                                {getName(agentType)}
+                                                {agentLabel(agentType, getName(agentType))}
                                             </span>
                                             <Badge
                                                 className="shrink-0"
@@ -1976,7 +1977,7 @@ function SettingsProvider() {
                 >
                     <AccordionTrigger className="group text-left hover:no-underline">
                         <div className="flex w-full items-center justify-between gap-2">
-                            <span className="group-hover:underline">{getName(agentKey)}</span>
+                            <span className="group-hover:underline">{agentLabel(agentKey, getName(agentKey))}</span>
                             <Button
                                 asChild
                                 className={cn(

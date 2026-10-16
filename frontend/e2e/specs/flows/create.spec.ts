@@ -39,7 +39,7 @@ test.describe('flow create', { tag: ['@flows', '@smoke'] }, () => {
         await page.goto('/flows/new');
 
         await expect(page.getByText(PROVIDER.name)).toBeVisible();
-        await page.getByPlaceholder(/Describe what you would like PentAGI to test/).fill('Say hello');
+        await page.getByPlaceholder(/给我找 50 个/).fill('Say hello');
         await page.getByRole('button', { name: 'Submit' }).click();
 
         await expect(page).toHaveURL(/\/flows\/7/);

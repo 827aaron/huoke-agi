@@ -19,9 +19,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Spinner } from '@/components/ui/spinner';
 import { StatusType } from '@/graphql/types';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import { statusLabel } from '@/lib/copy';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
-import { formatName } from '@/lib/utils/format';
 import { groupAssistantsByState } from '@/models/assistant';
 import { isProviderValid } from '@/models/provider';
 import { useFlow } from '@/providers/flow-provider';
@@ -108,7 +108,7 @@ function AssistantsDropdown({
             >
                 <FlowStatusIcon
                     status={assistant.status}
-                    tooltip={formatName(assistant.status)}
+                    tooltip={statusLabel(assistant.status)}
                 />
 
                 <ProviderIcon
@@ -167,7 +167,7 @@ function AssistantsDropdown({
                             <>
                                 <FlowStatusIcon
                                     status={selectedAssistant.status}
-                                    tooltip={formatName(selectedAssistant.status)}
+                                    tooltip={statusLabel(selectedAssistant.status)}
                                 />
                                 <ProviderIcon provider={selectedAssistant.provider} />
                                 <span className="bg-muted text-muted-foreground flex size-5 shrink-0 items-center justify-center rounded text-xs font-medium">

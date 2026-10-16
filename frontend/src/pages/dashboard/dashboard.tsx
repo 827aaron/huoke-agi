@@ -3,8 +3,10 @@ import { useState, useTransition } from 'react';
 
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import GrowthOnboarding from '@/features/growth/growth-onboarding';
 import { UsageStatsPeriod } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { DashboardAnalytics } from '@/pages/dashboard/dashboard-analytics';
 import { DashboardOverview } from '@/pages/dashboard/dashboard-overview';
@@ -74,11 +76,14 @@ function Dashboard() {
         <>
             <AppHeader>
                 <AppHeaderContent>
-                    <AppHeaderTitle icon={<LayoutDashboard className="size-4 shrink-0" />}>Dashboard</AppHeaderTitle>
+                    <AppHeaderTitle icon={<LayoutDashboard className="size-4 shrink-0" />}>
+                        {copy.nav.dashboard}
+                    </AppHeaderTitle>
                 </AppHeaderContent>
             </AppHeader>
 
             <div className="flex flex-col gap-6 p-4">
+                <GrowthOnboarding />
                 <Tabs
                     className="w-full"
                     onValueChange={handleTabChange}

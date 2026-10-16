@@ -1,6 +1,16 @@
 import type { ReactNode } from 'react';
 
-import { ArrowLeft, FileText, Key, Plug, Settings as SettingsIcon, User } from 'lucide-react';
+import {
+    ArrowLeft,
+    Briefcase,
+    FileText,
+    Key,
+    KeyRound,
+    Plug,
+    Send,
+    Settings as SettingsIcon,
+    User,
+} from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 
@@ -16,6 +26,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
 
@@ -35,25 +46,43 @@ const menuItems: readonly MenuItem[] = [
         icon: <User className="size-4" />,
         id: 'account',
         path: routes.settings.account,
-        title: 'Account',
+        title: copy.settingsNav.account,
+    },
+    {
+        icon: <KeyRound className="size-4" />,
+        id: 'credentials',
+        path: routes.settings.credentials,
+        title: copy.settingsNav.credentials,
+    },
+    {
+        icon: <Briefcase className="size-4" />,
+        id: 'business-profile',
+        path: routes.settings.growthProfile,
+        title: copy.settingsNav.growthProfile,
+    },
+    {
+        icon: <Send className="size-4" />,
+        id: 'telegram',
+        path: routes.settings.telegram,
+        title: copy.settingsNav.telegram,
     },
     {
         icon: <Plug className="size-4" />,
         id: 'providers',
         path: routes.settings.providers,
-        title: 'Providers',
+        title: copy.settingsNav.providers,
     },
     {
         icon: <FileText className="size-4" />,
         id: 'prompts',
         path: routes.settings.prompts,
-        title: 'Prompts',
+        title: copy.settingsNav.prompts,
     },
     {
         icon: <Key className="size-4" />,
         id: 'api-tokens',
         path: routes.settings.apiTokens,
-        title: 'API Tokens',
+        title: copy.settingsNav.apiTokens,
     },
 ] as const;
 
@@ -75,7 +104,7 @@ export function SettingsSidebar() {
                                     strokeWidth={4 / 3}
                                 />
                             }
-                            title="Settings"
+                            title={copy.settingsNav.settings}
                         />
                     </SidebarMenuItem>
                 </SidebarMenu>

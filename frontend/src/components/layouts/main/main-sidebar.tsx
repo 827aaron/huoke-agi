@@ -51,6 +51,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useResourcesUpload } from '@/features/resources/use-resources-upload';
 import { useTheme } from '@/hooks/use-theme';
+import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { formatAccountProvider } from '@/lib/utils/format';
 import { useFavorites } from '@/providers/favorites-provider';
@@ -108,8 +109,8 @@ export function MainSidebar() {
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <VersionPanel
-                            icon={<Logo className="hover:animate-logo-spin size-8" />}
-                            title="PentAGI"
+                            icon={<Logo className="size-8" />}
+                            title={copy.app.name}
                         />
                     </SidebarMenuItem>
                 </SidebarMenu>
@@ -122,7 +123,7 @@ export function MainSidebar() {
                                 <SidebarMenuButton asChild>
                                     <Link to={routes.newFlow}>
                                         <Plus />
-                                        New Flow
+                                        {copy.nav.newFlow}
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
@@ -133,7 +134,7 @@ export function MainSidebar() {
                                 >
                                     <Link to={routes.dashboard}>
                                         <LayoutDashboard />
-                                        Dashboard
+                                        {copy.nav.dashboard}
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>
@@ -144,7 +145,7 @@ export function MainSidebar() {
                                 >
                                     <Link to={routes.flows}>
                                         <GitFork />
-                                        Flows
+                                        {copy.nav.flows}
                                     </Link>
                                 </SidebarMenuButton>
                                 <SidebarMenuAction
@@ -153,7 +154,7 @@ export function MainSidebar() {
                                     showOnHover
                                 >
                                     <Link
-                                        aria-label="New flow"
+                                        aria-label={copy.nav.newFlow}
                                         to={routes.newFlow}
                                     >
                                         <Plus />
@@ -167,7 +168,7 @@ export function MainSidebar() {
                                 >
                                     <Link to={routes.templates}>
                                         <FileText />
-                                        Templates
+                                        {copy.nav.templates}
                                     </Link>
                                 </SidebarMenuButton>
                                 <SidebarMenuAction
@@ -190,7 +191,7 @@ export function MainSidebar() {
                                 >
                                     <Link to={routes.resources}>
                                         <Folder />
-                                        Resources
+                                        {copy.nav.resources}
                                     </Link>
                                 </SidebarMenuButton>
                                 <SidebarMenuAction
@@ -210,7 +211,7 @@ export function MainSidebar() {
                                 >
                                     <Link to={routes.knowledges}>
                                         <LibraryBig />
-                                        Knowledges
+                                        {copy.nav.knowledges}
                                     </Link>
                                 </SidebarMenuButton>
                                 <SidebarMenuAction
@@ -234,7 +235,7 @@ export function MainSidebar() {
                     <SidebarGroup>
                         <SidebarGroupLabel className="flex items-center gap-2">
                             <Clock />
-                            Recent Flows
+                            {copy.nav.recentFlows}
                         </SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
@@ -257,7 +258,7 @@ export function MainSidebar() {
                     <SidebarGroup>
                         <SidebarGroupLabel className="flex items-center gap-2">
                             <Star />
-                            Favorite Flows
+                            {copy.nav.favoriteFlows}
                         </SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
@@ -288,7 +289,7 @@ export function MainSidebar() {
                                 to={routes.settings.root}
                             >
                                 <Settings />
-                                Settings
+                                {copy.nav.settings}
                             </Link>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

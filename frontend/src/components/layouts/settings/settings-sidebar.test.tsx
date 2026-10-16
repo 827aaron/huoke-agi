@@ -48,9 +48,9 @@ describe('SettingsSidebar version', () => {
     it('names the section and the running version in the header', () => {
         renderSidebar({ pathname: '/settings/account' });
 
-        const header = screen.getByRole('button', { name: /Settings v2\.1\.0/ });
+        const header = screen.getByRole('button', { name: /设置 v2\.1\.0/ });
 
-        expect(header).toHaveTextContent('Settings');
+        expect(header).toHaveTextContent('设置');
         expect(header).toHaveTextContent('v2.1.0');
     });
 });
@@ -72,7 +72,7 @@ describe('SettingsSidebar "Back to App"', () => {
         const user = userEvent.setup();
         renderSidebar({ pathname: '/settings/account', state: { from: '/dashboard' } });
 
-        await user.click(screen.getByRole('link', { name: 'Providers' }));
+        await user.click(screen.getByRole('link', { name: '模型服务' }));
 
         expect(backToApp()).toHaveAttribute('href', '/dashboard');
     });
