@@ -209,6 +209,8 @@ func TestRouter_SetGrowthGroup_RefusesAMissingPrivilege(t *testing.T) {
 		{http.MethodPost, "/growth/accounts/", "growth.edit"},
 		{http.MethodPut, "/growth/accounts/7", "growth.edit"},
 		{http.MethodPost, "/growth/accounts/7/test-proxy", "growth.edit"},
+		{http.MethodGet, "/growth/profile", "growth.view"},
+		{http.MethodPut, "/growth/profile", "growth.edit"},
 		{http.MethodGet, "/growth/settings/", "growth.view"},
 		{http.MethodPut, "/growth/settings/llm", "growth.edit"},
 		{http.MethodDelete, "/growth/settings/llm", "growth.edit"},

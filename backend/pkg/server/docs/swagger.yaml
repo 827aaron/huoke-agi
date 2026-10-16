@@ -197,6 +197,47 @@ definitions:
       username:
         type: string
     type: object
+  growth.Profile:
+    properties:
+      audience:
+        type: string
+      bad_actor_samples:
+        items:
+          type: string
+        type: array
+      business_name:
+        type: string
+      exclusions:
+        items:
+          type: string
+        type: array
+      languages:
+        items:
+          type: string
+        type: array
+      notes:
+        type: string
+      product:
+        type: string
+      regions:
+        items:
+          type: string
+        type: array
+      signal_words:
+        items:
+          type: string
+        type: array
+      signals:
+        items:
+          type: string
+        type: array
+      sources:
+        items:
+          type: string
+        type: array
+      target_leads:
+        type: integer
+    type: object
   growth.ProxyCheck:
     properties:
       error:
@@ -209,6 +250,13 @@ definitions:
         type: string
       source:
         type: string
+    type: object
+  growth.SavedProfile:
+    properties:
+      knowledge:
+        type: string
+      profile:
+        $ref: '#/definitions/growth.Profile'
     type: object
   growth.SettingView:
     properties:
@@ -5636,6 +5684,79 @@ paths:
       security:
       - BearerAuth: []
       summary: Download leads as CSV, one row per lead with its first evidence
+      tags:
+      - Growth
+  /growth/profile:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: profile received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.Profile'
+              type: object
+        "403":
+          description: getting the profile not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: no profile is saved
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting the profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the business profile every task of the current user starts
+        from
+      tags:
+      - Growth
+    put:
+      consumes:
+      - application/json
+      description: 'knowledge says whether the long lists reached the knowledge store:
+        seeded, or skipped with the reason.'
+      parameters:
+      - description: business profile
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.Profile'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: profile saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.SavedProfile'
+              type: object
+        "400":
+          description: invalid profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: saving the profile not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on saving the profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Save the business profile; new tasks start with it
       tags:
       - Growth
   /growth/runs/:

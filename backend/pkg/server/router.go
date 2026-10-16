@@ -232,6 +232,7 @@ func NewRouter(
 	if growthCore == nil {
 		growthCore = growth.NewService(db, cfg)
 	}
+	growthCore.SetKnowledgeStore(knowledgeStore)
 	growthService := services.NewGrowthService(growthCore)
 	anonymizerService := services.NewAnonymizerService(textReplacer)
 	graphqlService := services.NewGraphqlService(
@@ -453,6 +454,8 @@ func setGrowthGroup(parent *gin.RouterGroup, svc *services.GrowthService) {
 		gg.POST("/accounts/", auth.PrivilegesRequired("growth.edit"), svc.CreateAccount)
 		gg.PUT("/accounts/:accountID", auth.PrivilegesRequired("growth.edit"), svc.UpdateAccount)
 		gg.POST("/accounts/:accountID/test-proxy", auth.PrivilegesRequired("growth.edit"), svc.TestAccountProxy)
+		gg.GET("/profile", auth.PrivilegesRequired("growth.view"), svc.GetProfile)
+		gg.PUT("/profile", auth.PrivilegesRequired("growth.edit"), svc.SaveProfile)
 		gg.GET("/settings/", auth.PrivilegesRequired("growth.view"), svc.ListSettings)
 		gg.POST("/settings/test-email", auth.PrivilegesRequired("growth.edit"), svc.SendTestEmail)
 		gg.PUT("/settings/:kind", auth.PrivilegesRequired("growth.edit"), svc.SaveSetting)

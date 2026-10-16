@@ -369,3 +369,21 @@ DELETE FROM growth_settings WHERE user_id = $1 AND kind = $2;
 UPDATE growth_runs
 SET notify_status = sqlc.arg(notify_status), notify_error = sqlc.arg(notify_error), notified_at = now()
 WHERE id = sqlc.arg(id);
+
+-- name: GetGrowthProfile :one
+SELECT * FROM growth_profiles WHERE user_id = sqlc.arg(user_id);
+
+-- name: UpsertGrowthProfile :one
+INSERT INTO growth_profiles (user_id, profile) VALUES (sqlc.arg(user_id), sqlc.arg(profile))
+ON CONFLICT (user_id) DO UPDATE SET profile = EXCLUDED.profile
+RETURNING *;
+
+-- name: UpsertUserResourceFile :one
+INSERT INTO user_resources (user_id, hash, name, path, size, is_dir)
+VALUES (sqlc.arg(user_id), sqlc.arg(hash), sqlc.arg(name), sqlc.arg(path), sqlc.arg(size), false)
+ON CONFLICT (user_id, path) DO UPDATE
+SET hash = EXCLUDED.hash, size = EXCLUDED.size, is_dir = false
+RETURNING *;
+
+-- name: GetUserResourceByPath :one
+SELECT * FROM user_resources WHERE user_id = sqlc.arg(user_id) AND path = sqlc.arg(path);

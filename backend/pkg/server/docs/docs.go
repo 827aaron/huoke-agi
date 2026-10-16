@@ -4858,6 +4858,127 @@ const docTemplate = `{
                 }
             }
         },
+        "/growth/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Retrieve the business profile every task of the current user starts from",
+                "responses": {
+                    "200": {
+                        "description": "profile received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.Profile"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "getting the profile not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "no profile is saved",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting the profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "knowledge says whether the long lists reached the knowledge store: seeded, or skipped with the reason.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Save the business profile; new tasks start with it",
+                "parameters": [
+                    {
+                        "description": "business profile",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/growth.Profile"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "profile saved successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.SavedProfile"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "saving the profile not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on saving the profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/growth/runs/": {
             "get": {
                 "security": [
@@ -9120,6 +9241,68 @@ const docTemplate = `{
                 }
             }
         },
+        "growth.Profile": {
+            "type": "object",
+            "properties": {
+                "audience": {
+                    "type": "string"
+                },
+                "bad_actor_samples": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "business_name": {
+                    "type": "string"
+                },
+                "exclusions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "languages": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "product": {
+                    "type": "string"
+                },
+                "regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "signal_words": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "signals": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sources": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "target_leads": {
+                    "type": "integer"
+                }
+            }
+        },
         "growth.ProxyCheck": {
             "type": "object",
             "properties": {
@@ -9137,6 +9320,17 @@ const docTemplate = `{
                 },
                 "source": {
                     "type": "string"
+                }
+            }
+        },
+        "growth.SavedProfile": {
+            "type": "object",
+            "properties": {
+                "knowledge": {
+                    "type": "string"
+                },
+                "profile": {
+                    "$ref": "#/definitions/growth.Profile"
                 }
             }
         },

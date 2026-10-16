@@ -23,6 +23,7 @@ import (
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
 	"pentagi/pkg/growth"
+	"pentagi/pkg/growth/flowctl"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/profiling"
 	"pentagi/pkg/providers"
@@ -244,7 +245,7 @@ func main() {
 		logrus.WithError(err).Fatal("Active flows restoration failed")
 	}
 
-	r := router.NewRouter(queries, orm, cfg, providers, controller, subscriptions, client, updates)
+	r := router.NewRouter(queries, orm, cfg, providers, withBusinessProfile(controller), subscriptions, client, updates)
 
 	// Launch HTTP/HTTPS server in background goroutine
 	serverErrChan := make(chan error, 1)
@@ -289,4 +290,12 @@ func main() {
 	}
 
 	logrus.Info("Application shutdown completed successfully")
+}
+
+// withBusinessProfile makes every flow and task a client starts carry the owner's business profile.
+func withBusinessProfile(fc controller.FlowController) controller.FlowController {
+	if svc := growth.Default(); svc != nil {
+		return flowctl.Wrap(fc, svc)
+	}
+	return fc
 }

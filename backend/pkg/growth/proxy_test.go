@@ -31,8 +31,8 @@ func TestProxy_MaskEndpoint_HidesCredentialsAndTokens(t *testing.T) {
 		"socks5://user:secret@1.2.3.4:1080":                      "socks5://••••@1.2.3.4:1080",
 		"http://10.0.0.1:3128":                                   "http://10.0.0.1:3128",
 		"ws://127.0.0.1:9222/devtools/browser/0f3c-token-a1b2c3": "ws://127.0.0.1:9222/••••",
-		"":                                                       "",
-		"not a url":                                              "••••",
+		"":          "",
+		"not a url": "••••",
 	}
 	for in, want := range cases {
 		assert.Equal(t, want, maskEndpoint(in), in)

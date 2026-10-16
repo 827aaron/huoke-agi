@@ -1003,6 +1003,13 @@ type FlowTemplate struct {
 	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
+type GrowthProfile struct {
+	UserID    int64           `json:"user_id"`
+	Profile   json.RawMessage `json:"profile"`
+	CreatedAt sql.NullTime    `json:"created_at"`
+	UpdatedAt sql.NullTime    `json:"updated_at"`
+}
+
 type GrowthRun struct {
 	ID             int64         `json:"id"`
 	UserID         int64         `json:"user_id"`

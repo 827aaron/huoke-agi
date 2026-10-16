@@ -141,6 +141,7 @@ type Querier interface {
 	GetFlowsForPeriod(ctx context.Context, arg GetFlowsForPeriodParams) ([]GetFlowsForPeriodRow, error)
 	// One dense row per calendar day in the caller's timezone, zeros included.
 	GetFlowsStatsByDay(ctx context.Context, arg GetFlowsStatsByDayParams) ([]GetFlowsStatsByDayRow, error)
+	GetGrowthProfile(ctx context.Context, userID int64) (GrowthProfile, error)
 	GetGrowthRun(ctx context.Context, id int64) (GrowthRun, error)
 	GetGrowthRunByTask(ctx context.Context, taskID sql.NullInt64) (GrowthRun, error)
 	GetGrowthSource(ctx context.Context, id int64) (GrowthSource, error)
@@ -265,6 +266,7 @@ type Querier interface {
 	GetUserProviders(ctx context.Context, userID int64) ([]Provider, error)
 	GetUserProvidersByType(ctx context.Context, arg GetUserProvidersByTypeParams) ([]Provider, error)
 	GetUserResourceByID(ctx context.Context, id int64) (UserResource, error)
+	GetUserResourceByPath(ctx context.Context, arg GetUserResourceByPathParams) (UserResource, error)
 	GetUserResourcesAll(ctx context.Context, userID int64) ([]UserResource, error)
 	GetUserResourcesByIDs(ctx context.Context, ids []int64) ([]UserResource, error)
 	GetUserResourcesInDir(ctx context.Context, arg GetUserResourcesInDirParams) ([]UserResource, error)
@@ -393,10 +395,12 @@ type Querier interface {
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) (User, error)
 	UpsertAccountSource(ctx context.Context, arg UpsertAccountSourceParams) (AccountSource, error)
 	UpsertChannelAccount(ctx context.Context, arg UpsertChannelAccountParams) (ChannelAccount, error)
+	UpsertGrowthProfile(ctx context.Context, arg UpsertGrowthProfileParams) (GrowthProfile, error)
 	UpsertGrowthSetting(ctx context.Context, arg UpsertGrowthSettingParams) (GrowthSetting, error)
 	UpsertGrowthSource(ctx context.Context, arg UpsertGrowthSourceParams) (UpsertGrowthSourceRow, error)
 	UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, error)
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
+	UpsertUserResourceFile(ctx context.Context, arg UpsertUserResourceFileParams) (UserResource, error)
 }
 
 var _ Querier = (*Queries)(nil)

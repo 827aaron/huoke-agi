@@ -240,10 +240,25 @@ CREATE TABLE IF NOT EXISTS growth_settings (
 CREATE OR REPLACE TRIGGER update_growth_settings_modified
   BEFORE UPDATE ON growth_settings
   FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+-- One business profile per customer. Each task's input starts with its compact block,
+-- the whole profile is the user resource business_profile.md, and its long lists are
+-- the customer's guide documents in the knowledge store.
+CREATE TABLE IF NOT EXISTS growth_profiles (
+  user_id     BIGINT      PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  profile     JSONB       NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE TRIGGER update_growth_profiles_modified
+  BEFORE UPDATE ON growth_profiles
+  FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+DROP TABLE IF EXISTS growth_profiles;
 DROP TABLE IF EXISTS growth_settings;
 DROP TABLE IF EXISTS lead_evidence;
 DROP TABLE IF EXISTS leads;

@@ -529,6 +529,69 @@ func (s *GrowthService) TestAccountProxy(c *gin.Context) {
 	response.Success(c, http.StatusOK, check)
 }
 
+// GetProfile is a function to return the business profile of the current user
+// @Summary Retrieve the business profile every task of the current user starts from
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.successResp{data=growth.Profile} "profile received successful"
+// @Failure 403 {object} response.errorResp "getting the profile not permitted"
+// @Failure 404 {object} response.errorResp "no profile is saved"
+// @Failure 500 {object} response.errorResp "internal error on getting the profile"
+// @Router /growth/profile [get]
+func (s *GrowthService) GetProfile(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	profile, err := s.svc.GetProfile(c, uid)
+	if err != nil {
+		if errors.Is(err, growth.ErrNoProfile) {
+			response.Error(c, response.ErrGrowthProfileNotFound, err)
+			return
+		}
+		logger.FromContext(c).WithError(err).Errorf("error getting business profile")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, profile)
+}
+
+// SaveProfile is a function to store the business profile
+// @Summary Save the business profile; new tasks start with it
+// @Description knowledge says whether the long lists reached the knowledge store: seeded, or skipped with the reason.
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param json body growth.Profile true "business profile"
+// @Success 200 {object} response.successResp{data=growth.SavedProfile} "profile saved successful"
+// @Failure 400 {object} response.errorResp "invalid profile"
+// @Failure 403 {object} response.errorResp "saving the profile not permitted"
+// @Failure 500 {object} response.errorResp "internal error on saving the profile"
+// @Router /growth/profile [put]
+func (s *GrowthService) SaveProfile(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	var req growth.Profile
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	saved, err := s.svc.SaveProfile(c, uid, req)
+	if err != nil {
+		if errors.Is(err, growth.ErrInvalidProfile) {
+			response.Error(c, response.ErrGrowthInvalidRequest, err)
+			return
+		}
+		logger.FromContext(c).WithError(err).Errorf("error saving business profile")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, saved)
+}
+
 type growthSettings struct {
 	Settings []growth.SettingView `json:"settings"`
 }
