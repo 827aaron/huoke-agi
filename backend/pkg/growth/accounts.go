@@ -1,0 +1,566 @@
+package growth
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"sort"
+	"strings"
+	"time"
+
+	"pentagi/pkg/config"
+	"pentagi/pkg/database"
+	"pentagi/pkg/growth/connectors"
+	"pentagi/pkg/system"
+
+	"github.com/sqlc-dev/pqtype"
+)
+
+const (
+	ProxySourceAccount = "account"
+	ProxySourceGlobal  = "global"
+	ProxySourceDirect  = "direct"
+
+	accountFieldProxy     = "proxy"
+	accountFieldBrowserWS = "external_browser_ws"
+)
+
+var ErrAccountNotFound = errors.New("account not found")
+
+// AccountView is an account as the settings panel shows it; the session never leaves the backend.
+type AccountView struct {
+	ID                int64      `json:"id"`
+	Platform          string     `json:"platform"`
+	Kind              string     `json:"kind"`
+	Label             string     `json:"label"`
+	ExternalID        string     `json:"external_id,omitempty"`
+	Status            string     `json:"status"`
+	Available         bool       `json:"available"`
+	LastUsedAt        *time.Time `json:"last_used_at,omitempty"`
+	LastSuccessAt     *time.Time `json:"last_success_at,omitempty"`
+	LastRateLimitedAt *time.Time `json:"last_rate_limited_at,omitempty"`
+	RateLimitUntil    *time.Time `json:"rate_limit_until,omitempty"`
+	ConsecutiveErrors int        `json:"consecutive_errors"`
+	LastError         string     `json:"last_error,omitempty"`
+	// ProxyURL is the account's own proxy, masked; ProxySource says which proxy its
+	// traffic takes: its own, the customer's default, or none.
+	ProxyURL          string          `json:"proxy_url,omitempty"`
+	ProxySource       string          `json:"proxy_source"`
+	Fingerprint       json.RawMessage `json:"fingerprint,omitempty" swaggertype:"object"`
+	ExternalBrowserWS string          `json:"external_browser_ws,omitempty"`
+}
+
+// AccountUpdate changes an account; a nil field keeps its value and an empty string
+// clears it. A value still carrying the mask "••••" is the page resubmitting what it
+// was shown and keeps the stored one. Fingerprint JSON null clears it.
+type AccountUpdate struct {
+	Label             *string         `json:"label,omitempty"`
+	Status            *string         `json:"status,omitempty"`
+	ProxyURL          *string         `json:"proxy_url,omitempty"`
+	Fingerprint       json.RawMessage `json:"fingerprint,omitempty" swaggertype:"object"`
+	ExternalBrowserWS *string         `json:"external_browser_ws,omitempty"`
+}
+
+func (s *Service) ListAccounts(ctx context.Context, userID int64) ([]AccountView, error) {
+	accounts, err := s.db.GetUserChannelAccounts(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list accounts: %w", err)
+	}
+	cfg, err := s.ConfigFor(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]AccountView, 0, len(accounts))
+	for _, a := range accounts {
+		views = append(views, s.accountView(a, cfg))
+	}
+	return views, nil
+}
+
+func (s *Service) accountView(a database.ChannelAccount, cfg *config.Config) AccountView {
+	now := time.Now()
+	v := AccountView{
+		ID:                a.ID,
+		Platform:          a.Platform,
+		Kind:              a.Kind,
+		Label:             a.Label,
+		ExternalID:        a.ExternalID,
+		Status:            a.Status,
+		LastUsedAt:        nullTime(a.LastUsedAt.Time, a.LastUsedAt.Valid),
+		LastSuccessAt:     nullTime(a.LastSuccessAt.Time, a.LastSuccessAt.Valid),
+		LastRateLimitedAt: nullTime(a.LastRateLimitedAt.Time, a.LastRateLimitedAt.Valid),
+		ConsecutiveErrors: int(a.ConsecutiveErrors),
+		LastError:         a.LastError,
+		ProxySource:       ProxySourceDirect,
+	}
+	resting := a.RateLimitUntil.Valid && a.RateLimitUntil.Time.After(now)
+	if resting {
+		v.RateLimitUntil = nullTime(a.RateLimitUntil.Time, true)
+	}
+	v.Available = (a.Status == AccountStatusActive || a.Status == AccountStatusRateLimited) && !resting
+
+	if len(a.Proxy) > 0 {
+		v.ProxySource, v.ProxyURL = ProxySourceAccount, "••••"
+		if own, err := s.accountSecret(a, accountFieldProxy, a.Proxy); err == nil {
+			v.ProxyURL = maskEndpoint(own)
+		}
+	} else if cfg.GrowthProxyURL != "" {
+		v.ProxySource = ProxySourceGlobal
+	}
+	if a.Fingerprint.Valid {
+		v.Fingerprint = a.Fingerprint.RawMessage
+	}
+	if len(a.ExternalBrowserWs) > 0 {
+		v.ExternalBrowserWS = "••••"
+		if ws, err := s.accountSecret(a, accountFieldBrowserWS, a.ExternalBrowserWs); err == nil {
+			v.ExternalBrowserWS = maskEndpoint(ws)
+		}
+	}
+	return v
+}
+
+func accountAAD(userID int64, field string) []byte {
+	return []byte(fmt.Sprintf("channel_accounts:%d:%s", userID, field))
+}
+
+func (s *Service) accountSecret(a database.ChannelAccount, field string, blob []byte) (string, error) {
+	if len(blob) == 0 {
+		return "", nil
+	}
+	plain, err := s.openBytes(blob, accountAAD(a.UserID, field))
+	if err != nil {
+		return "", fmt.Errorf("the %s of account %d does not open with the current GROWTH_SECRET_KEY", field, a.ID)
+	}
+	return string(plain), nil
+}
+
+// sealAccountField applies one change of an AccountUpdate to a sealed column.
+func (s *Service) sealAccountField(
+	a database.ChannelAccount,
+	field string,
+	current []byte,
+	value *string,
+	parse func(string) error,
+) ([]byte, error) {
+	if value == nil || strings.Contains(*value, "••••") {
+		return current, nil
+	}
+	v := strings.TrimSpace(*value)
+	if v == "" {
+		return nil, nil
+	}
+	if err := parse(v); err != nil {
+		return nil, err
+	}
+	return s.sealBytes([]byte(v), accountAAD(a.UserID, field))
+}
+
+// resolveProxy returns the proxy an account's traffic takes: its own, else the
+// customer's default, else none. An own proxy that does not open is an error rather
+// than a silent direct connection, which would expose the server's address.
+func (s *Service) resolveProxy(a database.ChannelAccount, cfg *config.Config) (string, string, error) {
+	own, err := s.accountSecret(a, accountFieldProxy, a.Proxy)
+	switch {
+	case err != nil:
+		return "", "", err
+	case own != "":
+		return own, ProxySourceAccount, nil
+	case cfg.GrowthProxyURL != "":
+		return cfg.GrowthProxyURL, ProxySourceGlobal, nil
+	default:
+		return "", ProxySourceDirect, nil
+	}
+}
+
+func (s *Service) userAccount(ctx context.Context, userID, accountID int64) (database.ChannelAccount, error) {
+	a, err := s.db.GetUserChannelAccount(ctx, database.GetUserChannelAccountParams{ID: accountID, UserID: userID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return a, ErrAccountNotFound
+	}
+	if err != nil {
+		return a, fmt.Errorf("failed to load account %d: %w", accountID, err)
+	}
+	return a, nil
+}
+
+// UpdateAccount changes the label, the operator status (active or disabled) and the
+// network identity of an account. The connector is rebuilt on its next call.
+func (s *Service) UpdateAccount(ctx context.Context, userID, accountID int64, u AccountUpdate) (AccountView, error) {
+	a, err := s.userAccount(ctx, userID, accountID)
+	if err != nil {
+		return AccountView{}, err
+	}
+	params := database.UpdateUserChannelAccountParams{
+		ID:                a.ID,
+		UserID:            userID,
+		Label:             a.Label,
+		Status:            a.Status,
+		Proxy:             a.Proxy,
+		Fingerprint:       a.Fingerprint,
+		ExternalBrowserWs: a.ExternalBrowserWs,
+	}
+	if u.Label != nil {
+		if params.Label = strings.TrimSpace(*u.Label); params.Label == "" {
+			return AccountView{}, fmt.Errorf("%w: label cannot be empty", ErrInvalidSetting)
+		}
+	}
+	if u.Status != nil {
+		if *u.Status != AccountStatusActive && *u.Status != AccountStatusDisabled {
+			return AccountView{}, fmt.Errorf("%w: status can be set to %s or %s",
+				ErrInvalidSetting, AccountStatusActive, AccountStatusDisabled)
+		}
+		params.Status = *u.Status
+	}
+	if u.ProxyURL != nil || u.ExternalBrowserWS != nil {
+		if _, err := s.sealer(); err != nil {
+			return AccountView{}, err
+		}
+	}
+	params.Proxy, err = s.sealAccountField(a, accountFieldProxy, a.Proxy, u.ProxyURL, func(v string) error {
+		_, err := parseProxyURL(v)
+		return err
+	})
+	if err != nil {
+		return AccountView{}, err
+	}
+	params.ExternalBrowserWs, err = s.sealAccountField(a, accountFieldBrowserWS, a.ExternalBrowserWs, u.ExternalBrowserWS,
+		func(v string) error {
+			_, err := parseEndpointURL(v)
+			return err
+		})
+	if err != nil {
+		return AccountView{}, err
+	}
+	if u.Fingerprint != nil {
+		params.Fingerprint = pqtype.NullRawMessage{}
+		if fp := strings.TrimSpace(string(u.Fingerprint)); fp != "null" {
+			var obj map[string]any
+			if err := json.Unmarshal(u.Fingerprint, &obj); err != nil {
+				return AccountView{}, fmt.Errorf("%w: fingerprint must be a JSON object", ErrInvalidSetting)
+			}
+			params.Fingerprint = pqtype.NullRawMessage{RawMessage: u.Fingerprint, Valid: true}
+		}
+	}
+
+	updated, err := s.db.UpdateUserChannelAccount(ctx, params)
+	if err != nil {
+		return AccountView{}, fmt.Errorf("failed to update account %d: %w", accountID, err)
+	}
+	s.DropConnector(accountID)
+	cfg, err := s.ConfigFor(ctx, userID)
+	if err != nil {
+		return AccountView{}, err
+	}
+	return s.accountView(updated, cfg), nil
+}
+
+// CreateAccount adds an account a login or a browser profile attaches to later.
+func (s *Service) CreateAccount(ctx context.Context, userID int64, spec AccountSpec, u AccountUpdate) (AccountView, error) {
+	if strings.TrimSpace(string(spec.Platform)) == "" {
+		return AccountView{}, fmt.Errorf("%w: platform is required", ErrInvalidSetting)
+	}
+	if spec.Kind != "" && spec.Kind != AccountKindAPISession && spec.Kind != AccountKindBrowserSession {
+		return AccountView{}, fmt.Errorf("%w: kind must be %s or %s",
+			ErrInvalidSetting, AccountKindAPISession, AccountKindBrowserSession)
+	}
+	acc, err := s.EnsureAccount(ctx, userID, spec)
+	if err != nil {
+		return AccountView{}, err
+	}
+	u.Label = nil
+	return s.UpdateAccount(ctx, userID, acc.ID, u)
+}
+
+// TestAccountProxy fetches proxyCheckURL the way the account's traffic would go.
+func (s *Service) TestAccountProxy(ctx context.Context, userID, accountID int64) (ProxyCheck, error) {
+	a, err := s.userAccount(ctx, userID, accountID)
+	if err != nil {
+		return ProxyCheck{}, err
+	}
+	cfg, err := s.ConfigFor(ctx, userID)
+	if err != nil {
+		return ProxyCheck{}, err
+	}
+	proxyURL, source, err := s.resolveProxy(a, cfg)
+	if err != nil {
+		return ProxyCheck{Source: ProxySourceAccount, Error: err.Error()}, nil
+	}
+	check := ProxyCheck{Source: source, Proxy: maskEndpoint(proxyURL)}
+
+	var latency time.Duration
+	if proxyURL != "" {
+		latency, err = checkProxy(ctx, cfg, proxyURL)
+	} else {
+		latency, err = checkDirect(ctx, cfg)
+	}
+	if err != nil {
+		check.Error = err.Error()
+		return check, nil
+	}
+	check.OK, check.LatencyMs = true, latency.Milliseconds()
+	return check, nil
+}
+
+func checkDirect(ctx context.Context, cfg *config.Config) (time.Duration, error) {
+	client, err := system.GetHTTPClient(cfg)
+	if err != nil {
+		return 0, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxyCheckURL, nil)
+	if err != nil {
+		return 0, err
+	}
+	start := time.Now()
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("cannot reach %s: %w", req.URL.Host, err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+	return time.Since(start), nil
+}
+
+func nullTime(t time.Time, valid bool) *time.Time {
+	if !valid {
+		return nil
+	}
+	t = t.UTC()
+	return &t
+}
+
+// pickAccount chooses the account the next platform call goes to: one not resting after
+// a rate limit, preferring an account that already joined sourceID (its cursor and
+// membership are there), then the fewest errors in a row, then the longest unused.
+// With every usable account resting it returns a FloodWaitError for the shortest rest.
+func (s *Service) pickAccount(
+	ctx context.Context,
+	userID int64,
+	platform connectors.Platform,
+	sourceID int64,
+	tried map[int64]bool,
+) (database.ChannelAccount, error) {
+	rows, err := s.db.GetUsableChannelAccounts(ctx, database.GetUsableChannelAccountsParams{
+		UserID:   userID,
+		Platform: string(platform),
+		SourceID: sourceID,
+	})
+	if err != nil {
+		return database.ChannelAccount{}, fmt.Errorf("failed to load %s accounts: %w", platform, err)
+	}
+
+	now := time.Now()
+	var (
+		ready   []database.GetUsableChannelAccountsRow
+		soonest time.Time
+	)
+	for _, r := range rows {
+		if tried[r.ID] {
+			continue
+		}
+		if r.RateLimitUntil.Valid && r.RateLimitUntil.Time.After(now) {
+			if soonest.IsZero() || r.RateLimitUntil.Time.Before(soonest) {
+				soonest = r.RateLimitUntil.Time
+			}
+			continue
+		}
+		ready = append(ready, r)
+	}
+	if len(ready) == 0 {
+		if !soonest.IsZero() {
+			return database.ChannelAccount{}, &connectors.FloodWaitError{Wait: soonest.Sub(now)}
+		}
+		return database.ChannelAccount{}, fmt.Errorf("%w for %s: log an account in first", ErrNoAccount, platform)
+	}
+
+	sort.SliceStable(ready, func(i, j int) bool {
+		a, b := ready[i], ready[j]
+		if a.JoinedSource != b.JoinedSource {
+			return a.JoinedSource
+		}
+		if a.ConsecutiveErrors != b.ConsecutiveErrors {
+			return a.ConsecutiveErrors < b.ConsecutiveErrors
+		}
+		if a.LastUsedAt.Valid != b.LastUsedAt.Valid {
+			return !a.LastUsedAt.Valid
+		}
+		return a.LastUsedAt.Time.Before(b.LastUsedAt.Time)
+	})
+	r := ready[0]
+	return database.ChannelAccount{
+		ID:                r.ID,
+		UserID:            r.UserID,
+		Platform:          r.Platform,
+		Kind:              r.Kind,
+		Label:             r.Label,
+		ExternalID:        r.ExternalID,
+		ProfileDir:        r.ProfileDir,
+		Status:            r.Status,
+		Proxy:             r.Proxy,
+		Fingerprint:       r.Fingerprint,
+		ExternalBrowserWs: r.ExternalBrowserWs,
+	}, nil
+}
+
+// withAccount runs op on the account pickAccount chooses and moves on to the next one
+// when the platform rate-limits or rejects it. Once no account is left it returns the
+// shortest rate limit seen, or else the last error. sourceID 0 means no preference.
+func (s *Service) withAccount(
+	ctx context.Context,
+	userID int64,
+	platform connectors.Platform,
+	sourceID int64,
+	op func(conn connectors.Connector, acc database.ChannelAccount) error,
+) error {
+	tried := make(map[int64]bool)
+	var (
+		lastErr error
+		flood   *connectors.FloodWaitError
+	)
+	keepShortest := func(err error) {
+		var f *connectors.FloodWaitError
+		if errors.As(err, &f) && (flood == nil || f.Wait < flood.Wait) {
+			flood = f
+		}
+	}
+
+	for {
+		acc, err := s.pickAccount(ctx, userID, platform, sourceID, tried)
+		if err != nil {
+			keepShortest(err)
+			switch {
+			case flood != nil:
+				return flood
+			case lastErr != nil && errors.Is(err, ErrNoAccount):
+				return lastErr
+			default:
+				return err
+			}
+		}
+		tried[acc.ID] = true
+
+		conn, err := s.connectorFor(ctx, acc)
+		if err != nil {
+			return err
+		}
+		_ = s.db.MarkChannelAccountUsed(context.WithoutCancel(ctx), acc.ID)
+
+		err = op(conn, acc)
+		s.recordOutcome(ctx, acc.ID, err)
+		if err == nil || ctx.Err() != nil {
+			return err
+		}
+		var f *connectors.FloodWaitError
+		if !errors.As(err, &f) && !errors.Is(err, connectors.ErrUnauthorized) {
+			return err
+		}
+		keepShortest(err)
+		lastErr = err
+	}
+}
+
+// recordOutcome keeps the account's health in step with what the platform answered.
+// Not-found and unsupported answers say nothing about the account.
+func (s *Service) recordOutcome(ctx context.Context, accountID int64, err error) {
+	ctx = context.WithoutCancel(ctx)
+	var flood *connectors.FloodWaitError
+	switch {
+	case err == nil:
+		_ = s.db.RecordChannelAccountSuccess(ctx, accountID)
+	case errors.As(err, &flood):
+		_ = s.db.RecordChannelAccountRateLimit(ctx, database.RecordChannelAccountRateLimitParams{
+			ID: accountID, Until: time.Now().Add(flood.Wait),
+		})
+	case errors.Is(err, connectors.ErrUnauthorized):
+		_, _ = s.db.UpdateChannelAccountStatus(ctx, database.UpdateChannelAccountStatusParams{
+			ID: accountID, Status: AccountStatusNeedsLogin,
+		})
+		// Asynchronous, because a connector may report from inside its own construction,
+		// while connectorFor holds the lock DropConnector takes.
+		go s.DropConnector(accountID)
+	case errors.Is(err, connectors.ErrNotFound), errors.Is(err, connectors.ErrUnsupported),
+		errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+	default:
+		_ = s.db.RecordChannelAccountError(ctx, database.RecordChannelAccountErrorParams{
+			ID: accountID, LastError: truncateRunes(err.Error(), 500),
+		})
+	}
+}
+
+func (s *Service) connectorFor(ctx context.Context, acc database.ChannelAccount) (connectors.Connector, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if conn, ok := s.conns[acc.ID]; ok {
+		return conn, nil
+	}
+
+	platform := connectors.Platform(acc.Platform)
+	factory, ok := connectors.Lookup(platform)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", connectors.ErrNoConnector, platform)
+	}
+
+	cfg, err := s.ConfigFor(ctx, acc.UserID)
+	if err != nil {
+		return nil, err
+	}
+	proxyURL, _, err := s.resolveProxy(acc, cfg)
+	if err != nil {
+		return nil, err
+	}
+	browserWS, err := s.accountSecret(acc, accountFieldBrowserWS, acc.ExternalBrowserWs)
+	if err != nil {
+		return nil, err
+	}
+	var fingerprint json.RawMessage
+	if acc.Fingerprint.Valid {
+		fingerprint = acc.Fingerprint.RawMessage
+	}
+	// The connector outlives the request that happened to build it.
+	conn, err := factory(context.WithoutCancel(ctx), cfg, connectors.Account{
+		ID:         acc.ID,
+		UserID:     acc.UserID,
+		Platform:   platform,
+		Kind:       acc.Kind,
+		ExternalID: acc.ExternalID,
+		ProfileDir: acc.ProfileDir,
+		Session:    &accountSession{db: s.db, accountID: acc.ID},
+		Health:     &accountHealth{s: s, accountID: acc.ID},
+
+		Proxy:             proxyURL,
+		Fingerprint:       fingerprint,
+		ExternalBrowserWS: browserWS,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to start %s connector: %w", platform, err)
+	}
+	s.conns[acc.ID] = conn
+	return conn, nil
+}
+
+type accountHealth struct {
+	s         *Service
+	accountID int64
+}
+
+func (h *accountHealth) ReportSuccess(ctx context.Context) { h.s.recordOutcome(ctx, h.accountID, nil) }
+
+func (h *accountHealth) ReportRateLimited(ctx context.Context, wait time.Duration) {
+	h.s.recordOutcome(ctx, h.accountID, &connectors.FloodWaitError{Wait: wait})
+}
+
+func (h *accountHealth) ReportUnauthorized(ctx context.Context) {
+	h.s.recordOutcome(ctx, h.accountID, connectors.ErrUnauthorized)
+}
+
+func (h *accountHealth) ReportError(ctx context.Context, err error) {
+	if err != nil {
+		h.s.recordOutcome(ctx, h.accountID, err)
+	}
+}

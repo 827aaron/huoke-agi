@@ -18,7 +18,6 @@ import (
 	"github.com/vxcontrol/cloud/anonymizer"
 	"github.com/vxcontrol/langchaingo/documentloaders"
 	"github.com/vxcontrol/langchaingo/schema"
-	"github.com/vxcontrol/langchaingo/vectorstores"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
@@ -41,6 +40,7 @@ type guide struct {
 	maxEmbeddingBytes int
 	vslp              VectorStoreLogProvider
 	knp               KnowledgeProvider
+	ownerScoped       bool
 }
 
 func NewGuideTool(
@@ -131,12 +131,13 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 				"query":       query[:min(len(query), 1000)],
 			})
 
-			docs, err := g.store.SimilaritySearch(
+			docs, err := similaritySearchScoped(
 				ctx,
+				g.store,
 				query,
 				guideVectorStoreResultLimit,
-				vectorstores.WithScoreThreshold(guideVectorStoreThreshold),
-				vectorstores.WithFilters(filters),
+				guideVectorStoreThreshold,
+				ownerFilterSets(filters, g.userID, g.ownerScoped),
 			)
 			if err != nil {
 				obs.LogErrorOrCancel(queryLogger, err, "failed to search for similar documents")
@@ -401,3 +402,5 @@ func (g *guide) Handle(ctx context.Context, name string, args json.RawMessage) (
 func (g *guide) IsAvailable() bool {
 	return g.store != nil
 }
+
+func (g *guide) scopeToOwner() { g.ownerScoped = true }

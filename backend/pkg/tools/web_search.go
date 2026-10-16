@@ -176,14 +176,18 @@ func buildSearchEngines(
 	sum := searchers.SummarizeHandler(summarizer)
 
 	engines := map[database.SearchengineType]searchers.Searcher{
-		EngineGoogle:     searchers.NewGoogle(cfg),
+		EngineGoogle:     withKeyRotation(cfg, EngineGoogle, newGoogle),
 		EngineDuckDuckGo: searchers.NewDuckDuckGo(cfg),
-		EngineTavily:     searchers.NewTavily(cfg, sum),
-		EngineFirecrawl:  searchers.NewFirecrawl(cfg, sum),
-		EngineTraversaal: searchers.NewTraversaal(cfg),
-		EnginePerplexity: searchers.NewPerplexity(cfg, sum),
-		EngineSearxng:    searchers.NewSearxng(cfg, sum),
-		EngineSploitus:   searchers.NewSploitus(cfg),
+		EngineTavily: withKeyRotation(cfg, EngineTavily, func(c *config.Config) searchers.Searcher {
+			return searchers.NewTavily(c, sum)
+		}),
+		EngineFirecrawl:  withKeyRotation(cfg, EngineFirecrawl, newFirecrawl(sum)),
+		EngineTraversaal: withKeyRotation(cfg, EngineTraversaal, newTraversaal),
+		EnginePerplexity: withKeyRotation(cfg, EnginePerplexity, func(c *config.Config) searchers.Searcher {
+			return searchers.NewPerplexity(c, sum)
+		}),
+		EngineSearxng:  searchers.NewSearxng(cfg, sum),
+		EngineSploitus: searchers.NewSploitus(cfg),
 	}
 
 	// The internal analytics engine discovers URLs with the link engines (in priority
@@ -202,10 +206,10 @@ func buildSearchEngines(
 func NewInternalEngine(cfg *config.Config, summarizer SummarizeHandler, fetcher searchers.PageFetcher) searchers.Searcher {
 	sum := searchers.SummarizeHandler(summarizer)
 	byID := map[database.SearchengineType]searchers.Searcher{
-		EngineGoogle:     searchers.NewGoogle(cfg),
+		EngineGoogle:     withKeyRotation(cfg, EngineGoogle, newGoogle),
 		EngineDuckDuckGo: searchers.NewDuckDuckGo(cfg),
 		EngineSearxng:    searchers.NewSearxng(cfg, sum),
-		EngineFirecrawl:  searchers.NewFirecrawl(cfg, sum),
+		EngineFirecrawl:  withKeyRotation(cfg, EngineFirecrawl, newFirecrawl(sum)),
 	}
 	links := make([]searchers.Searcher, 0, len(linkEngineOrder))
 	for _, id := range linkEngineOrder {

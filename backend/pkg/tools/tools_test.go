@@ -629,8 +629,9 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 			tools: map[string]string{
 				"done": "Barrier", "ask": "Barrier", "advice": "Adviser", "coder": "Coder",
 				"maintenance": "Installer", "memorist": "Memorist", "pentester": "Pentester", "search": "Searcher",
+				"growth_get_progress": "", "growth_deliver_leads": "",
 			},
-			optional: []string{"ask"},
+			optional: []string{"ask", "growth_get_progress", "growth_deliver_leads"},
 			barriers: []string{"done", "ask"},
 			required: []string{"Barrier", "Adviser", "Coder", "Installer", "Memorist", "Pentester", "Searcher"},
 			task:     task, subtask: subtask,
@@ -688,8 +689,12 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 				"memorist": "Memorist", "search": "Searcher",
 				"terminal": "", "file": "", "browser": "", "store_guide": "", "search_guide": "",
 				"graphiti_search": "", "web_search": "",
+				"growth_sync_source": "", "growth_upsert_leads": "", "growth_add_sources": "", "growth_get_progress": "",
 			},
-			optional: []string{"browser", "store_guide", "search_guide", "graphiti_search", "web_search"},
+			optional: []string{
+				"browser", "store_guide", "search_guide", "graphiti_search", "web_search",
+				"growth_sync_source", "growth_upsert_leads", "growth_add_sources", "growth_get_progress",
+			},
 			barriers: []string{"hack_result"},
 			required: []string{"HackResult", "Adviser", "Coder", "Installer", "Memorist", "Searcher"},
 			sandbox:  true,
@@ -706,8 +711,12 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 			tools: map[string]string{
 				"search_result": "SearchResult", "memorist": "Memorist",
 				"browser": "", "web_search": "", "search_answer": "", "store_answer": "",
+				"growth_search_sources": "", "growth_add_sources": "", "growth_join_source": "", "growth_get_progress": "",
 			},
-			optional: []string{"browser", "web_search", "search_answer", "store_answer"},
+			optional: []string{
+				"browser", "web_search", "search_answer", "store_answer",
+				"growth_search_sources", "growth_add_sources", "growth_join_source", "growth_get_progress",
+			},
 			barriers: []string{"search_result"},
 			required: []string{"SearchResult", "Memorist"},
 			task:     task, subtask: subtask,
@@ -722,9 +731,9 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 			},
 			tools: map[string]string{
 				"subtask_list": "SubtaskList", "memorist": "Memorist", "search": "Searcher",
-				"terminal": "", "file": "", "browser": "",
+				"terminal": "", "file": "", "browser": "", "growth_get_progress": "",
 			},
-			optional: []string{"browser"},
+			optional: []string{"browser", "growth_get_progress"},
 			barriers: []string{"subtask_list"},
 			required: []string{"SubtaskList", "Memorist"},
 			sandbox:  true,
@@ -740,9 +749,9 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 			},
 			tools: map[string]string{
 				"subtask_patch": "SubtaskPatch", "memorist": "Memorist", "search": "Searcher",
-				"terminal": "", "file": "", "browser": "",
+				"terminal": "", "file": "", "browser": "", "growth_get_progress": "",
 			},
-			optional: []string{"browser"},
+			optional: []string{"browser", "growth_get_progress"},
 			barriers: []string{"subtask_patch"},
 			required: []string{"SubtaskPatch", "Memorist"},
 			sandbox:  true,
@@ -788,7 +797,8 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 					TaskID: &task, SubtaskID: &subtask, ReportResult: h("ReportResult"),
 				}, without))
 			},
-			tools:    map[string]string{"report_result": "ReportResult"},
+			tools:    map[string]string{"report_result": "ReportResult", "growth_get_progress": "", "growth_list_leads": ""},
+			optional: []string{"growth_get_progress", "growth_list_leads"},
 			barriers: []string{"report_result"},
 			required: []string{"ReportResult"},
 			task:     task, subtask: subtask,
@@ -821,6 +831,7 @@ func toolsAgentFlow(t *testing.T, everyService bool) *flowToolsExecutor {
 	fte.store = newFakeVectorStore(t, &fakeVectorConn{}, &fakeEmbedder{})
 	fte.embedder = &fakeEmbedder{}
 	fte.SetGraphitiClient(graphitiClient)
+	fte.growth = &fakeGrowthBackend{}
 	return fte
 }
 

@@ -223,6 +223,30 @@ func TestGuide_Handle_ReportsWhatTheStoreFound(t *testing.T) {
 	}
 }
 
+func TestGuide_Handle_OwnerScopedSearchSeesOwnAndSharedGuidesOnly(t *testing.T) {
+	rig := newKnowledgeRig(t)
+	door := guideDoor(rig, identityReplacer{}, 0)
+	door.(interface{ scopeToOwner() }).scopeToOwner()
+
+	rig.handle(t, door, SearchGuideToolName, mustJSON(map[string]any{
+		"questions": []string{"who is quitting the game?"}, "message": "m", "type": "other",
+	}))
+
+	searches := rig.conn.searches()
+	if len(searches) != 2 {
+		t.Fatalf("%d similarity queries, want one for the owner's guides and one for shared guides", len(searches))
+	}
+	want := []map[string]string{
+		{"doc_type": "guide", "guide_type": "other", "user_id": "1"},
+		{"doc_type": "guide", "guide_type": "other", "shared": "true"},
+	}
+	for i := range want {
+		if !maps.Equal(searches[i].filters, want[i]) {
+			t.Errorf("query %d filtered on %v, want %v", i+1, searches[i].filters, want[i])
+		}
+	}
+}
+
 // The database path embeds from its own anonymized copy of the guide, so both paths are checked.
 func TestGuide_Handle_StoresOnlyTheAnonymizedForm(t *testing.T) {
 	const (

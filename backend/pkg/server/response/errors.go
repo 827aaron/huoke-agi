@@ -183,3 +183,13 @@ var ErrTokenNotFound = NewHttpError(404, "Token.NotFound", "token not found")
 var ErrTokenUnauthorized = NewHttpError(403, "Token.Unauthorized", "not authorized to manage this token")
 var ErrTokenInvalidRequest = NewHttpError(400, "Token.InvalidRequest", "invalid token request data")
 var ErrTokenInvalidData = NewHttpError(500, "Token.InvalidData", "invalid token data")
+
+// growth
+
+var ErrGrowthInvalidRequest = NewHttpError(400, "Growth.InvalidRequest", "invalid growth request data")
+var ErrGrowthSourceNotFound = NewHttpError(404, "Growth.SourceNotFound", "source not found")
+var ErrGrowthLeadNotFound = NewHttpError(404, "Growth.LeadNotFound", "lead not found")
+var ErrGrowthAccountNotFound = NewHttpError(404, "Growth.AccountNotFound", "account not found")
+var ErrGrowthSettingNotFound = NewHttpError(404, "Growth.SettingNotFound", "no saved setting of this kind")
+var ErrGrowthNoSecretKey = NewHttpError(503, "Growth.NoSecretKey", "GROWTH_SECRET_KEY is not set on the server")
+var ErrGrowthEmailFailed = NewHttpError(502, "Growth.EmailFailed", "the email could not be sent")

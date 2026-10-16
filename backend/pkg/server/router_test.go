@@ -191,3 +191,52 @@ func TestRouter_SetKnowledgeGroup_RefusesAMissingPrivilege(t *testing.T) {
 		})
 	}
 }
+
+func TestRouter_SetGrowthGroup_RefusesAMissingPrivilege(t *testing.T) {
+	cases := []struct {
+		method string
+		path   string
+		priv   string
+	}{
+		{http.MethodGet, "/growth/sources/", "growth.view"},
+		{http.MethodPost, "/growth/sources/", "growth.edit"},
+		{http.MethodDelete, "/growth/sources/7", "growth.edit"},
+		{http.MethodGet, "/growth/leads/", "growth.view"},
+		{http.MethodGet, "/growth/leads/export", "growth.view"},
+		{http.MethodGet, "/growth/leads/7", "growth.view"},
+		{http.MethodGet, "/growth/runs/", "growth.view"},
+		{http.MethodGet, "/growth/accounts/", "growth.view"},
+		{http.MethodPost, "/growth/accounts/", "growth.edit"},
+		{http.MethodPut, "/growth/accounts/7", "growth.edit"},
+		{http.MethodPost, "/growth/accounts/7/test-proxy", "growth.edit"},
+		{http.MethodGet, "/growth/settings/", "growth.view"},
+		{http.MethodPut, "/growth/settings/llm", "growth.edit"},
+		{http.MethodDelete, "/growth/settings/llm", "growth.edit"},
+		{http.MethodPost, "/growth/settings/llm/test", "growth.edit"},
+		{http.MethodPost, "/growth/settings/test-email", "growth.edit"},
+	}
+
+	every := []string{"growth.view", "growth.edit", "growth.admin"}
+
+	for _, tc := range cases {
+		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
+			granted := []string{}
+			for _, priv := range every {
+				if priv != tc.priv {
+					granted = append(granted, priv)
+				}
+			}
+
+			gin.SetMode(gin.TestMode)
+			engine := gin.New()
+			engine.Use(gin.Recovery(), func(c *gin.Context) { c.Set("prm", granted) })
+			setGrowthGroup(engine.Group(""), nil)
+
+			rec := httptest.NewRecorder()
+			engine.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+
+			assert.Equal(t, http.StatusForbidden, rec.Code,
+				"a caller holding every growth privilege but %s reached %s %s", tc.priv, tc.method, tc.path)
+		})
+	}
+}
