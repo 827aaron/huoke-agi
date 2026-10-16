@@ -132,6 +132,14 @@ function GrowthProgressBar() {
                 className={cn('h-1.5', isReached && '[&>[data-slot=progress-indicator]]:bg-green-500')}
                 value={percent}
             />
+            {run.notify_status === 'sent' && (
+                <div className="text-muted-foreground text-xs">{copy.progress.emailSent}</div>
+            )}
+            {run.notify_status === 'failed' && (
+                <div className="text-destructive text-xs">
+                    {copy.progress.emailFailed(run.notify_error ?? copy.common.dash)}
+                </div>
+            )}
             {action && (
                 <div
                     className={cn(

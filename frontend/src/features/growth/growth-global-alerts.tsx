@@ -27,7 +27,7 @@ function GrowthGlobalAlerts() {
 
     useAccountNotices();
 
-    const invalid = settings?.filter((item) => item.status === 'invalid') ?? [];
+    const invalid = settings?.filter((item) => item.source !== 'none' && item.status === 'invalid') ?? [];
 
     if (!invalid.length || pathname.startsWith(routes.settings.credentials)) {
         return null;
@@ -38,7 +38,7 @@ function GrowthGlobalAlerts() {
             {invalid.map((item) => (
                 <div
                     className="flex items-center gap-2"
-                    key={item.id}
+                    key={item.kind}
                 >
                     <TriangleAlert className="size-4 shrink-0" />
                     <span>{copy.credentials.globalInvalid(settingTitle(item.kind))}</span>
@@ -69,10 +69,7 @@ function useAccountNotices() {
         if (previous.current) {
             for (const notice of accountTransitions(previous.current, data)) {
                 const action = notice.link
-                    ? {
-                          label: notice.link === 'add' ? copy.telegram.health.add : copy.telegram.health.reloginLink,
-                          onClick: () => navigate(routes.settings.telegram),
-                      }
+                    ? { label: copy.telegram.health.reloginLink, onClick: () => navigate(routes.settings.accounts) }
                     : undefined;
 
                 if (notice.isPersistent) {

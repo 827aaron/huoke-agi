@@ -23,7 +23,7 @@ function LeadsEmailButton() {
     const navigate = useNavigate();
     const [isSending, setIsSending] = useState(false);
 
-    const isConfigured = !!settings?.some((item) => item.kind === 'email' && item.status === 'connected');
+    const isConfigured = !!settings?.some((item) => item.kind === 'email' && item.source !== 'none');
 
     const handleSend = async () => {
         if (!flowId || !run) {
@@ -41,9 +41,13 @@ function LeadsEmailButton() {
         setIsSending(true);
 
         try {
-            const { sent_to } = await growthApi.sendLeadsEmail(flowId, run.task_id);
+            const result = await growthApi.sendLeadsEmail(flowId, run.task_id);
 
-            toast.success(text.sent(sent_to.join(', ')));
+            if (result.sent) {
+                toast.success(text.sent(result.to.join(', ')));
+            } else {
+                toast.error(text.failed);
+            }
         } catch (error) {
             toast.error(getApiErrorMessage(error, text.failed));
         } finally {

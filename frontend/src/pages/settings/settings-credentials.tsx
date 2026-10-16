@@ -2,20 +2,22 @@ import { Info, KeyRound } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import type { GrowthSetting } from '@/features/growth/growth-types';
+import type { GrowthSetting, GrowthSettingKind } from '@/features/growth/growth-types';
 
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { growthApi } from '@/features/growth/growth-api';
-import { isAccountUsable } from '@/features/growth/growth-types';
-import { GrowthCredentialCard, REQUIRED_KINDS } from '@/features/growth/settings/growth-credential-row';
+import { isAccountSignedIn } from '@/features/growth/growth-types';
+import { GrowthCredentialCard, REQUIRED_KINDS, settingState } from '@/features/growth/settings/growth-credential-row';
 import { useGrowthAccounts, useGrowthSettings } from '@/features/growth/use-growth-data';
 import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 
 const text = copy.credentials;
+
+const CARD_ORDER: GrowthSettingKind[] = ['llm', 'telegram', 'web_search', 'youtube', 'proxy', 'email'];
 
 function SettingsCredentials() {
     const { data, error, isLoading } = useGrowthSettings();
@@ -23,54 +25,56 @@ function SettingsCredentials() {
 
     const [settings, setSettings] = useState<GrowthSetting[] | null>(null);
     const [seededFrom, setSeededFrom] = useState<GrowthSetting[] | undefined>(undefined);
-    const [testingIds, setTestingIds] = useState<Set<string>>(new Set());
-    const [extraSearchCards, setExtraSearchCards] = useState(0);
-    const [autoTestIds, setAutoTestIds] = useState<null | string[]>(null);
+    const [testingKinds, setTestingKinds] = useState<Set<GrowthSettingKind>>(new Set());
+    const [autoTestKinds, setAutoTestKinds] = useState<GrowthSettingKind[] | null>(null);
 
     if (data !== seededFrom) {
         setSeededFrom(data);
         setSettings(data ?? null);
 
-        if (data?.length && autoTestIds === null) {
-            setAutoTestIds(data.map((item) => item.id));
-            setTestingIds(new Set(data.map((item) => item.id)));
+        if (data && autoTestKinds === null) {
+            const saved = data.filter((item) => item.source !== 'none').map((item) => item.kind);
+
+            setAutoTestKinds(saved);
+            setTestingKinds(new Set(saved));
         }
     }
 
     // On open, every saved item is re-tested once without any toast, so the badges reflect the keys as they
     // are now rather than when they were saved.
     useEffect(() => {
-        for (const id of autoTestIds ?? []) {
+        for (const kind of autoTestKinds ?? []) {
             growthApi
-                .testSetting(id)
+                .testSetting(kind)
                 .then((tested) =>
-                    setSettings((previous) => previous?.map((s) => (s.id === tested.id ? tested : s)) ?? null),
+                    setSettings(
+                        (previous) => previous?.map((item) => (item.kind === tested.kind ? tested : item)) ?? null,
+                    ),
                 )
                 .catch(() => {})
                 .finally(() =>
-                    setTestingIds((previous) => {
+                    setTestingKinds((previous) => {
                         const next = new Set(previous);
-                        next.delete(id);
+                        next.delete(kind);
 
                         return next;
                     }),
                 );
         }
-    }, [autoTestIds]);
+    }, [autoTestKinds]);
 
-    const handleChange = (previousId: null | string, next: GrowthSetting | null) =>
+    const byKind = (kind: GrowthSettingKind) => settings?.find((item) => item.kind === kind);
+
+    const handleChange = (kind: GrowthSettingKind, next: GrowthSetting | null) =>
         setSettings((previous) => {
-            const rest = (previous ?? []).filter((item) => item.id !== previousId && item.id !== next?.id);
+            const rest = (previous ?? []).filter((item) => item.kind !== kind);
 
             return next ? [...rest, next] : rest;
         });
 
-    const byKind = (kind: GrowthSetting['kind']) => (settings ?? []).filter((item) => item.kind === kind);
-    const searchSettings = byKind('web_search');
-    const searchCardCount = Math.max(1, searchSettings.length + extraSearchCards);
-    const isTelegramSignedIn = !!accounts?.some(isAccountUsable);
-    const isReady = REQUIRED_KINDS.every((kind) => byKind(kind)[0]?.status === 'connected');
-    const isEmpty = !!settings && settings.length === 0;
+    const isTelegramSignedIn = !!accounts?.some(isAccountSignedIn);
+    const isReady = REQUIRED_KINDS.every((kind) => settingState(byKind(kind)) === 'connected');
+    const isEmpty = !!settings && settings.every((item) => item.source === 'none');
 
     return (
         <>
@@ -111,60 +115,17 @@ function SettingsCredentials() {
                             </Alert>
                         )}
 
-                        {(['llm', 'telegram'] as const).map((kind) => {
-                            const setting = byKind(kind)[0];
+                        {CARD_ORDER.map((kind) => {
+                            const setting = byKind(kind);
 
                             return (
                                 <GrowthCredentialCard
                                     isTelegramSignedIn={isTelegramSignedIn}
-                                    isTesting={!!setting && testingIds.has(setting.id)}
-                                    key={setting?.id ?? kind}
+                                    isTesting={testingKinds.has(kind)}
+                                    // Saving or clearing remounts the card, so its edit state starts over.
+                                    key={`${kind}:${setting?.source ?? 'none'}:${setting?.provider ?? ''}`}
                                     kind={kind}
-                                    onChange={handleChange}
-                                    setting={setting}
-                                />
-                            );
-                        })}
-
-                        {Array.from({ length: searchCardCount }, (_, index) => {
-                            const setting = searchSettings[index];
-
-                            return (
-                                <GrowthCredentialCard
-                                    isTesting={!!setting && testingIds.has(setting.id)}
-                                    key={setting?.id ?? `web_search-draft-${index}`}
-                                    kind="web_search"
-                                    onChange={(previousId, next) => {
-                                        if (!setting && next) {
-                                            setExtraSearchCards((count) => Math.max(0, count - 1));
-                                        }
-
-                                        handleChange(previousId, next);
-                                    }}
-                                    setting={setting}
-                                />
-                            );
-                        })}
-                        {searchSettings.length > 0 && searchCardCount === searchSettings.length && (
-                            <Button
-                                className="self-start"
-                                onClick={() => setExtraSearchCards((count) => count + 1)}
-                                size="sm"
-                                variant="ghost"
-                            >
-                                {text.addSearch}
-                            </Button>
-                        )}
-
-                        {(['youtube', 'email'] as const).map((kind) => {
-                            const setting = byKind(kind)[0];
-
-                            return (
-                                <GrowthCredentialCard
-                                    isTesting={!!setting && testingIds.has(setting.id)}
-                                    key={setting?.id ?? kind}
-                                    kind={kind}
-                                    onChange={handleChange}
+                                    onChange={(next) => handleChange(kind, next)}
                                     setting={setting}
                                 />
                             );

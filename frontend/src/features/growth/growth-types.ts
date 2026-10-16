@@ -1,34 +1,50 @@
 // Wire shapes of the REST API under /api/v1/growth. Field names are the JSON keys the backend sends.
 
 export interface GrowthAccount {
-    display_name: string;
+    // True while the account may be picked for work right now.
+    available: boolean;
+    consecutive_errors: number;
+    // DevTools address of the customer's own fingerprint browser (AdsPower, BitBrowser); when set it supplies
+    // the proxy and the fingerprint, and the system's own are unused.
+    external_browser_ws: null | string;
+    // Phone number or platform user id; only its last four characters are shown.
+    external_id: string;
+    // Generated per browser_session account; null for Telegram.
+    fingerprint: GrowthFingerprint | null;
     id: number;
-    last_flood_wait_at: null | string;
+    kind: string;
+    label: string;
+    last_error: null | string;
+    last_rate_limited_at: null | string;
     last_success_at: null | string;
-    phone_last4: string;
+    last_used_at: null | string;
     platform: GrowthAccountPlatform;
-    // Set while `flood_wait`: when the platform lets the account act again.
-    resume_at: null | string;
+    // host:port of the account's own proxy, credentials removed; null connects directly or through the
+    // default proxy.
+    proxy: null | string;
+    // Set while `rate_limited`: when the platform lets the account act again.
+    rate_limit_until: null | string;
     status: GrowthAccountStatus;
-    // Counted since local midnight on the server; display only, nothing caps them.
-    today_joins: number;
-    today_reads: number;
 }
 
 // Facebook and Instagram accounts sign in through a remote browser rather than a code sent by Telegram.
 export type GrowthAccountPlatform = 'facebook' | 'instagram' | 'telegram';
 
-// `flood_wait` is not an error: the connector sleeps for as long as the platform asked and resumes on its
-// own. `disabled` is the customer's choice; the account is kept but never used. `restricted` means the
-// platform banned or froze the account and the system has stopped using it for good.
-export type GrowthAccountStatus = 'connected' | 'disabled' | 'flood_wait' | 'restricted' | 'signed_out';
+// `rate_limited` is not an error: the connector sleeps for as long as the platform asked and resumes on its
+// own. `disabled` is the customer's choice; the account is kept but never used.
+export type GrowthAccountStatus = 'active' | 'disabled' | 'needs_login' | 'rate_limited';
 
-export const isAccountUsable = (account: Pick<GrowthAccount, 'status'>): boolean =>
-    account.status === 'connected' || account.status === 'flood_wait';
+export const isAccountSignedIn = (account: Pick<GrowthAccount, 'status'>): boolean =>
+    account.status === 'active' || account.status === 'rate_limited';
 
-// Where the server actually sent a test email or a lead list.
+export interface GrowthAccountsResponse {
+    accounts: GrowthAccount[];
+}
+
+// `to` lists where the server actually sent the email.
 export interface GrowthEmailResult {
-    sent_to: string[];
+    sent: boolean;
+    to: string[];
 }
 
 export interface GrowthLead {
@@ -78,7 +94,15 @@ export type GrowthLeadSignal = 'competitor' | 'genre_match' | 'paying' | 'player
 
 export type GrowthLeadTier = 'qualified' | 'watch';
 
-export type GrowthPlatform = 'telegram';
+export type GrowthPlatform = 'facebook' | 'instagram' | 'telegram' | 'web' | 'youtube';
+
+export const GROWTH_PLATFORMS: GrowthPlatform[] = ['telegram', 'facebook', 'instagram', 'youtube', 'web'];
+
+export interface GrowthFingerprint {
+    language: string;
+    os: string;
+    timezone: string;
+}
 
 export interface GrowthProfile {
     competitors: string[];
@@ -97,6 +121,18 @@ export interface GrowthProfile {
 
 export type GrowthProfileInput = Omit<GrowthProfile, 'id' | 'updated_at'>;
 
+export interface GrowthProxyTestResult {
+    error: null | string;
+    ok: boolean;
+}
+
+// A browser opened on the server for Facebook or Instagram; `view_url` is the live view to embed.
+export interface GrowthRemoteLogin {
+    fingerprint: GrowthFingerprint | null;
+    session_id: string;
+    view_url: null | string;
+}
+
 // One round is one Task of the flow. `target` is null for an assistant question that set no goal.
 export interface GrowthRun {
     current_action: null | string;
@@ -106,6 +142,9 @@ export interface GrowthRun {
     flood_wait_seconds: null | number;
     flow_id: number;
     found: number;
+    notify_error: null | string;
+    // Outcome of emailing the delivered list; `skipped` when email notifications are not set up.
+    notify_status: 'failed' | 'sent' | 'skipped' | null;
     round: number;
     sources: GrowthRunSources;
     started_at: string;
@@ -124,32 +163,35 @@ export interface GrowthRunSources {
 
 export type GrowthRunStatus = 'delivered' | 'failed' | 'missed' | 'running' | 'waiting';
 
+// One card of the "Keys & connections" page. Secret fields come back masked ("••••abcd"); `source` says
+// whether the value was saved here, preset by the server, or is missing.
 export interface GrowthSetting {
-    // The kind itself, except `web_search:<provider>` since several search services may be saved.
-    id: string;
+    fields: Record<string, string>;
     kind: GrowthSettingKind;
-    masked: null | Record<string, string>;
     provider: null | string;
-    reason_code: GrowthSettingReason | null;
+    providers: string[];
+    source: GrowthSettingSource;
     status: GrowthSettingStatus;
+    status_reason: null | string;
     tested_at: null | string;
+    updated_at: null | string;
 }
 
+// A field left empty keeps the value already saved.
 export interface GrowthSettingInput {
-    kind: GrowthSettingKind;
+    fields: Record<string, string>;
     provider: null | string;
-    // Field name to value: api_key, plus server_url for a custom LLM, cx for Google search, api_id and
-    // api_hash for Telegram, smtp_* and notify_emails (comma-separated) for email.
-    values: Record<string, string>;
 }
 
-// One card (or, for web search, one service) of the "Keys & connections" page. The full secret never comes
-// back: `masked` holds each saved field already masked by the server.
-export type GrowthSettingKind = 'email' | 'llm' | 'telegram' | 'web_search' | 'youtube';
+export type GrowthSettingKind = 'email' | 'llm' | 'proxy' | 'telegram' | 'web_search' | 'youtube';
 
-export type GrowthSettingReason = 'format' | 'permission' | 'quota' | 'rejected' | 'timeout' | 'unreachable';
+export type GrowthSettingSource = 'database' | 'env' | 'none';
 
-export type GrowthSettingStatus = 'connected' | 'invalid' | 'unset';
+export interface GrowthSettingsResponse {
+    settings: GrowthSetting[];
+}
+
+export type GrowthSettingStatus = 'connected' | 'invalid' | 'untested';
 
 export interface GrowthSource {
     created_at: string;
@@ -181,4 +223,12 @@ export type GrowthSourceOrigin = 'ai' | 'manual';
 
 export interface GrowthSourcesAddResponse {
     results: GrowthSourceAddResult[];
+}
+
+// Telegram sign-in is a short conversation: the phone gets a code, and an account with two-step
+// verification then asks for its password.
+export interface GrowthTelegramLoginStep {
+    account: GrowthAccount | null;
+    login_id: string;
+    next: 'code' | 'done' | 'password';
 }

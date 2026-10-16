@@ -36,6 +36,7 @@ export type TitleResolver = ((params: RouteParams) => string) | ComponentType<{ 
  */
 export const routeTitles = {
     account: { title: 'Account' },
+    accounts: { title: copy.telegram.title },
     apiTokens: { title: 'API Tokens' },
     credentials: { title: copy.credentials.title },
     dashboard: { title: copy.nav.dashboard },
@@ -50,6 +51,7 @@ export const routeTitles = {
     flowReport: { title: 'Flow report' },
     flows: { title: copy.nav.flows },
     growthProfile: { title: copy.profile.title },
+    helpKeys: { title: copy.helpKeys.title },
     knowledge: {
         title: apolloTitle({
             document: KnowledgeDocumentDocument,
@@ -66,6 +68,7 @@ export const routeTitles = {
         title: (params: RouteParams) => (params.promptId ? formatPromptId(params.promptId) : 'Prompt'),
     },
     prompts: { title: 'Prompts' },
+
     provider: {
         title: apolloTitle({
             document: SettingsProvidersDocument,
@@ -87,8 +90,6 @@ export const routeTitles = {
     providers: { title: 'Providers' },
 
     resources: { title: 'Resources' },
-
-    telegram: { title: copy.telegram.title },
 
     template: {
         title: apolloTitle({

@@ -24,15 +24,15 @@ function GrowthOnboarding() {
     const steps = [
         {
             isDone: REQUIRED_KINDS.every((kind) =>
-                settings?.some((item) => item.kind === kind && item.status === 'connected'),
+                settings?.some((item) => item.kind === kind && item.source !== 'none' && item.status === 'connected'),
             ),
             label: copy.onboarding.stepCredentials,
             to: routes.settings.credentials,
         },
         {
-            isDone: !!accounts?.some((account) => account.status === 'connected'),
+            isDone: !!accounts?.some((account) => account.status === 'active'),
             label: copy.onboarding.stepAccount,
-            to: routes.settings.telegram,
+            to: routes.settings.accounts,
         },
         { isDone: !!profiles?.length, label: copy.onboarding.stepProfile, to: routes.settings.growthProfile },
         { isDone: flows.length > 0, label: copy.onboarding.stepFlow, to: routes.newFlow },

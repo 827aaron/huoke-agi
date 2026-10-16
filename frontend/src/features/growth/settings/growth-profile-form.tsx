@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import * as z from 'zod';
@@ -15,6 +16,7 @@ import { copy } from '@/lib/copy';
 import type { GrowthProfile, GrowthProfileInput } from '../growth-types';
 
 import { growthApi } from '../growth-api';
+import { LANGUAGE_CODES, languageCode } from '../languages';
 
 const { field, required } = copy.profile;
 
@@ -27,26 +29,49 @@ export const splitList = (text: string): string[] => [
     ),
 ];
 
+// The "other" chip only reveals the free-text field; what is typed there is saved as written.
+const OTHER_LANGUAGE = 'other';
+
+const selectedLanguages = (values: { languages: string[]; otherLanguages: string }): string[] => [
+    ...new Set([
+        ...values.languages.filter((language) => language !== OTHER_LANGUAGE),
+        ...(values.languages.includes(OTHER_LANGUAGE) ? splitList(values.otherLanguages) : []),
+    ]),
+];
+
+const languageFormValues = (languages: string[] = []) => {
+    const codes = languages.map(languageCode).filter((code): code is string => !!code);
+    const others = languages.filter((language) => !languageCode(language));
+
+    return {
+        languages: others.length ? [...codes, OTHER_LANGUAGE] : codes,
+        otherLanguages: others.join('、'),
+    };
+};
+
 const joinList = (items: string[] | undefined): string => (items ?? []).join('\n');
 
 const nonEmptyList = (message: string) => z.string().refine((value) => splitList(value).length > 0, { message });
 
-const profileFormSchema = z.object({
-    competitors: z.string(),
-    defaultTarget: z
-        .string()
-        .trim()
-        .regex(/^\d+$/, { message: copy.profile.targetRange })
-        .refine((value) => Number(value) >= 1 && Number(value) <= 1000, { message: copy.profile.targetRange }),
-    excludes: z.string(),
-    games: nonEmptyList(required.games),
-    genre: z.string().min(1, { message: required.genre }),
-    languages: z.array(z.string()).min(1, { message: required.languages }),
-    name: z.string().trim().min(1, { message: required.name }),
-    pitch: z.string().trim().min(1, { message: required.pitch }),
-    regions: nonEmptyList(required.regions),
-    signals: z.string(),
-});
+const profileFormSchema = z
+    .object({
+        competitors: z.string(),
+        defaultTarget: z
+            .string()
+            .trim()
+            .regex(/^\d+$/, { message: copy.profile.targetRange })
+            .refine((value) => Number(value) >= 1 && Number(value) <= 1000, { message: copy.profile.targetRange }),
+        excludes: z.string(),
+        games: nonEmptyList(required.games),
+        genre: z.string().min(1, { message: required.genre }),
+        languages: z.array(z.string()),
+        name: z.string().trim().min(1, { message: required.name }),
+        otherLanguages: z.string(),
+        pitch: z.string().trim().min(1, { message: required.pitch }),
+        regions: nonEmptyList(required.regions),
+        signals: z.string(),
+    })
+    .refine((values) => selectedLanguages(values).length > 0, { message: required.languages, path: ['languages'] });
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
@@ -56,7 +81,7 @@ const toFormValues = (profile: GrowthProfile | null): ProfileFormValues => ({
     excludes: joinList(profile ? profile.excludes : copy.profile.defaultExcludes),
     games: joinList(profile?.games),
     genre: profile?.genre ?? '',
-    languages: profile?.languages ?? [],
+    ...languageFormValues(profile?.languages),
     name: profile?.name ?? '',
     pitch: profile?.pitch ?? '',
     regions: joinList(profile?.regions),
@@ -69,7 +94,7 @@ const toInput = (values: ProfileFormValues): GrowthProfileInput => ({
     excludes: splitList(values.excludes),
     games: splitList(values.games),
     genre: values.genre,
-    languages: values.languages,
+    languages: selectedLanguages(values),
     name: values.name.trim(),
     pitch: values.pitch.trim(),
     regions: splitList(values.regions),
@@ -203,17 +228,33 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                                     value={input.value}
                                     variant="outline"
                                 >
-                                    {copy.profile.languages.map((language) => (
+                                    {[...LANGUAGE_CODES, OTHER_LANGUAGE].map((code) => (
                                         <ToggleGroupItem
-                                            className="px-3"
-                                            key={language}
-                                            value={language}
+                                            className="group data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90 data-[state=on]:hover:text-primary-foreground px-3"
+                                            key={code}
+                                            value={code}
                                         >
-                                            {language}
+                                            <Check className="hidden size-3.5 group-data-[state=on]:block" />
+                                            {code === OTHER_LANGUAGE
+                                                ? copy.profile.otherLanguage
+                                                : copy.profile.languages[code]}
                                         </ToggleGroupItem>
                                     ))}
                                 </ToggleGroup>
                             </FormControl>
+                            {input.value.includes(OTHER_LANGUAGE) && (
+                                <FormField
+                                    control={form.control}
+                                    name="otherLanguages"
+                                    render={({ field: other }) => (
+                                        <Input
+                                            aria-label={copy.profile.otherLanguage}
+                                            placeholder={copy.profile.otherLanguagePlaceholder}
+                                            {...other}
+                                        />
+                                    )}
+                                />
+                            )}
                             <FormDescription>{field.languages.help}</FormDescription>
                             <FormMessage />
                         </FormItem>

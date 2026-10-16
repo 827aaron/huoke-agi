@@ -7,6 +7,7 @@ import { copy } from '@/lib/copy';
 
 import type { GrowthLead } from '../growth-types';
 
+import { languageLabel } from '../languages';
 import LeadScoreBadge from './lead-score-badge';
 
 interface LeadDetailSheetProps {
@@ -48,7 +49,11 @@ function LeadDetailSheet({ lead, onOpenChange }: LeadDetailSheetProps) {
                                     <div className="text-muted-foreground flex flex-col gap-1 text-sm">
                                         {profile.bio && <p>{profile.bio}</p>}
                                         {!!profile.languages?.length && (
-                                            <p>{copy.leads.detail.profileLanguages(profile.languages)}</p>
+                                            <p>
+                                                {copy.leads.detail.profileLanguages(
+                                                    profile.languages.map(languageLabel),
+                                                )}
+                                            </p>
                                         )}
                                         {!!profile.related_groups && (
                                             <p>{copy.leads.detail.profileGroups(profile.related_groups)}</p>

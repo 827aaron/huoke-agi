@@ -46,6 +46,7 @@ const NewFlow = lazy(() => import('@/pages/flows/new-flow'));
 const Login = lazy(() => import('@/pages/login'));
 const Knowledge = lazy(() => import('@/pages/knowledges/knowledge'));
 const Knowledges = lazy(() => import('@/pages/knowledges/knowledges'));
+const HelpKeys = lazy(() => import('@/pages/help/help-keys'));
 const Resources = lazy(() => import('@/pages/resources/resources'));
 const Template = lazy(() => import('@/pages/templates/template'));
 const Templates = lazy(() => import('@/pages/templates/templates'));
@@ -54,7 +55,7 @@ const SettingsAccount = lazy(() => import('@/pages/settings/settings-account'));
 const SettingsAPITokens = lazy(() => import('@/pages/settings/settings-api-tokens'));
 const SettingsCredentials = lazy(() => import('@/pages/settings/settings-credentials'));
 const SettingsGrowthProfile = lazy(() => import('@/pages/settings/settings-growth-profile'));
-const SettingsTelegram = lazy(() => import('@/pages/settings/settings-telegram'));
+const SettingsAccounts = lazy(() => import('@/pages/settings/settings-accounts'));
 const SettingsPrompt = lazy(() => import('@/pages/settings/settings-prompt'));
 const SettingsPrompts = lazy(() => import('@/pages/settings/settings-prompts'));
 const SettingsProvider = lazy(() => import('@/pages/settings/settings-provider'));
@@ -197,6 +198,11 @@ const router = createBrowserRouter(
                         handle={routeTitles.resources}
                         path="resources"
                     />
+                    <Route
+                        element={<HelpKeys />}
+                        handle={routeTitles.helpKeys}
+                        path="help/keys"
+                    />
                 </Route>
 
                 <Route
@@ -223,9 +229,9 @@ const router = createBrowserRouter(
                         path="business-profile"
                     />
                     <Route
-                        element={<SettingsTelegram />}
-                        handle={routeTitles.telegram}
-                        path="telegram"
+                        element={<SettingsAccounts />}
+                        handle={routeTitles.accounts}
+                        path="accounts"
                     />
                     <Route
                         element={<SettingsCredentials />}

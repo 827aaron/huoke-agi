@@ -1,10 +1,11 @@
-import type { GrowthLead, GrowthLeadTier } from '../growth-types';
+import type { GrowthLead, GrowthLeadTier, GrowthPlatform } from '../growth-types';
 
 export type LeadDeliveryFilter = 'all' | 'delivered' | 'not_delivered';
 
 export interface LeadFilters {
     delivery: LeadDeliveryFilter;
     flags: LeadFlag[];
+    platform: GrowthPlatform | null;
     search: string;
     sourceId: null | number;
     tier: 'all' | GrowthLeadTier;
@@ -12,7 +13,14 @@ export interface LeadFilters {
 
 export type LeadFlag = 'competitor' | 'paying' | 'recent';
 
-export const EMPTY_LEAD_FILTERS: LeadFilters = { delivery: 'all', flags: [], search: '', sourceId: null, tier: 'all' };
+export const EMPTY_LEAD_FILTERS: LeadFilters = {
+    delivery: 'all',
+    flags: [],
+    platform: null,
+    search: '',
+    sourceId: null,
+    tier: 'all',
+};
 
 const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -37,6 +45,10 @@ export function filterLeads(leads: GrowthLead[], filters: LeadFilters, now = Dat
         }
 
         if (filters.delivery === 'not_delivered' && lead.delivered_at) {
+            return false;
+        }
+
+        if (filters.platform !== null && lead.platform !== filters.platform) {
             return false;
         }
 

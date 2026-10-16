@@ -15,10 +15,16 @@ import { getApiErrorMessage } from '@/lib/axios';
 import { copy } from '@/lib/copy';
 import { formatNumber } from '@/lib/utils/format';
 
-import type { GrowthSourceAddResult, GrowthSourceJoinStatus, GrowthSourceOrigin } from '../growth-types';
+import type {
+    GrowthPlatform,
+    GrowthSourceAddResult,
+    GrowthSourceJoinStatus,
+    GrowthSourceOrigin,
+} from '../growth-types';
 
 import { growthApi } from '../growth-api';
 import { useGrowthFlow } from '../growth-flow-provider';
+import { PlatformFilter } from '../platform-filter';
 import { MAX_SOURCE_LINKS, splitSourceLinks } from '../source-links';
 import { SOURCE_QUERY_PARAM, useGrowthTabLink } from '../use-growth-tab-link';
 
@@ -56,6 +62,7 @@ function FlowSources() {
     const [search, setSearch] = useState(queryParam ?? '');
     const [joinStatus, setJoinStatus] = useState<'all' | GrowthSourceJoinStatus>(ALL);
     const [origin, setOrigin] = useState<'all' | GrowthSourceOrigin>(ALL);
+    const [platform, setPlatform] = useState<GrowthPlatform | null>(null);
 
     const [appliedQueryParam, setAppliedQueryParam] = useState(queryParam);
 
@@ -74,9 +81,10 @@ function FlowSources() {
             (source) =>
                 (joinStatus === ALL || source.join_status === joinStatus) &&
                 (origin === ALL || source.origin === origin) &&
+                (platform === null || source.platform === platform) &&
                 (!query || source.title.toLowerCase().includes(query) || source.link.toLowerCase().includes(query)),
         );
-    }, [sources, search, joinStatus, origin]);
+    }, [sources, search, joinStatus, origin, platform]);
 
     const handleAdd = async () => {
         const links = splitSourceLinks(linksText);
@@ -175,6 +183,10 @@ function FlowSources() {
                         </InputGroupAddon>
                     )}
                 </InputGroup>
+                <PlatformFilter
+                    onChange={setPlatform}
+                    value={platform}
+                />
                 <Select
                     onValueChange={(value) => setJoinStatus(value as 'all' | GrowthSourceJoinStatus)}
                     value={joinStatus}

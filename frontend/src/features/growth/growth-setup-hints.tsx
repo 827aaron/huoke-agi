@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 
-import { isAccountUsable } from './growth-types';
+import { isAccountSignedIn } from './growth-types';
 import { useGrowthAccounts, useGrowthProfiles } from './use-growth-data';
 
 // Hints only: an unconfigured workspace may still start a project.
@@ -18,10 +18,10 @@ function GrowthSetupHints() {
     const hints = [
         {
             id: 'account',
-            isMissing: !isAccountsLoading && !!accounts && !accounts.some(isAccountUsable),
+            isMissing: !isAccountsLoading && !!accounts && !accounts.some(isAccountSignedIn),
             link: copy.newFlow.missingAccountLink,
             text: copy.newFlow.missingAccount,
-            to: routes.settings.telegram,
+            to: routes.settings.accounts,
         },
         {
             id: 'profile',

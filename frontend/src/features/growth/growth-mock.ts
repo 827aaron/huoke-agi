@@ -1,14 +1,19 @@
+import type { RemoteLoginInput, StartLoginInput } from './growth-api';
 import type {
     GrowthAccount,
     GrowthEmailResult,
     GrowthLead,
     GrowthProfile,
     GrowthProfileInput,
+    GrowthProxyTestResult,
+    GrowthRemoteLogin,
     GrowthRun,
     GrowthSetting,
     GrowthSettingInput,
+    GrowthSettingKind,
     GrowthSource,
     GrowthSourcesAddResponse,
+    GrowthTelegramLoginStep,
 } from './growth-types';
 
 import { isTelegramLink } from './source-links';
@@ -22,52 +27,94 @@ let profiles: GrowthProfile[] = [];
 
 let accounts: GrowthAccount[] = [
     {
-        display_name: 'Growth Ops',
+        available: true,
+        consecutive_errors: 0,
+        external_browser_ws: null,
+        external_id: '+8613800008842',
+        fingerprint: null,
         id: 1,
-        last_flood_wait_at: ago(1440),
+        kind: 'user',
+        label: 'Growth Ops',
+        last_error: null,
+        last_rate_limited_at: ago(1440),
         last_success_at: ago(3),
-        phone_last4: '8842',
+        last_used_at: ago(3),
         platform: 'telegram',
-        resume_at: null,
-        status: 'connected',
-        today_joins: 3,
-        today_reads: 1240,
+        proxy: null,
+        rate_limit_until: null,
+        status: 'active',
     },
     {
-        display_name: 'Growth Ops 2',
+        available: false,
+        consecutive_errors: 0,
+        external_browser_ws: null,
+        external_id: '+8613900001907',
+        fingerprint: null,
         id: 2,
-        last_flood_wait_at: ago(4),
+        kind: 'user',
+        label: 'Growth Ops 2',
+        last_error: null,
+        last_rate_limited_at: ago(4),
         last_success_at: ago(20),
-        phone_last4: '1907',
+        last_used_at: ago(20),
         platform: 'telegram',
-        resume_at: new Date(now + 6 * 60_000).toISOString(),
-        status: 'flood_wait',
-        today_joins: 1,
-        today_reads: 860,
+        proxy: null,
+        rate_limit_until: new Date(now + 6 * 60_000).toISOString(),
+        status: 'rate_limited',
     },
     {
-        display_name: 'Backup',
+        available: false,
+        consecutive_errors: 1,
+        external_browser_ws: null,
+        external_id: '+8613700005531',
+        fingerprint: null,
         id: 3,
-        last_flood_wait_at: null,
+        kind: 'user',
+        label: 'Backup',
+        last_error: 'AUTH_KEY_UNREGISTERED',
+        last_rate_limited_at: null,
         last_success_at: ago(4320),
-        phone_last4: '5531',
+        last_used_at: ago(4320),
         platform: 'telegram',
-        resume_at: null,
-        status: 'signed_out',
-        today_joins: 0,
-        today_reads: 0,
+        proxy: null,
+        rate_limit_until: null,
+        status: 'needs_login',
     },
     {
-        display_name: 'Old SIM',
+        available: true,
+        consecutive_errors: 0,
+        external_browser_ws: null,
+        external_id: 'fb_100089331207',
+        fingerprint: { language: 'zh-TW', os: 'Windows 11', timezone: 'Asia/Taipei' },
         id: 4,
-        last_flood_wait_at: ago(10080),
-        last_success_at: ago(8640),
-        phone_last4: '0274',
-        platform: 'telegram',
-        resume_at: null,
-        status: 'restricted',
-        today_joins: 0,
-        today_reads: 0,
+        kind: 'browser_session',
+        label: '星穹小编',
+        last_error: null,
+        last_rate_limited_at: null,
+        last_success_at: ago(35),
+        last_used_at: ago(35),
+        platform: 'facebook',
+        proxy: '203.0.113.24:8080',
+        rate_limit_until: null,
+        status: 'active',
+    },
+    {
+        available: false,
+        consecutive_errors: 0,
+        external_browser_ws: 'ws://127.0.0.1:53201/devtools/browser/8c1f',
+        external_id: 'ig_starera_sea',
+        fingerprint: null,
+        id: 5,
+        kind: 'browser_session',
+        label: 'starera.sea',
+        last_error: null,
+        last_rate_limited_at: null,
+        last_success_at: null,
+        last_used_at: null,
+        platform: 'instagram',
+        proxy: null,
+        rate_limit_until: null,
+        status: 'needs_login',
     },
 ];
 
@@ -267,6 +314,8 @@ const runs: GrowthRun[] = [
         flood_wait_seconds: null,
         flow_id: 1,
         found: 4,
+        notify_error: null,
+        notify_status: null,
         round: 1,
         sources: { joined: 2, not_joined: 1, pending: 1, unjoinable: 1 },
         started_at: ago(45),
@@ -277,54 +326,156 @@ const runs: GrowthRun[] = [
     },
 ];
 
+const providersOf: Record<GrowthSettingKind, string[]> = {
+    email: [],
+    llm: ['openai', 'anthropic', 'gemini', 'deepseek', 'glm', 'kimi', 'qwen', 'minimax', 'mistral', 'xai', 'custom'],
+    proxy: [],
+    telegram: [],
+    web_search: ['tavily', 'google', 'perplexity', 'firecrawl', 'traversaal'],
+    youtube: [],
+};
+
+const SECRET_FIELDS = new Set(['api_hash', 'api_key', 'api_keys', 'password']);
+
+const emptySetting = (kind: GrowthSettingKind): GrowthSetting => ({
+    fields: {},
+    kind,
+    provider: null,
+    providers: providersOf[kind],
+    source: 'none',
+    status: 'untested',
+    status_reason: null,
+    tested_at: null,
+    updated_at: null,
+});
+
 let settings: GrowthSetting[] = [
     {
-        id: 'llm',
-        kind: 'llm',
-        masked: { api_key: 'sk-••••••••a1b2' },
+        ...emptySetting('llm'),
+        fields: { api_key: '••••a1b2' },
         provider: 'openai',
-        reason_code: null,
+        source: 'database',
         status: 'connected',
         tested_at: ago(90),
+        updated_at: ago(600),
     },
+    emptySetting('telegram'),
     {
-        id: 'web_search:tavily',
-        kind: 'web_search',
-        masked: { api_key: 'tvl••••••••9f3c' },
+        ...emptySetting('web_search'),
+        fields: { api_keys: '••••9f3c\n••••07de' },
         provider: 'tavily',
-        reason_code: null,
+        source: 'env',
         status: 'connected',
         tested_at: ago(300),
     },
+    {
+        ...emptySetting('youtube'),
+        fields: { api_keys: '••••Kx2q\n••••p8Ld' },
+        source: 'database',
+        status: 'connected',
+        tested_at: ago(240),
+        updated_at: ago(3600),
+    },
+    emptySetting('proxy'),
+    emptySetting('email'),
 ];
 
-const PLAIN_FIELDS = new Set(['notify_emails', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_user']);
-
-// The masking rule the server applies: the first 3 and last 4 characters, only the last 2 below 12. Mail
-// server addresses are not secret and come back as entered.
+// The masking rule the server applies to secrets: only the last 4 characters survive.
 const mask = (field: string, value: string) =>
-    PLAIN_FIELDS.has(field)
+    SECRET_FIELDS.has(field)
         ? value
-        : value.length < 12
-          ? `••••••${value.slice(-2)}`
-          : `${value.slice(0, 3)}••••••••${value.slice(-4)}`;
+              .split('\n')
+              .map((line) => `••••${line.slice(-4)}`)
+              .join('\n')
+        : value;
 
-const notifyEmails = () =>
-    (storedValues.get('email')?.notify_emails ?? '')
+// Any value is accepted except one containing "bad", so both outcomes can be tried by hand.
+const testValues = (values: Record<string, string>): null | string =>
+    Object.values(values).some((value) => value.includes('bad')) ? 'rejected' : null;
+
+const storedValues = new Map<GrowthSettingKind, Record<string, string>>();
+
+const findSetting = (kind: GrowthSettingKind) => settings.find((item) => item.kind === kind) ?? emptySetting(kind);
+
+const replaceSetting = (next: GrowthSetting) => {
+    settings = settings.map((item) => (item.kind === next.kind ? next : item));
+
+    return next;
+};
+
+const sendMail = (): Promise<GrowthEmailResult> => {
+    const email = findSetting('email');
+
+    if (email.source === 'none') {
+        return Promise.reject(new Error('mock: email is not configured'));
+    }
+
+    const to = (email.fields.notify_emails || email.fields.username || '')
         .split(',')
         .map((address) => address.trim())
         .filter(Boolean);
 
-const sendMail = (): Promise<GrowthEmailResult> =>
-    settings.some((item) => item.kind === 'email' && item.status === 'connected')
-        ? delay({ sent_to: notifyEmails() })
-        : Promise.reject(new Error('mock: email is not configured'));
+    return delay({ sent: true, to });
+};
 
-// Any value is accepted except one containing "bad", so both outcomes can be tried by hand.
-const testValues = (values: Record<string, string>): GrowthSetting['reason_code'] =>
-    Object.values(values).some((value) => value.includes('bad')) ? 'rejected' : null;
+// Drops the credentials from a proxy URL the way the server reports it: host:port only.
+const proxyHost = (proxy: null | string | undefined): null | string => {
+    if (!proxy) {
+        return null;
+    }
 
-const storedValues = new Map<string, Record<string, string>>();
+    try {
+        const url = new URL(proxy);
+
+        return `${url.hostname}:${url.port}`;
+    } catch {
+        return proxy;
+    }
+};
+
+const telegramLogins = new Map<string, StartLoginInput & { phone: string }>();
+const remoteLogins = new Map<string, { input: RemoteLoginInput }>();
+
+const upsertAccount = (
+    accountId: number | undefined,
+    fields: Pick<GrowthAccount, 'external_id' | 'kind' | 'label' | 'platform' | 'proxy'>,
+    externalBrowserWs?: null | string,
+): GrowthAccount => {
+    const existing = accounts.find((account) => account.id === accountId);
+    const account: GrowthAccount = {
+        available: true,
+        consecutive_errors: 0,
+        external_browser_ws: existing?.external_browser_ws ?? null,
+        fingerprint: existing?.fingerprint ?? null,
+        id: existing?.id ?? Math.max(0, ...accounts.map(({ id }) => id)) + 1,
+        last_error: null,
+        last_rate_limited_at: existing?.last_rate_limited_at ?? null,
+        last_success_at: new Date().toISOString(),
+        last_used_at: new Date().toISOString(),
+        rate_limit_until: null,
+        status: 'active',
+        ...fields,
+        ...(existing ? { external_id: existing.external_id, label: existing.label } : {}),
+        proxy: fields.proxy ?? existing?.proxy ?? null,
+        ...(externalBrowserWs !== undefined ? { external_browser_ws: externalBrowserWs || null } : {}),
+    };
+
+    accounts = existing ? accounts.map((item) => (item.id === account.id ? account : item)) : [...accounts, account];
+
+    return account;
+};
+
+const finishTelegramLogin = (loginId: string, input: StartLoginInput & { phone: string }) => {
+    telegramLogins.delete(loginId);
+
+    return upsertAccount(input.account_id, {
+        external_id: input.phone,
+        kind: 'user',
+        label: 'Telegram 账号',
+        platform: 'telegram',
+        proxy: proxyHost(input.proxy),
+    });
+};
 
 const delay = <T>(value: T): Promise<T> =>
     new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), 150));
@@ -364,9 +515,12 @@ export const growthMock = {
 
         return delay({ results });
     },
-    clearSetting: async (id: string) => {
-        settings = settings.filter((item) => item.id !== id);
-        storedValues.delete(id);
+    cancelRemoteLogin: async (_sessionId: string) => {
+        await delay(null);
+    },
+    clearSetting: async (kind: GrowthSettingKind) => {
+        replaceSetting(emptySetting(kind));
+        storedValues.delete(kind);
         await delay(null);
     },
     createProfile: (input: GrowthProfileInput): Promise<GrowthProfile> => {
@@ -375,6 +529,29 @@ export const growthMock = {
 
         return delay(profile);
     },
+    finishRemoteLogin: (sessionId: string): Promise<GrowthAccount> => {
+        const pending = remoteLogins.get(sessionId);
+
+        if (!pending) {
+            return Promise.reject(new Error('mock: unknown remote login'));
+        }
+
+        remoteLogins.delete(sessionId);
+
+        return delay(
+            upsertAccount(
+                pending.input.account_id,
+                {
+                    external_id: `${pending.input.platform}_user_${sessionId.slice(-4)}`,
+                    kind: 'browser_session',
+                    label: `${pending.input.platform === 'facebook' ? 'Facebook' : 'Instagram'} 账号`,
+                    platform: pending.input.platform,
+                    proxy: proxyHost(pending.input.proxy),
+                },
+                pending.input.external_browser_ws,
+            ),
+        );
+    },
     listAccounts: () => delay(accounts),
     // Every flow sees the same sample leads so any flow opened in development has something to show.
     listLeads: () => delay(leads),
@@ -382,59 +559,103 @@ export const growthMock = {
     listRuns: (flowId: number | string) => delay(runs.map((run) => ({ ...run, flow_id: Number(flowId) }))),
     listSettings: () => delay(settings),
     listSources: () => delay(sources),
-    removeAccount: (id: number) => {
-        accounts = accounts.filter((account) => account.id !== id);
+    saveSetting: (kind: GrowthSettingKind, input: GrowthSettingInput): Promise<GrowthSetting> => {
+        const current = findSetting(kind);
+        const kept = current.provider === input.provider ? (storedValues.get(kind) ?? {}) : {};
+        const values = { ...kept, ...Object.fromEntries(Object.entries(input.fields).filter(([, value]) => value)) };
 
-        return delay(undefined);
-    },
-    saveSetting: (id: string, input: GrowthSettingInput): Promise<GrowthSetting> => {
-        const reason = testValues(input.values);
-        const saved: GrowthSetting = {
-            id,
-            kind: input.kind,
-            masked: Object.fromEntries(
-                Object.entries(input.values).map(([field, value]) => [field, mask(field, value)]),
-            ),
-            provider: input.provider,
-            reason_code: reason,
-            status: reason ? 'invalid' : 'connected',
-            tested_at: new Date().toISOString(),
-        };
+        storedValues.set(kind, values);
 
-        storedValues.set(id, input.values);
-        settings = [...settings.filter((item) => item.id !== id), saved];
-
-        return delay(saved);
+        return delay(
+            replaceSetting({
+                ...current,
+                fields: Object.fromEntries(Object.entries(values).map(([field, value]) => [field, mask(field, value)])),
+                provider: input.provider,
+                source: 'database',
+                status: 'untested',
+                status_reason: null,
+                updated_at: new Date().toISOString(),
+            }),
+        );
     },
     sendLeadsEmail: (_flowId: number | string, _taskId: number) => sendMail(),
     setAccountDisabled: (id: number, isDisabled: boolean): Promise<GrowthAccount> => {
         accounts = accounts.map((account) =>
             account.id === id
-                ? { ...account, resume_at: null, status: isDisabled ? 'disabled' : 'connected' }
+                ? {
+                      ...account,
+                      available: !isDisabled,
+                      rate_limit_until: null,
+                      status: isDisabled ? 'disabled' : 'active',
+                  }
                 : account,
         );
 
         return delay(accounts.find((account) => account.id === id) as GrowthAccount);
     },
-    testEmail: () => sendMail(),
-    testSetting: (id: string): Promise<GrowthSetting> => {
-        const current = settings.find((item) => item.id === id);
+    setAccountProxy: (id: number, proxy: null | string): Promise<GrowthAccount> => {
+        accounts = accounts.map((account) => (account.id === id ? { ...account, proxy: proxyHost(proxy) } : account));
 
-        if (!current) {
-            return Promise.reject(new Error(`mock: no setting ${id}`));
+        return delay(accounts.find((account) => account.id === id) as GrowthAccount);
+    },
+    startRemoteLogin: (input: RemoteLoginInput): Promise<GrowthRemoteLogin> => {
+        const sessionId = `rl-${Date.now()}`;
+
+        remoteLogins.set(sessionId, { input });
+
+        return delay({
+            fingerprint: input.external_browser_ws
+                ? null
+                : { language: 'en-US', os: 'macOS 14', timezone: 'Asia/Singapore' },
+            session_id: sessionId,
+            view_url: null,
+        });
+    },
+    startTelegramLogin: (input: StartLoginInput & { phone: string }): Promise<GrowthTelegramLoginStep> => {
+        const loginId = `tg-${Date.now()}`;
+
+        telegramLogins.set(loginId, input);
+
+        return delay({ account: null, login_id: loginId, next: 'code' });
+    },
+    // Code 00000 is refused; a phone ending in 2 asks for a two-step password, so every step can be tried.
+    submitTelegramCode: (loginId: string, code: string): Promise<GrowthTelegramLoginStep> => {
+        const input = telegramLogins.get(loginId);
+
+        if (!input || code === '00000') {
+            return Promise.reject(new Error('mock: wrong code'));
         }
 
-        const reason = testValues(storedValues.get(id) ?? {});
-        const tested: GrowthSetting = {
-            ...current,
-            reason_code: reason,
-            status: reason ? 'invalid' : 'connected',
-            tested_at: new Date().toISOString(),
-        };
+        if (input.phone.endsWith('2')) {
+            return delay({ account: null, login_id: loginId, next: 'password' });
+        }
 
-        settings = settings.map((item) => (item.id === id ? tested : item));
+        return delay({ account: finishTelegramLogin(loginId, input), login_id: loginId, next: 'done' });
+    },
+    submitTelegramPassword: (loginId: string, _password: string): Promise<GrowthTelegramLoginStep> => {
+        const input = telegramLogins.get(loginId);
 
-        return delay(tested);
+        if (!input) {
+            return Promise.reject(new Error('mock: unknown login'));
+        }
+
+        return delay({ account: finishTelegramLogin(loginId, input), login_id: loginId, next: 'done' });
+    },
+    testAccountProxy: (_id: number, proxy?: string): Promise<GrowthProxyTestResult> =>
+        delay(proxy?.includes('bad') ? { error: 'connection refused', ok: false } : { error: null, ok: true }),
+    testEmail: () => sendMail(),
+    testSetting: (kind: GrowthSettingKind): Promise<GrowthSetting> => {
+        const current = findSetting(kind);
+        const reason = current.source === 'env' ? null : testValues(storedValues.get(kind) ?? {});
+
+        return delay(
+            replaceSetting({
+                ...current,
+                status: reason ? 'invalid' : 'connected',
+                status_reason: reason,
+                tested_at: new Date().toISOString(),
+            }),
+        );
     },
     updateProfile: (id: number, input: GrowthProfileInput): Promise<GrowthProfile> => {
         const profile = { ...input, id, updated_at: new Date().toISOString() };

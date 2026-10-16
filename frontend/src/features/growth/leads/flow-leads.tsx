@@ -21,6 +21,7 @@ import { copy } from '@/lib/copy';
 import type { GrowthLead, GrowthLeadTier } from '../growth-types';
 
 import { useGrowthFlow } from '../growth-flow-provider';
+import { PlatformFilter } from '../platform-filter';
 import { LEAD_SOURCE_PARAM, LEAD_TIER_PARAM, useGrowthTabLink } from '../use-growth-tab-link';
 import LeadDetailSheet from './lead-detail-sheet';
 import LeadScoreBadge from './lead-score-badge';
@@ -84,6 +85,7 @@ function FlowLeads() {
         filters.tier !== 'all' ||
         filters.delivery !== 'all' ||
         filters.sourceId !== null ||
+        filters.platform !== null ||
         filters.flags.length > 0;
 
     return (
@@ -163,6 +165,10 @@ function FlowLeads() {
                         ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
+                <PlatformFilter
+                    onChange={(platform) => update({ platform })}
+                    value={filters.platform}
+                />
                 <Select
                     onValueChange={(value) => update({ sourceId: value === ALL ? null : Number(value) })}
                     value={filters.sourceId === null ? ALL : String(filters.sourceId)}
@@ -242,7 +248,7 @@ function FlowLeads() {
                                             <LeadScoreBadge lead={lead} />
                                         </TableCell>
                                         <TableCell>
-                                            <div className="flex max-w-56 flex-wrap gap-1">
+                                            <div className="flex w-56 flex-wrap gap-1">
                                                 {lead.signals.map((signal) => (
                                                     <Badge
                                                         key={signal}
@@ -265,7 +271,7 @@ function FlowLeads() {
                                                 {lead.source_title}
                                             </button>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="whitespace-nowrap">
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
                                                     <span>{copy.leads.evidenceCount(lead.evidence.length)}</span>

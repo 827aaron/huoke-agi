@@ -22,13 +22,14 @@ const { RULES } = (await import(pathToFileURL(join(__dirname, 'mock-llm', 'scena
 const EXCLUDED: Record<string, string> = {
     '/': 'redirects to /dashboard',
     '/flows/new': 'create form; no stable list/detail ready-state to sweep',
+    '/help/keys': 'static guide rendered from public/help/keys.md',
     '/knowledges/new': 'create-mode variant of the knowledge detail page',
     '/oauth/result': 'OAuth popup landing; only meaningful mid-OAuth-roundtrip',
     '/settings': 'redirects to /settings/account',
     '/settings/account': 'needs an account cassette + visual baseline before joining the sweep',
+    '/settings/accounts': 'needs a /growth REST cassette + visual baseline before joining the sweep',
     '/settings/business-profile': 'needs a /growth REST cassette + visual baseline before joining the sweep',
     '/settings/credentials': 'needs a /growth REST cassette + visual baseline before joining the sweep',
-    '/settings/telegram': 'needs a /growth REST cassette + visual baseline before joining the sweep',
     '/templates/new': 'create-mode variant of the template detail page',
 };
 

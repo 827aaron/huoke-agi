@@ -35,7 +35,7 @@ const ids = (leads: GrowthLead[]) => leads.map(({ id }) => id);
 describe('filterLeads', () => {
     const leads = [
         lead(1, { delivered_at: '2026-10-15T00:00:00Z', signals: ['paying'], username: 'ace' }),
-        lead(2, { last_active_at: '2026-10-14T00:00:00Z', source_id: 2, tier: 'watch' }),
+        lead(2, { last_active_at: '2026-10-14T00:00:00Z', platform: 'facebook', source_id: 2, tier: 'watch' }),
         lead(3, {
             evidence: [
                 {
@@ -60,6 +60,7 @@ describe('filterLeads', () => {
         ['delivered', { delivery: 'delivered' as const }, [1]],
         ['not delivered', { delivery: 'not_delivered' as const }, [2, 3]],
         ['source', { sourceId: 2 }, [2]],
+        ['platform', { platform: 'facebook' as const }, [2]],
         ['every flag must hold', { flags: ['paying' as const, 'competitor' as const] }, [3]],
         ['recent means within seven days', { flags: ['recent' as const] }, [2]],
         ['search matches the username', { search: 'ACE' }, [1]],

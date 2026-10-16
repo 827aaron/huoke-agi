@@ -62,9 +62,9 @@ const menuItems: readonly MenuItem[] = [
     },
     {
         icon: <Send className="size-4" />,
-        id: 'telegram',
-        path: routes.settings.telegram,
-        title: copy.settingsNav.telegram,
+        id: 'accounts',
+        path: routes.settings.accounts,
+        title: copy.settingsNav.accounts,
     },
     {
         icon: <Plug className="size-4" />,
