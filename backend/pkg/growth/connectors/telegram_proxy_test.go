@@ -205,15 +205,15 @@ func TestTelegramProxy_ProxyDialer_Rejects(t *testing.T) {
 }
 
 func TestTelegramConfig_ForAccount(t *testing.T) {
-	base := TelegramConfig{APIID: 1, APIHash: "x", SessionPath: "/data/telegram/session.json"}
+	base := TelegramConfig{APIID: 1, APIHash: "x", SessionDir: "/data/tg-session"}
 
 	cfg := base.ForAccount(Account{ID: "acc/1 cn", Platform: PlatformTelegram, Proxy: "socks5://10.0.0.2:1080"})
-	assert.Equal(t, "/data/telegram/account-acc_1_cn.session.json", cfg.SessionPath)
+	assert.Equal(t, "/data/tg-session/account-acc_1_cn.session.json", cfg.SessionPath)
 	assert.Equal(t, "socks5://10.0.0.2:1080", cfg.Proxy)
 	require.NoError(t, cfg.Validate())
 
 	other := base.ForAccount(Account{ID: "acc-2"})
-	assert.Equal(t, "/data/telegram/account-acc-2.session.json", other.SessionPath)
+	assert.Equal(t, "/data/tg-session/account-acc-2.session.json", other.SessionPath)
 	assert.Empty(t, other.Proxy)
 
 	bad := base.ForAccount(Account{ID: "acc-3", Proxy: "gopher://x:70"})

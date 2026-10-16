@@ -729,7 +729,7 @@ func TestTelegram_GetUser(t *testing.T) {
 }
 
 func TestTelegramConfig_Validate(t *testing.T) {
-	valid := TelegramConfig{APIID: 12345, APIHash: "abc", SessionPath: "/data/tg/session.json"}
+	valid := TelegramConfig{APIID: 12345, APIHash: "abc", SessionDir: "/data/tg"}
 	require.NoError(t, valid.Validate())
 
 	noID := valid
@@ -741,19 +741,19 @@ func TestTelegramConfig_Validate(t *testing.T) {
 	assert.ErrorContains(t, noHash.Validate(), "TG_API_HASH")
 
 	noPath := valid
-	noPath.SessionPath = ""
-	assert.ErrorContains(t, noPath.Validate(), "TG_SESSION_PATH")
+	noPath.SessionDir = ""
+	assert.ErrorContains(t, noPath.Validate(), "TG_SESSION_DIR")
 }
 
 func TestTelegramConfig_FromEnv(t *testing.T) {
 	t.Setenv("TG_API_ID", "12345")
 	t.Setenv("TG_API_HASH", "abc")
-	t.Setenv("TG_SESSION_PATH", "/srv/tg/session.json")
+	t.Setenv("TG_SESSION_DIR", "/srv/tg")
 	t.Setenv("TG_MAX_INLINE_FLOOD_WAIT", "2m")
 	cfg, err := TelegramConfigFromEnv()
 	require.NoError(t, err)
 	assert.Equal(t, 12345, cfg.APIID)
-	assert.Equal(t, "/srv/tg/session.json", cfg.SessionPath)
+	assert.Equal(t, "/srv/tg", cfg.SessionDir)
 	assert.Equal(t, 2*time.Minute, cfg.MaxInlineFloodWait)
 	assert.Equal(t, 30*time.Second, cfg.CallTimeout)
 	assert.False(t, cfg.TestServer)
@@ -761,12 +761,13 @@ func TestTelegramConfig_FromEnv(t *testing.T) {
 
 func TestTelegram_NewTelegram_CreatesPrivateSessionDirectory(t *testing.T) {
 	dir := t.TempDir() + "/nested/tg"
-	_, err := NewTelegram(TelegramConfig{APIID: 1, APIHash: "x", SessionPath: dir + "/session.json"})
+	tgc, err := NewTelegram(TelegramConfig{APIID: 1, APIHash: "x", SessionDir: dir})
 	require.NoError(t, err)
+	assert.Equal(t, dir+"/session.json", tgc.cfg.SessionPath)
 	info, err := os.Stat(dir)
 	require.NoError(t, err)
 	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
 
-	_, err = NewTelegram(TelegramConfig{APIHash: "x", SessionPath: dir + "/session.json"})
+	_, err = NewTelegram(TelegramConfig{APIHash: "x", SessionDir: dir})
 	assert.ErrorContains(t, err, "TG_API_ID")
 }

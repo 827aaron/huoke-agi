@@ -23,11 +23,14 @@ import (
 type TelegramConfig struct {
 	APIID   int    `env:"TG_API_ID"`
 	APIHash string `env:"TG_API_HASH"`
-	// SessionPath is the session file of the logged-in account. It holds the
-	// account's auth key, so it lives outside every container and is never
-	// shown to an agent.
-	SessionPath string `env:"TG_SESSION_PATH" envDefault:"./data/telegram/session.json"`
-	TestServer  bool   `env:"TG_TEST_SERVER" envDefault:"false"`
+	// SessionDir holds the session files of the logged-in accounts. They hold
+	// each account's auth key, so the directory lives outside every container
+	// and is never shown to an agent.
+	SessionDir string `env:"TG_SESSION_DIR" envDefault:"./data/tg-session"`
+	// SessionPath is this client's session file; empty means
+	// SessionDir/session.json.
+	SessionPath string
+	TestServer  bool `env:"TG_TEST_SERVER" envDefault:"false"`
 	// Proxy is the account's proxy URL; see Account.Proxy.
 	Proxy string `env:"TG_PROXY"`
 	// A FLOOD_WAIT up to this long is slept through inside the call; a longer
@@ -55,14 +58,21 @@ func TelegramConfigFromEnv() (TelegramConfig, error) {
 	return cfg, nil
 }
 
+func (c TelegramConfig) sessionFile() string {
+	if c.SessionPath != "" || c.SessionDir == "" {
+		return c.SessionPath
+	}
+	return filepath.Join(c.SessionDir, "session.json")
+}
+
 func (c TelegramConfig) Validate() error {
 	switch {
 	case c.APIID <= 0:
 		return errors.New("TG_API_ID is not set")
 	case c.APIHash == "":
 		return errors.New("TG_API_HASH is not set")
-	case c.SessionPath == "":
-		return errors.New("TG_SESSION_PATH is not set")
+	case c.sessionFile() == "":
+		return errors.New("TG_SESSION_DIR is not set")
 	}
 	_, err := proxyDialer(c.Proxy)
 	return err
@@ -118,6 +128,7 @@ func NewTelegram(cfg TelegramConfig) (*Telegram, error) {
 }
 
 func newTelegramWithAPI(cfg TelegramConfig, api telegramAPI) *Telegram {
+	cfg.SessionPath = cfg.sessionFile()
 	if cfg.CallTimeout <= 0 {
 		cfg.CallTimeout = 30 * time.Second
 	}
@@ -128,10 +139,11 @@ func newTelegramClient(cfg TelegramConfig) (*telegram.Client, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Dir(cfg.SessionPath), 0o700); err != nil {
+	path := cfg.sessionFile()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("create telegram session directory: %w", err)
 	}
-	opts := telegram.Options{SessionStorage: &session.FileStorage{Path: cfg.SessionPath}}
+	opts := telegram.Options{SessionStorage: &session.FileStorage{Path: path}}
 	if cfg.TestServer {
 		opts.DCList = dcs.Test()
 	}
@@ -217,7 +229,7 @@ func (t *Telegram) Close() {
 }
 
 // Login runs the interactive phone, code and 2FA flow once and leaves the
-// session in cfg.SessionPath for every later Start.
+// session file for every later Start.
 func Login(ctx context.Context, cfg TelegramConfig, user auth.UserAuthenticator) error {
 	client, err := newTelegramClient(cfg)
 	if err != nil {

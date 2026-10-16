@@ -31,11 +31,14 @@ type Account struct {
 var accountFileRe = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
 
 // ForAccount derives the account's config: its proxy, and a session file of
-// its own next to cfg.SessionPath (the join warm-up state follows it).
+// its own in the session directory (the join warm-up state follows it).
 func (c TelegramConfig) ForAccount(a Account) TelegramConfig {
 	c.Proxy = a.Proxy
 	if a.ID != "" {
-		dir := filepath.Dir(c.SessionPath)
+		dir := c.SessionDir
+		if dir == "" {
+			dir = filepath.Dir(c.SessionPath)
+		}
 		c.SessionPath = filepath.Join(dir, "account-"+accountFileRe.ReplaceAllString(a.ID, "_")+".session.json")
 	}
 	return c
