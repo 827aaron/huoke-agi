@@ -260,3 +260,78 @@ func LookupCredentialCheck(platform Platform) (CredentialCheck, bool) {
 	check, ok := credentialChecks[platform]
 	return check, ok
 }
+
+// ErrPasswordNeeded is returned by PhoneLoginSession.Code when the account has
+// two-step verification: the session then waits for Password.
+var ErrPasswordNeeded = errors.New("the account has two-step verification: its password is needed")
+
+// ErrBadCode is returned by PhoneLoginSession.Code and Password when the platform
+// rejected what the operator typed; the session stays open for another try.
+var ErrBadCode = errors.New("the code or password was rejected")
+
+// PhoneLogin starts signing an api_session account in by phone number: it asks the
+// platform to send a code and returns the session that takes it. ctx bounds sending
+// the code only; the session outlives it and holds whatever connection it needs until
+// it succeeds or is cancelled. account.Session is where the signed-in session is stored.
+type PhoneLogin func(ctx context.Context, cfg *config.Config, account Account, phone string) (PhoneLoginSession, error)
+
+// PhoneLoginSession is one sign-in in progress. Methods are called one at a time.
+// A nil error from Code or Password means the session is stored and the account is
+// signed in. The caller calls Cancel when it gives up, and also after success.
+type PhoneLoginSession interface {
+	Code(ctx context.Context, code string) error
+	Password(ctx context.Context, password string) error
+	Cancel()
+}
+
+// RemoteLoginView is what an operator opens to sign a browser_session account in by
+// hand. Fingerprint is the profile the browser runs with, stored on the account; nil
+// keeps the account's own.
+type RemoteLoginView struct {
+	ViewURL     string
+	ExpiresAt   time.Time
+	Fingerprint json.RawMessage
+}
+
+// RemoteLogin opens an account's server-side browser on the platform's login page for
+// an operator, who types the credentials and passes any verification; nothing here
+// fills a form. Finish reports whether the page is signed in now, with what it still
+// shows when it is not; it may be called again. Cancel closes the operator's view.
+type RemoteLogin interface {
+	Start(ctx context.Context, cfg *config.Config, account Account) (RemoteLoginView, error)
+	Finish(ctx context.Context, cfg *config.Config, account Account) (signedIn bool, reason string, err error)
+	Cancel(ctx context.Context, cfg *config.Config, account Account) error
+}
+
+var (
+	phoneLogins  = map[Platform]PhoneLogin{}
+	remoteLogins = map[Platform]RemoteLogin{}
+)
+
+// RegisterPhoneLogin and RegisterRemoteLogin are called from a connector package's
+// init, beside Register.
+func RegisterPhoneLogin(platform Platform, login PhoneLogin) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	phoneLogins[platform] = login
+}
+
+func LookupPhoneLogin(platform Platform) (PhoneLogin, bool) {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+	login, ok := phoneLogins[platform]
+	return login, ok
+}
+
+func RegisterRemoteLogin(platform Platform, login RemoteLogin) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	remoteLogins[platform] = login
+}
+
+func LookupRemoteLogin(platform Platform) (RemoteLogin, bool) {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+	login, ok := remoteLogins[platform]
+	return login, ok
+}

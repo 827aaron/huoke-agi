@@ -5,6 +5,7 @@ package growth
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
+	"pentagi/pkg/growth/connectors"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -172,7 +174,17 @@ func TestSettings_TestSetting_RecordsWhatTheServiceAnswers(t *testing.T) {
 	assert.Equal(t, SettingStatusInvalid, settingOf(t, w, SettingLLM).Status)
 }
 
-func TestSettings_TestSetting_LeavesTelegramUntestedWithoutACheck(t *testing.T) {
+func TestSettings_TestSetting_AsksTheTelegramCheckWithTheSavedCredentials(t *testing.T) {
+	if real, ok := connectors.LookupCredentialCheck(connectors.PlatformTelegram); ok {
+		t.Cleanup(func() { connectors.RegisterCredentialCheck(connectors.PlatformTelegram, real) })
+	}
+	var gotHash string
+	verdict := errors.New("API_ID_INVALID")
+	connectors.RegisterCredentialCheck(connectors.PlatformTelegram, func(_ context.Context, cfg *config.Config) error {
+		gotHash = cfg.TGAPIHash
+		return verdict
+	})
+
 	w := newWorld(t)
 	ctx := context.Background()
 	_, err := w.svc.SaveSetting(ctx, w.user, SettingTelegram, "", map[string]string{
@@ -182,7 +194,13 @@ func TestSettings_TestSetting_LeavesTelegramUntestedWithoutACheck(t *testing.T) 
 
 	v, err := w.svc.TestSetting(ctx, w.user, SettingTelegram)
 	require.NoError(t, err)
-	assert.Equal(t, SettingStatusUntested, v.Status)
+	assert.Equal(t, "0123456789abcdef0123456789abcdef", gotHash)
+	assert.Equal(t, SettingStatusInvalid, v.Status)
+
+	verdict = nil
+	v, err = w.svc.TestSetting(ctx, w.user, SettingTelegram)
+	require.NoError(t, err)
+	assert.Equal(t, SettingStatusConnected, v.Status)
 }
 
 func TestSettings_SendTestEmail_GoesToTheLoginAddressByDefault(t *testing.T) {

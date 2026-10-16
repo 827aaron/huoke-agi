@@ -227,15 +227,37 @@ func TestAccounts_TestAccountProxy_ReachesTheInternetThroughTheAccountsProxy(t *
 
 	_, err := w.svc.UpdateAccount(ctx, w.user, id, AccountUpdate{ProxyURL: strPtr(fwd.URL)})
 	require.NoError(t, err)
-	check, err := w.svc.TestAccountProxy(ctx, w.user, id)
+	check, err := w.svc.TestAccountProxy(ctx, w.user, id, "")
 	require.NoError(t, err)
 	assert.True(t, check.OK, check.Error)
 	assert.True(t, proxied)
 	assert.Equal(t, ProxySourceAccount, check.Source)
 
 	fwd.Close()
-	check, err = w.svc.TestAccountProxy(ctx, w.user, id)
+	check, err = w.svc.TestAccountProxy(ctx, w.user, id, "")
 	require.NoError(t, err)
 	assert.False(t, check.OK)
 	assert.Contains(t, check.Error, "cannot reach through-proxy.invalid through the proxy")
+}
+
+func TestAccounts_PickAccount_AddsTheKeyedAccountOnFirstUseAndHidesIt(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+
+	_, err := w.svc.pickAccount(ctx, w.user, "youtube", 0, map[int64]bool{})
+	assert.ErrorIs(t, err, ErrNoAccount, "no keys, no account")
+
+	w.svc.cfg.YouTubeAPIKey = "yt-1,yt-2"
+	acc, err := w.svc.pickAccount(ctx, w.user, "youtube", 0, map[int64]bool{})
+	require.NoError(t, err)
+	assert.Equal(t, "youtube", acc.Platform)
+	again, err := w.svc.pickAccount(ctx, w.user, "youtube", 0, map[int64]bool{})
+	require.NoError(t, err)
+	assert.Equal(t, acc.ID, again.ID)
+
+	views, err := w.svc.ListAccounts(ctx, w.user)
+	require.NoError(t, err)
+	for _, v := range views {
+		assert.NotEqual(t, "youtube", v.Platform)
+	}
 }

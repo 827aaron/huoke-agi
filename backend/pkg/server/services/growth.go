@@ -419,6 +419,16 @@ func accountError(c *gin.Context, err error) {
 		response.Error(c, response.ErrGrowthInvalidRequest, err)
 	case errors.Is(err, growth.ErrNoSecretKey):
 		response.Error(c, response.ErrGrowthNoSecretKey, err)
+	case errors.Is(err, growth.ErrLoginNotFound):
+		response.Error(c, response.ErrGrowthLoginNotFound, err)
+	case errors.Is(err, growth.ErrLoginUnavailable):
+		response.Error(c, response.ErrGrowthLoginUnavailable, err)
+	case errors.Is(err, growth.ErrLoginIncomplete):
+		response.Error(c, response.ErrGrowthLoginIncomplete, err)
+	case errors.Is(err, connectors.ErrBadCode):
+		response.Error(c, response.ErrGrowthLoginRejected, err)
+	case errors.As(err, new(*connectors.FloodWaitError)):
+		response.Error(c, response.ErrGrowthRateLimited, err)
 	default:
 		logger.FromContext(c).WithError(err).Errorf("error handling growth account")
 		response.Error(c, response.ErrInternal, err)
@@ -506,7 +516,9 @@ func (s *GrowthService) UpdateAccount(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param accountID path int true "account id"
+// @Param json body growthProxyRequest false "a proxy to try before saving it; without one the account's own route is tested"
 // @Success 200 {object} response.successResp{data=growth.ProxyCheck} "proxy checked successful"
+// @Failure 400 {object} response.errorResp "invalid proxy"
 // @Failure 403 {object} response.errorResp "testing accounts not permitted"
 // @Failure 404 {object} response.errorResp "account not found"
 // @Failure 500 {object} response.errorResp "internal error on testing proxy"
@@ -520,7 +532,19 @@ func (s *GrowthService) TestAccountProxy(c *gin.Context) {
 		return
 	}
 
-	check, err := s.svc.TestAccountProxy(c, uid, accountID)
+	var req growthProxyRequest
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			response.Error(c, response.ErrGrowthInvalidRequest, err)
+			return
+		}
+	}
+	candidate := ""
+	if req.Proxy != nil {
+		candidate = *req.Proxy
+	}
+
+	check, err := s.svc.TestAccountProxy(c, uid, accountID, candidate)
 	if err != nil {
 		accountError(c, err)
 		return
@@ -529,47 +553,367 @@ func (s *GrowthService) TestAccountProxy(c *gin.Context) {
 	response.Success(c, http.StatusOK, check)
 }
 
-// GetProfile is a function to return the business profile of the current user
-// @Summary Retrieve the business profile every task of the current user starts from
+type growthProxyRequest struct {
+	Proxy *string `json:"proxy"`
+}
+
+func accountIDParam(c *gin.Context) (int64, bool) {
+	id, err := strconv.ParseInt(c.Param("accountID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return 0, false
+	}
+	return id, true
+}
+
+// EnableAccount is a function to return an account to work
+// @Summary Return a disabled account to work: active when it was signed in before, needs_login otherwise
 // @Tags Growth
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} response.successResp{data=growth.Profile} "profile received successful"
-// @Failure 403 {object} response.errorResp "getting the profile not permitted"
-// @Failure 404 {object} response.errorResp "no profile is saved"
-// @Failure 500 {object} response.errorResp "internal error on getting the profile"
-// @Router /growth/profile [get]
-func (s *GrowthService) GetProfile(c *gin.Context) {
+// @Param accountID path int true "account id"
+// @Success 200 {object} response.successResp{data=growth.AccountView} "account enabled successful"
+// @Failure 403 {object} response.errorResp "changing accounts not permitted"
+// @Failure 404 {object} response.errorResp "account not found"
+// @Failure 500 {object} response.errorResp "internal error on enabling account"
+// @Router /growth/accounts/{accountID}/enable [post]
+func (s *GrowthService) EnableAccount(c *gin.Context) {
+	s.setAccountEnabled(c, true)
+}
+
+// DisableAccount is a function to keep an account out of work
+// @Summary Keep an account and its session but never pick it for work
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param accountID path int true "account id"
+// @Success 200 {object} response.successResp{data=growth.AccountView} "account disabled successful"
+// @Failure 403 {object} response.errorResp "changing accounts not permitted"
+// @Failure 404 {object} response.errorResp "account not found"
+// @Failure 500 {object} response.errorResp "internal error on disabling account"
+// @Router /growth/accounts/{accountID}/disable [post]
+func (s *GrowthService) DisableAccount(c *gin.Context) {
+	s.setAccountEnabled(c, false)
+}
+
+func (s *GrowthService) setAccountEnabled(c *gin.Context, enabled bool) {
+	uid := int64(c.GetUint64("uid"))
+	accountID, ok := accountIDParam(c)
+	if !ok {
+		return
+	}
+
+	view, err := s.svc.SetAccountEnabled(c, uid, accountID, enabled)
+	if err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, view)
+}
+
+// SetAccountProxy is a function to set the proxy of one account
+// @Summary Set the account's own proxy; null or empty falls back to the default proxy, else a direct connection
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param accountID path int true "account id"
+// @Param json body growthProxyRequest true "http, https, socks5 or socks5h URL, optionally with user:pass@"
+// @Success 200 {object} response.successResp{data=growth.AccountView} "proxy saved successful"
+// @Failure 400 {object} response.errorResp "invalid proxy"
+// @Failure 403 {object} response.errorResp "changing accounts not permitted"
+// @Failure 404 {object} response.errorResp "account not found"
+// @Failure 503 {object} response.errorResp "GROWTH_SECRET_KEY is not set"
+// @Router /growth/accounts/{accountID}/proxy [put]
+func (s *GrowthService) SetAccountProxy(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+	accountID, ok := accountIDParam(c)
+	if !ok {
+		return
+	}
+	var req growthProxyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+	proxy := ""
+	if req.Proxy != nil {
+		proxy = *req.Proxy
+	}
+
+	view, err := s.svc.UpdateAccount(c, uid, accountID, growth.AccountUpdate{ProxyURL: &proxy})
+	if err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, view)
+}
+
+type growthTelegramLoginRequest struct {
+	Phone     string  `json:"phone" binding:"required"`
+	AccountID *int64  `json:"account_id,omitempty"`
+	Proxy     *string `json:"proxy,omitempty"`
+}
+
+type growthCodeRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+type growthPasswordRequest struct {
+	Password string `json:"password" binding:"required"`
+}
+
+// StartTelegramLogin is a function to sign a Telegram account in by phone
+// @Summary Add or re-sign a Telegram account: Telegram sends a code to the phone
+// @Description account_id signs that account in again; without it the phone number becomes a new account. next is code.
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param json body growthTelegramLoginRequest true "phone in international format"
+// @Success 201 {object} response.successResp{data=growth.LoginStep} "code sent successful"
+// @Failure 400 {object} response.errorResp "invalid phone or proxy"
+// @Failure 403 {object} response.errorResp "adding accounts not permitted"
+// @Failure 404 {object} response.errorResp "account not found"
+// @Failure 429 {object} response.errorResp "Telegram asked to wait"
+// @Failure 503 {object} response.errorResp "no Telegram login in this build, or GROWTH_SECRET_KEY is not set"
+// @Router /growth/accounts/telegram/login [post]
+func (s *GrowthService) StartTelegramLogin(c *gin.Context) {
 	uid := int64(c.GetUint64("uid"))
 
-	profile, err := s.svc.GetProfile(c, uid)
+	var req growthTelegramLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	step, err := s.svc.StartTelegramLogin(c, uid, growth.LoginStart{
+		AccountID: req.AccountID, Phone: req.Phone, Proxy: req.Proxy,
+	})
 	if err != nil {
-		if errors.Is(err, growth.ErrNoProfile) {
-			response.Error(c, response.ErrGrowthProfileNotFound, err)
-			return
-		}
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, step)
+}
+
+// SubmitTelegramCode is a function to pass on the code Telegram sent
+// @Summary Pass on the login code; next is done, or password for an account with two-step verification
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param loginID path string true "login id"
+// @Param json body growthCodeRequest true "the code"
+// @Success 200 {object} response.successResp{data=growth.LoginStep} "code accepted successful"
+// @Failure 400 {object} response.errorResp "the code was rejected; try again"
+// @Failure 404 {object} response.errorResp "login not found or expired"
+// @Failure 429 {object} response.errorResp "Telegram asked to wait"
+// @Router /growth/accounts/telegram/login/{loginID}/code [post]
+func (s *GrowthService) SubmitTelegramCode(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	var req growthCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	step, err := s.svc.SubmitTelegramCode(c, uid, c.Param("loginID"), req.Code)
+	if err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, step)
+}
+
+// SubmitTelegramPassword is a function to pass on the two-step verification password
+// @Summary Pass on the two-step verification password; next is done
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param loginID path string true "login id"
+// @Param json body growthPasswordRequest true "the password"
+// @Success 200 {object} response.successResp{data=growth.LoginStep} "password accepted successful"
+// @Failure 400 {object} response.errorResp "the password was rejected; try again"
+// @Failure 404 {object} response.errorResp "login not found or expired"
+// @Failure 429 {object} response.errorResp "Telegram asked to wait"
+// @Router /growth/accounts/telegram/login/{loginID}/password [post]
+func (s *GrowthService) SubmitTelegramPassword(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	var req growthPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	step, err := s.svc.SubmitTelegramPassword(c, uid, c.Param("loginID"), req.Password)
+	if err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, step)
+}
+
+// StartRemoteLogin is a function to open an account's browser for an operator
+// @Summary Open a Facebook or Instagram account's browser on the server for an operator to sign in by hand
+// @Description account_id signs that account in again; without it a new account of platform is added. view_url is the live view to embed.
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param json body growth.LoginStart true "the account, or the platform of a new one"
+// @Success 201 {object} response.successResp{data=growth.RemoteLoginView} "browser opened successful"
+// @Failure 400 {object} response.errorResp "invalid request data"
+// @Failure 403 {object} response.errorResp "adding accounts not permitted"
+// @Failure 404 {object} response.errorResp "account not found"
+// @Failure 503 {object} response.errorResp "no remote login for this platform in this build"
+// @Router /growth/accounts/remote-login [post]
+func (s *GrowthService) StartRemoteLogin(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	var req growth.LoginStart
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+	req.Phone = ""
+
+	view, err := s.svc.StartRemoteLogin(c, uid, req)
+	if err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, view)
+}
+
+// FinishRemoteLogin is a function to check the browser the operator signed in
+// @Summary Check that the operator signed the browser in; the account turns active
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param sessionID path string true "remote login session id"
+// @Success 200 {object} response.successResp{data=growth.AccountView} "account signed in successful"
+// @Failure 404 {object} response.errorResp "login not found or expired"
+// @Failure 409 {object} response.errorResp "the browser is not signed in yet; the message says what the page shows"
+// @Router /growth/accounts/remote-login/{sessionID}/finish [post]
+func (s *GrowthService) FinishRemoteLogin(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	view, err := s.svc.FinishRemoteLogin(c, uid, c.Param("sessionID"))
+	if err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, view)
+}
+
+// CancelRemoteLogin is a function to close the operator's browser view
+// @Summary Close the browser view; the account stays as it was and a new one is removed
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param sessionID path string true "remote login session id"
+// @Success 200 {object} response.successResp "login cancelled successful"
+// @Failure 404 {object} response.errorResp "login not found or expired"
+// @Router /growth/accounts/remote-login/{sessionID} [delete]
+func (s *GrowthService) CancelRemoteLogin(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	if err := s.svc.CancelRemoteLogin(c, uid, c.Param("sessionID")); err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, nil)
+}
+
+type growthLeadsEmailRequest struct {
+	FlowID int64  `json:"flow_id" binding:"required,min=1"`
+	TaskID *int64 `json:"task_id,omitempty"`
+}
+
+// EmailLeads is a function to mail the leads of a round on demand
+// @Summary Mail a round's lead list to the notification addresses, as the email of a finished round
+// @Description With task_id: the round's delivered leads, or its qualified leads while none are delivered. Without: the flow's delivered leads, else its qualified ones.
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param json body growthLeadsEmailRequest true "the flow and optionally the round's task"
+// @Success 200 {object} response.successResp{data=growthTestEmailResult} "email sent successful"
+// @Failure 400 {object} response.errorResp "invalid request, no SMTP server configured, or no leads to send"
+// @Failure 403 {object} response.errorResp "sending email not permitted"
+// @Failure 502 {object} response.errorResp "the email could not be sent"
+// @Router /growth/leads/email [post]
+func (s *GrowthService) EmailLeads(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	var req growthLeadsEmailRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	to, err := s.svc.EmailLeads(c, uid, req.FlowID, req.TaskID)
+	switch {
+	case errors.Is(err, growth.ErrNoSMTP), errors.Is(err, growth.ErrNoLeadsToSend):
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	case err != nil:
+		response.Error(c, response.ErrGrowthEmailFailed, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, growthTestEmailResult{Sent: true, To: to})
+}
+
+// ListProfiles is a function to return the business profile of the current user
+// @Summary Retrieve the business profile every task of the current user starts from
+// @Description A user has at most one profile, so the list is empty or holds one.
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.successResp{data=[]growth.ProfileView} "profiles received successful"
+// @Failure 403 {object} response.errorResp "getting the profile not permitted"
+// @Failure 500 {object} response.errorResp "internal error on getting the profile"
+// @Router /growth/profiles [get]
+func (s *GrowthService) ListProfiles(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	profiles, err := s.svc.ListProfiles(c, uid)
+	if err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error getting business profile")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
 
-	response.Success(c, http.StatusOK, profile)
+	response.Success(c, http.StatusOK, profiles)
 }
 
-// SaveProfile is a function to store the business profile
+// CreateProfile is a function to store the business profile
 // @Summary Save the business profile; new tasks start with it
-// @Description knowledge says whether the long lists reached the knowledge store: seeded, or skipped with the reason.
+// @Description Saving when a profile exists replaces it. knowledge says whether the lists reached the knowledge store: seeded, or skipped with the reason.
 // @Tags Growth
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param json body growth.Profile true "business profile"
-// @Success 200 {object} response.successResp{data=growth.SavedProfile} "profile saved successful"
+// @Success 201 {object} response.successResp{data=growth.ProfileView} "profile saved successful"
 // @Failure 400 {object} response.errorResp "invalid profile"
 // @Failure 403 {object} response.errorResp "saving the profile not permitted"
 // @Failure 500 {object} response.errorResp "internal error on saving the profile"
-// @Router /growth/profile [put]
-func (s *GrowthService) SaveProfile(c *gin.Context) {
+// @Router /growth/profiles [post]
+func (s *GrowthService) CreateProfile(c *gin.Context) {
 	uid := int64(c.GetUint64("uid"))
 
 	var req growth.Profile
@@ -580,16 +924,60 @@ func (s *GrowthService) SaveProfile(c *gin.Context) {
 
 	saved, err := s.svc.SaveProfile(c, uid, req)
 	if err != nil {
-		if errors.Is(err, growth.ErrInvalidProfile) {
-			response.Error(c, response.ErrGrowthInvalidRequest, err)
-			return
-		}
-		logger.FromContext(c).WithError(err).Errorf("error saving business profile")
-		response.Error(c, response.ErrInternal, err)
+		profileError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, saved)
+}
+
+// UpdateProfile is a function to change the business profile
+// @Summary Change the business profile; new tasks start with it
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param profileID path int true "profile id" minimum(0)
+// @Param json body growth.Profile true "business profile"
+// @Success 200 {object} response.successResp{data=growth.ProfileView} "profile saved successful"
+// @Failure 400 {object} response.errorResp "invalid profile"
+// @Failure 403 {object} response.errorResp "saving the profile not permitted"
+// @Failure 404 {object} response.errorResp "profile not found"
+// @Failure 500 {object} response.errorResp "internal error on saving the profile"
+// @Router /growth/profiles/{profileID} [put]
+func (s *GrowthService) UpdateProfile(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	id, err := strconv.ParseInt(c.Param("profileID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+	var req growth.Profile
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	saved, err := s.svc.UpdateProfile(c, uid, id, req)
+	if err != nil {
+		profileError(c, err)
 		return
 	}
 
 	response.Success(c, http.StatusOK, saved)
+}
+
+func profileError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, growth.ErrInvalidProfile):
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+	case errors.Is(err, growth.ErrNoProfile):
+		response.Error(c, response.ErrGrowthProfileNotFound, err)
+	default:
+		logger.FromContext(c).WithError(err).Errorf("error saving business profile")
+		response.Error(c, response.ErrInternal, err)
+	}
 }
 
 type growthSettings struct {

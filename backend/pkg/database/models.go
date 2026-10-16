@@ -1149,6 +1149,7 @@ type Msglog struct {
 	CreatedAt    sql.NullTime       `json:"created_at"`
 	ResultFormat MsglogResultFormat `json:"result_format"`
 	Thinking     sql.NullString     `json:"thinking"`
+	Agent        NullMsgchainType   `json:"agent"`
 }
 
 type Privilege struct {

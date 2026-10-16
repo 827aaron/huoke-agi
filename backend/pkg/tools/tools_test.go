@@ -545,6 +545,8 @@ type toolsAgentExecutorCase struct {
 	// sandbox: the factory cannot build without the flow's primary container.
 	sandbox       bool
 	task, subtask int64 // 0: tool calls are not attributed to one
+	// agent is recorded on the executor's messages.
+	agent database.MsgchainType
 }
 
 func toolsWithout[C any](cfg C, field string) C {
@@ -589,6 +591,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 	return []toolsAgentExecutorCase{
 		{
 			factory: "GetAssistantExecutor",
+			agent:   "assistant",
 			build:   assistant(false),
 			tools: map[string]string{
 				"terminal": "", "file": "", "browser": "", "web_search": "",
@@ -604,6 +607,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetAssistantExecutor",
+			agent:   "assistant",
 			variant: "using agents",
 			build:   assistant(true),
 			tools: map[string]string{
@@ -619,6 +623,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetPrimaryExecutor",
+			agent:   "primary_agent",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetPrimaryExecutor(toolsWithout(PrimaryExecutorConfig{
 					TaskID: task, SubtaskID: subtask,
@@ -638,6 +643,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetInstallerExecutor",
+			agent:   "installer",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetInstallerExecutor(toolsWithout(InstallerExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask,
@@ -657,6 +663,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetCoderExecutor",
+			agent:   "coder",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetCoderExecutor(toolsWithout(CoderExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask,
@@ -677,6 +684,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetPentesterExecutor",
+			agent:   "pentester",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetPentesterExecutor(toolsWithout(PentesterExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask,
@@ -702,6 +710,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetSearcherExecutor",
+			agent:   "searcher",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetSearcherExecutor(toolsWithout(SearcherExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask,
@@ -723,6 +732,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetGeneratorExecutor",
+			agent:   "generator",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetGeneratorExecutor(toolsWithout(GeneratorExecutorConfig{
 					TaskID:      task,
@@ -741,6 +751,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetRefinerExecutor",
+			agent:   "refiner",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetRefinerExecutor(toolsWithout(RefinerExecutorConfig{
 					TaskID:       task,
@@ -759,6 +770,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetMemoristExecutor",
+			agent:   "memorist",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetMemoristExecutor(toolsWithout(MemoristExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask, SearchResult: h("SearchResult"),
@@ -775,6 +787,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetEnricherExecutor",
+			agent:   "enricher",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetEnricherExecutor(toolsWithout(EnricherExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask, EnricherResult: h("EnricherResult"),
@@ -792,6 +805,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetReporterExecutor",
+			agent:   "reporter",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetReporterExecutor(toolsWithout(ReporterExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask, ReportResult: h("ReportResult"),
@@ -852,6 +866,7 @@ func TestTools_GetExecutors_GiveEachAgentItsTools(t *testing.T) {
 				executor, err := tc.build(fte, everyService, "")
 				require.NoError(t, err)
 				ce := executor.(*customExecutor)
+				assert.Equal(t, tc.agent, ce.agent, "the agent its messages are recorded for")
 
 				var wantTools, wantBarriers []string
 				for tool := range tc.tools {

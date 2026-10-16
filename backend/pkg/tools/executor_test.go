@@ -58,6 +58,23 @@ func (l *executorMsgLog) UpdateMsgResult(
 	return l.updateErr
 }
 
+// agentMsgLog is an executorMsgLog that also takes the agent of a message.
+type agentMsgLog struct {
+	executorMsgLog
+	agents []database.MsgchainType
+}
+
+func (l *agentMsgLog) PutAgentMsg(
+	ctx context.Context, agent database.MsgchainType, msgType database.MsglogType, taskID, subtaskID *int64,
+	streamID int64, thinking, msg string,
+) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	l.agents = append(l.agents, agent)
+	return l.PutMsg(ctx, msgType, taskID, subtaskID, streamID, thinking, msg)
+}
+
 // executorToolCallLog stands in for the tool call log and, like the database, refuses a write through a done context.
 type executorToolCallLog struct {
 	putErr     error
@@ -1291,5 +1308,31 @@ func TestExecutor_Execute_WritesTheMessageResultEvenAfterTheFlowStops(t *testing
 	}
 	if mlp.result != "uid=0(root)" {
 		t.Errorf("the message log holds %q, want the same result the tool call log has", mlp.result)
+	}
+}
+
+func TestExecutor_Execute_RecordsTheAgentOnItsMessage(t *testing.T) {
+	args := mustJSON(map[string]any{"input": "id", "cwd": "", "detach": false, "timeout": 0, "message": "Check the user."})
+	handlers := map[string]ExecutorHandler{
+		TerminalToolName: func(context.Context, string, json.RawMessage) (string, error) { return "uid=0(root)", nil },
+	}
+
+	mlp := &agentMsgLog{}
+	ce := &customExecutor{agent: database.MsgchainTypeSearcher, flowID: 1, mlp: mlp, tclp: &executorToolCallLog{},
+		replacer: identityReplacer{}, handlers: handlers}
+	if _, err := ce.Execute(t.Context(), 1, "call-1", TerminalToolName, TerminalToolName, "", args); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(mlp.agents) != 1 || mlp.agents[0] != database.MsgchainTypeSearcher {
+		t.Fatalf("the message was recorded for agents %v, want [searcher]", mlp.agents)
+	}
+
+	anonymous := &agentMsgLog{}
+	ce = &customExecutor{flowID: 1, mlp: anonymous, tclp: &executorToolCallLog{}, replacer: identityReplacer{}, handlers: handlers}
+	if _, err := ce.Execute(t.Context(), 1, "call-2", TerminalToolName, TerminalToolName, "", args); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(anonymous.agents) != 0 {
+		t.Fatalf("an executor serving no agent recorded %v", anonymous.agents)
 	}
 }

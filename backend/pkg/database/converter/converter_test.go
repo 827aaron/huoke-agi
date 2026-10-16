@@ -568,3 +568,14 @@ func TestConverter_APITokenStatus_ReportsAnOutlivedActiveTokenAsExpired(t *testi
 		})
 	}
 }
+
+func TestConverter_ConvertMessageLog_GivesTheAgentOnlyWhenOneWasRecorded(t *testing.T) {
+	searcher := database.Msglog{ID: 1, Agent: database.NullMsgchainType{MsgchainType: database.MsgchainTypeSearcher, Valid: true}}
+	got := ConvertMessageLog(searcher).Agent
+	if got == nil || *got != model.AgentTypeSearcher {
+		t.Fatalf("agent = %v, want searcher", got)
+	}
+	if got := ConvertMessageLog(database.Msglog{ID: 2}).Agent; got != nil {
+		t.Fatalf("a message with no recorded agent got %v", *got)
+	}
+}

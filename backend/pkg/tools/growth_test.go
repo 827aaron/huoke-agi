@@ -110,7 +110,7 @@ func TestGrowth_Handle_ReturnsTheErrorOfACancelledCall(t *testing.T) {
 
 func TestGrowth_Handle_JoinReportsWhereItStopped(t *testing.T) {
 	out, err := newGrowthTools(&fakeGrowthBackend{err: &connectors.FloodWaitError{Wait: time.Minute}}, 1, 42, nil).
-		Handle(t.Context(), GrowthJoinSourceToolName, json.RawMessage(`{"source_ids":[5,6]}`))
+		Handle(t.Context(), GrowthJoinSourceToolName, json.RawMessage(`{"source_ids":[5,"6"]}`))
 	require.NoError(t, err)
 	assert.Contains(t, out, `"joined"`)
 	assert.Contains(t, out, `"stopped":"rate limited by the platform`)

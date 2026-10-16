@@ -64,20 +64,21 @@ func (m *memoryKnowledge) DeleteUserDocument(ctx context.Context, userID int64, 
 
 func gameProfile() Profile {
 	return Profile{
-		BusinessName: "Starfall Studio",
-		Product:      " Starfall Online ",
-		Audience:     "MMORPG players tired of pay-to-win",
-		Regions:      []string{"SEA", " "},
-		Languages:    []string{"en", "th"},
-		TargetLeads:  50,
-		Signals:      []string{"s1", "s2", "s3", "s4", "s5", "s6"},
-		Sources:      []string{"https://t.me/mmo_hub"},
-		SignalWords:  []string{"looking for a new mmo", "quit my game"},
-		Exclusions:   []string{"@rival_studio"},
+		Name:          "Starfall Studio",
+		Pitch:         " A fair MMORPG with no pay-to-win ",
+		Games:         []string{"Starfall Online"},
+		Genre:         "MMORPG",
+		Competitors:   []string{"Rival Saga"},
+		Regions:       []string{"SEA", " "},
+		Languages:     []string{"英语", "泰语"},
+		DefaultTarget: 50,
+		Signals:       []string{"s1", "s2", "s3", "s4", "s5", "s6"},
+		Excludes:      []string{"account sellers"},
+		Notes:         "Players who quit Rival Saga after the last patch are the best fit.",
 	}
 }
 
-func TestProfile_SaveProfile_WritesTheFileAndSeedsTheLongLists(t *testing.T) {
+func TestProfile_SaveProfile_WritesTheFileAndSeedsTheLists(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	w.svc.cfg.DataDir = t.TempDir()
@@ -89,23 +90,24 @@ func TestProfile_SaveProfile_WritesTheFileAndSeedsTheLongLists(t *testing.T) {
 	saved, err := w.svc.SaveProfile(ctx, w.user, gameProfile())
 	require.NoError(t, err)
 	assert.Equal(t, "seeded", saved.Knowledge)
-	assert.Equal(t, "Starfall Online", saved.Profile.Product)
-	assert.Equal(t, []string{"SEA"}, saved.Profile.Regions)
+	assert.Equal(t, w.user, saved.ID)
+	assert.NotNil(t, saved.UpdatedAt)
+	assert.Equal(t, "A fair MMORPG with no pay-to-win", saved.Pitch)
+	assert.Equal(t, []string{"SEA"}, saved.Regions)
 
 	file, err := w.svc.db.GetUserResourceByPath(ctx, database.GetUserResourceByPathParams{UserID: w.user, Path: "business_profile.md"})
 	require.NoError(t, err)
 	body, err := os.ReadFile(resources.BlobPath(w.svc.cfg.DataDir, file.Hash))
 	require.NoError(t, err)
 	assert.Contains(t, string(body), "# Business profile: Starfall Studio")
-	assert.NotContains(t, string(body), "## Bad-actor samples", "an empty list has no section")
-	assert.Contains(t, string(body), "- quit my game")
+	assert.Contains(t, string(body), "- s6")
+	assert.Contains(t, string(body), "## Notes\n\nPlayers who quit Rival Saga")
 	assert.Equal(t, int64(len(body)), file.Size)
 
 	require.Len(t, k.docs, 3, "two lists plus the owner's own document")
 	p := gameProfile()
-	p.SignalWords = []string{"returning player"}
-	p.Exclusions = nil
-	_, err = w.svc.SaveProfile(ctx, w.user, p)
+	p.Competitors, p.Excludes = nil, nil
+	_, err = w.svc.UpdateProfile(ctx, w.user, saved.ID, p)
 	require.NoError(t, err)
 	require.Len(t, k.docs, 2, "saving again replaces the profile's documents and keeps the rest")
 	assert.Contains(t, k.docs, "mine")
@@ -114,6 +116,9 @@ func TestProfile_SaveProfile_WritesTheFileAndSeedsTheLongLists(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, file.ID, again.ID)
 	assert.NotEqual(t, file.Hash, again.Hash)
+
+	_, err = w.svc.UpdateProfile(ctx, w.user, saved.ID+1, p)
+	assert.ErrorIs(t, err, ErrNoProfile, "another owner's id")
 }
 
 func TestProfile_SaveProfile_KeepsTheProfileWhenKnowledgeIsUnavailable(t *testing.T) {
@@ -121,14 +126,19 @@ func TestProfile_SaveProfile_KeepsTheProfileWhenKnowledgeIsUnavailable(t *testin
 	ctx := context.Background()
 	w.svc.SetKnowledgeStore(&memoryKnowledge{docs: map[string]*model.KnowledgeDocument{}, failWith: errors.New("embedding provider is not configured")})
 
+	list, err := w.svc.ListProfiles(ctx, w.user)
+	require.NoError(t, err)
+	assert.Empty(t, list)
+
 	saved, err := w.svc.SaveProfile(ctx, w.user, gameProfile())
 	require.NoError(t, err)
 	assert.Equal(t, "skipped: embedding provider is not configured", saved.Knowledge)
-	got, err := w.svc.GetProfile(ctx, w.user)
+	list, err = w.svc.ListProfiles(ctx, w.user)
 	require.NoError(t, err)
-	assert.Equal(t, "Starfall Studio", got.BusinessName)
+	require.Len(t, list, 1)
+	assert.Equal(t, "Starfall Studio", list[0].Name)
 
-	_, err = w.svc.SaveProfile(ctx, w.user, Profile{Audience: "players"})
+	_, err = w.svc.SaveProfile(ctx, w.user, Profile{Genre: "MMORPG"})
 	assert.ErrorIs(t, err, ErrInvalidProfile)
 }
 
@@ -146,20 +156,24 @@ func TestProfile_WithProfile_PutsTheCompactBlockFirstOnce(t *testing.T) {
 	input, res = w.svc.WithProfile(ctx, w.user, "find 50 players", nil)
 	require.True(t, strings.HasPrefix(input, "<business_profile>\nBusiness: Starfall Studio\n"), input)
 	assert.True(t, strings.HasSuffix(input, "</business_profile>\n\nfind 50 players"), input)
-	assert.Contains(t, input, "Custom signals: s1; s2; s3; s4; s5\n")
+	assert.Contains(t, input, "Signal words: s1; s2; s3; s4; s5; …\n")
+	assert.Contains(t, input, "Competitors (reject): Rival Saga\n")
+	assert.Contains(t, input, "Exclude: account sellers\n")
+	assert.Contains(t, input, "Notes: Players who quit Rival Saga after the last patch are the best fit.\n")
 	assert.Contains(t, input, "Lead target: 50\n")
-	assert.Contains(t, input, "Full profile: /work/resources/business_profile.md; signal words")
-	assert.NotContains(t, input, "quit my game", "long lists stay out of the input")
+	assert.Contains(t, input, "Full profile: /work/resources/business_profile.md (the lines above are cut")
 	require.Len(t, res, 1)
 	assert.Equal(t, "business_profile.md", res[0].Path)
 
 	p := gameProfile()
-	p.TargetLeads = 20
+	p.DefaultTarget = 20
+	p.Signals = p.Signals[:2]
 	_, err = w.svc.SaveProfile(ctx, w.user, p)
 	require.NoError(t, err)
 	again, res := w.svc.WithProfile(ctx, w.user, input, res)
 	assert.Equal(t, 1, strings.Count(again, "<business_profile>"))
 	assert.Contains(t, again, "Lead target: 20\n")
+	assert.Contains(t, again, "Full profile: /work/resources/business_profile.md\n", "nothing cut, no pointer")
 	assert.True(t, strings.HasSuffix(again, "\n\nfind 50 players"))
 	assert.Len(t, res, 1, "the file is attached once")
 }

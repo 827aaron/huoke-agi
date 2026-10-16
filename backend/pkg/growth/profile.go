@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
@@ -29,9 +30,11 @@ const ProfileResourcePath = "business_profile.md"
 // the profile replaces exactly those documents and no others.
 const profileGuideMarker = "growth business profile"
 
+// compactItems and compactRunes keep each list and free text of the compact block
+// short; what is cut stays in the file and the knowledge store.
 const (
-	compactSignals = 5
-	compactSources = 10
+	compactItems = 5
+	compactRunes = 240
 )
 
 var (
@@ -41,22 +44,30 @@ var (
 	profileBlock = regexp.MustCompile(`(?s)<business_profile>.*?</business_profile>\s*`)
 )
 
-// Profile is what a customer sells and to whom. The short fields are rendered into every
-// task's input; the three long lists only go to the resource file and the knowledge store.
+// Profile is what a customer sells and to whom. Signals (the words that mark a likely
+// customer), Excludes (who to reject) and Notes are the customer's own free text, one
+// item per line; they are what tunes the generic prompts to one customer.
 type Profile struct {
-	BusinessName string   `json:"business_name"`
-	Product      string   `json:"product"`
-	Audience     string   `json:"audience"`
-	Regions      []string `json:"regions,omitempty"`
-	Languages    []string `json:"languages,omitempty"`
-	TargetLeads  int      `json:"target_leads,omitempty"`
-	Signals      []string `json:"signals,omitempty"`
-	Sources      []string `json:"sources,omitempty"`
-	Notes        string   `json:"notes,omitempty"`
+	Name          string   `json:"name"`
+	Pitch         string   `json:"pitch"`
+	Games         []string `json:"games"`
+	Genre         string   `json:"genre"`
+	Competitors   []string `json:"competitors"`
+	Regions       []string `json:"regions"`
+	Languages     []string `json:"languages"`
+	DefaultTarget int      `json:"default_target"`
+	Signals       []string `json:"signals"`
+	Excludes      []string `json:"excludes"`
+	Notes         string   `json:"notes"`
+}
 
-	SignalWords     []string `json:"signal_words,omitempty"`
-	BadActorSamples []string `json:"bad_actor_samples,omitempty"`
-	Exclusions      []string `json:"exclusions,omitempty"`
+// ProfileView is a stored profile. A customer has one profile, so ID is the owner's id.
+// Knowledge is "seeded", "skipped: <reason>" or empty, and only set by a save.
+type ProfileView struct {
+	ID int64 `json:"id"`
+	Profile
+	UpdatedAt *time.Time `json:"updated_at"`
+	Knowledge string     `json:"knowledge,omitempty"`
 }
 
 // ProfileKnowledge is the slice of the knowledge store a profile writes its long lists to.
@@ -64,13 +75,6 @@ type ProfileKnowledge interface {
 	ListUserDocuments(ctx context.Context, userID int64, filter *model.KnowledgeFilter, withContent bool) ([]*model.KnowledgeDocument, error)
 	CreateDocument(ctx context.Context, userID int64, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error)
 	DeleteUserDocument(ctx context.Context, userID int64, id string) error
-}
-
-// SavedProfile is a stored profile with what saving it did to the knowledge store:
-// Knowledge is "seeded", "skipped: <reason>" or empty when there was nothing to seed.
-type SavedProfile struct {
-	Profile   Profile `json:"profile"`
-	Knowledge string  `json:"knowledge,omitempty"`
 }
 
 func (s *Service) SetKnowledgeStore(k ProfileKnowledge) {
@@ -81,7 +85,7 @@ func (s *Service) SetKnowledgeStore(k ProfileKnowledge) {
 
 func (p *Profile) normalize() {
 	trim := func(items []string) []string {
-		out := items[:0]
+		out := make([]string, 0, len(items))
 		for _, item := range items {
 			if item = strings.TrimSpace(item); item != "" {
 				out = append(out, item)
@@ -89,58 +93,92 @@ func (p *Profile) normalize() {
 		}
 		return out
 	}
-	p.BusinessName = strings.TrimSpace(p.BusinessName)
-	p.Product = strings.TrimSpace(p.Product)
-	p.Audience = strings.TrimSpace(p.Audience)
+	p.Name = strings.TrimSpace(p.Name)
+	p.Pitch = strings.TrimSpace(p.Pitch)
+	p.Genre = strings.TrimSpace(p.Genre)
 	p.Notes = strings.TrimSpace(p.Notes)
+	p.Games, p.Competitors = trim(p.Games), trim(p.Competitors)
 	p.Regions, p.Languages = trim(p.Regions), trim(p.Languages)
-	p.Signals, p.Sources = trim(p.Signals), trim(p.Sources)
-	p.SignalWords, p.BadActorSamples, p.Exclusions = trim(p.SignalWords), trim(p.BadActorSamples), trim(p.Exclusions)
+	p.Signals, p.Excludes = trim(p.Signals), trim(p.Excludes)
 }
 
 func (p Profile) validate() error {
 	switch {
-	case p.BusinessName == "" && p.Product == "":
-		return fmt.Errorf("%w: business_name or product is required", ErrInvalidProfile)
-	case p.TargetLeads < 0:
-		return fmt.Errorf("%w: target_leads cannot be negative", ErrInvalidProfile)
+	case p.Name == "" && p.Pitch == "" && len(p.Games) == 0:
+		return fmt.Errorf("%w: name, pitch or a game is required", ErrInvalidProfile)
+	case p.DefaultTarget < 0:
+		return fmt.Errorf("%w: default_target cannot be negative", ErrInvalidProfile)
 	}
 	return nil
 }
 
-func (s *Service) GetProfile(ctx context.Context, userID int64) (Profile, error) {
+func (s *Service) GetProfile(ctx context.Context, userID int64) (ProfileView, error) {
 	row, err := s.db.GetGrowthProfile(ctx, userID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Profile{}, ErrNoProfile
+		return ProfileView{}, ErrNoProfile
 	}
 	if err != nil {
-		return Profile{}, fmt.Errorf("failed to load the business profile: %w", err)
+		return ProfileView{}, fmt.Errorf("failed to load the business profile: %w", err)
 	}
-	var p Profile
-	if err := json.Unmarshal(row.Profile, &p); err != nil {
-		return Profile{}, fmt.Errorf("stored business profile is corrupt: %w", err)
+	return profileView(row)
+}
+
+func profileView(row database.GrowthProfile) (ProfileView, error) {
+	v := ProfileView{ID: row.UserID, UpdatedAt: nullTime(row.UpdatedAt.Time, row.UpdatedAt.Valid)}
+	if err := json.Unmarshal(row.Profile, &v.Profile); err != nil {
+		return ProfileView{}, fmt.Errorf("stored business profile is corrupt: %w", err)
 	}
-	return p, nil
+	v.normalize()
+	return v, nil
+}
+
+// ListProfiles returns the owner's profile, or none.
+func (s *Service) ListProfiles(ctx context.Context, userID int64) ([]ProfileView, error) {
+	v, err := s.GetProfile(ctx, userID)
+	switch {
+	case errors.Is(err, ErrNoProfile):
+		return []ProfileView{}, nil
+	case err != nil:
+		return nil, err
+	}
+	return []ProfileView{v}, nil
 }
 
 // SaveProfile stores the profile, rewrites its resource file and replaces its guide
 // documents. The knowledge step needs an embedder; without one it is skipped and said so.
-func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (SavedProfile, error) {
+func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (ProfileView, error) {
 	p.normalize()
 	if err := p.validate(); err != nil {
-		return SavedProfile{}, err
+		return ProfileView{}, err
 	}
 	raw, err := json.Marshal(p)
 	if err != nil {
-		return SavedProfile{}, err
+		return ProfileView{}, err
 	}
-	if _, err := s.db.UpsertGrowthProfile(ctx, database.UpsertGrowthProfileParams{UserID: userID, Profile: raw}); err != nil {
-		return SavedProfile{}, fmt.Errorf("failed to store the business profile: %w", err)
+	row, err := s.db.UpsertGrowthProfile(ctx, database.UpsertGrowthProfileParams{UserID: userID, Profile: raw})
+	if err != nil {
+		return ProfileView{}, fmt.Errorf("failed to store the business profile: %w", err)
 	}
 	if err := s.writeProfileResource(ctx, userID, p); err != nil {
-		return SavedProfile{}, err
+		return ProfileView{}, err
 	}
-	return SavedProfile{Profile: p, Knowledge: s.seedProfileKnowledge(ctx, userID, p)}, nil
+	v, err := profileView(row)
+	if err != nil {
+		return ProfileView{}, err
+	}
+	v.Knowledge = s.seedProfileKnowledge(ctx, userID, p)
+	return v, nil
+}
+
+// UpdateProfile saves over the profile with the given id, which must be the owner's.
+func (s *Service) UpdateProfile(ctx context.Context, userID, id int64, p Profile) (ProfileView, error) {
+	if id != userID {
+		return ProfileView{}, ErrNoProfile
+	}
+	if _, err := s.GetProfile(ctx, userID); err != nil {
+		return ProfileView{}, err
+	}
+	return s.SaveProfile(ctx, userID, p)
 }
 
 func (s *Service) writeProfileResource(ctx context.Context, userID int64, p Profile) error {
@@ -185,17 +223,21 @@ func (s *Service) seedProfileKnowledge(ctx context.Context, userID int64, p Prof
 		}
 	}
 
-	subject := p.Product
+	subject := strings.Join(p.Games, ", ")
 	if subject == "" {
-		subject = p.BusinessName
+		subject = p.Name
 	}
+	var rejected []string
+	for _, c := range p.Competitors {
+		rejected = append(rejected, "Competitor: "+c)
+	}
+	rejected = append(rejected, p.Excludes...)
 	lists := []struct {
 		question string
 		items    []string
 	}{
-		{"Signal words that mark a likely customer of " + subject, p.SignalWords},
-		{"Bad actors to reject for " + subject + ": account sellers, boosting services, competitors, bots", p.BadActorSamples},
-		{"People, groups and phrases excluded for " + subject, p.Exclusions},
+		{"Signal words that mark a likely customer of " + subject, p.Signals},
+		{"People, groups, competitors and phrases to reject for " + subject, rejected},
 	}
 	seeded := 0
 	for _, l := range lists {
@@ -222,28 +264,50 @@ func (s *Service) seedProfileKnowledge(ctx context.Context, userID int64, p Prof
 }
 
 // Compact is the block every task's input starts with. It stays short because each
-// agent call carries it, summarised, in the execution context.
+// agent call carries it, summarised, in the execution context; long lists and text are
+// cut here and read in full from the file or with search_guide.
 func (p Profile) Compact() string {
 	var b strings.Builder
+	cut := false
 	line := func(label, value string) {
 		if value != "" {
 			fmt.Fprintf(&b, "%s: %s\n", label, value)
 		}
 	}
-	b.WriteString("<business_profile>\n")
-	line("Business", p.BusinessName)
-	line("Product", p.Product)
-	line("Target customers", p.Audience)
-	line("Regions", strings.Join(p.Regions, ", "))
-	line("Languages", strings.Join(p.Languages, ", "))
-	if p.TargetLeads > 0 {
-		line("Lead target", fmt.Sprint(p.TargetLeads))
+	list := func(label string, items []string, sep string) {
+		shown := head(items, compactItems)
+		text := strings.Join(shown, sep)
+		if len(shown) < len(items) {
+			text += sep + "…"
+			cut = true
+		}
+		line(label, text)
 	}
-	line("Custom signals", strings.Join(head(p.Signals, compactSignals), "; "))
-	line("Sources to read", strings.Join(head(p.Sources, compactSources), " "))
+	text := func(label, value string) {
+		short := truncateRunes(value, compactRunes)
+		if short != value {
+			cut = true
+		}
+		line(label, strings.Join(strings.Fields(short), " "))
+	}
+
+	b.WriteString("<business_profile>\n")
+	line("Business", p.Name)
+	text("Offer", p.Pitch)
+	list("Games", p.Games, ", ")
+	line("Genre", p.Genre)
+	list("Regions", p.Regions, ", ")
+	list("Languages", p.Languages, ", ")
+	if p.DefaultTarget > 0 {
+		line("Lead target", fmt.Sprint(p.DefaultTarget))
+	}
+	list("Signal words", p.Signals, "; ")
+	list("Competitors (reject)", p.Competitors, ", ")
+	list("Exclude", p.Excludes, "; ")
+	text("Notes", p.Notes)
 	fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, ProfileResourcePath)
-	if len(p.SignalWords)+len(p.BadActorSamples)+len(p.Exclusions) > 0 {
-		b.WriteString("; signal words, bad-actor samples and exclusions: search_guide \"business profile\"")
+	if cut {
+		b.WriteString(" (the lines above are cut; read the file, or search_guide \"business profile\")")
 	}
 	b.WriteString("\n</business_profile>")
 	return b.String()
@@ -252,9 +316,9 @@ func (p Profile) Compact() string {
 // Markdown is the whole profile as the resource file holds it.
 func (p Profile) Markdown() string {
 	var b strings.Builder
-	title := p.BusinessName
+	title := p.Name
 	if title == "" {
-		title = p.Product
+		title = strings.Join(p.Games, ", ")
 	}
 	fmt.Fprintf(&b, "# Business profile: %s\n\n", title)
 	field := func(label, value string) {
@@ -262,13 +326,16 @@ func (p Profile) Markdown() string {
 			fmt.Fprintf(&b, "- **%s:** %s\n", label, value)
 		}
 	}
-	field("Business", p.BusinessName)
-	field("Product", p.Product)
-	field("Target customers", p.Audience)
+	field("Business", p.Name)
+	field("Games", strings.Join(p.Games, ", "))
+	field("Genre", p.Genre)
 	field("Regions", strings.Join(p.Regions, ", "))
 	field("Languages", strings.Join(p.Languages, ", "))
-	if p.TargetLeads > 0 {
-		field("Lead target", fmt.Sprint(p.TargetLeads))
+	if p.DefaultTarget > 0 {
+		field("Lead target", fmt.Sprint(p.DefaultTarget))
+	}
+	if p.Pitch != "" {
+		fmt.Fprintf(&b, "\n## Offer\n\n%s\n", p.Pitch)
 	}
 	section := func(heading string, items []string) {
 		if len(items) == 0 {
@@ -276,11 +343,9 @@ func (p Profile) Markdown() string {
 		}
 		fmt.Fprintf(&b, "\n## %s\n\n- %s\n", heading, strings.Join(items, "\n- "))
 	}
-	section("Custom signals", p.Signals)
-	section("Sources to read", p.Sources)
-	section("Signal words", p.SignalWords)
-	section("Bad-actor samples", p.BadActorSamples)
-	section("Exclusions", p.Exclusions)
+	section("Signal words", p.Signals)
+	section("Competitors (reject their staff and promoters)", p.Competitors)
+	section("Exclude", p.Excludes)
 	if p.Notes != "" {
 		fmt.Fprintf(&b, "\n## Notes\n\n%s\n", p.Notes)
 	}
@@ -303,14 +368,14 @@ func (s *Service) WithProfile(
 	input string,
 	res []database.UserResource,
 ) (string, []database.UserResource) {
-	p, err := s.GetProfile(ctx, userID)
+	v, err := s.GetProfile(ctx, userID)
 	if err != nil {
 		if !errors.Is(err, ErrNoProfile) {
 			logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).Warn("task started without the business profile")
 		}
 		return input, res
 	}
-	input = p.Compact() + "\n\n" + strings.TrimSpace(profileBlock.ReplaceAllString(input, ""))
+	input = v.Compact() + "\n\n" + strings.TrimSpace(profileBlock.ReplaceAllString(input, ""))
 	return input, s.WithProfileResource(ctx, userID, res)
 }
 
