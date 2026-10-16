@@ -19,7 +19,7 @@ import { copy } from '@/lib/copy';
 
 import type { GrowthAccount } from '../growth-types';
 
-import { accountName } from '../account-health';
+import { accountName, proxyRouteText } from '../account-health';
 import { growthApi } from '../growth-api';
 import { isProxyUrl } from '../settings/growth-credential-row';
 
@@ -47,10 +47,15 @@ function AccountProxyDialog({ account, onClose, onSaved }: AccountProxyDialogPro
         setError(null);
 
         try {
-            const result = await growthApi.testAccountProxy(account.id, value || undefined);
+            // The server only tests the route already saved, so a typed proxy is saved first.
+            if (value) {
+                onSaved(await growthApi.setAccountProxy(account.id, value));
+            }
+
+            const result = await growthApi.testAccountProxy(account.id);
 
             if (result.ok) {
-                toast.success(text.testOk);
+                toast.success(text.testOk(result.latency_ms));
             } else {
                 setError(text.testFailed(result.error ?? copy.common.dash));
             }
@@ -84,7 +89,7 @@ function AccountProxyDialog({ account, onClose, onSaved }: AccountProxyDialogPro
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{text.title(accountName(account))}</DialogTitle>
-                    <DialogDescription>{account.proxy ?? text.direct}</DialogDescription>
+                    <DialogDescription>{proxyRouteText(account)}</DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-col gap-1.5">
                     <Label htmlFor="account-proxy">{text.field}</Label>

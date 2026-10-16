@@ -106,3 +106,10 @@ export function accountTransitions(previous: GrowthAccount[], next: GrowthAccoun
 
     return transitions;
 }
+
+export const proxyRouteText = (account: GrowthAccount): string =>
+    account.proxy_source === 'account'
+        ? (account.proxy_url ?? copy.telegram.proxy.direct)
+        : account.proxy_source === 'global'
+          ? copy.telegram.proxy.global
+          : copy.telegram.proxy.direct;

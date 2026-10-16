@@ -138,7 +138,8 @@ const zh = {
             catalog: '第三方模型提供商',
             catalogHint: '从内置目录中选择 OpenAI、Anthropic、Kimi 等提供商，填入其 API 密钥即可使用。',
             custom: '自定义模型 API',
-            customHint: '适用于中转站、自建网关或任何 OpenAI 格式的接口，需填写接口地址、模型名称和 API 密钥。',
+            customHint:
+                '适用于中转站、自建网关或任何 OpenAI / Anthropic 格式的接口，需填写接口地址、协议、模型名称和 API 密钥。',
             overrides: '自定义设置',
             overridesHint: '留空则使用该服务商的默认模型和官方地址。',
             rolesLink: '按角色分配模型',
@@ -148,10 +149,10 @@ const zh = {
         noSecretKey:
             '服务器还没有设置加密密钥，密钥暂时无法保存。请让部署这套系统的管理员在服务器上设置 GROWTH_SECRET_KEY 后重试。',
         optional: '可选',
-        protocol: { anthropic: 'Anthropic Messages（即将支持）', openai: 'OpenAI Chat Completions' } as Record<
-            string,
-            string
-        >,
+        protocol: {
+            anthropic_messages: 'Anthropic Messages',
+            openai_chat: 'OpenAI Chat Completions',
+        } as Record<string, string>,
         provider: {
             llm: '服务商',
             web_search: '搜索服务',
@@ -610,16 +611,18 @@ const zh = {
         },
         proxy: {
             column: '代理',
-            direct: '默认',
+            direct: '直连',
             edit: '代理',
             field: '代理（可选）',
+            global: '默认代理',
             hint: '不填则使用密钥与连接里的默认代理；默认代理也没填就直连。',
             placeholder: 'http://user:pass@host:port 或 socks5://host:port',
             save: '保存',
             saved: '代理已保存',
             test: '测试代理',
             testFailed: (error: string) => `代理连不上：${error}`,
-            testOk: '代理可用',
+            testOk: (latencyMs: null | number) =>
+                latencyMs === null ? '代理可用' : `代理可用，延迟 ${latencyMs} 毫秒`,
             title: (name: string) => `${name} 的代理`,
         },
         remote: {
@@ -856,7 +859,7 @@ const en: Copy = {
             catalogHint: 'Pick OpenAI, Anthropic, Kimi or another built-in provider and paste its API key.',
             custom: 'Custom model API',
             customHint:
-                'For relays, self-hosted gateways or any OpenAI-format API: fill in the endpoint, model name and API key.',
+                'For relays, self-hosted gateways or any OpenAI- or Anthropic-format API: fill in the endpoint, protocol, model name and API key.',
             overrides: 'Custom settings',
             overridesHint: 'Leave empty to use the provider’s default model and official endpoint.',
             rolesLink: 'Assign models per role',
@@ -866,7 +869,7 @@ const en: Copy = {
         noSecretKey:
             'The server has no encryption key yet, so keys cannot be saved. Ask whoever deployed the system to set GROWTH_SECRET_KEY on the server and try again.',
         optional: 'Optional',
-        protocol: { anthropic: 'Anthropic Messages (coming soon)', openai: 'OpenAI Chat Completions' },
+        protocol: { anthropic_messages: 'Anthropic Messages', openai_chat: 'OpenAI Chat Completions' },
         provider: {
             llm: 'Provider',
             web_search: 'Search service',
@@ -1336,16 +1339,17 @@ const en: Copy = {
         },
         proxy: {
             column: 'Proxy',
-            direct: 'Default',
+            direct: 'Direct',
             edit: 'Proxy',
             field: 'Proxy (optional)',
+            global: 'Default proxy',
             hint: 'Empty uses the default proxy from Keys & connections; without one it connects directly.',
             placeholder: 'http://user:pass@host:port or socks5://host:port',
             save: 'Save',
             saved: 'Proxy saved',
             test: 'Test proxy',
             testFailed: (error) => `The proxy cannot be reached: ${error}`,
-            testOk: 'The proxy works',
+            testOk: (latencyMs) => (latencyMs === null ? 'The proxy works' : `The proxy works (${latencyMs} ms)`),
             title: (name) => `Proxy for ${name}`,
         },
         remote: {

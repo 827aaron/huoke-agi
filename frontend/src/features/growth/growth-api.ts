@@ -33,12 +33,12 @@ export interface RemoteLoginInput extends StartLoginInput {
 // `account_id` signs an existing account in again; without it a new account is added.
 export interface StartLoginInput {
     account_id?: number;
-    proxy: null | string;
+    proxy_url: null | string;
 }
 
 const live = {
     addSources: async (links: string[]) =>
-        unwrapApiResponse(await api.post<GrowthSourcesAddResponse>('/growth/sources', { links })),
+        unwrapApiResponse(await api.post<GrowthSourcesAddResponse>('/growth/sources/', { links })),
     // Leaves the account as it was (`needs_login` for a re-login, nothing for a new one).
     cancelRemoteLogin: async (sessionId: string) => {
         await api.delete(`/growth/accounts/remote-login/${sessionId}`);
@@ -55,9 +55,9 @@ const live = {
         unwrapApiResponse(await api.get<GrowthLead[]>('/growth/leads/', { params: { flow_id: flowId } })),
     listProfiles: async () => unwrapApiResponse(await api.get<GrowthProfile[]>('/growth/profiles')),
     listRuns: async (flowId: number | string) =>
-        unwrapApiResponse(await api.get<GrowthRun[]>('/growth/runs', { params: { flow_id: flowId } })),
+        unwrapApiResponse(await api.get<GrowthRun[]>('/growth/runs/', { params: { flow_id: flowId } })),
     listSettings: async () => unwrapApiResponse(await api.get<GrowthSettingsResponse>('/growth/settings/')).settings,
-    listSources: async () => unwrapApiResponse(await api.get<GrowthSource[]>('/growth/sources')),
+    listSources: async () => unwrapApiResponse(await api.get<GrowthSource[]>('/growth/sources/')),
     // Answers 503 Growth.NoSecretKey while the server has no key to encrypt secrets with.
     saveSetting: async (kind: GrowthSettingKind, input: GrowthSettingInput) =>
         unwrapApiResponse(await api.put<GrowthSetting>(`/growth/settings/${kind}`, input)),
@@ -68,9 +68,12 @@ const live = {
         ),
     // Re-enabling returns the account to `needs_login` or `active`, whichever its session allows.
     setAccountDisabled: async (id: number, isDisabled: boolean) =>
-        unwrapApiResponse(await api.post<GrowthAccount>(`/growth/accounts/${id}/${isDisabled ? 'disable' : 'enable'}`)),
-    setAccountProxy: async (id: number, proxy: null | string) =>
-        unwrapApiResponse(await api.put<GrowthAccount>(`/growth/accounts/${id}/proxy`, { proxy })),
+        unwrapApiResponse(
+            await api.put<GrowthAccount>(`/growth/accounts/${id}`, { status: isDisabled ? 'disabled' : 'active' }),
+        ),
+    // An empty string clears the account's own proxy, so it falls back to the default one.
+    setAccountProxy: async (id: number, proxyUrl: null | string) =>
+        unwrapApiResponse(await api.put<GrowthAccount>(`/growth/accounts/${id}`, { proxy_url: proxyUrl ?? '' })),
     startRemoteLogin: async (input: RemoteLoginInput) =>
         unwrapApiResponse(await api.post<GrowthRemoteLogin>('/growth/accounts/remote-login', input)),
     startTelegramLogin: async (input: StartLoginInput & { phone: string }) =>
@@ -85,9 +88,8 @@ const live = {
                 password,
             }),
         ),
-    // Without `proxy` the server tests the one the account already has.
-    testAccountProxy: async (id: number, proxy?: string) =>
-        unwrapApiResponse(await api.post<GrowthProxyTestResult>(`/growth/accounts/${id}/test-proxy`, { proxy })),
+    testAccountProxy: async (id: number) =>
+        unwrapApiResponse(await api.post<GrowthProxyTestResult>(`/growth/accounts/${id}/test-proxy`)),
     // Without `to` the server mails the notification addresses.
     testEmail: async () => unwrapApiResponse(await api.post<GrowthEmailResult>('/growth/settings/test-email', {})),
     testSetting: async (kind: GrowthSettingKind) =>

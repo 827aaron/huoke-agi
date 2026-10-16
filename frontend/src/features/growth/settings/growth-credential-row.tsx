@@ -70,9 +70,13 @@ const OPTIONAL_FIELDS = new Set(['notify_emails']);
 // A catalogue provider already knows its model and endpoint; these only override them.
 const LLM_OVERRIDE_FIELDS = new Set(['model', 'server_url']);
 
-// The custom endpoint speaks OpenAI Chat Completions only; the selector is shown but not sent.
-const DISPLAY_ONLY_FIELDS = new Set(['protocol']);
-const PROTOCOLS = ['openai', 'anthropic'] as const;
+const PROTOCOLS = ['openai_chat', 'anthropic_messages'] as const;
+
+const selectLabel = (field: string, value: string): string | undefined =>
+    field === 'tls' ? text.tlsOption[value] : text.protocol[value];
+
+// Fields picked from a list rather than typed, with the option a new setting starts on.
+const SELECT_DEFAULTS: Record<string, string> = { protocol: 'openai_chat', tls: 'starttls' };
 
 const isOverrideField = (kind: GrowthSettingKind, provider: null | string, field: string) =>
     kind === 'llm' && provider !== 'custom' && LLM_OVERRIDE_FIELDS.has(field);
@@ -187,11 +191,7 @@ export function GrowthCredentialCard({
         const filled: Record<string, string> = {};
 
         for (const field of fields) {
-            if (DISPLAY_ONLY_FIELDS.has(field)) {
-                continue;
-            }
-
-            const raw = values[field] ?? (field === 'tls' ? TLS_MODES[0] : '');
+            const raw = values[field] ?? SELECT_DEFAULTS[field] ?? '';
             const value = MULTILINE_FIELDS.has(field)
                 ? raw
                       .split('\n')
@@ -293,54 +293,31 @@ export function GrowthCredentialCard({
         const placeholder = canKeepSaved && SECRET_FIELDS.has(field) ? text.keepSaved : text.field[field]?.placeholder;
         const onValue = (value: string) => setValues((previous) => ({ ...previous, [field]: value }));
 
-        if (field === 'protocol') {
-            return (
-                <Select
-                    disabled={!isEditing || isBusy}
-                    value={PROTOCOLS[0]}
-                >
-                    <SelectTrigger
-                        className="w-full sm:w-72"
-                        id={id}
-                    >
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {PROTOCOLS.map((protocol) => (
-                            <SelectItem
-                                disabled={protocol !== PROTOCOLS[0]}
-                                key={protocol}
-                                value={protocol}
-                            >
-                                {text.protocol[protocol]}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            );
-        }
-
         if (!isEditing) {
             return (
                 <div
                     className="bg-muted min-h-9 rounded-md px-3 py-2 font-mono text-sm break-all"
                     id={id}
                 >
-                    {field === 'tls'
-                        ? (text.tlsOption[setting?.fields.tls ?? ''] ?? copy.common.dash)
+                    {field in SELECT_DEFAULTS
+                        ? (selectLabel(field, setting?.fields[field] ?? SELECT_DEFAULTS[field] ?? '') ??
+                          copy.common.dash)
                         : MULTILINE_FIELDS.has(field) && setting?.fields[field]
-                          ? setting.fields[field].split('\n').map((line, index) => <div key={index}>{line}</div>)
+                          ? setting.fields[field]
+                                .split(/[\n,]/)
+                                .filter(Boolean)
+                                .map((line, index) => <div key={index}>{line}</div>)
                           : setting?.fields[field] || copy.common.dash}
                 </div>
             );
         }
 
-        if (field === 'tls') {
+        if (field in SELECT_DEFAULTS) {
             return (
                 <Select
                     disabled={isBusy}
                     onValueChange={onValue}
-                    value={values.tls ?? setting?.fields.tls ?? TLS_MODES[0]}
+                    value={values[field] ?? setting?.fields[field] ?? SELECT_DEFAULTS[field]}
                 >
                     <SelectTrigger
                         className="w-full"
@@ -349,12 +326,12 @@ export function GrowthCredentialCard({
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        {TLS_MODES.map((mode) => (
+                        {(field === 'tls' ? TLS_MODES : PROTOCOLS).map((option) => (
                             <SelectItem
-                                key={mode}
-                                value={mode}
+                                key={option}
+                                value={option}
                             >
-                                {text.tlsOption[mode]}
+                                {selectLabel(field, option)}
                             </SelectItem>
                         ))}
                     </SelectContent>

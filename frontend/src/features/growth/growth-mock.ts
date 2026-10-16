@@ -40,7 +40,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: ago(3),
         last_used_at: ago(3),
         platform: 'telegram',
-        proxy: null,
+        proxy_source: 'direct',
+        proxy_url: null,
         rate_limit_until: null,
         status: 'active',
     },
@@ -58,7 +59,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: ago(20),
         last_used_at: ago(20),
         platform: 'telegram',
-        proxy: null,
+        proxy_source: 'direct',
+        proxy_url: null,
         rate_limit_until: new Date(now + 6 * 60_000).toISOString(),
         status: 'rate_limited',
     },
@@ -76,7 +78,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: ago(4320),
         last_used_at: ago(4320),
         platform: 'telegram',
-        proxy: null,
+        proxy_source: 'direct',
+        proxy_url: null,
         rate_limit_until: null,
         status: 'needs_login',
     },
@@ -94,7 +97,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: ago(35),
         last_used_at: ago(35),
         platform: 'facebook',
-        proxy: '203.0.113.24:8080',
+        proxy_source: 'account',
+        proxy_url: 'http://••••@203.0.113.24:8080',
         rate_limit_until: null,
         status: 'active',
     },
@@ -112,7 +116,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: null,
         last_used_at: null,
         platform: 'instagram',
-        proxy: null,
+        proxy_source: 'direct',
+        proxy_url: null,
         rate_limit_until: null,
         status: 'needs_login',
     },
@@ -418,8 +423,8 @@ const sendMail = (): Promise<GrowthEmailResult> => {
     return delay({ sent: true, to });
 };
 
-// Drops the credentials from a proxy URL the way the server reports it: host:port only.
-const proxyHost = (proxy: null | string | undefined): null | string => {
+// Masks a proxy URL the way the server reports it: scheme://••••@host:port.
+const maskProxy = (proxy: null | string | undefined): null | string => {
     if (!proxy) {
         return null;
     }
@@ -427,18 +432,23 @@ const proxyHost = (proxy: null | string | undefined): null | string => {
     try {
         const url = new URL(proxy);
 
-        return `${url.hostname}:${url.port}`;
+        return `${url.protocol}//${url.username ? '••••@' : ''}${url.hostname}:${url.port}`;
     } catch {
         return proxy;
     }
 };
+
+const proxyFields = (proxy: null | string | undefined): Pick<GrowthAccount, 'proxy_source' | 'proxy_url'> => ({
+    proxy_source: proxy ? 'account' : 'direct',
+    proxy_url: maskProxy(proxy),
+});
 
 const telegramLogins = new Map<string, StartLoginInput & { phone: string }>();
 const remoteLogins = new Map<string, { input: RemoteLoginInput }>();
 
 const upsertAccount = (
     accountId: number | undefined,
-    fields: Pick<GrowthAccount, 'external_id' | 'kind' | 'label' | 'platform' | 'proxy'>,
+    fields: Pick<GrowthAccount, 'external_id' | 'kind' | 'label' | 'platform' | 'proxy_source' | 'proxy_url'>,
     externalBrowserWs?: null | string,
 ): GrowthAccount => {
     const existing = accounts.find((account) => account.id === accountId);
@@ -456,7 +466,9 @@ const upsertAccount = (
         status: 'active',
         ...fields,
         ...(existing ? { external_id: existing.external_id, label: existing.label } : {}),
-        proxy: fields.proxy ?? existing?.proxy ?? null,
+        ...(fields.proxy_url || !existing
+            ? {}
+            : { proxy_source: existing.proxy_source, proxy_url: existing.proxy_url }),
         ...(externalBrowserWs !== undefined ? { external_browser_ws: externalBrowserWs || null } : {}),
     };
 
@@ -473,7 +485,7 @@ const finishTelegramLogin = (loginId: string, input: StartLoginInput & { phone: 
         kind: 'user',
         label: 'Telegram 账号',
         platform: 'telegram',
-        proxy: proxyHost(input.proxy),
+        ...proxyFields(input.proxy_url),
     });
 };
 
@@ -546,7 +558,7 @@ export const growthMock = {
                     kind: 'browser_session',
                     label: `${pending.input.platform === 'facebook' ? 'Facebook' : 'Instagram'} 账号`,
                     platform: pending.input.platform,
-                    proxy: proxyHost(pending.input.proxy),
+                    ...proxyFields(pending.input.proxy_url),
                 },
                 pending.input.external_browser_ws,
             ),
@@ -593,8 +605,8 @@ export const growthMock = {
 
         return delay(accounts.find((account) => account.id === id) as GrowthAccount);
     },
-    setAccountProxy: (id: number, proxy: null | string): Promise<GrowthAccount> => {
-        accounts = accounts.map((account) => (account.id === id ? { ...account, proxy: proxyHost(proxy) } : account));
+    setAccountProxy: (id: number, proxyUrl: null | string): Promise<GrowthAccount> => {
+        accounts = accounts.map((account) => (account.id === id ? { ...account, ...proxyFields(proxyUrl) } : account));
 
         return delay(accounts.find((account) => account.id === id) as GrowthAccount);
     },
@@ -641,8 +653,17 @@ export const growthMock = {
 
         return delay({ account: finishTelegramLogin(loginId, input), login_id: loginId, next: 'done' });
     },
-    testAccountProxy: (_id: number, proxy?: string): Promise<GrowthProxyTestResult> =>
-        delay(proxy?.includes('bad') ? { error: 'connection refused', ok: false } : { error: null, ok: true }),
+    // A proxy on host "bad" fails, so both outcomes can be tried by hand.
+    testAccountProxy: (id: number): Promise<GrowthProxyTestResult> => {
+        const account = accounts.find((item) => item.id === id);
+        const route = { proxy: account?.proxy_url ?? null, source: account?.proxy_source ?? ('direct' as const) };
+
+        return delay(
+            route.proxy?.includes('bad')
+                ? { ...route, error: 'connection refused', latency_ms: null, ok: false }
+                : { ...route, error: null, latency_ms: 180, ok: true },
+        );
+    },
     testEmail: () => sendMail(),
     testSetting: (kind: GrowthSettingKind): Promise<GrowthSetting> => {
         const current = findSetting(kind);

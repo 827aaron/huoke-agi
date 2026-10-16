@@ -85,7 +85,7 @@ function TelegramLoginDialog({ account, onClose, onSignedIn, open }: TelegramLog
                 const result = await growthApi.startTelegramLogin({
                     account_id: account?.id,
                     phone: phone.trim(),
-                    proxy: proxy.trim() || null,
+                    proxy_url: proxy.trim() || null,
                 });
 
                 setLoginId(result.login_id);

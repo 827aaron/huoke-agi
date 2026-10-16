@@ -18,6 +18,7 @@ import {
     accountsBanner,
     accountsBannerText,
     formatClock,
+    proxyRouteText,
 } from '@/features/growth/account-health';
 import AccountProxyDialog from '@/features/growth/accounts/account-proxy-dialog';
 import RemoteLoginDialog, { fingerprintSummary } from '@/features/growth/accounts/remote-login-dialog';
@@ -170,9 +171,7 @@ function SettingsAccounts() {
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">{limitText(account, now)}</TableCell>
                                 <TableCell className="font-mono text-xs whitespace-nowrap">
-                                    {account.external_browser_ws
-                                        ? copy.common.dash
-                                        : (account.proxy ?? text.proxy.direct)}
+                                    {account.external_browser_ws ? copy.common.dash : proxyRouteText(account)}
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex justify-end gap-1">

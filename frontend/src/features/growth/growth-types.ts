@@ -4,8 +4,8 @@ export interface GrowthAccount {
     // True while the account may be picked for work right now.
     available: boolean;
     consecutive_errors: number;
-    // DevTools address of the customer's own fingerprint browser (AdsPower, BitBrowser); when set it supplies
-    // the proxy and the fingerprint, and the system's own are unused.
+    // DevTools address of the customer's own fingerprint browser (AdsPower, BitBrowser), masked; when set it
+    // supplies the proxy and the fingerprint, and the system's own are unused.
     external_browser_ws: null | string;
     // Phone number or platform user id; only its last four characters are shown.
     external_id: string;
@@ -19,9 +19,10 @@ export interface GrowthAccount {
     last_success_at: null | string;
     last_used_at: null | string;
     platform: GrowthAccountPlatform;
-    // host:port of the account's own proxy, credentials removed; null connects directly or through the
-    // default proxy.
-    proxy: null | string;
+    // Which route the account's traffic takes: its own proxy, the default proxy, or none.
+    proxy_source: GrowthProxySource;
+    // The account's own proxy, credentials masked (scheme://••••@host:port); null when it has none.
+    proxy_url: null | string;
     // Set while `rate_limited`: when the platform lets the account act again.
     rate_limit_until: null | string;
     status: GrowthAccountStatus;
@@ -98,10 +99,11 @@ export type GrowthPlatform = 'facebook' | 'instagram' | 'telegram' | 'web' | 'yo
 
 export const GROWTH_PLATFORMS: GrowthPlatform[] = ['telegram', 'facebook', 'instagram', 'youtube', 'web'];
 
+// Stored as the server generated it; only these keys are shown.
 export interface GrowthFingerprint {
-    language: string;
-    os: string;
-    timezone: string;
+    language?: string;
+    os?: string;
+    timezone?: string;
 }
 
 export interface GrowthProfile {
@@ -121,9 +123,15 @@ export interface GrowthProfile {
 
 export type GrowthProfileInput = Omit<GrowthProfile, 'id' | 'updated_at'>;
 
+export type GrowthProxySource = 'account' | 'direct' | 'global';
+
+// Tests the route the account's traffic takes now, by fetching api.telegram.org through it.
 export interface GrowthProxyTestResult {
     error: null | string;
+    latency_ms: null | number;
     ok: boolean;
+    proxy: null | string;
+    source: GrowthProxySource;
 }
 
 // A browser opened on the server for Facebook or Instagram; `view_url` is the live view to embed.
