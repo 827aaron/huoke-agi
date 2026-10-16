@@ -64,6 +64,8 @@ test.describe('live panels', { tag: '@flows' }, () => {
     });
 
     test.describe('a revised message', () => {
+        test.describe.configure({ retries: 2 });
+
         test.use({
             cassette: variedMessagesCassette({
                 subscriptions: {

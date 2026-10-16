@@ -22,6 +22,17 @@ networks:
     name: langfuse-network
 
 services:
+  # Worker image for agent sandboxes. Build only: docker compose --profile build build growth-worker
+  growth-worker:
+    image: ${DOCKER_DEFAULT_IMAGE:-kelai-growth-worker:latest}
+    build:
+      context: .
+      dockerfile: docker/growth-worker.Dockerfile
+    profiles:
+      - build
+    entrypoint: ["true"]
+    restart: "no"
+
   pentagi:
     image: ${PENTAGI_IMAGE:-vxcontrol/pentagi:latest}
     restart: unless-stopped
@@ -195,6 +206,18 @@ services:
       - WEB_SEARCH_INTERNAL_ENABLED=${WEB_SEARCH_INTERNAL_ENABLED:-}
       - WEB_SEARCH_INTERNAL_MAX_SITES=${WEB_SEARCH_INTERNAL_MAX_SITES:-}
       - WEB_SEARCH_INTERNAL_MAX_SITE_BYTES=${WEB_SEARCH_INTERNAL_MAX_SITE_BYTES:-}
+      - GROWTH_ENABLED=${GROWTH_ENABLED:-false}
+      - TG_API_ID=${TG_API_ID:-}
+      - TG_API_HASH=${TG_API_HASH:-}
+      - TG_SESSION_DIR=${TG_SESSION_DIR:-}
+      - GROWTH_SECRET_KEY=${GROWTH_SECRET_KEY:-}
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-}
+      - SMTP_TLS=${SMTP_TLS:-}
       - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-}
       - LANGFUSE_PROJECT_ID=${LANGFUSE_PROJECT_ID:-}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
@@ -213,10 +236,10 @@ services:
       - DOCKER_NETWORK=${DOCKER_NETWORK:-}
       - DOCKER_PUBLIC_IP=${DOCKER_PUBLIC_IP:-}
       - DOCKER_WORK_DIR=${DOCKER_WORK_DIR:-}
-      - DOCKER_DEFAULT_IMAGE=${DOCKER_DEFAULT_IMAGE:-}
-      - DOCKER_DEFAULT_IMAGE_FOR_PENTEST=${DOCKER_DEFAULT_IMAGE_FOR_PENTEST:-}
+      - DOCKER_DEFAULT_IMAGE=${DOCKER_DEFAULT_IMAGE:-kelai-growth-worker:latest}
+      - DOCKER_DEFAULT_IMAGE_FOR_PENTEST=${DOCKER_DEFAULT_IMAGE_FOR_PENTEST:-kelai-growth-worker:latest}
       - DOCKER_DEFAULT_IMAGE_FOR_TEST=${DOCKER_DEFAULT_IMAGE_FOR_TEST:-}
-      - DOCKER_IMAGE_SELECTION_MODE=${DOCKER_IMAGE_SELECTION_MODE:-}
+      - DOCKER_IMAGE_SELECTION_MODE=${DOCKER_IMAGE_SELECTION_MODE:-fixed}
       - DOCKER_ALLOWED_IMAGES=${DOCKER_ALLOWED_IMAGES:-}
       - LLM_FALLBACK_PROVIDER=${LLM_FALLBACK_PROVIDER:-}
     logging:

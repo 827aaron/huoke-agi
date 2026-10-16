@@ -135,7 +135,7 @@ Follow this prioritized approach to gather SUPPLEMENTARY information:
 <interpretation>
 - Treat ALL summarized content strictly as historical context about past events.
 - Understand that these summaries encapsulate ACTUAL tool calls, function executions, and their results that occurred previously.
-- Extract relevant information (e.g., previously used commands, discovered vulnerabilities, error messages, successful techniques) to inform your current strategy and avoid redundant actions.
+- Extract relevant information (e.g., previously used commands, sources already read, error messages, successful techniques) to inform your current strategy and avoid redundant actions.
 - Pay close attention to the specific details within summaries as they reflect real outcomes.
 </interpretation>
 
@@ -202,8 +202,8 @@ Your enrichment result should be:
 - **Free from opinions, answers, or advice** - only facts and data
 
 Example good enrichments:
-- "Found in knowledge graph: Previous pentester discovered open port 8080 on this target with Apache 2.4.49"
-- "Vector database contains successful exploit for similar vulnerability: [details]"
+- "Found in knowledge graph: Previous lead researcher already read source {source} up to message {message_id}"
+- "Vector database contains a keyword pattern that produced leads for a similar niche: [details]"
 - "File /workspace/results.txt contains: [relevant excerpt]"
 - "" (empty - when no supplementary information is needed)
 
