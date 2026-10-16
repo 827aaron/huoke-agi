@@ -48,9 +48,8 @@ ALWAYS search Graphiti BEFORE searching vector database:
 </when_to_search>
 
 <taxonomy_reference>
-node_labels (PascalCase singular, use verbatim): Host, Port, Service, WebApp, Endpoint, Account, Vulnerability, Misconfiguration, Capability, Credential, ValidAccess, PrivChange, Tool, ToolExecution, Artifact, Evidence, Attempt, AttackTechnique.
-edge_types (UPPER_SNAKE_CASE, use verbatim): HAS_PORT, RUNS_SERVICE, HOSTS_APP, HAS_ENDPOINT, DETECTED_VULNERABILITY (scanner hit, unverified) → CONFIRMED_VULNERABILITY (validated) → HAS_VULNERABILITY (exploited), HAS_MISCONFIGURATION, AUTHENTICATES_TO, YIELDED_ACCESS, ESCALATED_VIA, PIVOTED_TO, ATTEMPTED_ON.
-Never invent a label/edge outside this list; if unsure, omit node_labels/edge_types and rely on the free-text query instead.
+The graph taxonomy was designed for a different domain and does not describe leads or sources.
+Do NOT pass node_labels or edge_types; rely on the free-text query only.
 </taxonomy_reference>
 
 <search_type_selection>
@@ -59,12 +58,12 @@ Choose the appropriate search type based on the information need:
 1. **recent_context** - Your DEFAULT starting point for recent history
    - Use: "What happened recently regarding [topic]?"
    - When: Answering questions about recent activities, current state
-   - Example: `search_type: "recent_context", query: "recent pentester findings about web application", recency_window: "6h"`
+   - Example: `search_type: "recent_context", query: "recent lead researcher findings about sources read", recency_window: "6h"`
 
 2. **episode_context** - Get detailed agent work and responses
    - Use: "What did [agent] do/discover about [topic]?"
    - When: Need complete agent reasoning and execution details
-   - Example: `search_type: "episode_context", query: "pentester agent exploitation of SQL injection vulnerability"`
+   - Example: `search_type: "episode_context", query: "lead researcher analysis of a source with many relevant questions"`
 
 3. **temporal_window** - Search within specific time period
    - Use: "What occurred between [time] and [time]?"
@@ -74,17 +73,17 @@ Choose the appropriate search type based on the information need:
 4. **successful_tools** - Find proven techniques and commands
    - Use: "What [tool/technique] executions succeeded?"
    - When: Looking for working command examples, successful approaches
-   - Example: `search_type: "successful_tools", query: "successful nmap scans revealing services", min_mentions: 2`
+   - Example: `search_type: "successful_tools", query: "keyword searches that found productive groups", min_mentions: 2`
 
 5. **entity_relationships** - Explore entity connections (requires center_node_uuid copied verbatim from a 'UUID:' field in a prior search result — never invent one; node_labels/edge_types are optional filters from the taxonomy reference above)
    - Use: "What is connected to [entity]?"
    - When: Understanding relationships between discovered entities
-   - Example: `search_type: "entity_relationships", query: "related vulnerabilities and services", center_node_uuid: "[uuid]", max_depth: 2`
+   - Example: `search_type: "entity_relationships", query: "related sources and keywords", center_node_uuid: "[uuid]", max_depth: 2`
 
 6. **entity_by_label** - Type-specific inventory using node_labels from the taxonomy reference above
    - Use: "List all [entity type] discovered"
    - When: Creating inventories, generating comprehensive reports
-   - Example: `search_type: "entity_by_label", query: "all discovered vulnerabilities", node_labels: ["Vulnerability"]`
+   - Example: `search_type: "entity_by_label", query: "all sources read in this flow"`
 
 7. **diverse_results** - Get varied perspectives and alternatives
    - Use: "What are different approaches/findings about [topic]?"
@@ -96,10 +95,10 @@ Choose the appropriate search type based on the information need:
 Effective queries are SPECIFIC and CONTEXTUAL:
 
 GOOD queries:
-- "pentester agent nmap scan results for 192.168.1.100 showing open ports"
-- "coder agent Python script for parsing JSON vulnerability data"
-- "searcher agent research findings about CVE-2024-1234 exploitation"
-- "developer tool executions modifying exploit payloads"
+- "lead researcher history reads of source {source} and leads saved"
+- "coder agent Python script for parsing JSON message history"
+- "searcher agent findings about groups for a niche in a given language"
+- "developer tool executions filtering message dumps"
 
 BAD queries (too vague):
 - "findings"
@@ -110,9 +109,9 @@ BAD queries (too vague):
 Include:
 - Agent type when relevant (pentester, coder, searcher, installer)
 - Specific topics or targets
-- Technical details (IPs, CVEs, tools, techniques)
+- Technical details (source names, keywords, tools, techniques)
 - Time context when available
-- Action types (scan, exploit, research, development)
+- Action types (search, join, read, score, development)
 </query_construction>
 
 <integration_with_memory_protocol>
@@ -171,7 +170,7 @@ Vector database provides the "library" of reusable solutions.
 <interpretation>
 - Treat ALL summarized content strictly as historical context about past events.
 - Understand that these summaries encapsulate ACTUAL tool calls, function executions, and their results that occurred previously.
-- Extract relevant information (e.g., previously used commands, discovered vulnerabilities, error messages, successful techniques) to inform your current strategy and avoid redundant actions.
+- Extract relevant information (e.g., previously used commands, sources already read, error messages, successful techniques) to inform your current strategy and avoid redundant actions.
 - Pay close attention to the specific details within summaries as they reflect real outcomes.
 </interpretation>
 

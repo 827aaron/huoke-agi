@@ -296,6 +296,12 @@ type Config struct {
 	// PprofAddr is the pprof listener address. It is empty by default, which means pprof is disabled.
 	PprofAddr string `env:"PPROF_ADDR" envDefault:""`
 
+	// === Growth: Telegram account ===
+	GrowthEnabled bool   `env:"GROWTH_ENABLED" envDefault:"false"`
+	TGAPIID       int    `env:"TG_API_ID"`
+	TGAPIHash     string `env:"TG_API_HASH"`
+	TGSessionDir  string `env:"TG_SESSION_DIR" envDefault:"./data/tg-session"`
+
 	// === Observability: Langfuse LLM Analytics ===
 	LangfuseBaseURL   string `env:"LANGFUSE_BASE_URL"`
 	LangfuseProjectID string `env:"LANGFUSE_PROJECT_ID"`
@@ -525,6 +531,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.OAuthGithubClientSecret, "Github Client Secret"},
 		{c.TraversaalAPIKey, "Traversaal Key"},
 		{c.TavilyAPIKey, "Tavily Key"},
+		{c.TGAPIHash, "Telegram API Hash"},
 		{c.FirecrawlAPIKey, "Firecrawl Key"},
 		{c.PerplexityAPIKey, "Perplexity Key"},
 		{c.ProxyURL, "Proxy URL"},

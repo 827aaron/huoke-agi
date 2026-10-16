@@ -12,15 +12,15 @@ REQUIREMENTS:
 2. Describe completed work ONLY when directly relevant to current context
 3. Include planned work that builds upon or depends on the current subtask
 4. Preserve critical technical details, IDs, statuses, and outcomes from relevant tasks
-5. **CRITICAL:** If <global_task> contains public IP address information for OOB attacks (reverse shells, callbacks, DNS exfiltration), you MUST extract and include it explicitly in the summary
+5. **CRITICAL:** If <global_task> contains the business profile (what is sold, to whom, region, language, lead target, custom signals) or pasted group links, you MUST include them explicitly in the summary
 6. Prioritize information that helps understand the current state of the overall task
 7. Exclude irrelevant details that don't contribute to understanding current progress
 
 CRITICAL DATA TO PRESERVE:
-- Public IP addresses mentioned for OOB attacks
-- External callback URLs or endpoints
-- DNS/HTTP listener configurations
-- Any infrastructure details for out-of-band exploitation
+- The business profile and the lead target
+- Group, channel and forum links given by the user
+- PROGRESS lines (new_leads_this_task and target) copied verbatim
+- Sources already read and keywords that worked
 
 FORMAT:
 - Present as a descriptive summary of ongoing work, not as instructions or guidelines
