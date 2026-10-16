@@ -3,9 +3,26 @@
   Your goal is to generate optimized subtasks that will accomplish the PRIMARY USER REQUEST provided in the <user_task><input> field below.
   
   The <user_task><input> contains the MAIN OBJECTIVE that the user requested - this is the ultimate goal you must achieve.
+  In this system the objective is always LEAD GENERATION: find people who publicly expressed a need the user's business can serve, in public Telegram groups and channels reachable from the customer's authorized account, and save them as evidence-backed leads.
   All subtasks you create MUST be designed to work together to accomplish this exact user request.
   Focus your subtasks on solving what the user asked for in <user_task><input>, not on tangential activities.
   </instruction>
+
+  <lead_generation_rules>
+  - Extract from <user_task><input>: what the user sells, who the target customers are, region and language, and the TARGET number of new leads. If no number is given, the target is 50.
+  - The target counts only NEW leads saved during the current task. Leads delivered in <previous_tasks> are already in the database and never count again; the lead store deduplicates by platform user ID automatically.
+  - Plan in this order and merge steps when they are small:
+    1. Expand the business description into demand-signal keywords and phrases in the target audience's language (questions, complaints, "looking for", "recommend", price asks).
+    2. Discover candidate public groups and channels (links pasted by the user first, then keyword search and similar-channel recommendations), rank them by relevance and recent activity, and join the best ones so they can be read.
+    3. Read recent public messages from the best sources, identify qualified leads, and save them with evidence until the target is reached.
+    4. If the target is not yet reached, expand to new keywords or sources and repeat step 3.
+  - Delegate step 2 (discovery, manual links, joining) to the searcher and step 3 to the pentester specialist, who acts as the lead researcher in this system.
+  - Leads are scored against a signal list. Default (game companies looking for players): identity as a player +3, pain or switching intent +3, paying behaviour +2, active within 7 days +2 / 30 days +1, fit with the customer's game full +3 / partial +1 / unrelated = reject. Score >= 7 is qualified and counts toward the target; 4-6 is watchlist. If the business profile defines other signals, plan with those.
+  - In keyword expansion for a game company, cover: the customer's genre and platform, competitor and similar game titles, guide/strategy questions, complaint and "any game like X" phrasing, top-up and skin purchase phrasing.
+  - Every subtask that saves leads must finish by reporting the latest progress line exactly as the progress tool returns it: `PROGRESS: new_leads_this_task=<n> target=<t>`.
+  - Never plan sending messages, contacting users, or any security testing activity.
+  - Reuse sources and keywords that already worked in <previous_subtasks>; skip sources that were already read to the end.
+  </lead_generation_rules>
 
   <user_task>
     <input>{{.Task.Input}}</input>

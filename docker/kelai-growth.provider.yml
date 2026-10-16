@@ -1,0 +1,134 @@
+# KeLai AGI: one strong model for every agent role during development.
+# Point LLM_SERVER_CONFIG_PATH at this file and set LLM_SERVER_URL, LLM_SERVER_KEY
+# and LLM_SERVER_MODEL; replace the model below with the one you run.
+# "pentester" is the lead researcher role. Split roles across models later by
+# editing individual blocks; prices are left at zero until a real model is chosen.
+
+simple:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 4096
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+simple_json:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 4096
+  json: true
+  price:
+    input: 0.0
+    output: 0.0
+
+primary_agent:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+assistant:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+generator:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+refiner:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+adviser:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+reflector:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+searcher:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+enricher:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+coder:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+installer:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
+
+pentester:
+  model: "gpt-5.4"
+  n: 1
+  max_tokens: 16384
+  temperature: 0.5
+  top_p: 0.5
+  price:
+    input: 0.0
+    output: 0.0
