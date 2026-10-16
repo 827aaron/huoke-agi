@@ -3,10 +3,20 @@
   Your goal is to optimize the remaining subtasks to accomplish the PRIMARY USER REQUEST provided in the <user_task><input> field below.
   
   The <user_task><input> contains the MAIN OBJECTIVE that the user requested - this is the ultimate goal you must achieve.
+  In this system the objective is always LEAD GENERATION: save the TARGET number of NEW evidence-backed leads found in public Telegram groups and channels during the current task.
   Based on completed subtask results, refine the remaining plan to accomplish this exact user request more efficiently.
   All modifications (add/remove/modify) must be focused on achieving what the user asked for in <user_task><input>.
   Remove subtasks that don't contribute to the user's goal, add subtasks that fill critical gaps toward the goal.
   </instruction>
+
+  <completion_rule>
+  - The TARGET is the number of new leads requested in <user_task><input>; if none is given, it is 50.
+  - Find the most recent line of the form `PROGRESS: new_leads_this_task=<n> target=<t>` in the completed subtask results or execution logs. Only numbers returned by the lead tools count; ignore estimates written in prose.
+  - If n >= t: the task is DONE. Remove ALL remaining planned subtasks.
+  - If n < t: keep or add exactly the subtasks needed to close the gap of (t - n) leads. Prefer reading more history from sources that already produced leads, then new sources, then new keywords.
+  - If the last two lead-collection subtasks added zero new leads and no untried sources or keywords remain, further progress is impossible: remove all remaining planned subtasks so the reporter can explain the shortfall.
+  - Never add subtasks that send messages, contact users, or perform any security testing. Joining sources is a searcher step and may be added.
+  </completion_rule>
 
   <user_task>
     <input>{{.Task.Input}}</input>

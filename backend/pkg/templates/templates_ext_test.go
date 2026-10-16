@@ -128,14 +128,14 @@ func TestTemplates_GetDefaultPrompts_PromptsCarryTheirKeyPhrases(t *testing.T) {
 			},
 		},
 		{
-			name:       "the pentester's tool-agnostic cli argument guidance",
+			name:       "the lead researcher's qualification rules",
 			promptType: templates.PromptTypePentester,
 			template:   defaultPrompts.AgentsPrompts.Pentester.System.Template,
 			phrases: []string{
-				"cli_argument_protocol", "Hallucinated flags", "--help", "Cross-tool flag assumptions",
-				"Never copy a flag from one tool to another", "shell redirection", "Machine-readable output", "Argument quoting",
+				"growth_upsert_leads", "growth_sync_source", "growth_get_progress",
+				"signal_scoring", "always_reject", "PROGRESS:",
 			},
-			forbidden: []string{"XSStrike", "xsstrike"},
+			forbidden: []string{"nmap", "metasploit", "XSStrike"},
 		},
 		{
 			name:       "the task assignment wrapper",
