@@ -20,7 +20,7 @@ test.describe('responsive', { tag: '@cross' }, () => {
             await expect(page.getByRole('button', { name: 'Toggle Sidebar' })).toBeVisible();
             // Owned by the mobile shell: the sidebar collapses to an off-canvas sheet, so its
             // nav links are hidden until the trigger opens it (they are inline-visible on desktop).
-            await expect(page.getByRole('link', { name: 'Dashboard' })).toBeHidden();
+            await expect(page.getByRole('link', { name: '概览' })).toBeHidden();
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
 
             await page.getByRole('row', { name: /E2E Alpha/ }).click();
@@ -41,13 +41,13 @@ test.describe('responsive', { tag: '@cross' }, () => {
         test('768 keeps the sidebar inline, 767 collapses it to the mobile sheet', async ({ page, pageErrorLog }) => {
             await page.setViewportSize({ height: 800, width: 768 });
             await page.goto('/flows');
-            await expect(page.getByRole('link', { name: 'Dashboard' })).toBeVisible();
+            await expect(page.getByRole('link', { name: '概览' })).toBeVisible();
 
             await page.setViewportSize({ height: 800, width: 767 });
             // `hidden md:block` hides the desktop tree either way, so its absence — the closed mobile
             // sheet renders nothing — is the only reading that tells the hook's answer from the CSS.
             await expect(page.locator('[data-sidebar="sidebar"]')).toHaveCount(0);
-            await expect(page.getByRole('link', { name: 'Dashboard' })).toBeHidden();
+            await expect(page.getByRole('link', { name: '概览' })).toBeHidden();
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
             expectCleanPage(pageErrorLog);
         });

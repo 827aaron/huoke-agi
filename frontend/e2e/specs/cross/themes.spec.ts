@@ -17,6 +17,7 @@ test.describe('themes', { tag: '@cross' }, () => {
 
         await expect(page.locator('html')).toHaveClass(/dark/);
         await expect(page.locator(MESSAGE_ID_SELECTOR).first()).toBeVisible();
+        await page.getByRole('tab', { name: '终端' }).click();
         await expect(page.locator('.xterm')).toBeVisible();
         expectCleanPage(pageErrorLog);
     });

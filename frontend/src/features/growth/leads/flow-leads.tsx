@@ -116,7 +116,10 @@ function FlowLeads() {
                     onValueChange={(value) => update({ tier: value as 'all' | GrowthLeadTier })}
                     value={filters.tier}
                 >
-                    <SelectTrigger className="w-28">
+                    <SelectTrigger
+                        aria-label={copy.leads.column.score}
+                        className="w-28"
+                    >
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -129,7 +132,10 @@ function FlowLeads() {
                     onValueChange={(value) => update({ delivery: value as LeadDeliveryFilter })}
                     value={filters.delivery}
                 >
-                    <SelectTrigger className="w-28">
+                    <SelectTrigger
+                        aria-label={copy.leads.column.status}
+                        className="w-28"
+                    >
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -173,7 +179,10 @@ function FlowLeads() {
                     onValueChange={(value) => update({ sourceId: value === ALL ? null : Number(value) })}
                     value={filters.sourceId === null ? ALL : String(filters.sourceId)}
                 >
-                    <SelectTrigger className="w-40">
+                    <SelectTrigger
+                        aria-label={copy.leads.column.source}
+                        className="w-40"
+                    >
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

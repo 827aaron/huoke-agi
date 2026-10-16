@@ -45,16 +45,18 @@ const zh = {
         cancel: '取消',
         card: {
             email: {
-                purpose: '每轮找人完成后，把潜客名单作为附件发到你指定的邮箱。不填则只在页面上交付。',
+                purpose:
+                    '每轮找人完成后，把潜客名单作为附件发到你指定的邮箱。不填也能用，只是不发邮件，名单在页面上查看。',
                 title: '邮件通知',
             },
             llm: { purpose: '智能体的“大脑”，没有它无法工作。', title: '大模型' },
             proxy: {
-                purpose: '所有账号默认走这个代理出网。不填则直连。单个账号可以在账号连接页另设代理。',
+                purpose: '所有账号默认走这个代理出网。不填也能用，直接连接。单个账号可以在账号连接页另设代理。',
                 title: '默认代理',
             },
             telegram: {
-                purpose: '让系统能以你的账号登录 Telegram，加入公开群、阅读群内公开发言。',
+                purpose:
+                    '让系统能以你的账号登录 Telegram，加入公开群、阅读群内公开发言。不填也能用，只是不找 Telegram 上的人。',
                 title: 'Telegram 接口凭据',
             },
             web_search: {
@@ -63,7 +65,7 @@ const zh = {
                 title: '网页搜索',
             },
             youtube: {
-                purpose: '读取公开视频的评论区，从中发现讨论游戏的玩家。不填则智能体不会使用 YouTube 这个渠道。',
+                purpose: '读取公开视频的评论区，从中发现讨论游戏的玩家。不填也能用，只是不找 YouTube 上的人。',
                 title: 'YouTube',
             },
         } as Record<string, { purpose: string; title: string }>,
@@ -369,6 +371,7 @@ const zh = {
         title: '四步开始',
     },
     profile: {
+        aiHint: '这些内容会自动带给 AI，不用改任何模板。',
         defaultExcludes: ['卖号', '代练', '竞品官方', '机器人'],
         description: '告诉智能体你在做什么、想找谁。填一次，之后每次只要说一句“找 50 个客户”。',
         emptyHint: '还没有业务档案。填写后，智能体才知道该找什么样的玩家。',
@@ -385,8 +388,8 @@ const zh = {
             },
             excludes: {
                 help: '可增删。命中的人不会入库',
-                label: '排除项',
-                placeholder: '卖号、代练、竞品官方、机器人',
+                label: '排除规则',
+                placeholder: '例如：代练、卖号、竞品员工',
             },
             games: {
                 help: '智能体会用这些名字搜索玩家讨论',
@@ -400,6 +403,11 @@ const zh = {
             },
             languages: { help: '决定去哪些语言的群里找', label: '目标语言', placeholder: '选择语言' },
             name: { help: '方便你在多个业务之间区分', label: '业务名称', placeholder: '例如：星穹纪元' },
+            notes: {
+                help: '可选。写成一段话就行',
+                label: '补充说明',
+                placeholder: '任何想让 AI 知道的事，例如游戏特色、常去的社区、忌讳',
+            },
             pitch: {
                 help: '一两句话即可，决定要找“什么需求”的玩家',
                 label: '你想让玩家知道什么',
@@ -770,7 +778,8 @@ const en: Copy = {
                 title: 'Default proxy',
             },
             telegram: {
-                purpose: 'Lets the system sign in to Telegram as you to join public groups and read public messages.',
+                purpose:
+                    'Lets the system sign in to Telegram as you to join public groups and read public messages. Optional; without it Telegram is skipped.',
                 title: 'Telegram API credentials',
             },
             web_search: {
@@ -1086,6 +1095,7 @@ const en: Copy = {
         title: 'Get started in four steps',
     },
     profile: {
+        aiHint: 'All of this is passed to the AI automatically; no template needs editing.',
         defaultExcludes: ['Account sellers', 'Boosters', 'Official competitor accounts', 'Bots'],
         description:
             'Tell the agent what you offer and who to find. Fill it once, then just say “find me 50 customers”.',
@@ -1103,8 +1113,8 @@ const en: Copy = {
             },
             excludes: {
                 help: 'Matching people are never saved',
-                label: 'Exclusions',
-                placeholder: 'Account sellers, boosters, official competitor accounts, bots',
+                label: 'Exclusion rules',
+                placeholder: 'e.g. boosters, account sellers, competitor staff',
             },
             games: {
                 help: 'The agent searches player discussions by these names',
@@ -1118,6 +1128,12 @@ const en: Copy = {
             },
             languages: { help: 'Which language groups to search', label: 'Languages', placeholder: 'Choose languages' },
             name: { help: 'Tells your businesses apart', label: 'Business name', placeholder: 'e.g. Star Era' },
+            notes: {
+                help: 'Optional. A paragraph is enough',
+                label: 'Anything else',
+                placeholder:
+                    'Anything the AI should know: what makes the game special, where players hang out, what to avoid',
+            },
             pitch: {
                 help: 'A sentence or two; it decides which needs to look for',
                 label: 'What you want players to know',

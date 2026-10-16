@@ -191,7 +191,10 @@ function FlowSources() {
                     onValueChange={(value) => setJoinStatus(value as 'all' | GrowthSourceJoinStatus)}
                     value={joinStatus}
                 >
-                    <SelectTrigger className="w-36">
+                    <SelectTrigger
+                        aria-label={copy.sources.column.joinStatus}
+                        className="w-36"
+                    >
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -210,7 +213,10 @@ function FlowSources() {
                     onValueChange={(value) => setOrigin(value as 'all' | GrowthSourceOrigin)}
                     value={origin}
                 >
-                    <SelectTrigger className="w-36">
+                    <SelectTrigger
+                        aria-label={copy.sources.column.origin}
+                        className="w-36"
+                    >
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

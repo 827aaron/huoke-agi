@@ -30,7 +30,7 @@ test.describe('flow detail tabs', { tag: '@flows' }, () => {
     test('the screenshot image decodes from its REST endpoint', async ({ page, pageErrorLog }) => {
         await page.goto('/flows/5');
         await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
-        await page.getByRole('tab', { name: 'Screenshots' }).click();
+        await page.getByRole('tab', { name: '截图' }).click();
 
         const image = page.getByRole('img', { name: TABS_SCREENSHOT_NEWEST_NAME });
         await image.scrollIntoViewIfNeeded();
@@ -49,9 +49,9 @@ test.describe('flow detail tabs', { tag: '@flows' }, () => {
     }) => {
         await page.goto('/flows/5');
         await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
-        await page.getByRole('tab', { name: 'Screenshots' }).click();
+        await page.getByRole('tab', { name: '截图' }).click();
 
-        const shots = page.getByRole('tabpanel', { name: 'Screenshots' }).getByRole('link');
+        const shots = page.getByRole('tabpanel', { name: '截图' }).getByRole('link');
 
         await expect(shots).toHaveText([TABS_SCREENSHOT_URL, TABS_SCREENSHOT_NEWER_URL, TABS_SCREENSHOT_NEWEST_URL]);
 

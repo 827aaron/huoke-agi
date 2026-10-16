@@ -66,6 +66,7 @@ const profileFormSchema = z
         genre: z.string().min(1, { message: required.genre }),
         languages: z.array(z.string()),
         name: z.string().trim().min(1, { message: required.name }),
+        notes: z.string(),
         otherLanguages: z.string(),
         pitch: z.string().trim().min(1, { message: required.pitch }),
         regions: nonEmptyList(required.regions),
@@ -83,6 +84,7 @@ const toFormValues = (profile: GrowthProfile | null): ProfileFormValues => ({
     genre: profile?.genre ?? '',
     ...languageFormValues(profile?.languages),
     name: profile?.name ?? '',
+    notes: profile?.notes ?? '',
     pitch: profile?.pitch ?? '',
     regions: joinList(profile?.regions),
     signals: joinList(profile?.signals),
@@ -96,6 +98,7 @@ const toInput = (values: ProfileFormValues): GrowthProfileInput => ({
     genre: values.genre,
     languages: selectedLanguages(values),
     name: values.name.trim(),
+    notes: values.notes.trim(),
     pitch: values.pitch.trim(),
     regions: splitList(values.regions),
     signals: splitList(values.signals),
@@ -108,7 +111,7 @@ interface GrowthProfileFormProps {
 
 const requiredMark = (name: string) => (name in required ? ' *' : '');
 
-type TextFieldName = 'competitors' | 'excludes' | 'games' | 'name' | 'pitch' | 'regions' | 'signals';
+type TextFieldName = 'competitors' | 'excludes' | 'games' | 'name' | 'notes' | 'pitch' | 'regions' | 'signals';
 
 export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) {
     const [error, setError] = useState<null | string>(null);
@@ -173,6 +176,7 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                 noValidate
                 onSubmit={form.handleSubmit(handleSubmit)}
             >
+                <p className="text-muted-foreground text-sm">{copy.profile.aiHint}</p>
                 {renderText('name')}
                 {renderText('games', true)}
                 <FormField
@@ -263,6 +267,7 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                 {renderText('signals', true)}
                 {renderText('competitors', true)}
                 {renderText('excludes', true)}
+                {renderText('notes', true)}
                 <FormField
                     control={form.control}
                     name="defaultTarget"

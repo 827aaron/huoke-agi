@@ -18,7 +18,7 @@ import { PROVIDER } from '../../mocks/cassettes/flows.ts';
 
 const openAssistantTab = async (page: Page) => {
     await page.goto('/flows/5');
-    await page.getByRole('tab', { name: 'Assistant' }).click();
+    await page.getByRole('tab', { name: '助手' }).click();
     await expect(page.getByPlaceholder('Search messages...')).toBeVisible();
 };
 

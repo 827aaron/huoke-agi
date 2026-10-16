@@ -59,7 +59,7 @@ const openRowMenu = async (page: Page, name: string) => {
 const openFilesTab = async (page: Page) => {
     await page.goto('/flows/5');
     await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
-    await page.getByRole('tab', { name: 'Files' }).click();
+    await page.getByRole('tab', { name: '文件' }).click();
     await expect(page.getByRole('treeitem', { name: new RegExp(TABS_FILE_NAME) })).toBeVisible();
 };
 

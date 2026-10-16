@@ -129,6 +129,7 @@ function GrowthProgressBar() {
                 )}
             </div>
             <Progress
+                aria-label={`${line.prefix} ${line.count}${line.suffix}`}
                 className={cn('h-1.5', isReached && '[&>[data-slot=progress-indicator]]:bg-green-500')}
                 value={percent}
             />

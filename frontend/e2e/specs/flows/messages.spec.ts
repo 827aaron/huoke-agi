@@ -36,7 +36,7 @@ test.describe('flow message rendering', { tag: '@flows' }, () => {
         page,
         pageErrorLog,
     }) => {
-        await page.goto('/flows/5?tab=automation');
+        await page.goto('/flows/5?tab=automation&side=terminal');
         await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(4);
 
         const thinkingToggle = page.getByText('Show thinking');

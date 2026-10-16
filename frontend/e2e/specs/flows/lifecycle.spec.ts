@@ -147,7 +147,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             await expect(star).toHaveAttribute('aria-pressed', 'false');
             await star.click();
             await expect(star).toHaveAttribute('aria-pressed', 'true');
-            await expect(page.getByText('Favorite Flows')).toBeVisible();
+            await expect(page.getByText('收藏的项目')).toBeVisible();
             await expect(star).toHaveAttribute('aria-pressed', 'true');
             expectCleanPage(pageErrorLog);
         });
@@ -201,12 +201,12 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
             const star = page.locator('header').getByRole('button', { name: 'Toggle favorite' });
 
             await expect(star).toHaveAttribute('aria-pressed', 'true');
-            await expect(page.getByText('Favorite Flows')).toBeVisible();
+            await expect(page.getByText('收藏的项目')).toBeVisible();
 
             await star.click();
 
             await expect(star).toHaveAttribute('aria-pressed', 'false');
-            await expect(page.getByText('Favorite Flows')).toBeHidden();
+            await expect(page.getByText('收藏的项目')).toBeHidden();
             expectCleanPage(pageErrorLog);
         });
     });

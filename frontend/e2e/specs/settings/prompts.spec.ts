@@ -19,7 +19,7 @@ test.describe('settings prompts', { tag: '@coverage' }, () => {
         await expect(page.getByRole('heading', { name: 'Agent Prompts' })).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Tool Prompts' })).toBeVisible();
 
-        const pentesterRow = page.getByRole('row', { name: /Pentester/ });
+        const pentesterRow = page.getByRole('row', { name: /潜客研究员/ });
 
         await expect(pentesterRow).toBeVisible();
         await expect(page.getByRole('row', { name: /Get Flow Description/ })).toBeVisible();
@@ -53,7 +53,7 @@ test.describe('settings prompts, resetting from the list', { tag: '@coverage' },
     test('offers Reset System on the overridden agent and sends the override id', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/prompts');
 
-        const row = page.getByRole('row', { name: /Pentester/ }).first();
+        const row = page.getByRole('row', { name: /潜客研究员/ }).first();
 
         await row.getByRole('button', { name: 'Open menu' }).click();
 
@@ -75,7 +75,7 @@ test.describe('settings prompts, resetting from the list', { tag: '@coverage' },
     test('offers no reset on an agent the operator never overrode', async ({ page }) => {
         await page.goto('/settings/prompts');
 
-        const row = page.getByRole('row', { name: /Generator/ }).first();
+        const row = page.getByRole('row', { name: /规划员/ }).first();
 
         await row.getByRole('button', { name: 'Open menu' }).click();
 

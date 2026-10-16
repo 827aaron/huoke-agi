@@ -59,7 +59,7 @@ test.describe('settings providers create form', { tag: '@coverage' }, () => {
     test('seeds the agent model from the selected type catalog', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/providers/new?type=anthropic');
 
-        await page.getByRole('button', { name: /^Adviser/ }).click();
+        await page.getByRole('button', { name: /^顾问/ }).click();
         await page.getByRole('button', { name: 'Open model list' }).first().click();
 
         // A catalog-only model (not the seeded agent default), so it can only appear if the type's
@@ -281,7 +281,7 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             const request = mutationRequest(page, 'testAgent');
 
-            await agentRow(page, 'Adviser').getByRole('button', { exact: true, name: 'Test' }).click();
+            await agentRow(page, '顾问').getByRole('button', { exact: true, name: 'Test' }).click();
 
             const { variables } = (await request).postDataJSON();
 
@@ -298,7 +298,7 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             // Only the agent that was tested appears — the dialog is keyed by the clicked agent, so a
             // handler that tested the wrong one would name it here.
-            await expect(dialog.getByRole('heading', { name: 'Adviser 1/1 passed' })).toBeVisible();
+            await expect(dialog.getByRole('heading', { name: '顾问 1/1 passed' })).toBeVisible();
             await expect(dialog.getByRole('heading', { name: /passed/ })).toHaveCount(1);
             expectCleanPage(pageErrorLog);
         });
@@ -333,9 +333,9 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
             const dialog = page.getByRole('dialog');
 
             await expect(dialog.getByRole('heading', { name: /passed/ }), 'one row per agent').toHaveCount(13);
-            await expect(dialog.getByRole('heading', { name: 'Pentester 0/1 passed' })).toBeVisible();
+            await expect(dialog.getByRole('heading', { name: '潜客研究员 0/1 passed' })).toBeVisible();
 
-            await dialog.getByRole('button', { name: 'Pentester 0/1 passed' }).click();
+            await dialog.getByRole('button', { name: '潜客研究员 0/1 passed' }).click();
 
             // The failing agent's own error must reach the operator; a dialog that renders only the
             // verdict leaves them with nothing to act on.

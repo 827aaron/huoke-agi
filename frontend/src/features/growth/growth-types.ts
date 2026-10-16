@@ -115,6 +115,8 @@ export interface GrowthProfile {
     id: number;
     languages: string[];
     name: string;
+    // Free text handed to the agents as written.
+    notes: string;
     pitch: string;
     regions: string[];
     signals: string[];

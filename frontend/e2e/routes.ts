@@ -50,6 +50,7 @@ export const FLOW_DETAIL_TABS: RouteTab[] = [
     { name: '记忆库', ready: (page) => page.getByText('E2E recall prior findings') },
     { name: '文件', ready: (page) => page.getByText(TABS_FILE_NAME) },
     { name: '截图', ready: (page) => page.getByText(TABS_SCREENSHOT_URL) },
+    { name: '来源池', ready: (page) => page.getByRole('row', { name: /手游退坑互助群/ }) },
 ];
 
 /**
@@ -78,18 +79,12 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             { rule: 'target-size', tabs: ['文件'], target: /text-blue-400|button\[aria-label="Select / },
             // The same file-manager row metadata waived on /resources — the Files tab embeds it.
             { rule: 'color-contrast', tabs: ['文件'], target: /text-muted-foreground\\?\/80/ },
-            {
-                rule: 'scrollable-region-focusable',
-                tabs: ['Dashboard', 'Files'],
-                target: /\[data-slot="table-container"\]/,
-            },
         ],
         // Must stay the populated cassette: the empty seed renders none of the sources below.
         cassette: flowTabsCassette,
         path: routes.flow('5'),
-        // The terminal mounts after the header, and the visual spec masks it —
-        // capturing before it exists compares live pixels against a masked baseline.
-        ready: (page) => page.locator('.xterm').first(),
+        // A finished flow opens the prospects tab, filled from the in-bundle growth sample data.
+        ready: (page) => page.getByRole('row', { name: /阿杰 Jay/ }),
         sources: [
             'src/pages/flows/flow.tsx',
             'src/features/flows',
@@ -97,6 +92,10 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             'src/providers/flows-provider.tsx',
             'src/components/shared/file-manager',
             'src/components/dashboard',
+            // Not the whole growth dir: the app shell mounts its global alerts on every route.
+            'src/features/growth/leads',
+            'src/features/growth/progress',
+            'src/features/growth/sources',
             // Assistant-tab FlowForm reads useTemplates, so a provider change reaches this route too.
             'src/providers/templates-provider.tsx',
         ],

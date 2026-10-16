@@ -40,7 +40,7 @@ export const LLM_PROVIDERS = [
 
 export const SEARCH_PROVIDERS = ['tavily', 'google', 'perplexity', 'firecrawl', 'traversaal'] as const;
 
-export const REQUIRED_KINDS: GrowthSettingKind[] = ['llm', 'telegram'];
+export const REQUIRED_KINDS: GrowthSettingKind[] = ['llm'];
 
 const TLS_MODES = ['starttls', 'tls', 'none'] as const;
 
