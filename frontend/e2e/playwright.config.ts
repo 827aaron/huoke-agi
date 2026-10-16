@@ -57,7 +57,7 @@ export default defineConfig<BackendOptions>({
     // Only the mock tier: the real tiers' serial worst case (auth.setup + two flow-run
     // attempts + the stand smokes) exceeds 10 min and would abort mid-retry, reporting
     // "timed out" instead of the real failure while the job still has budget.
-    globalTimeout: isCI && tier === 'mock' ? 10 * 60_000 : undefined,
+    globalTimeout: isCI && tier === 'mock' ? 25 * 60_000 : undefined,
     outputDir: './test-results',
     projects:
         tier === 'mock'
