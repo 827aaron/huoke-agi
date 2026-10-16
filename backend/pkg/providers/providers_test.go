@@ -832,3 +832,27 @@ func (r *recordingProvidersQuerier) CreateProvider(
 	r.lastName = params.Name
 	return database.Provider{Name: params.Name}, nil
 }
+
+func TestProviders_GetProviders_AddsWhatTheUsersOwnCredentialsEnable(t *testing.T) {
+	base := &config.Config{}
+	withKey := &config.Config{MiniMaxAPIKey: "user-key", MiniMaxServerURL: "https://api.minimax.io/v1"}
+	pc := &providerController{
+		cfg: base,
+		db:  stubProvidersQuerier{rows: []database.Provider{{Name: "my-minimax", Type: "minimax"}}},
+		userConfigFn: func(_ context.Context, userID int64) (*config.Config, error) {
+			if userID == 1 {
+				return withKey, nil
+			}
+			return base, nil
+		},
+	}
+
+	mine, err := pc.GetProviders(context.Background(), 1)
+	require.NoError(t, err)
+	assert.Contains(t, mine, provider.DefaultProviderNameMiniMax)
+	assert.Contains(t, mine, provider.ProviderName("my-minimax"), "a saved provider of a type only the user's key enables")
+
+	theirs, err := pc.GetProviders(context.Background(), 2)
+	require.NoError(t, err)
+	assert.Empty(t, theirs)
+}

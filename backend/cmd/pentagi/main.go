@@ -22,6 +22,7 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
+	"pentagi/pkg/growth"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/profiling"
 	"pentagi/pkg/providers"
@@ -223,7 +224,16 @@ func main() {
 		logrus.WithError(err).Fatal("Docker runtime client initialization failed")
 	}
 
-	providers, err := providers.NewProviderController(cfg, queries, client)
+	// Before flows are restored: their tool executors pick the growth service up at construction.
+	var providerOpts []providers.Option
+	if cfg.GrowthEnabled {
+		growthService := growth.NewService(queries, cfg)
+		growth.SetDefault(growthService)
+		defer growthService.Close()
+		providerOpts = append(providerOpts, providers.WithUserConfig(growthService.ConfigFor))
+	}
+
+	providers, err := providers.NewProviderController(cfg, queries, client, providerOpts...)
 	if err != nil {
 		logrus.WithError(err).Fatal("LLM provider controller initialization failed")
 	}

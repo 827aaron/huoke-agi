@@ -17,9 +17,11 @@ import (
 // a default meant to keep the account out of Telegram's anti-spam, never a
 // quota: every knob can be set to zero.
 type pacer struct {
-	cfg   TelegramConfig
-	now   func() time.Time
-	sleep func(ctx context.Context, d time.Duration) error
+	cfg TelegramConfig
+	// statePath keeps the join warm-up across restarts; empty keeps it in memory.
+	statePath string
+	now       func() time.Time
+	sleep     func(ctx context.Context, d time.Duration) error
 	// jitter returns a duration in [lo, hi].
 	jitter func(lo, hi time.Duration) time.Duration
 
@@ -39,14 +41,15 @@ type joinState struct {
 
 var errNeedsLogin = errors.New("telegram demands a new login; calls are stopped until it is done")
 
-func newPacer(cfg TelegramConfig, sleep func(ctx context.Context, d time.Duration) error) *pacer {
+func newPacer(cfg TelegramConfig, statePath string, sleep func(ctx context.Context, d time.Duration) error) *pacer {
 	p := &pacer{
-		cfg:      cfg,
-		now:      time.Now,
-		sleep:    sleep,
-		jitter:   randomBetween,
-		slots:    make(chan struct{}, max(cfg.MaxConcurrency, 1)),
-		cooldown: map[string]time.Time{},
+		cfg:       cfg,
+		statePath: statePath,
+		now:       time.Now,
+		sleep:     sleep,
+		jitter:    randomBetween,
+		slots:     make(chan struct{}, max(cfg.MaxConcurrency, 1)),
+		cooldown:  map[string]time.Time{},
 	}
 	p.joins = p.loadJoins()
 	return p
@@ -161,20 +164,12 @@ func (p *pacer) joined() {
 	p.saveJoins(state)
 }
 
-func (p *pacer) joinStatePath() string {
-	if p.cfg.SessionPath == "" {
-		return ""
-	}
-	return p.cfg.SessionPath + ".joins.json"
-}
-
 func (p *pacer) loadJoins() joinState {
 	var s joinState
-	path := p.joinStatePath()
-	if path == "" {
+	if p.statePath == "" {
 		return s
 	}
-	if data, err := os.ReadFile(path); err == nil {
+	if data, err := os.ReadFile(p.statePath); err == nil {
 		_ = json.Unmarshal(data, &s)
 	}
 	return s
@@ -182,12 +177,11 @@ func (p *pacer) loadJoins() joinState {
 
 // saveJoins is best effort: losing the count only restarts the warm-up.
 func (p *pacer) saveJoins(s joinState) {
-	path := p.joinStatePath()
-	if path == "" {
+	if p.statePath == "" {
 		return
 	}
 	if data, err := json.Marshal(s); err == nil {
-		_ = os.WriteFile(path, data, 0o600)
+		_ = os.WriteFile(p.statePath, data, 0o600)
 	}
 }
 

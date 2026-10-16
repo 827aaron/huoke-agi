@@ -1,255 +1,262 @@
-// Package connectors reaches the platforms where leads are found. Every
-// platform implements Connector; callers branch on Outcome.Status, never on a
-// Go error, so a result can be handed to an agent as JSON unchanged.
+// Package connectors is the platform boundary of lead generation: every platform
+// (Telegram first, forums and browser-driven sites later) implements Connector,
+// declares what it can do through Capabilities, and registers a Factory.
+// Nothing above this package speaks a platform protocol.
 package connectors
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"slices"
+	"sort"
+	"sync"
 	"time"
+
+	"pentagi/pkg/config"
 )
 
 type Platform string
 
 const (
 	PlatformTelegram Platform = "telegram"
+	// PlatformWeb is public forum threads and pages. It has no connector: agents read
+	// them with the browser tool, so the pool only stores and dedups their links.
+	PlatformWeb Platform = "web"
 )
 
-type Status string
+type Capability string
 
 const (
-	StatusOK          Status = "ok"
-	StatusRateLimited Status = "rate_limited"
-	StatusNotFound    Status = "not_found"
-	// The session is missing or revoked, or Telegram demands verification.
-	// The connector stops calling Telegram until a human logs in again.
-	StatusNeedsLogin Status = "needs_login"
-	// No access: private, banned, or reading requires joining first.
-	StatusForbidden   Status = "forbidden"
-	StatusInvalid     Status = "invalid_argument"
-	StatusUnsupported Status = "unsupported"
-	// Transient failure (timeout, network); the same call may succeed later.
-	StatusUnavailable Status = "unavailable"
-	StatusError       Status = "error"
-)
-
-type Membership string
-
-const (
-	MembershipJoined          Membership = "joined"
-	MembershipPendingApproval Membership = "pending_approval"
-	MembershipNotJoined       Membership = "not_joined"
-	MembershipNotJoinable     Membership = "not_joinable"
-	// The join may or may not have happened (timeout after the request was
-	// sent); recheck with MembershipStatus before joining again.
-	MembershipUnknown Membership = "unknown"
+	CapSearchSources    Capability = "search_sources"
+	CapResolveSource    Capability = "resolve_source"
+	CapRecommendSources Capability = "recommend_sources"
+	CapJoinSource       Capability = "join_source"
+	CapReadHistory      Capability = "read_history"
+	CapUserProfile      Capability = "user_profile"
 )
 
 type SourceKind string
 
 const (
-	SourceChannel SourceKind = "channel"
-	SourceGroup   SourceKind = "group"
-	// An invite link whose chat cannot be identified until it is joined or
-	// previewed.
-	SourceInvite SourceKind = "invite"
+	SourceKindGroup   SourceKind = "group"
+	SourceKindChannel SourceKind = "channel"
+	SourceKindForum   SourceKind = "forum"
+	SourceKindUnknown SourceKind = "unknown"
 )
 
-// Outcome is embedded in every result.
-type Outcome struct {
-	Status Status `json:"status"`
-	// ErrorCode is the platform's own code (e.g. FLOOD_WAIT, CHANNELS_TOO_MUCH)
-	// or one of TIMEOUT, CANCELED, NOT_STARTED, NEEDS_LOGIN, JOIN_PACING,
-	// INTERNAL. With Status ok it
-	// may still explain a not_joinable or unknown membership.
-	ErrorCode string `json:"error_code,omitempty"`
-	Message   string `json:"message,omitempty"`
-	// RetryAfter is set with StatusRateLimited: the seconds the platform
-	// demands before the same method is called again.
-	RetryAfter int `json:"retry_after,omitempty"`
-	// Checkpoint is an opaque cursor for SyncSource. The caller persists it per
-	// source and passes it back unchanged; empty means "nothing read yet".
-	Checkpoint string `json:"checkpoint,omitempty"`
+type JoinStatus string
+
+const (
+	JoinStatusNotJoined   JoinStatus = "not_joined"
+	JoinStatusPending     JoinStatus = "pending"
+	JoinStatusJoined      JoinStatus = "joined"
+	JoinStatusNotJoinable JoinStatus = "not_joinable"
+)
+
+var (
+	// ErrUnsupported is returned by a method whose capability the connector does not declare.
+	ErrUnsupported = errors.New("operation is not supported by this platform connector")
+	ErrNotFound    = errors.New("source or user not found")
+	// ErrUnauthorized means the account session is missing or revoked; a new login is needed.
+	// A connector returning it should expect the account to be moved to needs_login.
+	ErrUnauthorized = errors.New("platform account is not authorized")
+	ErrNoConnector  = errors.New("no connector is registered for this platform")
+)
+
+// FloodWaitError is returned when the platform asked for a pause longer than the
+// connector is willing to block the calling agent for. Shorter waits are slept
+// inside the connector and never surface.
+type FloodWaitError struct {
+	Wait time.Duration
 }
 
-func (o Outcome) OK() bool { return o.Status == StatusOK }
-
-func (o Outcome) Err() error {
-	if o.OK() {
-		return nil
-	}
-	if o.ErrorCode != "" {
-		return fmt.Errorf("%s: %s: %s", o.Status, o.ErrorCode, o.Message)
-	}
-	return fmt.Errorf("%s: %s", o.Status, o.Message)
+func (e *FloodWaitError) Error() string {
+	return fmt.Sprintf("platform rate limit: retry after %s", e.Wait)
 }
 
-type Capabilities struct {
-	Search          bool `json:"search"`
-	Similar         bool `json:"similar"`
-	ResolveLink     bool `json:"resolve_link"`
-	Join            bool `json:"join"`
-	JoinByInvite    bool `json:"join_by_invite"`
-	JoinApproval    bool `json:"join_approval"`
-	ReadHistory     bool `json:"read_history"`
-	IncrementalSync bool `json:"incremental_sync"`
-	MembershipCheck bool `json:"membership_check"`
-	UserProfile     bool `json:"user_profile"`
-	// ReadWithoutJoin: public sources can be read before joining them.
-	ReadWithoutJoin bool `json:"read_without_join"`
-	// MaxPageSize is the most messages one ReadSource/SyncSource call returns.
-	MaxPageSize int `json:"max_page_size"`
-}
-
-// SourceRef identifies a source for one account. Ref is opaque and
-// account-bound (on Telegram it carries the access hash): store it alongside
-// the source but never reuse it with another account.
-type SourceRef struct {
-	Platform Platform `json:"platform"`
-	ID       string   `json:"id"`
-	Ref      string   `json:"ref"`
-}
-
+// Source is a group, channel or forum as the platform reports it.
+// ExternalID is the stable platform id; Peer is opaque connector state valid only
+// for the account that produced it (a Telegram access hash) and is stored per account.
 type Source struct {
-	SourceRef
-	Kind       SourceKind `json:"kind"`
-	Title      string     `json:"title"`
-	Username   string     `json:"username,omitempty"`
-	Link       string     `json:"link,omitempty"`
-	About      string     `json:"about,omitempty"`
-	Members    int        `json:"members,omitempty"`
-	Membership Membership `json:"membership"`
-	// RequestNeeded: joining sends a request that an admin must approve.
-	RequestNeeded bool `json:"request_needed,omitempty"`
-	// Broadcast: only admins post, so the authors of messages are not leads.
-	Broadcast bool `json:"broadcast,omitempty"`
+	ExternalID  string
+	Username    string
+	Title       string
+	Link        string
+	Kind        SourceKind
+	MemberCount int64
+	Description string
+	Peer        json.RawMessage
 }
 
-type UserRef struct {
-	Platform Platform `json:"platform"`
-	ID       string   `json:"id"`
-	Ref      string   `json:"ref,omitempty"`
+// SourceRef addresses a source on a call. A connector should prefer Peer, then
+// ExternalID, then Username, then Link; an unresolved source carries only Link.
+type SourceRef struct {
+	ExternalID string
+	Username   string
+	Link       string
+	Peer       json.RawMessage
 }
 
-type User struct {
-	UserRef
-	Username  string `json:"username,omitempty"`
-	FirstName string `json:"first_name,omitempty"`
-	LastName  string `json:"last_name,omitempty"`
-	About     string `json:"about,omitempty"`
-	Bot       bool   `json:"bot,omitempty"`
-	Link      string `json:"link,omitempty"`
+type JoinResult struct {
+	Status JoinStatus
+	// Reason explains pending and not_joinable outcomes in a few words.
+	Reason string
+	// Source is the resolved source when joining also resolved it (an invite link), else nil.
+	Source *Source
+}
+
+// HistoryRequest pages through a source. With both ids zero it returns the newest page.
+// OffsetID returns messages strictly older than it; MinID returns messages strictly newer than it.
+type HistoryRequest struct {
+	OffsetID int64
+	MinID    int64
+	Limit    int
 }
 
 type Message struct {
-	ID       string    `json:"id"`
-	SourceID string    `json:"source_id"`
-	Date     time.Time `json:"date"`
-	Text     string    `json:"text"`
-	// Sender is nil for anonymous admins and channel posts.
-	Sender    *UserRef `json:"sender,omitempty"`
-	ReplyToID string   `json:"reply_to_id,omitempty"`
-	// Link opens the message in a client; empty for basic groups, which have
-	// no public message URLs.
-	Link string `json:"link,omitempty"`
+	ID             int64
+	SenderID       string
+	SenderUsername string
+	SenderName     string
+	SenderIsBot    bool
+	Text           string
+	Time           time.Time
+	Link           string
+	ReplyToID      int64
 }
 
-type SearchQuery struct {
-	Query string `json:"query,omitempty"`
-	// SimilarTo, when set, asks for the platform's recommendations next to this
-	// source instead of a text search.
-	SimilarTo *SourceRef `json:"similar_to,omitempty"`
-	Limit     int        `json:"limit,omitempty"`
+// HistoryPage holds messages newest first. Exhausted is true when an older-direction
+// read reached the beginning of the history.
+type HistoryPage struct {
+	Messages  []Message
+	Exhausted bool
 }
 
-type ReadRequest struct {
-	Source SourceRef `json:"source"`
-	// Before pages backwards: messages older than this cursor. Empty starts at
-	// the newest message.
-	Before string `json:"before,omitempty"`
-	Limit  int    `json:"limit,omitempty"`
+type UserProfile struct {
+	ID          string
+	Username    string
+	DisplayName string
+	Bio         string
+	IsBot       bool
 }
 
-type SyncRequest struct {
-	Source SourceRef `json:"source"`
-	// Checkpoint from the previous ReadSource/SyncSource of this source. Empty
-	// behaves like ReadSource from the newest message.
-	Checkpoint string `json:"checkpoint,omitempty"`
-	Limit      int    `json:"limit,omitempty"`
-}
-
-type HealthResult struct {
-	Outcome
-	Account *User `json:"account,omitempty"`
-}
-
-type SearchResult struct {
-	Outcome
-	Sources []Source `json:"sources"`
-}
-
-type SourceResult struct {
-	Outcome
-	Source *Source `json:"source,omitempty"`
-}
-
-type MembershipResult struct {
-	Outcome
-	Membership Membership `json:"membership"`
-	// Source is filled when the call learnt the chat's identity, e.g. after an
-	// invite link was accepted.
-	Source *Source `json:"source,omitempty"`
-}
-
-type ReadResult struct {
-	Outcome
-	Messages []Message `json:"messages"`
-	// Users holds the senders of Messages, keyed by UserRef.ID.
-	Users map[string]User `json:"users"`
-	// Before continues paging backwards; empty when the start of history was
-	// reached. Only ReadSource sets it.
-	Before string `json:"before,omitempty"`
-	// HasMore: SyncSource stopped at Limit and newer messages remain.
-	HasMore bool `json:"has_more,omitempty"`
-}
-
-type UserResult struct {
-	Outcome
-	User *User `json:"user,omitempty"`
-}
-
-// AccountEvent reports the outcome of one platform request so the caller can
-// keep the account's health record (last success, rate limit, login state).
-type AccountEvent struct {
-	Platform Platform  `json:"platform"`
-	Method   string    `json:"method"`
-	At       time.Time `json:"at"`
-	Outcome
-	// RateLimitUntil is At plus RetryAfter when Status is rate_limited.
-	RateLimitUntil time.Time `json:"rate_limit_until,omitzero"`
-}
-
-// AccountObserver is called synchronously after every request, including one
-// refused locally by a cooldown or a stopped session; it must not block.
-type AccountObserver func(AccountEvent)
-
-// Connector is safe for concurrent use. Calls block while the platform demands
-// a short wait; a longer one comes back as StatusRateLimited with RetryAfter.
+// Connector is one authorised platform account. Implementations must be safe for
+// concurrent use: several agents of one flow may call it at the same time.
 type Connector interface {
 	Platform() Platform
-	Capabilities() Capabilities
-	HealthCheck(ctx context.Context) HealthResult
-	SearchSources(ctx context.Context, q SearchQuery) SearchResult
-	// ResolveSource accepts a link, @username or bare username. An invite link
-	// is checked without joining.
-	ResolveSource(ctx context.Context, link string) SourceResult
-	MembershipStatus(ctx context.Context, src SourceRef) MembershipResult
-	// JoinSource is idempotent: an already joined source returns joined.
-	JoinSource(ctx context.Context, src SourceRef) MembershipResult
-	// ReadSource returns messages newest first and a Checkpoint covering the
-	// newest message seen.
-	ReadSource(ctx context.Context, req ReadRequest) ReadResult
-	// SyncSource returns messages newer than the checkpoint, oldest first.
-	SyncSource(ctx context.Context, req SyncRequest) ReadResult
-	GetUser(ctx context.Context, user UserRef) UserResult
+	Capabilities() []Capability
+
+	SearchSources(ctx context.Context, query string, limit int) ([]Source, error)
+	// ResolveSource turns a link, @username or invite link into a source without joining it.
+	ResolveSource(ctx context.Context, link string) (Source, error)
+	RecommendSources(ctx context.Context, ref SourceRef, limit int) ([]Source, error)
+	// JoinSource must be idempotent: joining a source the account is already in reports joined.
+	JoinSource(ctx context.Context, ref SourceRef) (JoinResult, error)
+	ReadHistory(ctx context.Context, ref SourceRef, req HistoryRequest) (HistoryPage, error)
+	GetUser(ctx context.Context, userID string) (UserProfile, error)
+
+	Close() error
+}
+
+func Has(c Connector, capability Capability) bool {
+	return slices.Contains(c.Capabilities(), capability)
+}
+
+// SessionStore persists the account session. Its method set matches gotd's
+// session.Storage, so a Telegram connector can use it directly.
+type SessionStore interface {
+	LoadSession(ctx context.Context) ([]byte, error)
+	StoreSession(ctx context.Context, data []byte) error
+}
+
+// Account is what a factory gets to build a connector. Kind is "api_session" (Session
+// holds the protocol session) or "browser_session" (ProfileDir is a persistent browser
+// profile an operator logs in by hand).
+type Account struct {
+	ID         int64
+	UserID     int64
+	Platform   Platform
+	Kind       string
+	ExternalID string
+	ProfileDir string
+	Session    SessionStore
+	Health     HealthReporter
+
+	// Proxy is the route every connection of this account must take, already resolved
+	// (the account's own proxy, else the customer's default): http://, https://,
+	// socks5:// or socks5h://, optionally with user:pass@. Empty means a direct connection.
+	Proxy string
+	// Fingerprint is the browser profile the browser service generated for a
+	// browser_session account, stored and returned as given; nil when none was set.
+	Fingerprint json.RawMessage
+	// ExternalBrowserWS is the DevTools endpoint of an external fingerprint browser
+	// (AdsPower, BitBrowser) to attach to instead of launching one; empty when unused.
+	ExternalBrowserWS string
+}
+
+// HealthReporter takes what a connector learns about its account outside a call's
+// return value, such as a flood wait it absorbed by sleeping in a retry middleware.
+// The service already records the outcome of every call that returns, so a connector
+// that only returns errors needs none of it. Methods never block on the platform.
+type HealthReporter interface {
+	ReportSuccess(ctx context.Context)
+	ReportRateLimited(ctx context.Context, wait time.Duration)
+	ReportUnauthorized(ctx context.Context)
+	ReportError(ctx context.Context, err error)
+}
+
+// Factory builds a running connector for one account. It is called once per
+// account and the result is cached until Close.
+type Factory func(ctx context.Context, cfg *config.Config, account Account) (Connector, error)
+
+var (
+	registryMu sync.RWMutex
+	registry   = map[Platform]Factory{}
+)
+
+// Register is meant to be called from a connector's init; a second registration replaces the first.
+func Register(platform Platform, factory Factory) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	registry[platform] = factory
+}
+
+func Lookup(platform Platform) (Factory, bool) {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+	f, ok := registry[platform]
+	return f, ok
+}
+
+func Registered() []Platform {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+	platforms := make([]Platform, 0, len(registry))
+	for p := range registry {
+		platforms = append(platforms, p)
+	}
+	sort.Slice(platforms, func(i, j int) bool { return platforms[i] < platforms[j] })
+	return platforms
+}
+
+// CredentialCheck confirms that the app credentials in cfg (TG_API_ID and TG_API_HASH
+// for Telegram) are accepted by the platform, without an account session.
+type CredentialCheck func(ctx context.Context, cfg *config.Config) error
+
+var credentialChecks = map[Platform]CredentialCheck{}
+
+// RegisterCredentialCheck is called from a connector package's init, beside Register.
+func RegisterCredentialCheck(platform Platform, check CredentialCheck) {
+	registryMu.Lock()
+	defer registryMu.Unlock()
+	credentialChecks[platform] = check
+}
+
+func LookupCredentialCheck(platform Platform) (CredentialCheck, bool) {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
+	check, ok := credentialChecks[platform]
+	return check, ok
 }

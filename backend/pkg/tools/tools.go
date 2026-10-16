@@ -22,6 +22,7 @@ import (
 	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/graphiti"
+	"pentagi/pkg/growth"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/schema"
 
@@ -186,6 +187,7 @@ type flowToolsExecutor struct {
 	primaryLID     string
 	functions      *Functions
 	replacer       anonymizer.Replacer
+	growth         GrowthBackend
 
 	definitions map[string]llms.FunctionDefinition
 	handlers    map[string]ExecutorHandler
@@ -374,20 +376,14 @@ func NewFlowToolsExecutor(
 	// cfg.GetSecretPatterns() reads environment variables that are fixed at
 	// startup, so the first caller's config is representative for all callers.
 	sharedReplacerOnce.Do(func() {
-		allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
-		if err != nil {
-			sharedReplacerErr = fmt.Errorf("failed to load all patterns: %v", err)
-			return
-		}
-		allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
-		sharedReplacer, sharedReplacerErr = anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names())
+		sharedReplacer, sharedReplacerErr = newSecretReplacer(cfg)
 	})
 
 	if sharedReplacerErr != nil {
 		return nil, fmt.Errorf("failed to create replacer: %v", sharedReplacerErr)
 	}
 
-	return &flowToolsExecutor{
+	fte := &flowToolsExecutor{
 		db:          db,
 		docker:      docker,
 		functions:   functions,
@@ -397,7 +393,67 @@ func NewFlowToolsExecutor(
 		userID:      userID,
 		definitions: make(map[string]llms.FunctionDefinition),
 		handlers:    make(map[string]ExecutorHandler),
-	}, nil
+	}
+	// Assigned only when set: a nil *growth.Service in the interface would read as available.
+	if svc := growth.Default(); cfg.GrowthEnabled && svc != nil {
+		fte.growth = svc
+		fte.useOwnerSettings(svc)
+	}
+
+	return fte, nil
+}
+
+func newSecretReplacer(cfg *config.Config) (anonymizer.Replacer, error) {
+	allPatterns, err := patterns.LoadPatterns(patterns.PatternListTypeAll)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load all patterns: %v", err)
+	}
+	allPatterns.Patterns = append(allPatterns.Patterns, cfg.GetSecretPatterns()...)
+	return anonymizer.NewReplacer(allPatterns.Regexes(), allPatterns.Names())
+}
+
+// useOwnerSettings runs the executor on the credentials the customer saved on the settings
+// page (web search keys among them) and masks those values in agent output as .env
+// secrets are. Without saved credentials, or if they cannot be loaded, .env applies.
+func (fte *flowToolsExecutor) useOwnerSettings(svc *growth.Service) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cfg, err := svc.ConfigFor(ctx, fte.userID)
+	if err != nil {
+		logrus.WithError(err).WithField("user_id", fte.userID).Warn("running flow tools on .env credentials")
+		return
+	}
+	if cfg == fte.cfg {
+		return
+	}
+	replacer, err := newSecretReplacer(cfg)
+	if err != nil {
+		logrus.WithError(err).WithField("user_id", fte.userID).Warn("running flow tools on .env credentials")
+		return
+	}
+	fte.cfg, fte.replacer = cfg, replacer
+}
+
+// scopeKnowledgeToOwner keeps one customer's lead-generation knowledge out of another's
+// searches: the guide, answer and code stores are shared across users, and the documents
+// already carry user_id, so with growth enabled their searches filter on it.
+func (fte *flowToolsExecutor) scopeKnowledgeToOwner(tool Tool) {
+	if scoped, ok := tool.(interface{ scopeToOwner() }); ok && fte.growth != nil {
+		scoped.scopeToOwner()
+	}
+}
+
+// addGrowthTools appends lead-generation tools to an agent; without the growth service
+// (GROWTH_ENABLED off) the agent keeps exactly its original tool set.
+func (fte *flowToolsExecutor) addGrowthTools(ce *customExecutor, taskID *int64, names ...string) {
+	if fte.growth == nil {
+		return
+	}
+	g := newGrowthTools(fte.growth, fte.userID, fte.flowID, taskID)
+	for _, name := range names {
+		ce.definitions = append(ce.definitions, registryDefinitions[name])
+		ce.handlers[name] = g.Handle
+	}
 }
 
 func (fte *flowToolsExecutor) SetUserID(userID int64) {
@@ -906,6 +962,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			fte.vslp,
 			fte.knp,
 		)
+		fte.scopeKnowledgeToOwner(guide)
 		if guide.IsAvailable() {
 			definitions = append(definitions, registryDefinitions[SearchGuideToolName])
 			handlers[SearchGuideToolName] = guide.Handle
@@ -921,6 +978,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			fte.vslp,
 			fte.knp,
 		)
+		fte.scopeKnowledgeToOwner(search)
 		if search.IsAvailable() {
 			definitions = append(definitions, registryDefinitions[SearchAnswerToolName])
 			handlers[SearchAnswerToolName] = search.Handle
@@ -936,6 +994,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 			fte.vslp,
 			fte.knp,
 		)
+		fte.scopeKnowledgeToOwner(code)
 		if code.IsAvailable() {
 			definitions = append(definitions, registryDefinitions[SearchCodeToolName])
 			handlers[SearchCodeToolName] = code.Handle
@@ -1064,6 +1123,8 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 		ce.barriers[AskUserToolName] = struct{}{}
 	}
 
+	fte.addGrowthTools(ce, &cfg.TaskID, GrowthGetProgressToolName, GrowthDeliverLeadsToolName)
+
 	return ce, nil
 }
 
@@ -1161,6 +1222,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 		fte.vslp,
 		fte.knp,
 	)
+	fte.scopeKnowledgeToOwner(guide)
 	if guide.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreGuideToolName])
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchGuideToolName])
@@ -1271,6 +1333,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 		fte.vslp,
 		fte.knp,
 	)
+	fte.scopeKnowledgeToOwner(code)
 	if code.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchCodeToolName])
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreCodeToolName])
@@ -1399,6 +1462,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		fte.vslp,
 		fte.knp,
 	)
+	fte.scopeKnowledgeToOwner(guide)
 	if guide.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreGuideToolName])
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchGuideToolName])
@@ -1423,6 +1487,9 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 		ce.definitions = append(ce.definitions, registryDefinitions[WebSearchToolName])
 		ce.handlers[WebSearchToolName] = webSearch.Handle
 	}
+
+	fte.addGrowthTools(ce, cfg.TaskID,
+		GrowthSyncSourceToolName, GrowthUpsertLeadsToolName, GrowthAddSourcesToolName, GrowthGetProgressToolName)
 
 	return ce, nil
 }
@@ -1494,12 +1561,16 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 		fte.vslp,
 		fte.knp,
 	)
+	fte.scopeKnowledgeToOwner(search)
 	if search.IsAvailable() {
 		ce.definitions = append(ce.definitions, registryDefinitions[SearchAnswerToolName])
 		ce.definitions = append(ce.definitions, registryDefinitions[StoreAnswerToolName])
 		ce.handlers[SearchAnswerToolName] = search.Handle
 		ce.handlers[StoreAnswerToolName] = search.Handle
 	}
+
+	fte.addGrowthTools(ce, cfg.TaskID,
+		GrowthSearchSourcesToolName, GrowthAddSourcesToolName, GrowthJoinSourceToolName, GrowthGetProgressToolName)
 
 	return ce, nil
 }
@@ -1571,6 +1642,8 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 		ce.handlers[BrowserToolName] = browser.Handle
 	}
 
+	fte.addGrowthTools(ce, &cfg.TaskID, GrowthGetProgressToolName)
+
 	return ce, nil
 }
 
@@ -1640,6 +1713,8 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 		ce.definitions = append(ce.definitions, registryDefinitions[BrowserToolName])
 		ce.handlers[BrowserToolName] = browser.Handle
 	}
+
+	fte.addGrowthTools(ce, &cfg.TaskID, GrowthGetProgressToolName)
 
 	return ce, nil
 }
@@ -1813,7 +1888,7 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 		return nil, fmt.Errorf("report result handler is required")
 	}
 
-	return &customExecutor{
+	ce := &customExecutor{
 		userID:      fte.userID,
 		flowID:      fte.flowID,
 		taskID:      cfg.TaskID,
@@ -1827,7 +1902,11 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 		definitions: []llms.FunctionDefinition{registryDefinitions[ReportResultToolName]},
 		handlers:    map[string]ExecutorHandler{ReportResultToolName: cfg.ReportResult},
 		barriers:    map[string]struct{}{ReportResultToolName: {}},
-	}, nil
+	}
+
+	fte.addGrowthTools(ce, cfg.TaskID, GrowthGetProgressToolName, GrowthListLeadsToolName)
+
+	return ce, nil
 }
 
 func enrichLogrusFields(flowID int64, taskID, subtaskID *int64, fields logrus.Fields) logrus.Fields {

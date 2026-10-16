@@ -81,6 +81,203 @@ definitions:
         items: {}
         type: array
     type: object
+  growth.AccountUpdate:
+    properties:
+      external_browser_ws:
+        type: string
+      fingerprint:
+        type: object
+      label:
+        type: string
+      proxy_url:
+        type: string
+      status:
+        type: string
+    type: object
+  growth.AccountView:
+    properties:
+      available:
+        type: boolean
+      consecutive_errors:
+        type: integer
+      external_browser_ws:
+        type: string
+      external_id:
+        type: string
+      fingerprint:
+        type: object
+      id:
+        type: integer
+      kind:
+        type: string
+      label:
+        type: string
+      last_error:
+        type: string
+      last_rate_limited_at:
+        type: string
+      last_success_at:
+        type: string
+      last_used_at:
+        type: string
+      platform:
+        type: string
+      proxy_source:
+        type: string
+      proxy_url:
+        description: |-
+          ProxyURL is the account's own proxy, masked; ProxySource says which proxy its
+          traffic takes: its own, the customer's default, or none.
+        type: string
+      rate_limit_until:
+        type: string
+      status:
+        type: string
+    type: object
+  growth.AddSourceResult:
+    properties:
+      input:
+        type: string
+      reason:
+        type: string
+      result:
+        type: string
+      source:
+        $ref: '#/definitions/growth.SourceView'
+    type: object
+  growth.EvidenceView:
+    properties:
+      captured_at:
+        type: string
+      excerpt:
+        type: string
+      match_reason:
+        type: string
+      message_id:
+        type: string
+      message_link:
+        type: string
+      message_time:
+        type: string
+      source_id:
+        type: integer
+    type: object
+  growth.LeadView:
+    properties:
+      created_at:
+        type: string
+      delivered_at:
+        type: string
+      delivered_run_id:
+        type: integer
+      display_name:
+        type: string
+      evidence:
+        items:
+          $ref: '#/definitions/growth.EvidenceView'
+        type: array
+      flow_id:
+        type: integer
+      identity_kind:
+        type: string
+      lead_id:
+        type: integer
+      match_reason:
+        type: string
+      platform:
+        type: string
+      platform_user_id:
+        type: string
+      score:
+        type: integer
+      task_id:
+        type: integer
+      tier:
+        type: string
+      username:
+        type: string
+    type: object
+  growth.ProxyCheck:
+    properties:
+      error:
+        type: string
+      latency_ms:
+        type: integer
+      ok:
+        type: boolean
+      proxy:
+        type: string
+      source:
+        type: string
+    type: object
+  growth.SettingView:
+    properties:
+      fields:
+        additionalProperties:
+          type: string
+        type: object
+      kind:
+        type: string
+      provider:
+        type: string
+      providers:
+        items:
+          type: string
+        type: array
+      source:
+        type: string
+      status:
+        type: string
+      status_reason:
+        type: string
+      tested_at:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  growth.SourceView:
+    properties:
+      description:
+        type: string
+      discovered_from:
+        type: integer
+      empty_streak:
+        type: integer
+      health:
+        type: string
+      history_exhausted:
+        type: boolean
+      join_status:
+        type: string
+      kind:
+        type: string
+      last_synced_at:
+        type: string
+      link:
+        type: string
+      member_count:
+        type: integer
+      messages_read:
+        type: integer
+      new:
+        type: boolean
+      origin:
+        type: string
+      platform:
+        type: string
+      qualified_leads:
+        type: integer
+      source_id:
+        type: integer
+      status:
+        type: string
+      status_reason:
+        type: string
+      title:
+        type: string
+      username:
+        type: string
+    type: object
   http.Header:
     additionalProperties:
       items:
@@ -567,6 +764,10 @@ definitions:
       question:
         maxLength: 2048
         type: string
+      shared:
+        description: Shared documents are returned to every customer's searches; needs
+          knowledge.admin.
+        type: boolean
     required:
     - content
     - doc_type
@@ -1868,6 +2069,134 @@ definitions:
         type: array
       total:
         type: integer
+    type: object
+  services.growthAccounts:
+    properties:
+      accounts:
+        items:
+          $ref: '#/definitions/growth.AccountView'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.growthAddSourcesRequest:
+    properties:
+      links:
+        items:
+          type: string
+        maxItems: 200
+        minItems: 1
+        type: array
+    required:
+    - links
+    type: object
+  services.growthAddSourcesResult:
+    properties:
+      results:
+        items:
+          $ref: '#/definitions/growth.AddSourceResult'
+        type: array
+    type: object
+  services.growthCreateAccountRequest:
+    properties:
+      external_browser_ws:
+        type: string
+      fingerprint:
+        type: object
+      kind:
+        type: string
+      label:
+        type: string
+      platform:
+        type: string
+      proxy_url:
+        type: string
+      status:
+        type: string
+    required:
+    - platform
+    type: object
+  services.growthLeads:
+    properties:
+      leads:
+        items:
+          $ref: '#/definitions/growth.LeadView'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.growthRun:
+    properties:
+      created_at:
+        type: string
+      delivered_count:
+        type: integer
+      finished_at:
+        type: string
+      flow_id:
+        type: integer
+      id:
+        type: integer
+      notify_error:
+        type: string
+      notify_status:
+        type: string
+      status:
+        type: string
+      target:
+        type: integer
+      task_id:
+        type: integer
+    type: object
+  services.growthRuns:
+    properties:
+      runs:
+        items:
+          $ref: '#/definitions/services.growthRun'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.growthSaveSettingRequest:
+    properties:
+      fields:
+        additionalProperties:
+          type: string
+        type: object
+      provider:
+        type: string
+    required:
+    - fields
+    type: object
+  services.growthSettings:
+    properties:
+      settings:
+        items:
+          $ref: '#/definitions/growth.SettingView'
+        type: array
+    type: object
+  services.growthSources:
+    properties:
+      sources:
+        items:
+          $ref: '#/definitions/growth.SourceView'
+        type: array
+      total:
+        type: integer
+    type: object
+  services.growthTestEmailRequest:
+    properties:
+      to:
+        type: string
+    type: object
+  services.growthTestEmailResult:
+    properties:
+      sent:
+        type: boolean
+      to:
+        items:
+          type: string
+        type: array
     type: object
   services.info:
     properties:
@@ -4995,6 +5324,649 @@ paths:
       summary: Perform graphql requests
       tags:
       - GraphQL
+  /growth/accounts/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: accounts received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthAccounts'
+              type: object
+        "403":
+          description: getting accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting accounts
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the platform accounts of the current user with rotation health
+      tags:
+      - Growth
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: platform, kind, label and network identity
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.growthCreateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: account created successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.AccountView'
+              type: object
+        "400":
+          description: invalid account
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: creating accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on creating account
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: GROWTH_SECRET_KEY is not set
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add a platform account that a login or a browser profile attaches to
+      tags:
+      - Growth
+  /growth/accounts/{accountID}:
+    put:
+      consumes:
+      - application/json
+      description: An absent field keeps its value and an empty string clears it;
+        a value still masked with •••• keeps the stored one.
+      parameters:
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      - description: fields to change
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.AccountUpdate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: account updated successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.AccountView'
+              type: object
+        "400":
+          description: invalid account change
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: updating accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: account not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on updating account
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: GROWTH_SECRET_KEY is not set
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change the label, status (active or disabled), proxy, fingerprint or
+        external browser of an account
+      tags:
+      - Growth
+  /growth/accounts/{accountID}/test-proxy:
+    post:
+      description: source is account, global or direct; ok false carries the error.
+      parameters:
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: proxy checked successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.ProxyCheck'
+              type: object
+        "403":
+          description: testing accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: account not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on testing proxy
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Reach the internet the way the account's traffic goes and report the
+        latency or the error
+      tags:
+      - Growth
+  /growth/leads/:
+    get:
+      parameters:
+      - description: only leads last seen in this flow
+        in: query
+        name: flow_id
+        type: integer
+      - description: only leads last seen in this task
+        in: query
+        name: task_id
+        type: integer
+      - description: only leads delivered by this round
+        in: query
+        name: run_id
+        type: integer
+      - description: qualified or watchlist
+        in: query
+        name: tier
+        type: string
+      - description: true for delivered leads, false for undelivered
+        in: query
+        name: delivered
+        type: boolean
+      - description: page size, default 100, at most 500
+        in: query
+        name: limit
+        type: integer
+      - description: rows to skip
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: leads received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthLeads'
+              type: object
+        "400":
+          description: invalid query
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting leads not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting leads
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve leads of the current user with evidence
+      tags:
+      - Growth
+  /growth/leads/{leadID}:
+    get:
+      parameters:
+      - description: lead id
+        in: path
+        minimum: 0
+        name: leadID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: lead received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.LeadView'
+              type: object
+        "400":
+          description: invalid lead id
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting lead not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: lead not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting lead
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve one lead with its evidence
+      tags:
+      - Growth
+  /growth/leads/export:
+    get:
+      parameters:
+      - description: only leads last seen in this flow
+        in: query
+        name: flow_id
+        type: integer
+      - description: only leads last seen in this task
+        in: query
+        name: task_id
+        type: integer
+      - description: only leads delivered by this round
+        in: query
+        name: run_id
+        type: integer
+      - description: qualified or watchlist
+        in: query
+        name: tier
+        type: string
+      - description: true for delivered leads, false for undelivered
+        in: query
+        name: delivered
+        type: boolean
+      produces:
+      - text/csv
+      responses:
+        "200":
+          description: leads exported successful
+          schema:
+            type: file
+        "400":
+          description: invalid query
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: exporting leads not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on exporting leads
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download leads as CSV, one row per lead with its first evidence
+      tags:
+      - Growth
+  /growth/runs/:
+    get:
+      parameters:
+      - description: only rounds of this flow
+        in: query
+        name: flow_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: rounds received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthRuns'
+              type: object
+        "400":
+          description: invalid query
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting rounds not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting rounds
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the lead collection rounds of the current user
+      tags:
+      - Growth
+  /growth/settings/:
+    get:
+      description: Every kind is listed; source says whether its value comes from
+        the database, .env or nowhere.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: settings received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthSettings'
+              type: object
+        "403":
+          description: getting settings not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting settings
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the credentials of the current user with secrets masked
+      tags:
+      - Growth
+  /growth/settings/{kind}:
+    delete:
+      parameters:
+      - description: llm, telegram, youtube, web_search, email or proxy
+        in: path
+        name: kind
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: setting deleted successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "403":
+          description: deleting settings not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: no saved setting of this kind
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting setting
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove the saved credential of one kind, so .env applies again
+      tags:
+      - Growth
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: llm, telegram, youtube, web_search, email or proxy
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: provider and fields
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.growthSaveSettingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: setting saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.SettingView'
+              type: object
+        "400":
+          description: invalid setting
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: saving settings not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on saving setting
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: GROWTH_SECRET_KEY is not set
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Save the credential of one kind; an empty field keeps the saved value
+      tags:
+      - Growth
+  /growth/settings/{kind}/test:
+    post:
+      description: status is connected or invalid; untested means the service has
+        no check without a login.
+      parameters:
+      - description: llm, telegram, youtube, web_search, email or proxy
+        in: path
+        name: kind
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: setting tested successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.SettingView'
+              type: object
+        "400":
+          description: unknown kind
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: testing settings not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on testing setting
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Check the credential of one kind against its service and record the
+        verdict
+      tags:
+      - Growth
+  /growth/settings/test-email:
+    post:
+      consumes:
+      - application/json
+      description: Without to, it goes to the notify_emails of the email setting,
+        or else to the login address.
+      parameters:
+      - description: recipients, comma separated
+        in: body
+        name: json
+        schema:
+          $ref: '#/definitions/services.growthTestEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: test email sent successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthTestEmailResult'
+              type: object
+        "400":
+          description: invalid recipients
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: sending email not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "502":
+          description: the SMTP server refused or could not be reached
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Send a test message through the configured SMTP server
+      tags:
+      - Growth
+  /growth/sources/:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: sources received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthSources'
+              type: object
+        "403":
+          description: getting sources not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting sources
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the lead source pool of the current user
+      tags:
+      - Growth
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: links to add
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.growthAddSourcesRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: sources added successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthAddSourcesResult'
+              type: object
+        "400":
+          description: invalid request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: adding sources not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on adding sources
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add Telegram links or web page URLs to the source pool
+      tags:
+      - Growth
+  /growth/sources/{sourceID}:
+    delete:
+      parameters:
+      - description: source id
+        in: path
+        minimum: 0
+        name: sourceID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: source deleted successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: invalid source id
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: deleting source not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: source not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting source
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a source from the pool; leads and their evidence are kept
+      tags:
+      - Growth
   /info:
     get:
       parameters:

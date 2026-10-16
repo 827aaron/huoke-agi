@@ -9,6 +9,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
@@ -867,6 +868,23 @@ func (ns NullVecstoreActionType) Value() (driver.Value, error) {
 	return string(ns.VecstoreActionType), nil
 }
 
+type AccountSource struct {
+	ID               int64                 `json:"id"`
+	AccountID        int64                 `json:"account_id"`
+	SourceID         int64                 `json:"source_id"`
+	Peer             pqtype.NullRawMessage `json:"peer"`
+	JoinStatus       string                `json:"join_status"`
+	JoinError        string                `json:"join_error"`
+	NewestMessageID  int64                 `json:"newest_message_id"`
+	OldestMessageID  int64                 `json:"oldest_message_id"`
+	HistoryExhausted bool                  `json:"history_exhausted"`
+	MessagesRead     int64                 `json:"messages_read"`
+	JoinedAt         sql.NullTime          `json:"joined_at"`
+	SyncedAt         sql.NullTime          `json:"synced_at"`
+	CreatedAt        sql.NullTime          `json:"created_at"`
+	UpdatedAt        sql.NullTime          `json:"updated_at"`
+}
+
 type Agentlog struct {
 	ID        int64         `json:"id"`
 	Initiator MsgchainType  `json:"initiator"`
@@ -923,6 +941,29 @@ type Assistantlog struct {
 	Thinking     sql.NullString     `json:"thinking"`
 }
 
+type ChannelAccount struct {
+	ID                int64                 `json:"id"`
+	UserID            int64                 `json:"user_id"`
+	Platform          string                `json:"platform"`
+	Kind              string                `json:"kind"`
+	Label             string                `json:"label"`
+	ExternalID        string                `json:"external_id"`
+	Session           []byte                `json:"session"`
+	ProfileDir        string                `json:"profile_dir"`
+	Status            string                `json:"status"`
+	LastUsedAt        sql.NullTime          `json:"last_used_at"`
+	LastSuccessAt     sql.NullTime          `json:"last_success_at"`
+	LastRateLimitedAt sql.NullTime          `json:"last_rate_limited_at"`
+	RateLimitUntil    sql.NullTime          `json:"rate_limit_until"`
+	ConsecutiveErrors int32                 `json:"consecutive_errors"`
+	LastError         string                `json:"last_error"`
+	Proxy             []byte                `json:"proxy"`
+	Fingerprint       pqtype.NullRawMessage `json:"fingerprint"`
+	ExternalBrowserWs []byte                `json:"external_browser_ws"`
+	CreatedAt         sql.NullTime          `json:"created_at"`
+	UpdatedAt         sql.NullTime          `json:"updated_at"`
+}
+
 type Container struct {
 	ID        int64           `json:"id"`
 	Type      ContainerType   `json:"type"`
@@ -962,6 +1003,64 @@ type FlowTemplate struct {
 	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
+type GrowthRun struct {
+	ID             int64         `json:"id"`
+	UserID         int64         `json:"user_id"`
+	FlowID         sql.NullInt64 `json:"flow_id"`
+	TaskID         sql.NullInt64 `json:"task_id"`
+	Target         int32         `json:"target"`
+	Status         string        `json:"status"`
+	DeliveredCount int32         `json:"delivered_count"`
+	FinishedAt     sql.NullTime  `json:"finished_at"`
+	NotifyStatus   string        `json:"notify_status"`
+	NotifyError    string        `json:"notify_error"`
+	NotifiedAt     sql.NullTime  `json:"notified_at"`
+	CreatedAt      sql.NullTime  `json:"created_at"`
+	UpdatedAt      sql.NullTime  `json:"updated_at"`
+}
+
+type GrowthSetting struct {
+	ID           int64        `json:"id"`
+	UserID       int64        `json:"user_id"`
+	Kind         string       `json:"kind"`
+	Provider     string       `json:"provider"`
+	Secret       []byte       `json:"secret"`
+	Status       string       `json:"status"`
+	StatusReason string       `json:"status_reason"`
+	TestedAt     sql.NullTime `json:"tested_at"`
+	CreatedAt    sql.NullTime `json:"created_at"`
+	UpdatedAt    sql.NullTime `json:"updated_at"`
+}
+
+type GrowthSource struct {
+	ID               int64         `json:"id"`
+	UserID           int64         `json:"user_id"`
+	Platform         string        `json:"platform"`
+	SourceKey        string        `json:"source_key"`
+	ExternalID       string        `json:"external_id"`
+	Username         string        `json:"username"`
+	Title            string        `json:"title"`
+	Link             string        `json:"link"`
+	Kind             string        `json:"kind"`
+	MemberCount      int64         `json:"member_count"`
+	Language         string        `json:"language"`
+	Description      string        `json:"description"`
+	Origin           string        `json:"origin"`
+	Query            string        `json:"query"`
+	Status           string        `json:"status"`
+	StatusReason     string        `json:"status_reason"`
+	QualifiedLeads   int32         `json:"qualified_leads"`
+	QualifiedAtSync  int32         `json:"qualified_at_sync"`
+	EmptyStreak      int32         `json:"empty_streak"`
+	Health           string        `json:"health"`
+	LastSyncedAt     sql.NullTime  `json:"last_synced_at"`
+	DiscoveredFromID sql.NullInt64 `json:"discovered_from_id"`
+	DiscoveredFlowID sql.NullInt64 `json:"discovered_flow_id"`
+	DiscoveredTaskID sql.NullInt64 `json:"discovered_task_id"`
+	CreatedAt        sql.NullTime  `json:"created_at"`
+	UpdatedAt        sql.NullTime  `json:"updated_at"`
+}
+
 type LangchainPgCollection struct {
 	Name      sql.NullString        `json:"name"`
 	Cmetadata pqtype.NullRawMessage `json:"cmetadata"`
@@ -974,6 +1073,42 @@ type LangchainPgEmbedding struct {
 	Document     sql.NullString        `json:"document"`
 	Cmetadata    pqtype.NullRawMessage `json:"cmetadata"`
 	Uuid         uuid.UUID             `json:"uuid"`
+}
+
+type Lead struct {
+	ID             int64         `json:"id"`
+	UserID         int64         `json:"user_id"`
+	Platform       string        `json:"platform"`
+	PlatformUserID string        `json:"platform_user_id"`
+	IdentityKind   string        `json:"identity_kind"`
+	Username       string        `json:"username"`
+	DisplayName    string        `json:"display_name"`
+	Score          int32         `json:"score"`
+	Tier           string        `json:"tier"`
+	MatchReason    string        `json:"match_reason"`
+	FirstFlowID    sql.NullInt64 `json:"first_flow_id"`
+	FirstTaskID    sql.NullInt64 `json:"first_task_id"`
+	LastFlowID     sql.NullInt64 `json:"last_flow_id"`
+	LastTaskID     sql.NullInt64 `json:"last_task_id"`
+	DeliveredAt    sql.NullTime  `json:"delivered_at"`
+	DeliveredRunID sql.NullInt64 `json:"delivered_run_id"`
+	CreatedAt      sql.NullTime  `json:"created_at"`
+	UpdatedAt      sql.NullTime  `json:"updated_at"`
+}
+
+type LeadEvidence struct {
+	ID          int64         `json:"id"`
+	LeadID      int64         `json:"lead_id"`
+	SourceID    sql.NullInt64 `json:"source_id"`
+	MessageID   string        `json:"message_id"`
+	MessageLink string        `json:"message_link"`
+	MessageTime sql.NullTime  `json:"message_time"`
+	CapturedAt  time.Time     `json:"captured_at"`
+	Excerpt     string        `json:"excerpt"`
+	MatchReason string        `json:"match_reason"`
+	FlowID      sql.NullInt64 `json:"flow_id"`
+	TaskID      sql.NullInt64 `json:"task_id"`
+	CreatedAt   sql.NullTime  `json:"created_at"`
 }
 
 type Msgchain struct {

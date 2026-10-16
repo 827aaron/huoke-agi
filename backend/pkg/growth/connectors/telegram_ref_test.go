@@ -1,6 +1,7 @@
 package connectors
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/gotd/td/tg"
@@ -54,22 +55,21 @@ func TestTelegramRef_ParseTelegramLink_Rejects(t *testing.T) {
 	}
 }
 
-func TestTelegramRef_EncodeDecodeRoundTrip(t *testing.T) {
+func TestTelegramRef_PeerRoundTrip(t *testing.T) {
 	for _, r := range []tgRef{
 		{Kind: refChannel, ID: 1001, Hash: -77, Username: "mobilegamers", Invite: "AbCdEfGh123"},
 		{Kind: refChat, ID: 55},
 		{Kind: refInvite, Invite: "AbCdEfGh123"},
-		{Kind: refUser, ID: 502, FromPeer: &tgRef{Kind: refChannel, ID: 1001, Hash: 77}, FromMsg: 12},
 	} {
-		got, err := decodeRef(r.encode())
+		got, err := peerRef(r.peer())
 		require.NoError(t, err)
 		assert.Equal(t, r, got)
 	}
 }
 
-func TestTelegramRef_DecodeRef_Rejects(t *testing.T) {
-	for _, in := range []string{"", "k=channel", "k=invite", "k=planet&id=1", "k=channel&id=x", "%zz"} {
-		_, err := decodeRef(in)
+func TestTelegramRef_PeerRef_Rejects(t *testing.T) {
+	for _, in := range []string{`""`, `{"k":"channel"}`, `{"k":"invite"}`, `{"k":"planet","id":1}`, `{"k":"user","id":5}`, `{"k":"channel","id":"x"}`, `{`} {
+		_, err := peerRef(json.RawMessage(in))
 		assert.Error(t, err, in)
 	}
 }

@@ -235,6 +235,8 @@ type CreateKnowledgeDocRequest struct {
 	GuideType   *KnowledgeGuideType  `json:"guide_type,omitempty" validate:"omitempty,valid"`
 	AnswerType  *KnowledgeAnswerType `json:"answer_type,omitempty" validate:"omitempty,valid"`
 	CodeLang    *string              `json:"code_lang,omitempty" validate:"omitempty,max=100"`
+	// Shared documents are returned to every customer's searches; needs knowledge.admin.
+	Shared bool `json:"shared,omitempty"`
 }
 
 // Valid implements IValid.

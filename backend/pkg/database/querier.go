@@ -15,6 +15,7 @@ type Querier interface {
 	CountActiveFlows(ctx context.Context) (int64, error)
 	CountAssistants(ctx context.Context) (int64, error)
 	CountContainers(ctx context.Context) (int64, error)
+	CountFlowLeads(ctx context.Context, arg CountFlowLeadsParams) (CountFlowLeadsRow, error)
 	CountFlowTemplates(ctx context.Context) (int64, error)
 	CountFlows(ctx context.Context) (int64, error)
 	CountPrompts(ctx context.Context) (int64, error)
@@ -64,6 +65,9 @@ type Querier interface {
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserAPIToken(ctx context.Context, arg DeleteUserAPITokenParams) (ApiToken, error)
 	DeleteUserAPITokenByTokenID(ctx context.Context, arg DeleteUserAPITokenByTokenIDParams) (ApiToken, error)
+	DeleteUserChannelAccount(ctx context.Context, arg DeleteUserChannelAccountParams) (int64, error)
+	DeleteUserGrowthSetting(ctx context.Context, arg DeleteUserGrowthSettingParams) (int64, error)
+	DeleteUserGrowthSource(ctx context.Context, arg DeleteUserGrowthSourceParams) (GrowthSource, error)
 	// Delete a knowledge document by UUID, only if it belongs to the given user.
 	DeleteUserKnowledgeDocument(ctx context.Context, arg DeleteUserKnowledgeDocumentParams) error
 	DeleteUserPreferences(ctx context.Context, userID int64) error
@@ -75,9 +79,11 @@ type Querier interface {
 	// (providers_name_user_id_unique is partial on deleted_at IS NULL). Mirrors the
 	// guard GetUserProvider already applies on the rename path.
 	DeleteUserProvider(ctx context.Context, arg DeleteUserProviderParams) (Provider, error)
+	EnsureGrowthRun(ctx context.Context, arg EnsureGrowthRunParams) (GrowthRun, error)
 	GetAPIToken(ctx context.Context, id int64) (ApiToken, error)
 	GetAPITokenByTokenID(ctx context.Context, tokenID string) (ApiToken, error)
 	GetAPITokens(ctx context.Context) ([]ApiToken, error)
+	GetAccountSource(ctx context.Context, arg GetAccountSourceParams) (AccountSource, error)
 	// Get toolcalls stats for all flows
 	GetAllFlowsToolcallsStats(ctx context.Context) ([]GetAllFlowsToolcallsStatsRow, error)
 	GetAllFlowsUsageStats(ctx context.Context) ([]GetAllFlowsUsageStatsRow, error)
@@ -90,8 +96,11 @@ type Querier interface {
 	// Get total count of assistants for a specific flow
 	GetAssistantsCountForFlow(ctx context.Context, flowID int64) (int64, error)
 	GetCallToolcall(ctx context.Context, callID string) (Toolcall, error)
+	GetChannelAccount(ctx context.Context, id int64) (ChannelAccount, error)
+	GetChannelAccountSession(ctx context.Context, id int64) ([]byte, error)
 	GetContainerTermLogs(ctx context.Context, containerID int64) ([]Termlog, error)
 	GetContainers(ctx context.Context) ([]Container, error)
+	GetDeliverableLeads(ctx context.Context, arg GetDeliverableLeadsParams) ([]Lead, error)
 	GetFlow(ctx context.Context, id int64) (Flow, error)
 	GetFlowAgentLog(ctx context.Context, arg GetFlowAgentLogParams) (Agentlog, error)
 	GetFlowAgentLogs(ctx context.Context, flowID int64) ([]Agentlog, error)
@@ -132,8 +141,14 @@ type Querier interface {
 	GetFlowsForPeriod(ctx context.Context, arg GetFlowsForPeriodParams) ([]GetFlowsForPeriodRow, error)
 	// One dense row per calendar day in the caller's timezone, zeros included.
 	GetFlowsStatsByDay(ctx context.Context, arg GetFlowsStatsByDayParams) ([]GetFlowsStatsByDayRow, error)
+	GetGrowthRun(ctx context.Context, id int64) (GrowthRun, error)
+	GetGrowthRunByTask(ctx context.Context, taskID sql.NullInt64) (GrowthRun, error)
+	GetGrowthSource(ctx context.Context, id int64) (GrowthSource, error)
+	GetGrowthSourceByKey(ctx context.Context, arg GetGrowthSourceByKeyParams) (GrowthSource, error)
 	// Fetch a single knowledge document by its UUID (admin view — no user_id check).
 	GetKnowledgeDocument(ctx context.Context, uuid string) (GetKnowledgeDocumentRow, error)
+	GetLeadByPlatformUser(ctx context.Context, arg GetLeadByPlatformUserParams) (Lead, error)
+	GetLeadsEvidence(ctx context.Context, leadIds []int64) ([]LeadEvidence, error)
 	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
 	// Get all msgchains for a flow (including task and subtask level)
 	GetMsgchainsForFlow(ctx context.Context, flowID int64) ([]GetMsgchainsForFlowRow, error)
@@ -144,6 +159,7 @@ type Querier interface {
 	GetRole(ctx context.Context, id int64) (GetRoleRow, error)
 	GetRoleByName(ctx context.Context, name string) (GetRoleByNameRow, error)
 	GetRoles(ctx context.Context) ([]GetRolesRow, error)
+	GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64) ([]Lead, error)
 	GetRunningContainers(ctx context.Context) ([]Container, error)
 	GetScreenshot(ctx context.Context, id int64) (Screenshot, error)
 	GetSubtask(ctx context.Context, id int64) (Subtask, error)
@@ -195,6 +211,9 @@ type Querier interface {
 	GetToolcallsStatsByFunction(ctx context.Context, userID int64) ([]GetToolcallsStatsByFunctionRow, error)
 	// Get toolcalls stats grouped by function name for a specific flow
 	GetToolcallsStatsByFunctionForFlow(ctx context.Context, flowID int64) ([]GetToolcallsStatsByFunctionForFlowRow, error)
+	// Accounts that may take a call now or after their rate limit ends; joined_source tells
+	// whether the account already joined source_id (0 matches none).
+	GetUsableChannelAccounts(ctx context.Context, arg GetUsableChannelAccountsParams) ([]GetUsableChannelAccountsRow, error)
 	// One dense row per calendar day in the caller's timezone, zeros included.
 	GetUsageStatsByDay(ctx context.Context, arg GetUsageStatsByDayParams) ([]GetUsageStatsByDayRow, error)
 	GetUsageStatsByModel(ctx context.Context, userID int64) ([]GetUsageStatsByModelRow, error)
@@ -206,7 +225,10 @@ type Querier interface {
 	GetUserAPIToken(ctx context.Context, arg GetUserAPITokenParams) (ApiToken, error)
 	GetUserAPITokenByTokenID(ctx context.Context, arg GetUserAPITokenByTokenIDParams) (ApiToken, error)
 	GetUserAPITokens(ctx context.Context, userID int64) ([]ApiToken, error)
+	GetUserAccountSources(ctx context.Context, userID int64) ([]AccountSource, error)
 	GetUserByHash(ctx context.Context, hash string) (GetUserByHashRow, error)
+	GetUserChannelAccount(ctx context.Context, arg GetUserChannelAccountParams) (ChannelAccount, error)
+	GetUserChannelAccounts(ctx context.Context, userID int64) ([]ChannelAccount, error)
 	GetUserContainers(ctx context.Context, userID int64) ([]Container, error)
 	GetUserFlow(ctx context.Context, arg GetUserFlowParams) (Flow, error)
 	GetUserFlowAgentLogs(ctx context.Context, arg GetUserFlowAgentLogsParams) ([]Agentlog, error)
@@ -224,8 +246,16 @@ type Querier interface {
 	GetUserFlowTermLogs(ctx context.Context, arg GetUserFlowTermLogsParams) ([]Termlog, error)
 	GetUserFlowVectorStoreLogs(ctx context.Context, arg GetUserFlowVectorStoreLogsParams) ([]Vecstorelog, error)
 	GetUserFlows(ctx context.Context, userID int64) ([]Flow, error)
+	GetUserGrowthRun(ctx context.Context, arg GetUserGrowthRunParams) (GrowthRun, error)
+	GetUserGrowthRuns(ctx context.Context, arg GetUserGrowthRunsParams) ([]GrowthRun, error)
+	GetUserGrowthSetting(ctx context.Context, arg GetUserGrowthSettingParams) (GrowthSetting, error)
+	GetUserGrowthSettings(ctx context.Context, userID int64) ([]GrowthSetting, error)
+	GetUserGrowthSource(ctx context.Context, arg GetUserGrowthSourceParams) (GrowthSource, error)
+	GetUserGrowthSources(ctx context.Context, userID int64) ([]GrowthSource, error)
 	// Fetch a single knowledge document by UUID, scoped to a specific user.
 	GetUserKnowledgeDocument(ctx context.Context, arg GetUserKnowledgeDocumentParams) (GetUserKnowledgeDocumentRow, error)
+	GetUserLead(ctx context.Context, arg GetUserLeadParams) (Lead, error)
+	GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]Lead, error)
 	GetUserPreferencesByUserID(ctx context.Context, userID int64) (UserPreference, error)
 	GetUserPrompt(ctx context.Context, arg GetUserPromptParams) (Prompt, error)
 	GetUserPromptByType(ctx context.Context, arg GetUserPromptByTypeParams) (Prompt, error)
@@ -240,6 +270,7 @@ type Querier interface {
 	GetUserResourcesInDir(ctx context.Context, arg GetUserResourcesInDirParams) ([]UserResource, error)
 	GetUserResourcesRecursive(ctx context.Context, arg GetUserResourcesRecursiveParams) ([]UserResource, error)
 	GetUserResourcesRoot(ctx context.Context, userID int64) ([]UserResource, error)
+	GetUserSourceStats(ctx context.Context, userID int64) (GetUserSourceStatsRow, error)
 	// Get total count of flows, tasks, subtasks, and assistants for a user
 	GetUserTotalFlowsStats(ctx context.Context, userID int64) (GetUserTotalFlowsStatsRow, error)
 	// Get total toolcalls stats for a user
@@ -250,12 +281,22 @@ type Querier interface {
 	// embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
 	// cmetadata must be valid JSON text.
 	InsertKnowledgeDocument(ctx context.Context, arg InsertKnowledgeDocumentParams) (string, error)
+	InsertLeadEvidence(ctx context.Context, arg InsertLeadEvidenceParams) (int64, error)
 	// List all knowledge documents excluding the noisy memory type (admin view).
 	ListAllKnowledgeDocuments(ctx context.Context) ([]ListAllKnowledgeDocumentsRow, error)
 	// List non-memory knowledge documents belonging to a specific flow (admin scoped).
 	ListFlowKnowledgeDocuments(ctx context.Context, flowID sql.NullString) ([]ListFlowKnowledgeDocumentsRow, error)
 	// List all non-memory knowledge documents owned by a specific user (user-scoped view).
 	ListUserKnowledgeDocuments(ctx context.Context, userID sql.NullString) ([]ListUserKnowledgeDocumentsRow, error)
+	MarkChannelAccountUsed(ctx context.Context, id int64) error
+	MarkLeadsDelivered(ctx context.Context, arg MarkLeadsDeliveredParams) ([]Lead, error)
+	RecordChannelAccountError(ctx context.Context, arg RecordChannelAccountErrorParams) error
+	RecordChannelAccountRateLimit(ctx context.Context, arg RecordChannelAccountRateLimitParams) error
+	RecordChannelAccountSuccess(ctx context.Context, id int64) error
+	RecordGrowthRunNotify(ctx context.Context, arg RecordGrowthRunNotifyParams) error
+	RecordSourceRead(ctx context.Context, arg RecordSourceReadParams) (GrowthSource, error)
+	RefreshSourceYield(ctx context.Context, ids []int64) error
+	ResolveGrowthSource(ctx context.Context, arg ResolveGrowthSourceParams) (GrowthSource, error)
 	SaveAssistantLog(ctx context.Context, arg SaveAssistantLogParams) error
 	SaveAssistantLogContent(ctx context.Context, arg SaveAssistantLogContentParams) error
 	// Vector similarity search over all knowledge documents (admin view, no user filter).
@@ -273,6 +314,8 @@ type Querier interface {
 	// user_id      owner filter as a decimal text string (e.g. "42")
 	SearchUserKnowledgeDocuments(ctx context.Context, arg SearchUserKnowledgeDocumentsParams) ([]SearchUserKnowledgeDocumentsRow, error)
 	UpdateAPIToken(ctx context.Context, arg UpdateAPITokenParams) (ApiToken, error)
+	UpdateAccountSourceJoin(ctx context.Context, arg UpdateAccountSourceJoinParams) (AccountSource, error)
+	UpdateAccountSourceSync(ctx context.Context, arg UpdateAccountSourceSyncParams) (AccountSource, error)
 	UpdateAssistant(ctx context.Context, arg UpdateAssistantParams) (Assistant, error)
 	UpdateAssistantLanguage(ctx context.Context, arg UpdateAssistantLanguageParams) (Assistant, error)
 	UpdateAssistantLog(ctx context.Context, arg UpdateAssistantLogParams) (Assistantlog, error)
@@ -289,6 +332,8 @@ type Querier interface {
 	// statement can never cross a tenant boundary. Idempotent for the same reason:
 	// a rewritten row no longer matches old_name.
 	UpdateAssistantsProviderNameByOldName(ctx context.Context, arg UpdateAssistantsProviderNameByOldNameParams) ([]Assistant, error)
+	UpdateChannelAccountSession(ctx context.Context, arg UpdateChannelAccountSessionParams) error
+	UpdateChannelAccountStatus(ctx context.Context, arg UpdateChannelAccountStatusParams) (ChannelAccount, error)
 	UpdateContainerImage(ctx context.Context, arg UpdateContainerImageParams) (Container, error)
 	UpdateContainerStatus(ctx context.Context, arg UpdateContainerStatusParams) (Container, error)
 	UpdateContainerStatusLocalID(ctx context.Context, arg UpdateContainerStatusLocalIDParams) (Container, error)
@@ -305,6 +350,10 @@ type Querier interface {
 	// statement idempotent: once rewritten, a row no longer matches, so it is safe
 	// to call unconditionally and to retry.
 	UpdateFlowsProviderNameByOldName(ctx context.Context, arg UpdateFlowsProviderNameByOldNameParams) ([]Flow, error)
+	UpdateGrowthRunDelivery(ctx context.Context, arg UpdateGrowthRunDeliveryParams) (GrowthRun, error)
+	UpdateGrowthRunTarget(ctx context.Context, arg UpdateGrowthRunTargetParams) (GrowthRun, error)
+	UpdateGrowthSettingStatus(ctx context.Context, arg UpdateGrowthSettingStatusParams) (GrowthSetting, error)
+	UpdateGrowthSourceStatus(ctx context.Context, arg UpdateGrowthSourceStatusParams) (GrowthSource, error)
 	// Update an existing document's embedding, text and metadata atomically.
 	// embedding must be formatted as a PostgreSQL vector literal: '[f1,f2,...]'
 	// cmetadata must be valid JSON text.
@@ -332,6 +381,7 @@ type Querier interface {
 	UpdateToolcallFinishedResult(ctx context.Context, arg UpdateToolcallFinishedResultParams) (Toolcall, error)
 	UpdateToolcallStatus(ctx context.Context, arg UpdateToolcallStatusParams) (Toolcall, error)
 	UpdateUserAPIToken(ctx context.Context, arg UpdateUserAPITokenParams) (ApiToken, error)
+	UpdateUserChannelAccount(ctx context.Context, arg UpdateUserChannelAccountParams) (ChannelAccount, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
 	UpdateUserPasswordChangeRequired(ctx context.Context, arg UpdateUserPasswordChangeRequiredParams) (User, error)
@@ -341,6 +391,11 @@ type Querier interface {
 	UpdateUserProvider(ctx context.Context, arg UpdateUserProviderParams) (Provider, error)
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) (User, error)
+	UpsertAccountSource(ctx context.Context, arg UpsertAccountSourceParams) (AccountSource, error)
+	UpsertChannelAccount(ctx context.Context, arg UpsertChannelAccountParams) (ChannelAccount, error)
+	UpsertGrowthSetting(ctx context.Context, arg UpsertGrowthSettingParams) (GrowthSetting, error)
+	UpsertGrowthSource(ctx context.Context, arg UpsertGrowthSourceParams) (UpsertGrowthSourceRow, error)
+	UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, error)
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
 }
 

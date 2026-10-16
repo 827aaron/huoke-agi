@@ -10,39 +10,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"path/filepath"
-	"regexp"
 	"time"
 
 	"github.com/gotd/td/telegram/dcs"
 	"golang.org/x/net/proxy"
 )
-
-// Account is one platform login the connectors act as. Each account gets its
-// own client, so its session, pacing and proxy never mix with another's.
-type Account struct {
-	ID       string   `json:"id"`
-	Platform Platform `json:"platform"`
-	// Proxy is an http://, https://, socks5:// or socks5h:// URL with optional
-	// user:pass@; empty dials Telegram directly.
-	Proxy string `json:"proxy,omitempty"`
-}
-
-var accountFileRe = regexp.MustCompile(`[^A-Za-z0-9_.-]`)
-
-// ForAccount derives the account's config: its proxy, and a session file of
-// its own in the session directory (the join warm-up state follows it).
-func (c TelegramConfig) ForAccount(a Account) TelegramConfig {
-	c.Proxy = a.Proxy
-	if a.ID != "" {
-		dir := c.SessionDir
-		if dir == "" {
-			dir = filepath.Dir(c.SessionPath)
-		}
-		c.SessionPath = filepath.Join(dir, "account-"+accountFileRe.ReplaceAllString(a.ID, "_")+".session.json")
-	}
-	return c
-}
 
 func proxyDialer(raw string) (dcs.DialFunc, error) {
 	if raw == "" {

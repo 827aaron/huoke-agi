@@ -1,11 +1,11 @@
 package connectors
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/gotd/td/tg"
@@ -16,101 +16,48 @@ const (
 	refChat    = "chat"
 	refInvite  = "invite"
 	refUser    = "user"
-
-	inviteIDPrefix = "invite:"
 )
 
-// tgRef is the decoded form of SourceRef.Ref / UserRef.Ref. A channel reached
-// through an invite link keeps the invite hash: a private channel can only be
-// joined through it, while reading needs the id and access hash.
+// tgRef addresses a chat or user for one account; as a source it is stored in
+// Source.Peer. A channel reached through an invite link keeps the invite hash:
+// a private channel can only be joined through it, while reading needs the id
+// and access hash.
 type tgRef struct {
-	Kind     string
-	ID       int64
-	Hash     int64
-	Invite   string
-	Username string
+	Kind     string `json:"k"`
+	ID       int64  `json:"id,omitempty"`
+	Hash     int64  `json:"h,omitempty"`
+	Invite   string `json:"i,omitempty"`
+	Username string `json:"u,omitempty"`
 	// A "min" user seen in a message has no usable access hash; the API
-	// addresses it through the message it was seen in.
-	FromPeer *tgRef
-	FromMsg  int
+	// addresses it through the message it was seen in. Users are never stored
+	// as peers, so these stay in memory.
+	FromPeer *tgRef `json:"-"`
+	FromMsg  int    `json:"-"`
 }
 
-func (r tgRef) encode() string {
-	v := url.Values{}
-	v.Set("k", r.Kind)
-	if r.ID != 0 {
-		v.Set("id", strconv.FormatInt(r.ID, 10))
-	}
-	if r.Hash != 0 {
-		v.Set("h", strconv.FormatInt(r.Hash, 10))
-	}
-	if r.Invite != "" {
-		v.Set("i", r.Invite)
-	}
-	if r.Username != "" {
-		v.Set("u", r.Username)
-	}
-	if r.FromPeer != nil {
-		v.Set("fk", r.FromPeer.Kind)
-		v.Set("fid", strconv.FormatInt(r.FromPeer.ID, 10))
-		if r.FromPeer.Hash != 0 {
-			v.Set("fh", strconv.FormatInt(r.FromPeer.Hash, 10))
-		}
-		v.Set("fm", strconv.Itoa(r.FromMsg))
-	}
-	return v.Encode()
+func (r tgRef) peer() json.RawMessage {
+	data, _ := json.Marshal(r)
+	return data
 }
 
-func decodeRef(s string) (tgRef, error) {
-	v, err := url.ParseQuery(s)
-	if err != nil {
-		return tgRef{}, fmt.Errorf("malformed ref: %w", err)
-	}
-	r := tgRef{Kind: v.Get("k"), Invite: v.Get("i"), Username: v.Get("u")}
-	if r.ID, err = parseOptionalInt(v.Get("id")); err != nil {
-		return tgRef{}, err
-	}
-	if r.Hash, err = parseOptionalInt(v.Get("h")); err != nil {
-		return tgRef{}, err
-	}
-	if fk := v.Get("fk"); fk != "" {
-		from := tgRef{Kind: fk}
-		if from.ID, err = parseOptionalInt(v.Get("fid")); err != nil {
-			return tgRef{}, err
-		}
-		if from.Hash, err = parseOptionalInt(v.Get("fh")); err != nil {
-			return tgRef{}, err
-		}
-		msg, err := parseOptionalInt(v.Get("fm"))
-		if err != nil {
-			return tgRef{}, err
-		}
-		r.FromPeer, r.FromMsg = &from, int(msg)
+func peerRef(raw json.RawMessage) (tgRef, error) {
+	var r tgRef
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return tgRef{}, fmt.Errorf("malformed telegram peer: %w", err)
 	}
 	switch r.Kind {
-	case refChannel, refChat, refUser:
+	case refChannel, refChat:
 		if r.ID == 0 {
-			return tgRef{}, fmt.Errorf("ref of kind %q has no id", r.Kind)
+			return tgRef{}, fmt.Errorf("telegram peer of kind %q has no id", r.Kind)
 		}
 	case refInvite:
 		if r.Invite == "" {
-			return tgRef{}, errors.New("invite ref has no hash")
+			return tgRef{}, errors.New("telegram invite peer has no hash")
 		}
 	default:
-		return tgRef{}, fmt.Errorf("unknown ref kind %q", r.Kind)
+		return tgRef{}, fmt.Errorf("telegram peer of kind %q is not a source", r.Kind)
 	}
 	return r, nil
-}
-
-func parseOptionalInt(s string) (int64, error) {
-	if s == "" {
-		return 0, nil
-	}
-	n, err := strconv.ParseInt(s, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("malformed number %q in ref", s)
-	}
-	return n, nil
 }
 
 func (r tgRef) inputPeer() (tg.InputPeerClass, bool) {

@@ -72,6 +72,7 @@ func knowledgeAnswerToAnUnstorableDocument(t *testing.T, handler func(*Knowledge
 type recordingKnowledgeStore struct {
 	knowledgepkg.KnowledgeStore
 	contents []string
+	shared   []string
 }
 
 func (s *recordingKnowledgeStore) record(ctx context.Context, content string) (*gqlmodel.KnowledgeDocument, error) {
@@ -85,6 +86,13 @@ func (s *recordingKnowledgeStore) record(ctx context.Context, content string) (*
 func (s *recordingKnowledgeStore) CreateDocument(
 	ctx context.Context, _ int64, input gqlmodel.CreateKnowledgeDocumentInput,
 ) (*gqlmodel.KnowledgeDocument, error) {
+	return s.record(ctx, input.Content)
+}
+
+func (s *recordingKnowledgeStore) CreateSharedDocument(
+	ctx context.Context, _ int64, input gqlmodel.CreateKnowledgeDocumentInput,
+) (*gqlmodel.KnowledgeDocument, error) {
+	s.shared = append(s.shared, input.Content)
 	return s.record(ctx, input.Content)
 }
 
@@ -132,6 +140,36 @@ func knowledgeContentAtTheDoor(t *testing.T, handler func(*KnowledgeService, *gi
 
 			assert.Equal(t, tc.wantStatus, w.Code, w.Body.String())
 			assert.Equal(t, tc.wantStored, store.contents)
+		})
+	}
+}
+
+func TestKnowledge_CreateDocument_SharesADocumentOnlyForAnAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := `{"doc_type":"answer","answer_type":"guide","question":"q","content":"seed","shared":true}`
+
+	for _, tc := range []struct {
+		name       string
+		privileges []string
+		wantStatus int
+		wantShared []string
+	}{
+		{name: "a user without knowledge.admin", privileges: []string{"knowledge.create"}, wantStatus: http.StatusForbidden},
+		{name: "an admin", privileges: []string{"knowledge.create", "knowledge.admin"}, wantStatus: http.StatusCreated, wantShared: []string{"seed"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &recordingKnowledgeStore{}
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Set("uid", uint64(7))
+			c.Set("prm", tc.privileges)
+			c.Request = httptest.NewRequest(http.MethodPost, "/knowledge/", strings.NewReader(body))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			NewKnowledgeService(nil, store).CreateDocument(c)
+
+			assert.Equal(t, tc.wantStatus, w.Code, w.Body.String())
+			assert.Equal(t, tc.wantShared, store.shared)
 		})
 	}
 }

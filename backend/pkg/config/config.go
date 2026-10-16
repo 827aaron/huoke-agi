@@ -301,6 +301,26 @@ type Config struct {
 	TGAPIID       int    `env:"TG_API_ID"`
 	TGAPIHash     string `env:"TG_API_HASH"`
 	TGSessionDir  string `env:"TG_SESSION_DIR" envDefault:"./data/tg-session"`
+	// YouTubeAPIKey may list several keys, comma or newline separated, rotated as each
+	// one's daily quota runs out; YouTubeAPIKeys splits it.
+	YouTubeAPIKey string `env:"YOUTUBE_API_KEY"`
+	// GrowthProxyURL is the default proxy of platform accounts (http, https or socks5,
+	// optionally with user:pass@); an account's own proxy wins. PROXY_URL is unrelated:
+	// it carries the server's own outbound calls.
+	GrowthProxyURL string `env:"GROWTH_PROXY_URL"`
+
+	// SMTP that mails a delivered lead list; a customer's saved settings take precedence.
+	SMTPHost     string `env:"SMTP_HOST"`
+	SMTPPort     int    `env:"SMTP_PORT" envDefault:"587"`
+	SMTPUsername string `env:"SMTP_USERNAME"`
+	SMTPPassword string `env:"SMTP_PASSWORD"`
+	SMTPFrom     string `env:"SMTP_FROM"`
+	// SMTPTLS is starttls, tls (implicit, usually port 465) or none.
+	SMTPTLS string `env:"SMTP_TLS" envDefault:"starttls"`
+
+	// GrowthSecretKey encrypts the credentials customers save on the settings page;
+	// changing it makes every saved credential unreadable.
+	GrowthSecretKey string `env:"GROWTH_SECRET_KEY"`
 
 	// === Observability: Langfuse LLM Analytics ===
 	LangfuseBaseURL   string `env:"LANGFUSE_BASE_URL"`
@@ -494,6 +514,21 @@ func (c *Config) WorkerNetwork() string {
 	return c.DockerNetwork
 }
 
+func (c *Config) YouTubeAPIKeys() []string {
+	return SplitList(c.YouTubeAPIKey)
+}
+
+// SplitList splits a comma or newline separated value, dropping blanks.
+func SplitList(v string) []string {
+	var out []string
+	for _, item := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == '\n' || r == '\r' }) {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
 // GetSecretPatterns returns a list of patterns for all secrets in the config
 func (c *Config) GetSecretPatterns() []patterns.Pattern {
 	var result []patterns.Pattern
@@ -523,20 +558,38 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.MiniMaxAPIKey, "MiniMax Key"},
 		{c.MistralAPIKey, "Mistral Key"},
 		{c.XAIAPIKey, "xAI Key"},
-		{c.GoogleAPIKey, "Google API Key"},
 		{c.GoogleCXKey, "Google CX Key"},
 		{c.OAuthGoogleClientID, "Google Client ID"},
 		{c.OAuthGoogleClientSecret, "Google Client Secret"},
 		{c.OAuthGithubClientID, "Github Client ID"},
 		{c.OAuthGithubClientSecret, "Github Client Secret"},
-		{c.TraversaalAPIKey, "Traversaal Key"},
-		{c.TavilyAPIKey, "Tavily Key"},
 		{c.TGAPIHash, "Telegram API Hash"},
-		{c.FirecrawlAPIKey, "Firecrawl Key"},
-		{c.PerplexityAPIKey, "Perplexity Key"},
+		{c.GrowthProxyURL, "Growth Proxy URL"},
+		{c.GrowthSecretKey, "Growth Secret Key"},
+		{c.SMTPPassword, "SMTP Password"},
 		{c.ProxyURL, "Proxy URL"},
 		{c.LangfusePublicKey, "Langfuse Public Key"},
 		{c.LangfuseSecretKey, "Langfuse Secret Key"},
+	}
+	// These may hold several keys rotated on quota errors; each one is masked alone.
+	lists := []struct {
+		value string
+		name  string
+	}{
+		{c.GoogleAPIKey, "Google API Key"},
+		{c.TraversaalAPIKey, "Traversaal Key"},
+		{c.TavilyAPIKey, "Tavily Key"},
+		{c.FirecrawlAPIKey, "Firecrawl Key"},
+		{c.PerplexityAPIKey, "Perplexity Key"},
+		{c.YouTubeAPIKey, "YouTube API Key"},
+	}
+	for _, l := range lists {
+		for _, key := range SplitList(l.value) {
+			secrets = append(secrets, struct {
+				value string
+				name  string
+			}{key, l.name})
+		}
 	}
 
 	for _, s := range secrets {

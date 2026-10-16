@@ -6,35 +6,36 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"pentagi/pkg/config"
 
 	"github.com/caarlos0/env/v10"
 	"github.com/gotd/td/session"
 	"github.com/gotd/td/telegram"
-	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/telegram/dcs"
 	"github.com/gotd/td/tg"
 	"github.com/gotd/td/tgerr"
 )
 
+func init() {
+	Register(PlatformTelegram, newTelegramConnector)
+	RegisterCredentialCheck(PlatformTelegram, checkTelegramCredentials)
+}
+
 type TelegramConfig struct {
-	APIID   int    `env:"TG_API_ID"`
-	APIHash string `env:"TG_API_HASH"`
-	// SessionDir holds the session files of the logged-in accounts. They hold
-	// each account's auth key, so the directory lives outside every container
-	// and is never shown to an agent.
-	SessionDir string `env:"TG_SESSION_DIR" envDefault:"./data/tg-session"`
-	// SessionPath is this client's session file; empty means
-	// SessionDir/session.json.
-	SessionPath string
-	TestServer  bool `env:"TG_TEST_SERVER" envDefault:"false"`
-	// Proxy is the account's proxy URL; see Account.Proxy.
-	Proxy string `env:"TG_PROXY"`
+	APIID   int
+	APIHash string
+	// SessionDir holds the join pacing state of every account and the session
+	// file of an account that comes without a SessionStore. Session files hold
+	// the account's auth key, so the directory lives outside every container.
+	SessionDir string
+	TestServer bool `env:"TG_TEST_SERVER" envDefault:"false"`
 	// A FLOOD_WAIT up to this long is slept through inside the call; a longer
-	// one is returned as StatusRateLimited so the caller is not blocked.
+	// one is returned as a FloodWaitError so the caller is not blocked.
 	MaxInlineFloodWait time.Duration `env:"TG_MAX_INLINE_FLOOD_WAIT" envDefault:"60s"`
 	CallTimeout        time.Duration `env:"TG_CALL_TIMEOUT" envDefault:"30s"`
 
@@ -50,19 +51,15 @@ type TelegramConfig struct {
 	JoinWarmupCount    int           `env:"TG_JOIN_WARMUP_COUNT" envDefault:"10"`
 }
 
-func TelegramConfigFromEnv() (TelegramConfig, error) {
-	var cfg TelegramConfig
-	if err := env.Parse(&cfg); err != nil {
+// TelegramConfigFor takes the app credentials and the session directory from
+// cfg and the pacing defaults from the environment.
+func TelegramConfigFor(cfg *config.Config) (TelegramConfig, error) {
+	var c TelegramConfig
+	if err := env.Parse(&c); err != nil {
 		return TelegramConfig{}, fmt.Errorf("parse telegram config: %w", err)
 	}
-	return cfg, nil
-}
-
-func (c TelegramConfig) sessionFile() string {
-	if c.SessionPath != "" || c.SessionDir == "" {
-		return c.SessionPath
-	}
-	return filepath.Join(c.SessionDir, "session.json")
+	c.APIID, c.APIHash, c.SessionDir = cfg.TGAPIID, cfg.TGAPIHash, cfg.TGSessionDir
+	return c, nil
 }
 
 func (c TelegramConfig) Validate() error {
@@ -71,16 +68,19 @@ func (c TelegramConfig) Validate() error {
 		return errors.New("TG_API_ID is not set")
 	case c.APIHash == "":
 		return errors.New("TG_API_HASH is not set")
-	case c.sessionFile() == "":
-		return errors.New("TG_SESSION_DIR is not set")
 	}
-	_, err := proxyDialer(c.Proxy)
-	return err
+	return nil
+}
+
+func (c TelegramConfig) accountFile(acc Account, suffix string) string {
+	if c.SessionDir == "" {
+		return ""
+	}
+	return filepath.Join(c.SessionDir, fmt.Sprintf("account-%d%s", acc.ID, suffix))
 }
 
 // telegramAPI is the part of *tg.Client the connector calls; tests replace it.
 type telegramAPI interface {
-	UsersGetUsers(ctx context.Context, id []tg.InputUserClass) ([]tg.UserClass, error)
 	UsersGetFullUser(ctx context.Context, id tg.InputUserClass) (*tg.UsersUserFull, error)
 	ContactsSearch(ctx context.Context, request *tg.ContactsSearchRequest) (*tg.ContactsFound, error)
 	ContactsResolveUsername(ctx context.Context, request *tg.ContactsResolveUsernameRequest) (*tg.ContactsResolvedPeer, error)
@@ -99,64 +99,123 @@ const (
 	maxSearchLimit     = 100
 	defaultPageSize    = 100
 	maxPageSize        = 100
+	maxKnownUsers      = 50000
 )
 
-var errNotStarted = errors.New("telegram client is not running")
+var (
+	errNotStarted = errors.New("telegram client is not running")
+	// errJoinToResolve is not ErrNotFound: the invite is alive, and the service
+	// keeps such a source unresolved until JoinSource returns it.
+	errJoinToResolve = errors.New("the group behind this invite link shows itself only after joining; join it first")
+)
 
+// Telegram is the connector of one Telegram user account.
 type Telegram struct {
-	cfg    TelegramConfig
-	client *telegram.Client
-	pacer  *pacer
+	cfg     TelegramConfig
+	account Account
+	client  *telegram.Client
+	pacer   *pacer
 
-	mu       sync.RWMutex
-	observer AccountObserver
-	api      telegramAPI
-	stop     context.CancelFunc
-	done     chan struct{}
+	mu   sync.RWMutex
+	api  telegramAPI
+	stop context.CancelFunc
+	done chan struct{}
+
+	// users holds how to address the senders this account has read, because
+	// GetUser receives a bare id and Telegram wants an access hash or the
+	// message the user was seen in.
+	usersMu sync.Mutex
+	users   map[int64]tgRef
 }
 
 var _ Connector = (*Telegram)(nil)
 
-func NewTelegram(cfg TelegramConfig) (*Telegram, error) {
-	client, err := newTelegramClient(cfg)
+func newTelegramConnector(ctx context.Context, cfg *config.Config, acc Account) (Connector, error) {
+	tc, err := TelegramConfigFor(cfg)
 	if err != nil {
 		return nil, err
 	}
-	t := newTelegramWithAPI(cfg, nil)
+	t, err := NewTelegram(tc, acc)
+	if err != nil {
+		return nil, err
+	}
+	if err := t.Start(ctx); err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func NewTelegram(cfg TelegramConfig, acc Account) (*Telegram, error) {
+	client, err := newTelegramClient(cfg, acc)
+	if err != nil {
+		return nil, err
+	}
+	t := newTelegramWithAPI(cfg, acc, nil)
 	t.client = client
 	return t, nil
 }
 
-func newTelegramWithAPI(cfg TelegramConfig, api telegramAPI) *Telegram {
-	cfg.SessionPath = cfg.sessionFile()
+func newTelegramWithAPI(cfg TelegramConfig, acc Account, api telegramAPI) *Telegram {
 	if cfg.CallTimeout <= 0 {
 		cfg.CallTimeout = 30 * time.Second
 	}
-	return &Telegram{cfg: cfg, api: api, pacer: newPacer(cfg, sleepCtx)}
+	return &Telegram{
+		cfg:     cfg,
+		account: acc,
+		api:     api,
+		pacer:   newPacer(cfg, cfg.accountFile(acc, ".joins.json"), sleepCtx),
+		users:   map[int64]tgRef{},
+	}
 }
 
-func newTelegramClient(cfg TelegramConfig) (*telegram.Client, error) {
+func newTelegramClient(cfg TelegramConfig, acc Account) (*telegram.Client, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	path := cfg.sessionFile()
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, fmt.Errorf("create telegram session directory: %w", err)
+	dial, err := proxyDialer(acc.Proxy)
+	if err != nil {
+		return nil, err
 	}
-	opts := telegram.Options{SessionStorage: &session.FileStorage{Path: path}}
+	if cfg.SessionDir != "" {
+		if err := os.MkdirAll(cfg.SessionDir, 0o700); err != nil {
+			return nil, fmt.Errorf("create telegram session directory: %w", err)
+		}
+	}
+	var storage telegram.SessionStorage
+	switch {
+	case acc.Session != nil:
+		storage = sessionStore{acc.Session}
+	case cfg.SessionDir != "":
+		storage = &session.FileStorage{Path: cfg.accountFile(acc, ".session.json")}
+	default:
+		return nil, errors.New("telegram account has no session store and TG_SESSION_DIR is not set")
+	}
+	opts := telegram.Options{SessionStorage: storage, Resolver: dcs.Plain(dcs.PlainOptions{Dial: dial})}
 	if cfg.TestServer {
 		opts.DCList = dcs.Test()
-	}
-	if cfg.Proxy != "" {
-		dial, _ := proxyDialer(cfg.Proxy)
-		opts.Resolver = dcs.Plain(dcs.PlainOptions{Dial: dial})
 	}
 	return telegram.NewClient(cfg.APIID, cfg.APIHash, opts), nil
 }
 
-// Start connects and returns once the connection is up. It does not fail on a
-// missing login: HealthCheck reports unauthorized until Login has been run.
-// The connection lives until ctx is done or Close is called.
+// sessionStore maps the backend's empty session to the error gotd expects
+// before the first login.
+type sessionStore struct{ s SessionStore }
+
+func (a sessionStore) LoadSession(ctx context.Context) ([]byte, error) {
+	data, err := a.s.LoadSession(ctx)
+	if err == nil && len(data) == 0 {
+		return nil, session.ErrNotFound
+	}
+	return data, err
+}
+
+func (a sessionStore) StoreSession(ctx context.Context, data []byte) error {
+	return a.s.StoreSession(ctx, data)
+}
+
+// Start connects and returns once the connection is up and the session is
+// logged in; a missing login is ErrUnauthorized. The connection lives until
+// ctx is done or Close is called.
 func (t *Telegram) Start(ctx context.Context) error {
 	if t.client == nil {
 		return errors.New("telegram connector has no client")
@@ -180,44 +239,42 @@ func (t *Telegram) Start(ctx context.Context) error {
 		t.mu.Unlock()
 	}()
 
+	timeout := time.NewTimer(t.cfg.CallTimeout)
+	defer timeout.Stop()
 	select {
 	case <-ready:
-		t.pacer.resetLogin()
-		t.mu.Lock()
-		t.stop, t.done = cancel, done
-		t.mu.Unlock()
-		return nil
 	case err := <-runErr:
 		cancel()
 		return fmt.Errorf("connect to telegram: %w", err)
+	case <-timeout.C:
+		cancel()
+		<-done
+		return fmt.Errorf("connect to telegram: no connection within %s", t.cfg.CallTimeout)
 	case <-ctx.Done():
 		cancel()
 		<-done
 		return ctx.Err()
 	}
-}
-
-func (t *Telegram) SetObserver(o AccountObserver) {
+	t.pacer.resetLogin()
 	t.mu.Lock()
-	t.observer = o
+	t.stop, t.done = cancel, done
 	t.mu.Unlock()
+
+	actx, acancel := context.WithTimeout(ctx, t.cfg.CallTimeout)
+	defer acancel()
+	status, err := t.client.Auth().Status(actx)
+	switch {
+	case err != nil:
+		_ = t.Close()
+		return fmt.Errorf("check telegram login: %w", errorOf(err))
+	case !status.Authorized:
+		_ = t.Close()
+		return fmt.Errorf("%w: telegram account %d has no login", ErrUnauthorized, t.account.ID)
+	}
+	return nil
 }
 
-func (t *Telegram) report(method string, err error) {
-	t.mu.RLock()
-	o := t.observer
-	t.mu.RUnlock()
-	if o == nil || errors.Is(err, errNotStarted) {
-		return
-	}
-	ev := AccountEvent{Platform: PlatformTelegram, Method: method, At: t.pacer.now(), Outcome: outcomeOf(err)}
-	if ev.Status == StatusRateLimited && ev.RetryAfter > 0 {
-		ev.RateLimitUntil = ev.At.Add(time.Duration(ev.RetryAfter) * time.Second)
-	}
-	o(ev)
-}
-
-func (t *Telegram) Close() {
+func (t *Telegram) Close() error {
 	t.mu.Lock()
 	stop, done := t.stop, t.done
 	t.stop, t.done = nil, nil
@@ -226,123 +283,128 @@ func (t *Telegram) Close() {
 		stop()
 		<-done
 	}
+	return nil
 }
 
-// Login runs the interactive phone, code and 2FA flow once and leaves the
-// session file for every later Start.
-func Login(ctx context.Context, cfg TelegramConfig, user auth.UserAuthenticator) error {
-	client, err := newTelegramClient(cfg)
+// checkTelegramCredentials sends one unauthenticated request: Telegram checks
+// api_id and api_hash on the first request of a connection.
+func checkTelegramCredentials(ctx context.Context, cfg *config.Config) error {
+	tc, err := TelegramConfigFor(cfg)
 	if err != nil {
 		return err
 	}
+	if err := tc.Validate(); err != nil {
+		return err
+	}
+	dial, err := proxyDialer(cfg.GrowthProxyURL)
+	if err != nil {
+		return err
+	}
+	opts := telegram.Options{SessionStorage: &session.StorageMemory{}, Resolver: dcs.Plain(dcs.PlainOptions{Dial: dial})}
+	if tc.TestServer {
+		opts.DCList = dcs.Test()
+	}
+	client := telegram.NewClient(tc.APIID, tc.APIHash, opts)
+	ctx, cancel := context.WithTimeout(ctx, tc.CallTimeout)
+	defer cancel()
 	return client.Run(ctx, func(ctx context.Context) error {
-		return auth.NewFlow(user, auth.SendCodeOptions{}).Run(ctx, client.Auth())
+		_, err := client.API().HelpGetConfig(ctx)
+		if tgerr.Is(err, "API_ID_INVALID", "API_ID_PUBLISHED_FLOOD") {
+			return fmt.Errorf("telegram rejected the api_id and api_hash pair: %w", err)
+		}
+		return err
 	})
 }
 
 func (t *Telegram) Platform() Platform { return PlatformTelegram }
 
-func (t *Telegram) Capabilities() Capabilities {
-	return Capabilities{
-		Search:          true,
-		Similar:         true,
-		ResolveLink:     true,
-		Join:            true,
-		JoinByInvite:    true,
-		JoinApproval:    true,
-		ReadHistory:     true,
-		IncrementalSync: true,
-		MembershipCheck: true,
-		UserProfile:     true,
-		ReadWithoutJoin: true,
-		MaxPageSize:     maxPageSize,
+func (t *Telegram) Capabilities() []Capability {
+	return []Capability{
+		CapSearchSources, CapResolveSource, CapRecommendSources,
+		CapJoinSource, CapReadHistory, CapUserProfile,
 	}
 }
 
-func (t *Telegram) HealthCheck(ctx context.Context) HealthResult {
-	var users []tg.UserClass
-	err := t.call(ctx, "users.getUsers", func(ctx context.Context, api telegramAPI) (err error) {
-		users, err = api.UsersGetUsers(ctx, []tg.InputUserClass{&tg.InputUserSelf{}})
+func (t *Telegram) SearchSources(ctx context.Context, query string, limit int) ([]Source, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, errors.New("search query is empty")
+	}
+	limit = clamp(limit, defaultSearchLimit, maxSearchLimit)
+	var chats []tg.ChatClass
+	err := t.call(ctx, "contacts.search", func(ctx context.Context, api telegramAPI) error {
+		res, err := api.ContactsSearch(ctx, &tg.ContactsSearchRequest{Q: query, Limit: limit})
+		if err == nil {
+			chats = res.Chats
+		}
 		return err
 	})
 	if err != nil {
-		return HealthResult{Outcome: outcomeOf(err)}
+		return nil, errorOf(err)
 	}
-	for _, u := range users {
-		if self, ok := u.(*tg.User); ok {
-			acc := userFromTG(self)
-			return HealthResult{Outcome: okOutcome(), Account: &acc}
-		}
-	}
-	return HealthResult{Outcome: Outcome{Status: StatusNeedsLogin, Message: "no account behind the session"}}
+	return joinableSources(chats, limit), nil
 }
 
-func (t *Telegram) SearchSources(ctx context.Context, q SearchQuery) SearchResult {
-	limit := clamp(q.Limit, defaultSearchLimit, maxSearchLimit)
-	var chats []tg.ChatClass
-	switch {
-	case q.SimilarTo != nil:
-		ref, err := decodeRef(q.SimilarTo.Ref)
-		if err != nil {
-			return SearchResult{Outcome: invalid(err.Error())}
-		}
-		channel, ok := ref.inputChannel()
-		if !ok {
-			return SearchResult{Outcome: invalid("recommendations exist only for channels and supergroups")}
-		}
-		err = t.call(ctx, "channels.getChannelRecommendations", func(ctx context.Context, api telegramAPI) error {
-			res, err := api.ChannelsGetChannelRecommendations(ctx, &tg.ChannelsGetChannelRecommendationsRequest{Channel: channel})
-			if err == nil {
-				chats = res.GetChats()
-			}
-			return err
-		})
-		if err != nil {
-			return SearchResult{Outcome: outcomeOf(err)}
-		}
-	case q.Query != "":
-		err := t.call(ctx, "contacts.search", func(ctx context.Context, api telegramAPI) error {
-			res, err := api.ContactsSearch(ctx, &tg.ContactsSearchRequest{Q: q.Query, Limit: limit})
-			if err == nil {
-				chats = res.Chats
-			}
-			return err
-		})
-		if err != nil {
-			return SearchResult{Outcome: outcomeOf(err)}
-		}
-	default:
-		return SearchResult{Outcome: invalid("query or similar_to is required")}
+func (t *Telegram) RecommendSources(ctx context.Context, ref SourceRef, limit int) ([]Source, error) {
+	r, err := t.refOf(ctx, ref)
+	if err != nil {
+		return nil, errorOf(err)
 	}
+	channel, ok := r.inputChannel()
+	if !ok {
+		return nil, fmt.Errorf("%w: telegram recommends only next to channels and supergroups", ErrUnsupported)
+	}
+	limit = clamp(limit, defaultSearchLimit, maxSearchLimit)
+	var chats []tg.ChatClass
+	err = t.call(ctx, "channels.getChannelRecommendations", func(ctx context.Context, api telegramAPI) error {
+		res, err := api.ChannelsGetChannelRecommendations(ctx, &tg.ChannelsGetChannelRecommendationsRequest{Channel: channel})
+		if err == nil {
+			chats = res.GetChats()
+		}
+		return err
+	})
+	if err != nil {
+		return nil, errorOf(err)
+	}
+	return joinableSources(chats, limit), nil
+}
 
+func joinableSources(chats []tg.ChatClass, limit int) []Source {
 	sources := make([]Source, 0, len(chats))
 	for _, c := range chats {
-		if src, ok := sourceFromChat(c); ok && src.Membership != MembershipNotJoinable {
-			sources = append(sources, src)
+		if info, ok := chatInfoOf(c); ok && info.status != JoinStatusNotJoinable {
+			sources = append(sources, info.source)
 		}
 		if len(sources) == limit {
 			break
 		}
 	}
-	return SearchResult{Outcome: okOutcome(), Sources: sources}
+	return sources
 }
 
-func (t *Telegram) ResolveSource(ctx context.Context, link string) SourceResult {
+func (t *Telegram) ResolveSource(ctx context.Context, link string) (Source, error) {
 	l, err := parseTelegramLink(link)
 	if err != nil {
-		return SourceResult{Outcome: invalid(err.Error())}
+		return Source{}, fmt.Errorf("%w: %v", ErrNotFound, err)
 	}
+	var info chatInfo
 	if l.Invite != "" {
-		return t.resolveInvite(ctx, l.Invite)
+		info, err = t.resolveInvite(ctx, l.Invite)
+		if err == nil && info.source.ExternalID == "" {
+			return Source{}, errJoinToResolve
+		}
+	} else {
+		info, err = t.resolveChat(ctx, l.Username)
 	}
-
-	var res *tg.ContactsResolvedPeer
-	err = t.call(ctx, "contacts.resolveUsername", func(ctx context.Context, api telegramAPI) (err error) {
-		res, err = api.ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{Username: l.Username})
-		return err
-	})
 	if err != nil {
-		return SourceResult{Outcome: outcomeOf(err)}
+		return Source{}, errorOf(err)
+	}
+	return info.source, nil
+}
+
+func (t *Telegram) resolveChat(ctx context.Context, username string) (chatInfo, error) {
+	res, err := t.resolveUsername(ctx, username)
+	if err != nil {
+		return chatInfo{}, err
 	}
 	var id int64
 	switch p := res.Peer.(type) {
@@ -351,44 +413,192 @@ func (t *Telegram) ResolveSource(ctx context.Context, link string) SourceResult 
 	case *tg.PeerChat:
 		id = p.ChatID
 	default:
-		return SourceResult{Outcome: Outcome{Status: StatusInvalid, ErrorCode: "NOT_A_CHAT", Message: "@" + l.Username + " is a user, not a group or channel"}}
+		return chatInfo{}, fmt.Errorf("%w: @%s is a person, not a group or channel", ErrNotFound, username)
 	}
 	for _, c := range res.Chats {
 		if c.GetID() == id {
-			if src, ok := sourceFromChat(c); ok {
-				return SourceResult{Outcome: okOutcome(), Source: &src}
+			if info, ok := chatInfoOf(c); ok {
+				return info, nil
 			}
 		}
 	}
-	return SourceResult{Outcome: Outcome{Status: StatusNotFound, Message: "resolved peer missing from response"}}
+	return chatInfo{}, fmt.Errorf("%w: @%s is missing from the response", ErrNotFound, username)
 }
 
-func (t *Telegram) resolveInvite(ctx context.Context, hash string) SourceResult {
+func (t *Telegram) resolveUsername(ctx context.Context, username string) (res *tg.ContactsResolvedPeer, err error) {
+	err = t.call(ctx, "contacts.resolveUsername", func(ctx context.Context, api telegramAPI) (err error) {
+		res, err = api.ContactsResolveUsername(ctx, &tg.ContactsResolveUsernameRequest{Username: username})
+		return err
+	})
+	return res, err
+}
+
+// resolveInvite describes an invite link. A chat the account cannot see yet
+// comes back with an empty ExternalID and an invite peer.
+func (t *Telegram) resolveInvite(ctx context.Context, hash string) (chatInfo, error) {
 	var inv tg.ChatInviteClass
 	err := t.call(ctx, "messages.checkChatInvite", func(ctx context.Context, api telegramAPI) (err error) {
 		inv, err = api.MessagesCheckChatInvite(ctx, hash)
 		return err
 	})
 	if err != nil {
-		return SourceResult{Outcome: outcomeOf(err)}
+		return chatInfo{}, err
 	}
-	src, ok := sourceFromInvite(hash, inv)
-	if !ok {
-		return SourceResult{Outcome: Outcome{Status: StatusError, ErrorCode: "INTERNAL", Message: fmt.Sprintf("unexpected invite type %T", inv)}}
+	link := "https://t.me/+" + hash
+	switch v := inv.(type) {
+	case *tg.ChatInviteAlready:
+		if info, ok := chatInfoOf(v.Chat); ok {
+			return info.withInvite(hash, link), nil
+		}
+	case *tg.ChatInvitePeek:
+		if info, ok := chatInfoOf(v.Chat); ok {
+			info.status = JoinStatusNotJoined
+			return info.withInvite(hash, link), nil
+		}
+	case *tg.ChatInvite:
+		ref := tgRef{Kind: refInvite, Invite: hash}
+		kind := SourceKindGroup
+		if v.Broadcast {
+			kind = SourceKindChannel
+		}
+		return chatInfo{
+			source: Source{
+				Title:       v.Title,
+				Link:        link,
+				Kind:        kind,
+				MemberCount: int64(v.ParticipantsCount),
+				Description: v.About,
+				Peer:        ref.peer(),
+			},
+			ref:    ref,
+			status: JoinStatusNotJoined,
+		}, nil
 	}
-	return SourceResult{Outcome: okOutcome(), Source: &src}
+	return chatInfo{}, fmt.Errorf("unexpected telegram invite type %T", inv)
 }
 
-func (t *Telegram) MembershipStatus(ctx context.Context, src SourceRef) MembershipResult {
-	ref, err := decodeRef(src.Ref)
-	if err != nil {
-		return MembershipResult{Outcome: invalid(err.Error())}
+// refOf finds the account's address of a source: its stored peer, else its
+// username, else its link. ExternalID alone carries no access hash.
+func (t *Telegram) refOf(ctx context.Context, ref SourceRef) (tgRef, error) {
+	if len(ref.Peer) > 0 && string(ref.Peer) != "null" {
+		return peerRef(ref.Peer)
 	}
-	switch ref.Kind {
+	if ref.Username != "" {
+		info, err := t.resolveChat(ctx, strings.TrimPrefix(ref.Username, "@"))
+		return info.ref, err
+	}
+	if ref.Link != "" {
+		l, err := parseTelegramLink(ref.Link)
+		if err != nil {
+			return tgRef{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+		}
+		if l.Invite != "" {
+			return tgRef{Kind: refInvite, Invite: l.Invite}, nil
+		}
+		info, err := t.resolveChat(ctx, l.Username)
+		return info.ref, err
+	}
+	return tgRef{}, fmt.Errorf("%w: telegram source %q has no peer, username or link", ErrNotFound, ref.ExternalID)
+}
+
+// JoinSource joins by invite when the ref carries one, since a private chat
+// cannot be joined by id. A join that times out is checked before it is
+// retried once, so a join that did land is not sent twice.
+func (t *Telegram) JoinSource(ctx context.Context, ref SourceRef) (JoinResult, error) {
+	r, err := t.refOf(ctx, ref)
+	if err != nil {
+		return JoinResult{}, errorOf(err)
+	}
+	if r.Kind == refChat && r.Invite == "" {
+		res, err := t.membership(ctx, r)
+		if err != nil {
+			return JoinResult{}, errorOf(err)
+		}
+		if res.Status != JoinStatusJoined {
+			res = JoinResult{Status: JoinStatusNotJoinable, Reason: "a legacy group can be joined only through its invite link"}
+		}
+		return res, nil
+	}
+
+	res, err := t.joinOnce(ctx, r)
+	if !transient(err) {
+		return res, errorOf(err)
+	}
+	check, cerr := t.membership(ctx, r)
+	switch {
+	case cerr != nil:
+		return JoinResult{}, fmt.Errorf("the join timed out and membership could not be checked; check it before joining again: %w", errorOf(err))
+	case check.Status == JoinStatusNotJoined:
+		res, err = t.joinOnce(ctx, r)
+		return res, errorOf(err)
+	}
+	return check, nil
+}
+
+func (t *Telegram) joinOnce(ctx context.Context, r tgRef) (JoinResult, error) {
+	if err := t.pacer.beforeJoin(ctx); err != nil {
+		return JoinResult{}, err
+	}
+	method := "channels.joinChannel"
+	if r.Invite != "" {
+		method = "messages.importChatInvite"
+	}
+	var joined tg.MessagesChatInviteJoinResultClass
+	err := t.call(ctx, method, func(ctx context.Context, api telegramAPI) (err error) {
+		if r.Invite != "" {
+			joined, err = api.MessagesImportChatInvite(ctx, r.Invite)
+		} else {
+			channel, _ := r.inputChannel()
+			joined, err = api.ChannelsJoinChannel(ctx, channel)
+		}
+		return err
+	})
+
+	if err == nil || tgerr.Is(err, "INVITE_REQUEST_SENT") || transient(err) {
+		t.pacer.joined()
+	}
+
+	switch {
+	case err == nil:
+	case tgerr.Is(err, "INVITE_REQUEST_SENT"):
+		return JoinResult{Status: JoinStatusPending, Reason: "join request sent; a group admin has to approve it"}, nil
+	case tgerr.Is(err, "USER_ALREADY_PARTICIPANT"):
+		return JoinResult{Status: JoinStatusJoined}, nil
+	case tgerr.Is(err, "INVITE_HASH_EXPIRED", "INVITE_HASH_INVALID", "INVITE_HASH_EMPTY",
+		"CHANNEL_PRIVATE", "CHANNEL_INVALID", "CHAT_INVALID", "USER_BANNED_IN_CHANNEL", "CHANNEL_PUBLIC_GROUP_NA"):
+		return JoinResult{Status: JoinStatusNotJoinable, Reason: rpcType(err)}, nil
+	default:
+		// CHANNELS_TOO_MUCH and flood waits concern the account, not the source.
+		return JoinResult{}, err
+	}
+
+	switch v := joined.(type) {
+	case *tg.MessagesChatInviteJoinResultOk:
+		res := JoinResult{Status: JoinStatusJoined}
+		if u, ok := v.Updates.(interface{ GetChats() []tg.ChatClass }); ok {
+			for _, c := range u.GetChats() {
+				if info, ok := chatInfoOf(c); ok && (r.ID == 0 || c.GetID() == r.ID) {
+					if r.Invite != "" {
+						info = info.withInvite(r.Invite, "https://t.me/+"+r.Invite)
+					}
+					res.Source = &info.source
+					break
+				}
+			}
+		}
+		return res, nil
+	case *tg.MessagesChatInviteJoinResultWebView:
+		return JoinResult{Status: JoinStatusNotJoinable, Reason: "the group requires a bot web app before joining"}, nil
+	}
+	return JoinResult{Status: JoinStatusJoined}, nil
+}
+
+func (t *Telegram) membership(ctx context.Context, r tgRef) (JoinResult, error) {
+	switch r.Kind {
 	case refInvite:
-		return t.inviteMembership(ctx, ref.Invite)
+		return t.inviteMembership(ctx, r.Invite)
 	case refChannel:
-		channel, _ := ref.inputChannel()
+		channel, _ := r.inputChannel()
 		var res *tg.ChannelsChannelParticipant
 		err := t.call(ctx, "channels.getParticipant", func(ctx context.Context, api telegramAPI) (err error) {
 			res, err = api.ChannelsGetParticipant(ctx, &tg.ChannelsGetParticipantRequest{Channel: channel, Participant: &tg.InputPeerSelf{}})
@@ -398,238 +608,79 @@ func (t *Telegram) MembershipStatus(ctx context.Context, src SourceRef) Membersh
 		case err == nil:
 			switch res.Participant.(type) {
 			case *tg.ChannelParticipantBanned:
-				return MembershipResult{Outcome: Outcome{Status: StatusOK, ErrorCode: "USER_BANNED_IN_CHANNEL"}, Membership: MembershipNotJoinable}
+				return JoinResult{Status: JoinStatusNotJoinable, Reason: "USER_BANNED_IN_CHANNEL"}, nil
 			case *tg.ChannelParticipantLeft:
-				return MembershipResult{Outcome: okOutcome(), Membership: MembershipNotJoined}
+				return JoinResult{Status: JoinStatusNotJoined}, nil
 			}
-			return MembershipResult{Outcome: okOutcome(), Membership: MembershipJoined}
+			return JoinResult{Status: JoinStatusJoined}, nil
 		case tgerr.Is(err, "USER_NOT_PARTICIPANT"):
-			return MembershipResult{Outcome: okOutcome(), Membership: MembershipNotJoined}
-		case tgerr.Is(err, "CHANNEL_PRIVATE") && ref.Invite != "":
-			return t.inviteMembership(ctx, ref.Invite)
+			return JoinResult{Status: JoinStatusNotJoined}, nil
+		case tgerr.Is(err, "CHANNEL_PRIVATE") && r.Invite != "":
+			return t.inviteMembership(ctx, r.Invite)
 		case tgerr.Is(err, "CHANNEL_PRIVATE", "CHANNEL_INVALID", "USER_BANNED_IN_CHANNEL"):
-			return MembershipResult{Outcome: Outcome{Status: StatusOK, ErrorCode: rpcType(err)}, Membership: MembershipNotJoinable}
+			return JoinResult{Status: JoinStatusNotJoinable, Reason: rpcType(err)}, nil
 		}
-		return MembershipResult{Outcome: outcomeOf(err), Membership: MembershipUnknown}
+		return JoinResult{}, err
 	case refChat:
 		var res tg.MessagesChatsClass
 		err := t.call(ctx, "messages.getChats", func(ctx context.Context, api telegramAPI) (err error) {
-			res, err = api.MessagesGetChats(ctx, []int64{ref.ID})
+			res, err = api.MessagesGetChats(ctx, []int64{r.ID})
 			return err
 		})
+		if tgerr.Is(err, "CHAT_ID_INVALID", "PEER_ID_INVALID") {
+			return JoinResult{Status: JoinStatusNotJoined}, nil
+		}
 		if err != nil {
-			if tgerr.Is(err, "CHAT_ID_INVALID", "PEER_ID_INVALID") {
-				return MembershipResult{Outcome: Outcome{Status: StatusOK, ErrorCode: rpcType(err)}, Membership: MembershipNotJoined}
-			}
-			return MembershipResult{Outcome: outcomeOf(err), Membership: MembershipUnknown}
+			return JoinResult{}, err
 		}
 		for _, c := range res.GetChats() {
-			if c.GetID() == ref.ID {
-				s, _ := sourceFromChat(c)
-				return MembershipResult{Outcome: okOutcome(), Membership: s.Membership, Source: &s}
+			if c.GetID() == r.ID {
+				info, _ := chatInfoOf(c)
+				return JoinResult{Status: info.status, Source: &info.source}, nil
 			}
 		}
-		return MembershipResult{Outcome: okOutcome(), Membership: MembershipNotJoined}
+		return JoinResult{Status: JoinStatusNotJoined}, nil
 	}
-	return MembershipResult{Outcome: invalid("a user is not a source")}
+	return JoinResult{}, fmt.Errorf("telegram peer of kind %q is not a source", r.Kind)
 }
 
-func (t *Telegram) inviteMembership(ctx context.Context, hash string) MembershipResult {
-	res := t.resolveInvite(ctx, hash)
-	if !res.OK() {
-		if isInviteDead(res.ErrorCode) {
-			return MembershipResult{Outcome: Outcome{Status: StatusOK, ErrorCode: res.ErrorCode}, Membership: MembershipNotJoinable}
-		}
-		return MembershipResult{Outcome: res.Outcome, Membership: MembershipUnknown}
+func (t *Telegram) inviteMembership(ctx context.Context, hash string) (JoinResult, error) {
+	info, err := t.resolveInvite(ctx, hash)
+	if tgerr.Is(err, "INVITE_HASH_EXPIRED", "INVITE_HASH_INVALID", "INVITE_HASH_EMPTY") {
+		return JoinResult{Status: JoinStatusNotJoinable, Reason: rpcType(err)}, nil
 	}
-	return MembershipResult{Outcome: okOutcome(), Membership: res.Source.Membership, Source: res.Source}
-}
-
-func isInviteDead(code string) bool {
-	return code == "INVITE_HASH_EXPIRED" || code == "INVITE_HASH_INVALID" || code == "INVITE_HASH_EMPTY"
-}
-
-// JoinSource joins by invite when the ref carries one, since a private chat
-// cannot be joined by id. A join that times out is checked before it is
-// retried once, so a join that did land is not sent twice.
-func (t *Telegram) JoinSource(ctx context.Context, src SourceRef) MembershipResult {
-	ref, err := decodeRef(src.Ref)
 	if err != nil {
-		return MembershipResult{Outcome: invalid(err.Error())}
+		return JoinResult{}, err
 	}
-	if ref.Kind == refUser {
-		return MembershipResult{Outcome: invalid("a user is not a source")}
+	res := JoinResult{Status: info.status}
+	if info.source.ExternalID != "" {
+		res.Source = &info.source
 	}
-	if ref.Kind == refChat && ref.Invite == "" {
-		st := t.MembershipStatus(ctx, src)
-		if st.OK() && st.Membership != MembershipJoined {
-			st.Membership, st.ErrorCode = MembershipNotJoinable, "INVITE_REQUIRED"
-		}
-		return st
-	}
-
-	res := t.joinOnce(ctx, ref)
-	if res.Status != StatusUnavailable {
-		return res
-	}
-	check := t.MembershipStatus(ctx, src)
-	switch {
-	case check.OK() && check.Membership == MembershipNotJoined:
-		res = t.joinOnce(ctx, ref)
-		if res.Status == StatusUnavailable {
-			res.Membership = MembershipUnknown
-		}
-		return res
-	case check.OK():
-		return check
-	}
-	return MembershipResult{Outcome: res.Outcome, Membership: MembershipUnknown}
+	return res, nil
 }
 
-func (t *Telegram) joinOnce(ctx context.Context, ref tgRef) MembershipResult {
-	if err := t.pacer.beforeJoin(ctx); err != nil {
-		return MembershipResult{Outcome: outcomeOf(err), Membership: MembershipNotJoined}
-	}
-	method := "channels.joinChannel"
-	if ref.Invite != "" {
-		method = "messages.importChatInvite"
-	}
-	var joined tg.MessagesChatInviteJoinResultClass
-	err := t.call(ctx, method, func(ctx context.Context, api telegramAPI) (err error) {
-		if ref.Invite != "" {
-			joined, err = api.MessagesImportChatInvite(ctx, ref.Invite)
-		} else {
-			channel, _ := ref.inputChannel()
-			joined, err = api.ChannelsJoinChannel(ctx, channel)
-		}
-		return err
-	})
-
-	if err == nil || tgerr.Is(err, "INVITE_REQUEST_SENT") ||
-		(outcomeOf(err).Status == StatusUnavailable && !errors.Is(err, errNotStarted)) {
-		t.pacer.joined()
-	}
-
-	switch {
-	case err == nil:
-	case tgerr.Is(err, "INVITE_REQUEST_SENT"):
-		return MembershipResult{Outcome: okOutcome(), Membership: MembershipPendingApproval}
-	case tgerr.Is(err, "USER_ALREADY_PARTICIPANT"):
-		return MembershipResult{Outcome: okOutcome(), Membership: MembershipJoined}
-	case tgerr.Is(err, "INVITE_HASH_EXPIRED", "INVITE_HASH_INVALID", "INVITE_HASH_EMPTY",
-		"CHANNEL_PRIVATE", "CHANNEL_INVALID", "CHAT_INVALID", "USER_BANNED_IN_CHANNEL", "CHANNEL_PUBLIC_GROUP_NA"):
-		return MembershipResult{Outcome: Outcome{Status: StatusOK, ErrorCode: rpcType(err)}, Membership: MembershipNotJoinable}
-	default:
-		// CHANNELS_TOO_MUCH and flood waits concern the account, not the source.
-		o := outcomeOf(err)
-		m := MembershipNotJoined
-		if o.Status == StatusUnavailable {
-			m = MembershipUnknown
-		}
-		return MembershipResult{Outcome: o, Membership: m}
-	}
-
-	switch r := joined.(type) {
-	case *tg.MessagesChatInviteJoinResultOk:
-		res := MembershipResult{Outcome: okOutcome(), Membership: MembershipJoined}
-		if u, ok := r.Updates.(interface{ GetChats() []tg.ChatClass }); ok {
-			for _, c := range u.GetChats() {
-				if s, ok := sourceFromChat(c); ok && (ref.ID == 0 || c.GetID() == ref.ID) {
-					if ref.Invite != "" {
-						s.Ref = withInvite(s.Ref, ref.Invite)
-					}
-					s.Membership = MembershipJoined
-					res.Source = &s
-					break
-				}
-			}
-		}
-		return res
-	case *tg.MessagesChatInviteJoinResultWebView:
-		return MembershipResult{Outcome: Outcome{Status: StatusOK, ErrorCode: "JOIN_WEBVIEW_REQUIRED", Message: "the chat requires completing a bot web app before joining"}, Membership: MembershipUnknown}
-	}
-	return MembershipResult{Outcome: okOutcome(), Membership: MembershipJoined}
-}
-
-func withInvite(encoded, invite string) string {
-	r, err := decodeRef(encoded)
+// ReadHistory pages backwards from OffsetID, or forwards from MinID: with only
+// MinID set it returns the Limit messages just above it, so a cursor that
+// advances to the newest of them skips nothing.
+func (t *Telegram) ReadHistory(ctx context.Context, ref SourceRef, req HistoryRequest) (HistoryPage, error) {
+	r, err := t.refOf(ctx, ref)
 	if err != nil {
-		return encoded
+		return HistoryPage{}, errorOf(err)
 	}
-	r.Invite = invite
-	return r.encode()
-}
-
-func (t *Telegram) ReadSource(ctx context.Context, req ReadRequest) ReadResult {
-	ref, peer, o := readablePeer(req.Source)
-	if !o.OK() {
-		return ReadResult{Outcome: o}
+	if r.Kind == refInvite {
+		return HistoryPage{}, errors.New("an invite-only source can be read after it is joined")
 	}
-	before, err := parseOptionalInt(req.Before)
-	if err != nil || before < 0 {
-		return ReadResult{Outcome: invalid("before must be a message id")}
-	}
+	peer, _ := r.inputPeer()
 	limit := clamp(req.Limit, defaultPageSize, maxPageSize)
-
-	raw, msgs, users, err := t.history(ctx, &tg.MessagesGetHistoryRequest{Peer: peer, OffsetID: int(before), Limit: limit})
-	if err != nil {
-		return ReadResult{Outcome: outcomeOf(err)}
-	}
-	res := t.buildRead(ref, req.Source, msgs, users)
-	if len(raw) == limit {
-		res.Before = strconv.Itoa(minID(raw))
-	}
-	if before == 0 {
-		res.Checkpoint = strconv.Itoa(maxID(raw))
-	}
-	return res
-}
-
-func (t *Telegram) SyncSource(ctx context.Context, req SyncRequest) ReadResult {
-	cp, err := parseOptionalInt(req.Checkpoint)
-	if err != nil || cp < 0 {
-		return ReadResult{Outcome: invalid("checkpoint is malformed")}
-	}
-	limit := clamp(req.Limit, defaultPageSize, maxPageSize)
-	ref, peer, o := readablePeer(req.Source)
-	if !o.OK() {
-		return ReadResult{Outcome: o}
+	hreq := &tg.MessagesGetHistoryRequest{Peer: peer, OffsetID: int(req.OffsetID), MinID: int(req.MinID), Limit: limit}
+	if req.MinID > 0 && req.OffsetID == 0 {
+		hreq.OffsetID, hreq.AddOffset = int(req.MinID)+1, -limit
 	}
 
-	hreq := &tg.MessagesGetHistoryRequest{Peer: peer, Limit: limit}
-	if cp > 0 {
-		// The page of `limit` messages that starts just above the checkpoint.
-		hreq.OffsetID, hreq.AddOffset, hreq.MinID = int(cp)+1, -limit, int(cp)
-	}
-	raw, msgs, users, err := t.history(ctx, hreq)
-	if err != nil {
-		return ReadResult{Outcome: outcomeOf(err)}
-	}
-	slices.Reverse(msgs)
-	res := t.buildRead(ref, req.Source, msgs, users)
-	res.HasMore = cp > 0 && len(raw) == limit
-	res.Checkpoint = strconv.Itoa(max(int(cp), maxID(raw)))
-	return res
-}
-
-func readablePeer(src SourceRef) (tgRef, tg.InputPeerClass, Outcome) {
-	ref, err := decodeRef(src.Ref)
-	if err != nil {
-		return tgRef{}, nil, invalid(err.Error())
-	}
-	if ref.Kind == refInvite {
-		return tgRef{}, nil, Outcome{Status: StatusForbidden, ErrorCode: "JOIN_REQUIRED", Message: "an invite-only source can be read after it is joined"}
-	}
-	if ref.Kind == refUser {
-		return tgRef{}, nil, invalid("a user is not a source")
-	}
-	peer, _ := ref.inputPeer()
-	return ref, peer, okOutcome()
-}
-
-func (t *Telegram) history(ctx context.Context, req *tg.MessagesGetHistoryRequest) (raw []tg.MessageClass, msgs []*tg.Message, users []tg.UserClass, err error) {
+	var raw []tg.MessageClass
+	var users []tg.UserClass
 	err = t.call(ctx, "messages.getHistory", func(ctx context.Context, api telegramAPI) error {
-		res, err := api.MessagesGetHistory(ctx, req)
+		res, err := api.MessagesGetHistory(ctx, hreq)
 		if err != nil {
 			return err
 		}
@@ -638,105 +689,152 @@ func (t *Telegram) history(ctx context.Context, req *tg.MessagesGetHistoryReques
 		}
 		return nil
 	})
-	for _, m := range raw {
-		if msg, ok := m.(*tg.Message); ok {
-			msgs = append(msgs, msg)
-		}
+	if err != nil {
+		return HistoryPage{}, errorOf(err)
 	}
-	return raw, msgs, users, err
+	return HistoryPage{
+		Messages:  t.messages(r, raw, users),
+		Exhausted: req.MinID == 0 && len(raw) < limit,
+	}, nil
 }
 
-func (t *Telegram) buildRead(ref tgRef, src SourceRef, msgs []*tg.Message, users []tg.UserClass) ReadResult {
+func (t *Telegram) messages(r tgRef, raw []tg.MessageClass, users []tg.UserClass) []Message {
 	byID := make(map[int64]*tg.User, len(users))
 	for _, u := range users {
 		if user, ok := u.(*tg.User); ok {
 			byID[user.ID] = user
 		}
 	}
-	res := ReadResult{Outcome: okOutcome(), Messages: make([]Message, 0, len(msgs)), Users: map[string]User{}}
-	for _, m := range msgs {
-		msg := Message{
-			ID:       strconv.Itoa(m.ID),
-			SourceID: strconv.FormatInt(ref.ID, 10),
-			Date:     time.Unix(int64(m.Date), 0).UTC(),
-			Text:     m.Message,
-			Link:     messageLink(ref, m.ID),
+	out := make([]Message, 0, len(raw))
+	for _, rm := range raw {
+		m, ok := rm.(*tg.Message)
+		if !ok {
+			continue
 		}
-		if h, ok := m.ReplyTo.(*tg.MessageReplyHeader); ok && h.ReplyToMsgID != 0 {
-			msg.ReplyToID = strconv.Itoa(h.ReplyToMsgID)
+		msg := Message{
+			ID:   int64(m.ID),
+			Text: m.Message,
+			Time: time.Unix(int64(m.Date), 0).UTC(),
+			Link: messageLink(r, m.ID),
+		}
+		if h, ok := m.ReplyTo.(*tg.MessageReplyHeader); ok {
+			msg.ReplyToID = int64(h.ReplyToMsgID)
 		}
 		if from, ok := m.FromID.(*tg.PeerUser); ok {
-			key := strconv.FormatInt(from.UserID, 10)
-			u, known := res.Users[key]
-			if !known {
-				if tu := byID[from.UserID]; tu != nil {
-					u = userFromTG(tu)
-					if tu.Min {
-						u.Ref = minUserRef(tu.ID, ref, m.ID)
-					}
-				} else {
-					u = User{UserRef: UserRef{Platform: PlatformTelegram, ID: key, Ref: minUserRef(from.UserID, ref, m.ID)}}
+			msg.SenderID = strconv.FormatInt(from.UserID, 10)
+			via := tgRef{Kind: refUser, ID: from.UserID, FromPeer: &tgRef{Kind: r.Kind, ID: r.ID, Hash: r.Hash}, FromMsg: m.ID}
+			if u := byID[from.UserID]; u != nil {
+				p := profileOf(u)
+				msg.SenderUsername, msg.SenderName, msg.SenderIsBot = p.Username, p.DisplayName, p.IsBot
+				if !u.Min && u.AccessHash != 0 {
+					via = tgRef{Kind: refUser, ID: u.ID, Hash: u.AccessHash}
 				}
-				res.Users[key] = u
 			}
-			sender := u.UserRef
-			msg.Sender = &sender
+			t.rememberUser(via)
 		}
-		res.Messages = append(res.Messages, msg)
+		out = append(out, msg)
 	}
-	return res
+	return out
 }
 
-func minUserRef(userID int64, source tgRef, msgID int) string {
-	from := tgRef{Kind: source.Kind, ID: source.ID, Hash: source.Hash}
-	return tgRef{Kind: refUser, ID: userID, FromPeer: &from, FromMsg: msgID}.encode()
+func (t *Telegram) rememberUser(r tgRef) {
+	t.usersMu.Lock()
+	defer t.usersMu.Unlock()
+	if known, ok := t.users[r.ID]; ok && known.FromPeer == nil && r.FromPeer != nil {
+		return
+	}
+	if len(t.users) >= maxKnownUsers {
+		clear(t.users)
+	}
+	t.users[r.ID] = r
 }
 
-func messageLink(ref tgRef, id int) string {
+func (t *Telegram) knownUser(id int64) (tgRef, bool) {
+	t.usersMu.Lock()
+	defer t.usersMu.Unlock()
+	r, ok := t.users[id]
+	return r, ok
+}
+
+func messageLink(r tgRef, id int) string {
 	switch {
-	case ref.Kind != refChannel:
+	case r.Kind != refChannel:
 		return ""
-	case ref.Username != "":
-		return fmt.Sprintf("https://t.me/%s/%d", ref.Username, id)
+	case r.Username != "":
+		return fmt.Sprintf("https://t.me/%s/%d", r.Username, id)
 	}
-	return fmt.Sprintf("https://t.me/c/%d/%d", ref.ID, id)
+	return fmt.Sprintf("https://t.me/c/%d/%d", r.ID, id)
 }
 
-func (t *Telegram) GetUser(ctx context.Context, user UserRef) UserResult {
-	ref, err := decodeRef(user.Ref)
-	if err != nil {
-		return UserResult{Outcome: invalid(err.Error())}
+// GetUser takes a numeric id of a sender this connector has read, or a
+// username.
+func (t *Telegram) GetUser(ctx context.Context, userID string) (UserProfile, error) {
+	var input tg.InputUserClass
+	if id, err := strconv.ParseInt(userID, 10, 64); err == nil {
+		r, ok := t.knownUser(id)
+		if !ok {
+			return UserProfile{}, fmt.Errorf("%w: telegram user %s was not seen in a message this account read; read the source first", ErrNotFound, userID)
+		}
+		input, _ = r.inputUser()
+	} else {
+		name := strings.TrimPrefix(userID, "@")
+		res, err := t.resolveUsername(ctx, name)
+		if err != nil {
+			return UserProfile{}, errorOf(err)
+		}
+		for _, u := range res.Users {
+			if tu, ok := u.(*tg.User); ok {
+				input = &tg.InputUser{UserID: tu.ID, AccessHash: tu.AccessHash}
+			}
+		}
+		if input == nil {
+			return UserProfile{}, fmt.Errorf("%w: @%s is not a person", ErrNotFound, name)
+		}
 	}
-	input, ok := ref.inputUser()
-	if !ok {
-		return UserResult{Outcome: invalid("not a user ref")}
-	}
+
 	var full *tg.UsersUserFull
-	err = t.call(ctx, "users.getFullUser", func(ctx context.Context, api telegramAPI) (err error) {
+	err := t.call(ctx, "users.getFullUser", func(ctx context.Context, api telegramAPI) (err error) {
 		full, err = api.UsersGetFullUser(ctx, input)
 		return err
 	})
 	if err != nil {
-		return UserResult{Outcome: outcomeOf(err)}
+		return UserProfile{}, errorOf(err)
 	}
 	for _, u := range full.Users {
-		if tu, ok := u.(*tg.User); ok && tu.ID == ref.ID {
-			res := userFromTG(tu)
-			if tu.Min || tu.AccessHash == 0 {
-				res.Ref = user.Ref
+		if tu, ok := u.(*tg.User); ok && tu.ID == full.FullUser.ID {
+			if !tu.Min && tu.AccessHash != 0 {
+				t.rememberUser(tgRef{Kind: refUser, ID: tu.ID, Hash: tu.AccessHash})
 			}
-			res.About = full.FullUser.About
-			return UserResult{Outcome: okOutcome(), User: &res}
+			p := profileOf(tu)
+			p.Bio = full.FullUser.About
+			return p, nil
 		}
 	}
-	return UserResult{Outcome: Outcome{Status: StatusNotFound, Message: "user missing from response"}}
+	return UserProfile{}, fmt.Errorf("%w: telegram user %s is missing from the response", ErrNotFound, userID)
+}
+
+func profileOf(u *tg.User) UserProfile {
+	p := UserProfile{
+		ID:          strconv.FormatInt(u.ID, 10),
+		Username:    u.Username,
+		DisplayName: strings.TrimSpace(u.FirstName + " " + u.LastName),
+		IsBot:       u.Bot,
+	}
+	if p.Username == "" {
+		for _, n := range u.Usernames {
+			if n.Active {
+				p.Username = n.Username
+				break
+			}
+		}
+	}
+	return p
 }
 
 // call runs fn against the live API, sleeping through flood waits no longer
 // than MaxInlineFloodWait. Telegram counts a flood wait per method, so the
 // retry repeats only the call that was refused.
-func (t *Telegram) call(ctx context.Context, method string, fn func(ctx context.Context, api telegramAPI) error) (err error) {
-	defer func() { t.report(method, err) }()
+func (t *Telegram) call(ctx context.Context, method string, fn func(ctx context.Context, api telegramAPI) error) error {
 	t.mu.RLock()
 	api := t.api
 	t.mu.RUnlock()
@@ -756,6 +854,10 @@ func (t *Telegram) call(ctx context.Context, method string, fn func(ctx context.
 		if !flood || wait > t.cfg.MaxInlineFloodWait || attempt == maxFloodRetries {
 			t.pacer.observe(method, err)
 			return err
+		}
+		// The caller never sees an absorbed wait, but the account's health does.
+		if t.account.Health != nil {
+			t.account.Health.ReportRateLimited(ctx, wait)
 		}
 		if err := t.pacer.sleep(ctx, wait); err != nil {
 			return err
@@ -784,54 +886,45 @@ var (
 		"PEER_ID_INVALID", "USER_ID_INVALID", "INVITE_HASH_INVALID", "INVITE_HASH_EXPIRED",
 		"INVITE_HASH_EMPTY", "MSG_ID_INVALID",
 	}
-	forbiddenTypes = []string{
-		"CHANNEL_PRIVATE", "CHAT_FORBIDDEN", "USER_BANNED_IN_CHANNEL", "CHAT_ADMIN_REQUIRED",
-	}
 )
 
-func outcomeOf(err error) Outcome {
+// errorOf maps a Telegram error to the errors the growth service acts on.
+func errorOf(err error) error {
 	if err == nil {
-		return okOutcome()
+		return nil
 	}
 	if wait, ok := tgerr.AsFloodWait(err); ok {
-		return Outcome{Status: StatusRateLimited, ErrorCode: tgerr.ErrFloodWait, RetryAfter: int(wait / time.Second), Message: err.Error()}
+		return &FloodWaitError{Wait: wait}
 	}
 	var paced *joinPacingError
 	switch {
 	case errors.As(err, &paced):
-		return Outcome{Status: StatusRateLimited, ErrorCode: "JOIN_PACING", RetryAfter: int((paced.wait + time.Second - 1) / time.Second), Message: err.Error()}
+		return &FloodWaitError{Wait: paced.wait}
 	case errors.Is(err, errNeedsLogin):
-		return Outcome{Status: StatusNeedsLogin, ErrorCode: "NEEDS_LOGIN", Message: err.Error()}
-	case errors.Is(err, errNotStarted):
-		return Outcome{Status: StatusUnavailable, ErrorCode: "NOT_STARTED", Message: err.Error()}
-	case errors.Is(err, context.DeadlineExceeded):
-		return Outcome{Status: StatusUnavailable, ErrorCode: "TIMEOUT", Message: err.Error()}
-	case errors.Is(err, context.Canceled):
-		return Outcome{Status: StatusUnavailable, ErrorCode: "CANCELED", Message: err.Error()}
+		return fmt.Errorf("%w: %v", ErrUnauthorized, err)
 	}
 	rpc, ok := tgerr.As(err)
 	if !ok {
-		return Outcome{Status: StatusError, ErrorCode: "INTERNAL", Message: err.Error()}
+		return err
 	}
-	o := Outcome{ErrorCode: rpc.Type, Message: rpc.Error()}
 	switch {
 	case rpc.IsOneOf(needsLoginTypes...) || rpc.Code == 401:
-		o.Status = StatusNeedsLogin
+		return fmt.Errorf("%w: telegram %s", ErrUnauthorized, rpc.Type)
 	case rpc.IsOneOf(notFoundTypes...):
-		o.Status = StatusNotFound
-	case rpc.IsOneOf(forbiddenTypes...) || rpc.Code == 403:
-		o.Status = StatusForbidden
-	case rpc.Code == 420:
-		o.Status = StatusRateLimited
-		o.RetryAfter = rpc.Argument
-	case rpc.Code >= 500:
-		o.Status = StatusUnavailable
-	case rpc.Code == 400:
-		o.Status = StatusInvalid
-	default:
-		o.Status = StatusError
+		return fmt.Errorf("%w: telegram %s", ErrNotFound, rpc.Type)
+	case rpc.Code == 420 && rpc.Argument > 0:
+		return &FloodWaitError{Wait: time.Duration(rpc.Argument) * time.Second}
 	}
-	return o
+	return fmt.Errorf("telegram: %w", err)
+}
+
+// transient is a failure after which a join may or may not have landed.
+func transient(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	rpc, ok := tgerr.As(err)
+	return ok && rpc.Code >= 500
 }
 
 func rpcType(err error) string {
@@ -840,10 +933,6 @@ func rpcType(err error) string {
 	}
 	return ""
 }
-
-func okOutcome() Outcome { return Outcome{Status: StatusOK} }
-
-func invalid(msg string) Outcome { return Outcome{Status: StatusInvalid, Message: msg} }
 
 func clamp(n, def, hi int) int {
 	switch {
@@ -855,25 +944,25 @@ func clamp(n, def, hi int) int {
 	return n
 }
 
-func minID(msgs []tg.MessageClass) int {
-	lo := 0
-	for _, m := range msgs {
-		if id := m.GetID(); lo == 0 || id < lo {
-			lo = id
-		}
-	}
-	return lo
+// chatInfo is a source together with the account's address of it and the
+// account's membership.
+type chatInfo struct {
+	source Source
+	ref    tgRef
+	status JoinStatus
 }
 
-func maxID(msgs []tg.MessageClass) int {
-	hi := 0
-	for _, m := range msgs {
-		hi = max(hi, m.GetID())
+func (c chatInfo) withInvite(hash, link string) chatInfo {
+	c.ref.Invite = hash
+	c.source.Peer = c.ref.peer()
+	if c.source.Link == "" {
+		c.source.Link = link
 	}
-	return hi
+	return c
 }
 
-func sourceFromChat(c tg.ChatClass) (Source, bool) {
+func chatInfoOf(c tg.ChatClass) (chatInfo, bool) {
+	var info chatInfo
 	switch ch := c.(type) {
 	case *tg.Channel:
 		username := ch.Username
@@ -885,123 +974,44 @@ func sourceFromChat(c tg.ChatClass) (Source, bool) {
 				}
 			}
 		}
-		s := Source{
-			SourceRef: SourceRef{
-				Platform: PlatformTelegram,
-				ID:       strconv.FormatInt(ch.ID, 10),
-				Ref:      tgRef{Kind: refChannel, ID: ch.ID, Hash: ch.AccessHash, Username: username}.encode(),
-			},
-			Kind:          SourceChannel,
-			Title:         ch.Title,
-			Username:      username,
-			Members:       ch.ParticipantsCount,
-			Membership:    MembershipJoined,
-			RequestNeeded: ch.JoinRequest,
-			Broadcast:     ch.Broadcast,
-		}
-		if !ch.Broadcast {
-			s.Kind = SourceGroup
+		info.ref = tgRef{Kind: refChannel, ID: ch.ID, Hash: ch.AccessHash, Username: username}
+		info.source = Source{Username: username, Title: ch.Title, Kind: SourceKindGroup, MemberCount: int64(ch.ParticipantsCount)}
+		if ch.Broadcast {
+			info.source.Kind = SourceKindChannel
 		}
 		if username != "" {
-			s.Link = "https://t.me/" + username
+			info.source.Link = "https://t.me/" + username
 		}
+		info.status = JoinStatusJoined
 		if ch.Left {
-			s.Membership = MembershipNotJoined
+			info.status = JoinStatusNotJoined
 		}
-		return s, true
 	case *tg.ChannelForbidden:
-		return Source{
-			SourceRef:  SourceRef{Platform: PlatformTelegram, ID: strconv.FormatInt(ch.ID, 10), Ref: tgRef{Kind: refChannel, ID: ch.ID, Hash: ch.AccessHash}.encode()},
-			Kind:       SourceGroup,
-			Title:      ch.Title,
-			Membership: MembershipNotJoinable,
-			Broadcast:  ch.Broadcast,
-		}, true
-	case *tg.Chat:
-		s := Source{
-			SourceRef:  SourceRef{Platform: PlatformTelegram, ID: strconv.FormatInt(ch.ID, 10), Ref: tgRef{Kind: refChat, ID: ch.ID}.encode()},
-			Kind:       SourceGroup,
-			Title:      ch.Title,
-			Members:    ch.ParticipantsCount,
-			Membership: MembershipJoined,
+		info.ref = tgRef{Kind: refChannel, ID: ch.ID, Hash: ch.AccessHash}
+		info.source = Source{Title: ch.Title, Kind: SourceKindGroup}
+		if ch.Broadcast {
+			info.source.Kind = SourceKindChannel
 		}
+		info.status = JoinStatusNotJoinable
+	case *tg.Chat:
+		info.ref = tgRef{Kind: refChat, ID: ch.ID}
+		info.source = Source{Title: ch.Title, Kind: SourceKindGroup, MemberCount: int64(ch.ParticipantsCount)}
 		switch {
 		case ch.Deactivated:
-			s.Membership = MembershipNotJoinable
+			info.status = JoinStatusNotJoinable
 		case ch.Left:
-			s.Membership = MembershipNotJoined
+			info.status = JoinStatusNotJoined
+		default:
+			info.status = JoinStatusJoined
 		}
-		return s, true
 	case *tg.ChatForbidden:
-		return Source{
-			SourceRef:  SourceRef{Platform: PlatformTelegram, ID: strconv.FormatInt(ch.ID, 10), Ref: tgRef{Kind: refChat, ID: ch.ID}.encode()},
-			Kind:       SourceGroup,
-			Title:      ch.Title,
-			Membership: MembershipNotJoinable,
-		}, true
+		info.ref = tgRef{Kind: refChat, ID: ch.ID}
+		info.source = Source{Title: ch.Title, Kind: SourceKindGroup}
+		info.status = JoinStatusNotJoinable
+	default:
+		return chatInfo{}, false
 	}
-	return Source{}, false
-}
-
-// sourceFromInvite describes an invite link. A chat the account cannot see yet
-// has no id, so its ID is "invite:<hash>" until JoinSource returns the real one.
-func sourceFromInvite(hash string, inv tg.ChatInviteClass) (Source, bool) {
-	link := "https://t.me/+" + hash
-	switch v := inv.(type) {
-	case *tg.ChatInviteAlready:
-		s, ok := sourceFromChat(v.Chat)
-		if ok {
-			s.Ref = withInvite(s.Ref, hash)
-			if s.Link == "" {
-				s.Link = link
-			}
-		}
-		return s, ok
-	case *tg.ChatInvitePeek:
-		s, ok := sourceFromChat(v.Chat)
-		if ok {
-			s.Ref = withInvite(s.Ref, hash)
-			s.Membership = MembershipNotJoined
-			if s.Link == "" {
-				s.Link = link
-			}
-		}
-		return s, ok
-	case *tg.ChatInvite:
-		s := Source{
-			SourceRef:     SourceRef{Platform: PlatformTelegram, ID: inviteIDPrefix + hash, Ref: tgRef{Kind: refInvite, Invite: hash}.encode()},
-			Kind:          SourceInvite,
-			Title:         v.Title,
-			Link:          link,
-			About:         v.About,
-			Members:       v.ParticipantsCount,
-			Membership:    MembershipNotJoined,
-			RequestNeeded: v.RequestNeeded,
-			Broadcast:     v.Broadcast,
-		}
-		return s, true
-	}
-	return Source{}, false
-}
-
-func userFromTG(u *tg.User) User {
-	res := User{
-		UserRef:   UserRef{Platform: PlatformTelegram, ID: strconv.FormatInt(u.ID, 10), Ref: tgRef{Kind: refUser, ID: u.ID, Hash: u.AccessHash}.encode()},
-		Username:  u.Username,
-		FirstName: u.FirstName,
-		LastName:  u.LastName,
-		Bot:       u.Bot,
-	}
-	if res.Username == "" {
-		for _, n := range u.Usernames {
-			if n.Active {
-				res.Username = n.Username
-				break
-			}
-		}
-	}
-	if res.Username != "" {
-		res.Link = "https://t.me/" + res.Username
-	}
-	return res
+	info.source.ExternalID = strconv.FormatInt(info.ref.ID, 10)
+	info.source.Peer = info.ref.peer()
+	return info, true
 }
