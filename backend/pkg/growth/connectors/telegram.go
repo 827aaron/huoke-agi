@@ -28,6 +28,8 @@ type TelegramConfig struct {
 	// shown to an agent.
 	SessionPath string `env:"TG_SESSION_PATH" envDefault:"./data/telegram/session.json"`
 	TestServer  bool   `env:"TG_TEST_SERVER" envDefault:"false"`
+	// Proxy is the account's proxy URL; see Account.Proxy.
+	Proxy string `env:"TG_PROXY"`
 	// A FLOOD_WAIT up to this long is slept through inside the call; a longer
 	// one is returned as StatusRateLimited so the caller is not blocked.
 	MaxInlineFloodWait time.Duration `env:"TG_MAX_INLINE_FLOOD_WAIT" envDefault:"60s"`
@@ -62,7 +64,8 @@ func (c TelegramConfig) Validate() error {
 	case c.SessionPath == "":
 		return errors.New("TG_SESSION_PATH is not set")
 	}
-	return nil
+	_, err := proxyDialer(c.Proxy)
+	return err
 }
 
 // telegramAPI is the part of *tg.Client the connector calls; tests replace it.
@@ -131,6 +134,10 @@ func newTelegramClient(cfg TelegramConfig) (*telegram.Client, error) {
 	opts := telegram.Options{SessionStorage: &session.FileStorage{Path: cfg.SessionPath}}
 	if cfg.TestServer {
 		opts.DCList = dcs.Test()
+	}
+	if cfg.Proxy != "" {
+		dial, _ := proxyDialer(cfg.Proxy)
+		opts.Resolver = dcs.Plain(dcs.PlainOptions{Dial: dial})
 	}
 	return telegram.NewClient(cfg.APIID, cfg.APIHash, opts), nil
 }
