@@ -16,7 +16,7 @@ INSERT INTO privileges (role_id, name) VALUES
 -- healthy account used least recently, and a rate-limited one rests until rate_limit_until.
 -- proxy and external_browser_ws are sealed like growth_settings secrets, since both may
 -- carry credentials; fingerprint is the browser service's own profile, stored as given.
-CREATE TABLE channel_accounts (
+CREATE TABLE IF NOT EXISTS channel_accounts (
   id                   BIGINT      PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   user_id              BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   platform             TEXT        NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE channel_accounts (
     CHECK (status IN ('active', 'rate_limited', 'needs_login', 'disabled'))
 );
 
-CREATE INDEX channel_accounts_user_platform_idx ON channel_accounts(user_id, platform);
+CREATE INDEX IF NOT EXISTS channel_accounts_user_platform_idx ON channel_accounts(user_id, platform);
 
 -- Yield tracking: qualified_leads counts distinct qualified leads with evidence here;
 -- empty_streak counts reads in a row that added none (qualified_at_sync is the count at the
@@ -53,7 +53,7 @@ CREATE INDEX channel_accounts_user_platform_idx ON channel_accounts(user_id, pla
 -- browser tool, so a web source never gets an account_sources row.
 -- source_key is the dedup key: the platform id once resolved, 'link:<canonical link>' before that,
 -- so a group found by search and the same group pasted by hand collapse into one row.
-CREATE TABLE growth_sources (
+CREATE TABLE IF NOT EXISTS growth_sources (
   id                    BIGINT      PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   user_id               BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   platform              TEXT        NOT NULL,
@@ -89,12 +89,12 @@ CREATE TABLE growth_sources (
   CONSTRAINT growth_sources_health_check  CHECK (health IN ('active', 'stale', 'dead'))
 );
 
-CREATE INDEX growth_sources_user_id_idx ON growth_sources(user_id, updated_at DESC);
-CREATE INDEX growth_sources_user_yield_idx ON growth_sources(user_id, qualified_leads DESC);
+CREATE INDEX IF NOT EXISTS growth_sources_user_id_idx ON growth_sources(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS growth_sources_user_yield_idx ON growth_sources(user_id, qualified_leads DESC);
 
 -- Per-account view of a source: Telegram access hashes differ per account, so peer data,
 -- membership and the read cursor cannot be global.
-CREATE TABLE account_sources (
+CREATE TABLE IF NOT EXISTS account_sources (
   id                BIGINT      PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   account_id        BIGINT      NOT NULL REFERENCES channel_accounts(id) ON DELETE CASCADE,
   source_id         BIGINT      NOT NULL REFERENCES growth_sources(id) ON DELETE CASCADE,
@@ -115,12 +115,12 @@ CREATE TABLE account_sources (
     CHECK (join_status IN ('not_joined', 'pending', 'joined', 'not_joinable'))
 );
 
-CREATE INDEX account_sources_source_id_idx ON account_sources(source_id);
+CREATE INDEX IF NOT EXISTS account_sources_source_id_idx ON account_sources(source_id);
 
 -- A round of lead collection; one per task because every flow input opens a new task.
 -- Everything lead-related belongs to the customer (user_id), not to a flow: deleting a flow
 -- or task only detaches these rows, so dedup and the delivered mark survive it.
-CREATE TABLE growth_runs (
+CREATE TABLE IF NOT EXISTS growth_runs (
   id              BIGINT      PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   user_id         BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   flow_id         BIGINT      REFERENCES flows(id) ON DELETE SET NULL,
@@ -141,12 +141,12 @@ CREATE TABLE growth_runs (
   CONSTRAINT growth_runs_notify_check  CHECK (notify_status IN ('', 'sent', 'failed', 'skipped'))
 );
 
-CREATE INDEX growth_runs_user_flow_idx ON growth_runs(user_id, flow_id);
+CREATE INDEX IF NOT EXISTS growth_runs_user_flow_idx ON growth_runs(user_id, flow_id);
 
 -- identity_kind says how stable platform_user_id is: a platform id, or for web sources a
 -- normalised profile URL or 'host:username' standing in until a better identity is known.
 -- last_flow_id scopes what a round may deliver: a qualified, undelivered person seen in this flow.
-CREATE TABLE leads (
+CREATE TABLE IF NOT EXISTS leads (
   id               BIGINT      PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   user_id          BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   platform         TEXT        NOT NULL,
@@ -172,12 +172,12 @@ CREATE TABLE leads (
   CONSTRAINT leads_identity_kind_check CHECK (identity_kind IN ('platform_id', 'profile_url', 'forum_username'))
 );
 
-CREATE INDEX leads_deliverable_idx ON leads(user_id, last_flow_id, score DESC)
+CREATE INDEX IF NOT EXISTS leads_deliverable_idx ON leads(user_id, last_flow_id, score DESC)
   WHERE tier = 'qualified' AND delivered_at IS NULL;
-CREATE INDEX leads_delivered_run_idx ON leads(delivered_run_id) WHERE delivered_run_id IS NOT NULL;
-CREATE INDEX leads_user_updated_idx ON leads(user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS leads_delivered_run_idx ON leads(delivered_run_id) WHERE delivered_run_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS leads_user_updated_idx ON leads(user_id, updated_at DESC);
 
-CREATE TABLE lead_evidence (
+CREATE TABLE IF NOT EXISTS lead_evidence (
   id           BIGINT      PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   lead_id      BIGINT      NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
   source_id    BIGINT      REFERENCES growth_sources(id) ON DELETE SET NULL,
@@ -195,7 +195,7 @@ CREATE TABLE lead_evidence (
   CONSTRAINT lead_evidence_message_not_empty CHECK (length(trim(message_id)) > 0)
 );
 
-CREATE INDEX lead_evidence_lead_id_idx ON lead_evidence(lead_id);
+CREATE INDEX IF NOT EXISTS lead_evidence_lead_id_idx ON lead_evidence(lead_id);
 
 CREATE OR REPLACE TRIGGER update_channel_accounts_modified
   BEFORE UPDATE ON channel_accounts
@@ -220,7 +220,7 @@ CREATE OR REPLACE TRIGGER update_leads_modified
 -- Credentials a customer saves on the settings page, one row per kind. secret is the
 -- AES-GCM sealed JSON of the fields (key from GROWTH_SECRET_KEY); a saved value takes
 -- precedence over the matching .env variable for that customer only.
-CREATE TABLE growth_settings (
+CREATE TABLE IF NOT EXISTS growth_settings (
   id             BIGINT       PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
   user_id        BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   kind           TEXT         NOT NULL,
