@@ -402,27 +402,7 @@ const runs: GrowthRun[] = [
 
 const profilePresets: GrowthProfilePreset[] = [
     {
-        id: 'game_publisher',
-        profile: {
-            competitors: null,
-            contact_types: ['platform_handle'],
-            default_target: 50,
-            excludes: [
-                'accounts selling or boosting services',
-                'bots and spam',
-                'developers advertising their own game',
-            ],
-            games: null,
-            genre: 'Mobile and PC games',
-            languages: null,
-            name: '',
-            notes: '',
-            pitch: 'A mobile or PC game looking for players who play similar games and are open to a new one.',
-            regions: null,
-            signals: ['looking for a new game', 'any game like', 'bored of', 'quitting', 'top up', 'skins'],
-        },
-    },
-    {
+        default: true,
         id: 'licensed_casino',
         profile: {
             competitors: null,
@@ -443,6 +423,27 @@ const profilePresets: GrowthProfilePreset[] = [
             regions: null,
             scoring: { qualified: 8, watchlist: 4, weights: { active: 2, match: 3, pain: 3, paying: 3, player: 3 } },
             signals: ['deposit', 'withdrawal', 'bonus', 'free spins', 'which site is legit', 'recommend a site'],
+        },
+    },
+    {
+        id: 'game_publisher',
+        profile: {
+            competitors: null,
+            contact_types: ['platform_handle'],
+            default_target: 50,
+            excludes: [
+                'accounts selling or boosting services',
+                'bots and spam',
+                'developers advertising their own game',
+            ],
+            games: null,
+            genre: 'Mobile and PC games',
+            languages: null,
+            name: '',
+            notes: '',
+            pitch: 'A mobile or PC game looking for players who play similar games and are open to a new one.',
+            regions: null,
+            signals: ['looking for a new game', 'any game like', 'bored of', 'quitting', 'top up', 'skins'],
         },
     },
 ];

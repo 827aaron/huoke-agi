@@ -1193,15 +1193,15 @@ const zh = {
             games: {
                 help: '智能体会用这些名字搜索相关讨论',
                 label: '产品名称',
-                placeholder: '例如：星穹纪元、Star Era（可填多个，用回车分隔）',
+                placeholder: '例如：Lucky Star、星穹纪元（可填多个，用回车分隔）',
             },
             genre: {
                 help: '用来判断对方关注的东西是否对口：完全匹配加分，不相关会被淘汰',
                 label: '产品类型',
-                placeholder: '例如：MMORPG 手游、线上娱乐城、跨境电商',
+                placeholder: '例如：持牌线上娱乐城、MMORPG 手游、跨境电商',
             },
             languages: { help: '决定去哪些语言的群里找', label: '目标语言', placeholder: '选择语言' },
-            name: { help: '方便你在多个业务之间区分', label: '业务名称', placeholder: '例如：星穹纪元' },
+            name: { help: '方便你在多个业务之间区分', label: '业务名称', placeholder: '例如：Lucky Star' },
             notes: {
                 help: '可选。写成一段话就行',
                 label: '补充说明',
@@ -1210,7 +1210,7 @@ const zh = {
             pitch: {
                 help: '一两句话即可，决定要找有什么需求的人',
                 label: '你想让目标人群知道什么',
-                placeholder: '例如：新服开启，老玩家回归送礼包',
+                placeholder: '例如：持牌正规站，首充返现、提款快；或新服开启，老玩家回归送礼包',
             },
             regions: { help: '可填多个', label: '目标地区', placeholder: '例如：东南亚、台湾、中东' },
             signals: {
@@ -3224,15 +3224,15 @@ const en: Copy = {
             games: {
                 help: 'The agent searches discussions by these names',
                 label: 'Product names',
-                placeholder: 'e.g. Star Era (one per line)',
+                placeholder: 'e.g. Lucky Star, Star Era (one per line)',
             },
             genre: {
                 help: 'An exact match with what people talk about scores higher; an unrelated one is dropped',
                 label: 'Product type',
-                placeholder: 'e.g. mobile MMORPG, online casino, cross-border store',
+                placeholder: 'e.g. licensed online casino, mobile MMORPG, cross-border store',
             },
             languages: { help: 'Which language groups to search', label: 'Languages', placeholder: 'Choose languages' },
-            name: { help: 'Tells your businesses apart', label: 'Business name', placeholder: 'e.g. Star Era' },
+            name: { help: 'Tells your businesses apart', label: 'Business name', placeholder: 'e.g. Lucky Star' },
             notes: {
                 help: 'Optional. A paragraph is enough',
                 label: 'Anything else',
@@ -3242,7 +3242,8 @@ const en: Copy = {
             pitch: {
                 help: 'A sentence or two; it decides which needs to look for',
                 label: 'What you want your audience to know',
-                placeholder: 'e.g. A new server opens with gifts for returning players',
+                placeholder:
+                    'e.g. A licensed site with first-deposit cashback and fast payouts; or a new server with gifts for returning players',
             },
             regions: {
                 help: 'Several are fine',

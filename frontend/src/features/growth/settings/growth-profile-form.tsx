@@ -242,28 +242,50 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
 
     const [presets, setPresets] = useState<GrowthProfilePreset[]>([]);
     const [uncovered, setUncovered] = useState<Set<ProfileField>>(new Set());
+    const [presetId, setPresetId] = useState('');
+
+    const fill = (preset: GrowthProfilePreset) => {
+        const next = withPreset(form.getValues(), preset);
+
+        form.reset(next.values, { keepDefaultValues: true });
+        setUncovered(next.uncovered);
+    };
 
     useEffect(() => {
         let isCancelled = false;
 
         growthApi
             .listProfilePresets()
-            .then((list) => !isCancelled && setPresets(list))
+            .then((list) => {
+                if (isCancelled) {
+                    return;
+                }
+
+                const initial = list.find((preset) => preset.default) ?? list[0];
+
+                setPresets(list);
+
+                if (initial && !profile) {
+                    setPresetId(initial.id);
+                    fill(initial);
+                }
+            })
             .catch(() => {});
 
         return () => {
             isCancelled = true;
         };
+        // Runs once: a new profile starts from the default preset; a saved one is left as it is.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handlePreset = (id: string) => {
         const preset = presets.find((item) => item.id === id);
 
-        if (preset) {
-            const next = withPreset(form.getValues(), preset);
+        setPresetId(id);
 
-            form.reset(next.values, { keepDefaultValues: true });
-            setUncovered(next.uncovered);
+        if (preset) {
+            fill(preset);
         }
     };
 
@@ -332,7 +354,10 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                 {presets.length > 0 && (
                     <div className="flex flex-col gap-2">
                         <Label htmlFor="growth-profile-preset">{copy.profile.preset.label}</Label>
-                        <Select onValueChange={handlePreset}>
+                        <Select
+                            onValueChange={handlePreset}
+                            value={presetId || undefined}
+                        >
                             <SelectTrigger
                                 className="w-full"
                                 id="growth-profile-preset"

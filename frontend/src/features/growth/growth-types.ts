@@ -183,6 +183,8 @@ export type GrowthProfileInput = Omit<GrowthProfile, 'id' | 'updated_at'>;
 // A starting profile in English, the language the agents read; the page names it by its id. A list
 // the preset leaves to the owner, such as the regions, comes back null.
 export interface GrowthProfilePreset {
+    // The one a new profile starts from; without it the first preset is.
+    default?: boolean;
     id: string;
     profile: { [K in keyof GrowthProfileInput]: GrowthProfileInput[K] | null };
 }

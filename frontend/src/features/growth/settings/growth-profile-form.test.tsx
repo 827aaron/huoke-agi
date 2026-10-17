@@ -10,6 +10,24 @@ vi.mock('../growth-api', () => ({
     growthApi: {
         listProfilePresets: vi.fn(async () => [
             {
+                id: 'game_publisher',
+                profile: {
+                    competitors: null,
+                    contact_types: ['platform_handle'],
+                    default_target: 50,
+                    excludes: null,
+                    games: null,
+                    genre: 'Mobile and PC games',
+                    languages: null,
+                    name: '',
+                    notes: '',
+                    pitch: 'A game looking for players.',
+                    regions: null,
+                    signals: null,
+                },
+            },
+            {
+                default: true,
                 id: 'licensed_casino',
                 profile: {
                     competitors: null,
@@ -148,5 +166,21 @@ describe('GrowthProfileForm', () => {
 
         expect(Object.keys(PRESET_FORM_FIELDS).sort()).toEqual(serverFields);
         expect(Object.keys(preset?.profile ?? {}).filter((name) => !serverFields.includes(name))).toEqual([]);
+    });
+
+    it('starts a new profile from the default template without saving it', async () => {
+        render(
+            <GrowthProfileForm
+                onSaved={() => {}}
+                profile={null}
+            />,
+        );
+
+        expect(await screen.findByRole('combobox', { name: '从模板开始（可选）' })).toHaveTextContent(
+            '持牌线上娱乐城找玩家',
+        );
+        expect(screen.getByLabelText(/产品类型/)).toHaveValue('Licensed online casino and sportsbook');
+        expect(screen.getByLabelText(/业务名称/)).toHaveValue('');
+        expect(growthApi.updateProfile).not.toHaveBeenCalled();
     });
 });

@@ -1,3 +1,5 @@
+import type { Page } from '@playwright/test';
+
 import type { Cassette } from '../../mocks/cassette.ts';
 
 import { expect, test } from '../../fixtures/test.ts';
@@ -7,21 +9,26 @@ import { baseQueries, baseRest } from '../../mocks/cassettes/base.ts';
 // The mock tier answers /api/v1/growth from the bundle's in-memory sample data, which starts with no profile.
 const growthCassette = (): Cassette => ({ queries: baseQueries(), rest: baseRest() });
 
+// A new profile is filled from the default template once the templates arrive; typing before that would
+// be overwritten.
+const openNewProfile = async (page: Page) => {
+    await page.goto('/settings/business-profile');
+    await expect(page.getByRole('combobox', { name: '从模板开始（可选）' })).toHaveText('持牌线上娱乐城找玩家');
+};
+
 test.describe('growth business profile', { tag: '@settings' }, () => {
     test.use({ cassette: growthCassette() });
 
-    test('prefills the default exclusions and flags every missing required field', async ({ page, pageErrorLog }) => {
+    test('starts from the casino template and flags what it leaves to the owner', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/business-profile');
 
         await expect(page.getByText('还没有业务档案')).toBeVisible();
-        await expect(page.getByLabel('排除规则')).toHaveValue('竞品官方\n机器人\n广告和推销');
+        await expect(page.getByRole('combobox', { name: '从模板开始（可选）' })).toHaveText('持牌线上娱乐城找玩家');
+        await expect(page.getByLabel('产品类型')).toHaveValue('Licensed online casino and sportsbook');
 
         await page.getByRole('button', { name: '保存' }).click();
 
         await expect(page.getByText('请填写业务名称')).toBeVisible();
-        await expect(page.getByText('请填写产品名称')).toBeVisible();
-        await expect(page.getByText('请填写产品类型')).toBeVisible();
-        await expect(page.getByText('请填写你想让目标人群知道什么')).toBeVisible();
         await expect(page.getByText('请填写目标地区')).toBeVisible();
         await expect(page.getByText('请至少选择一种目标语言')).toBeVisible();
         await expect(page.getByText('业务档案已保存')).toHaveCount(0);
@@ -30,7 +37,7 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
     });
 
     test('rejects a round target outside 1 to 1000', async ({ page, pageErrorLog }) => {
-        await page.goto('/settings/business-profile');
+        await openNewProfile(page);
 
         await page.getByLabel('默认每轮目标数').fill('1001');
         await page.getByRole('button', { name: '保存' }).click();
@@ -49,7 +56,7 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
     });
 
     test('saves a complete profile', async ({ page, pageErrorLog }) => {
-        await page.goto('/settings/business-profile');
+        await openNewProfile(page);
 
         await page.getByLabel('业务名称').fill('星穹纪元');
         await page.getByLabel('产品名称').fill('星穹纪元, Star Era');
@@ -69,16 +76,15 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
         expectCleanPage(pageErrorLog);
     });
 
-    test('fills the profile from a template and keeps the name typed before', async ({ page, pageErrorLog }) => {
-        await page.goto('/settings/business-profile');
+    test('switches to the game template and keeps the name typed before', async ({ page, pageErrorLog }) => {
+        await openNewProfile(page);
 
-        await page.getByLabel('业务名称').fill('Lucky Star');
+        await page.getByLabel('业务名称').fill('Star Era');
         await page.getByRole('combobox', { name: '从模板开始（可选）' }).click();
-        await page.getByRole('option', { name: '持牌线上娱乐城找玩家' }).click();
+        await page.getByRole('option', { name: '游戏厂商找玩家' }).click();
 
-        await expect(page.getByLabel('业务名称')).toHaveValue('Lucky Star');
-        await expect(page.getByLabel('产品类型')).toHaveValue('Licensed online casino and sportsbook');
-        await expect(page.getByLabel('产品名称')).toHaveValue('online slots\nlive casino\nsports betting');
+        await expect(page.getByLabel('业务名称')).toHaveValue('Star Era');
+        await expect(page.getByLabel('产品类型')).toHaveValue('Mobile and PC games');
 
         expectCleanPage(pageErrorLog);
     });
