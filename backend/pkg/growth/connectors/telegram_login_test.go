@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"context"
+	"io"
 	"net"
 	"sync"
 	"testing"
@@ -160,6 +161,19 @@ func TestTelegramLogin_StartTelegramLogin_NamesTheProxyWhenTelegramIsUnreachable
 			mu.Lock()
 			conns = append(conns, conn)
 			mu.Unlock()
+			go func() {
+				// Grant the SOCKS5 greeting and CONNECT, then say nothing, as a route that
+				// reaches no Telegram data centre does.
+				buf := make([]byte, 262)
+				if _, err := io.ReadAtLeast(conn, buf, 3); err != nil {
+					return
+				}
+				_, _ = conn.Write([]byte{5, 0})
+				if _, err := io.ReadAtLeast(conn, buf, 10); err != nil {
+					return
+				}
+				_, _ = conn.Write([]byte{5, 0, 0, 1, 127, 0, 0, 1, 0, 80})
+			}()
 		}
 	}()
 	t.Setenv("TG_CONNECT_TIMEOUT", "300ms")
@@ -169,5 +183,5 @@ func TestTelegramLogin_StartTelegramLogin_NamesTheProxyWhenTelegramIsUnreachable
 		&config.Config{TGAPIID: 12345, TGAPIHash: "abc", TGSessionDir: t.TempDir()},
 		Account{ID: 1, Proxy: "socks5://" + silent.Addr().String()}, "+66812345678")
 	assert.ErrorIs(t, err, ErrUnreachable)
-	assert.Less(t, time.Since(start), 10*time.Second)
+	assert.Less(t, time.Since(start), 5*time.Second)
 }

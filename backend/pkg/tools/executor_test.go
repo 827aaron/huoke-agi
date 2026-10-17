@@ -365,7 +365,7 @@ func TestExecutor_Execute_ReportsALoggingFailureOnlyBeforeTheToolRuns(t *testing
 	}
 }
 
-func TestExecutor_Execute_ClosesTheToolCallLogEvenAfterTheFlowStops(t *testing.T) {
+func TestExecutor_Execute_ClosesTheToolCallAndItsMessageEvenAfterTheFlowStops(t *testing.T) {
 	errHandler := errors.New("docker daemon is not reachable")
 	withMessage := mustJSON(map[string]any{"input": "id", "message": "Check the user."})
 
@@ -376,10 +376,12 @@ func TestExecutor_Execute_ClosesTheToolCallLogEvenAfterTheFlowStops(t *testing.T
 		handlerErr  error
 		wantSuccess []string
 		wantFailed  []string
+		wantMessage string
 	}{
 		{
 			name: "a failed call that carries a message", args: withMessage, handlerErr: errHandler,
-			wantFailed: []string{"failed to execute handler: docker daemon is not reachable"},
+			wantFailed:  []string{"failed to execute handler: docker daemon is not reachable"},
+			wantMessage: "Failed: failed to execute handler: docker daemon is not reachable",
 		},
 		{
 			name: "a failed call without one", args: mustJSON(map[string]any{"input": "id"}), handlerErr: errHandler,
@@ -387,21 +389,27 @@ func TestExecutor_Execute_ClosesTheToolCallLogEvenAfterTheFlowStops(t *testing.T
 		},
 		{
 			name: "a call that fails once its flow is stopped", args: withMessage, stopFlow: true, handlerErr: errHandler,
-			wantFailed: []string{"failed to execute handler: docker daemon is not reachable"},
+			wantFailed:  []string{"failed to execute handler: docker daemon is not reachable"},
+			wantMessage: "Failed: failed to execute handler: docker daemon is not reachable",
+		},
+		{
+			name: "a call the stop interrupts", args: withMessage, stopFlow: true, handlerErr: context.Canceled,
+			wantFailed:  []string{"failed to execute handler: context canceled"},
+			wantMessage: "Stopped before it finished.",
 		},
 		{
 			name: "a result that arrives once its flow is stopped", args: withMessage, stopFlow: true,
-			wantSuccess: []string{"uid=0(root)"},
+			wantSuccess: []string{"uid=0(root)"}, wantMessage: "uid=0(root)",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, stop := context.WithCancel(t.Context())
 			defer stop()
 
-			tclp := &executorToolCallLog{}
+			tclp, mlp := &executorToolCallLog{}, &executorMsgLog{}
 			ce := &customExecutor{
 				flowID:   1,
-				mlp:      &executorMsgLog{},
+				mlp:      mlp,
 				tclp:     tclp,
 				replacer: identityReplacer{},
 				handlers: map[string]ExecutorHandler{
@@ -428,6 +436,9 @@ func TestExecutor_Execute_ClosesTheToolCallLogEvenAfterTheFlowStops(t *testing.T
 			if !slices.Equal(tclp.failed, tc.wantFailed) || !slices.Equal(tclp.success, tc.wantSuccess) {
 				t.Fatalf("the tool call log was closed with failed %q and success %q, want failed %q and success %q",
 					tclp.failed, tclp.success, tc.wantFailed, tc.wantSuccess)
+			}
+			if mlp.result != tc.wantMessage {
+				t.Fatalf("the message reads %q, want %q", mlp.result, tc.wantMessage)
 			}
 		})
 	}

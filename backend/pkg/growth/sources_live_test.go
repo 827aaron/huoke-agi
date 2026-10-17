@@ -348,7 +348,7 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	ctx := context.Background()
 	scope := w.seedTask(t)
 	p := gameProfile()
-	p.Signals = []string{"想换游戏"}
+	p.Signals = []string{"looking for a new game"}
 	_, err := w.svc.SaveProfile(ctx, w.user, p)
 	require.NoError(t, err)
 	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
@@ -408,7 +408,7 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	state := requests[0]["state"].(map[string]any)
 	assert.Equal(t, "telegram", state["platform"])
 	assert.Equal(t, "Screen A", state["source"])
-	assert.Contains(t, state["business"], "想换游戏")
+	assert.Contains(t, state["business"], "looking for a new game")
 	assert.Len(t, state["messages"], 40)
 	assert.Equal(t, "@u145", state["messages"].(map[string]any)["m0"].(map[string]any)["sender"])
 
