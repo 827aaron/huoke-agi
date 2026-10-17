@@ -189,6 +189,7 @@ var ErrTokenInvalidData = NewHttpError(500, "Token.InvalidData", "invalid token 
 var ErrGrowthInvalidRequest = NewHttpError(400, "Growth.InvalidRequest", "invalid growth request data")
 var ErrGrowthSourceNotFound = NewHttpError(404, "Growth.SourceNotFound", "source not found")
 var ErrGrowthLeadNotFound = NewHttpError(404, "Growth.LeadNotFound", "lead not found")
+var ErrGrowthLeadExists = NewHttpError(409, "Growth.LeadExists", "this person is already a lead")
 var ErrGrowthProfileNotFound = NewHttpError(404, "Growth.ProfileNotFound", "no business profile is saved")
 var ErrGrowthAccountNotFound = NewHttpError(404, "Growth.AccountNotFound", "account not found")
 var ErrGrowthSettingNotFound = NewHttpError(404, "Growth.SettingNotFound", "no saved setting of this kind")

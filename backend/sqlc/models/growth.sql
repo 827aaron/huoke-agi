@@ -199,6 +199,12 @@ RETURNING *;
 -- name: DeleteUserGrowthSource :one
 DELETE FROM growth_sources WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) RETURNING *;
 
+-- name: UpdateUserGrowthSource :one
+UPDATE growth_sources
+SET title = COALESCE(sqlc.narg(title), title), note = COALESCE(sqlc.narg(note), note)
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
+RETURNING *;
+
 -- name: UpsertAccountSource :one
 INSERT INTO account_sources (account_id, source_id, peer)
 VALUES (sqlc.arg(account_id), sqlc.arg(source_id), sqlc.narg(peer))
@@ -306,6 +312,40 @@ ORDER BY lead_id, message_time DESC NULLS LAST, id DESC;
 
 -- name: GetUserLead :one
 SELECT * FROM leads WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+
+-- name: UpdateUserLead :one
+UPDATE leads
+SET note     = COALESCE(sqlc.narg(note), note),
+    tier     = COALESCE(sqlc.narg(tier), tier),
+    contacts = COALESCE(sqlc.narg(contacts), contacts)
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
+RETURNING *;
+
+-- A lead's evidence goes with it by cascade; the scores of its messages go in the same
+-- statement, so a later read of those messages is judged afresh.
+-- name: DeleteUserLead :one
+WITH evidence AS (
+  SELECT e.source_id, e.message_id FROM lead_evidence e
+  JOIN leads l ON l.id = e.lead_id
+  WHERE l.id = sqlc.arg(id)::bigint AND l.user_id = sqlc.arg(user_id)::bigint
+), dropped AS (
+  DELETE FROM growth_message_scores s USING evidence
+  WHERE s.user_id = sqlc.arg(user_id)::bigint AND s.source_id = evidence.source_id AND s.message_id = evidence.message_id
+)
+DELETE FROM leads WHERE id = sqlc.arg(id)::bigint AND user_id = sqlc.arg(user_id)::bigint
+RETURNING *;
+
+-- name: InsertManualLead :one
+INSERT INTO leads (
+  user_id, platform, platform_user_id, identity_kind, display_name, score, tier, contacts, note, origin,
+  first_flow_id, last_flow_id
+) VALUES (
+  sqlc.arg(user_id), sqlc.arg(platform), sqlc.arg(platform_user_id), sqlc.arg(identity_kind),
+  sqlc.arg(display_name), sqlc.arg(score), sqlc.arg(tier), sqlc.arg(contacts), sqlc.arg(note), 'manual',
+  sqlc.narg(flow_id), sqlc.narg(flow_id)
+)
+ON CONFLICT (user_id, platform, platform_user_id) DO NOTHING
+RETURNING *;
 
 -- name: CountUserLeads :one
 SELECT

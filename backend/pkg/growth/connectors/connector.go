@@ -169,6 +169,12 @@ func Has(c Connector, capability Capability) bool {
 	return slices.Contains(c.Capabilities(), capability)
 }
 
+// Joinable reports whether an account must join a source on p before it can read it;
+// it agrees with which connectors offer CapJoinSource.
+func Joinable(p Platform) bool {
+	return p == PlatformTelegram || p == PlatformFacebook
+}
+
 // SessionStore persists the account session. Its method set matches gotd's
 // session.Storage, so a Telegram connector can use it directly.
 type SessionStore interface {

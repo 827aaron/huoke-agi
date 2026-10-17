@@ -192,6 +192,48 @@ func (s *GrowthService) DeleteSource(c *gin.Context) {
 	response.Success(c, http.StatusOK, struct{}{})
 }
 
+// UpdateSource is a function to change a source's title or note
+// @Summary Change a source's title or note; the link stays
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param sourceID path int true "source id" minimum(0)
+// @Param json body growth.SourceUpdate true "fields to change"
+// @Success 200 {object} response.successResp{data=growth.SourceView} "source saved successful"
+// @Failure 400 {object} response.errorResp "invalid source data"
+// @Failure 403 {object} response.errorResp "changing the source not permitted"
+// @Failure 404 {object} response.errorResp "source not found"
+// @Failure 500 {object} response.errorResp "internal error on changing the source"
+// @Router /growth/sources/{sourceID} [put]
+func (s *GrowthService) UpdateSource(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	sourceID, err := strconv.ParseInt(c.Param("sourceID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+	var req growth.SourceUpdate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	source, err := s.svc.UpdateSource(c, uid, sourceID, req)
+	if err != nil {
+		if errors.Is(err, growth.ErrSourceNotFound) {
+			response.Error(c, response.ErrGrowthSourceNotFound, err)
+			return
+		}
+		logger.FromContext(c).WithError(err).Errorf("error changing growth source")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, source)
+}
+
 // ListLeads is a function to return leads with their evidence
 // @Summary Retrieve leads of the current user with evidence
 // @Tags Growth
@@ -261,6 +303,117 @@ func (s *GrowthService) GetLead(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, lead)
+}
+
+// CreateLead is a function to add a lead by hand
+// @Summary Add a person as a lead by hand, at the profile's qualified line and without a judgement
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param json body growth.ManualLead true "the person"
+// @Success 201 {object} response.successResp{data=growth.LeadView} "lead added successful"
+// @Failure 400 {object} response.errorResp "invalid lead data"
+// @Failure 403 {object} response.errorResp "adding a lead not permitted"
+// @Failure 409 {object} response.errorResp "this person is already a lead"
+// @Failure 500 {object} response.errorResp "internal error on adding the lead"
+// @Router /growth/leads/ [post]
+func (s *GrowthService) CreateLead(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	var req growth.ManualLead
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	lead, err := s.svc.CreateLead(c, uid, req)
+	if err != nil {
+		leadError(c, err, "error adding lead")
+		return
+	}
+
+	response.Success(c, http.StatusCreated, lead)
+}
+
+// UpdateLead is a function to change a lead's note, tier or contacts
+// @Summary Change a lead's note, tier or contacts; contacts replace the saved list
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param leadID path int true "lead id" minimum(0)
+// @Param json body growth.LeadUpdate true "fields to change"
+// @Success 200 {object} response.successResp{data=growth.LeadView} "lead saved successful"
+// @Failure 400 {object} response.errorResp "invalid lead data"
+// @Failure 403 {object} response.errorResp "changing the lead not permitted"
+// @Failure 404 {object} response.errorResp "lead not found"
+// @Failure 500 {object} response.errorResp "internal error on changing the lead"
+// @Router /growth/leads/{leadID} [put]
+func (s *GrowthService) UpdateLead(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	leadID, err := strconv.ParseInt(c.Param("leadID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+	var req growth.LeadUpdate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	lead, err := s.svc.UpdateLead(c, uid, leadID, req)
+	if err != nil {
+		leadError(c, err, "error changing lead")
+		return
+	}
+
+	response.Success(c, http.StatusOK, lead)
+}
+
+// DeleteLead is a function to remove a lead
+// @Summary Remove a lead with its evidence and the scores of its messages
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param leadID path int true "lead id" minimum(0)
+// @Success 200 {object} response.successResp "lead deleted successful"
+// @Failure 400 {object} response.errorResp "invalid lead id"
+// @Failure 403 {object} response.errorResp "deleting the lead not permitted"
+// @Failure 404 {object} response.errorResp "lead not found"
+// @Failure 500 {object} response.errorResp "internal error on deleting the lead"
+// @Router /growth/leads/{leadID} [delete]
+func (s *GrowthService) DeleteLead(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	leadID, err := strconv.ParseInt(c.Param("leadID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	if err := s.svc.DeleteLead(c, uid, leadID); err != nil {
+		leadError(c, err, "error deleting lead")
+		return
+	}
+
+	response.Success(c, http.StatusOK, struct{}{})
+}
+
+func leadError(c *gin.Context, err error, msg string) {
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		response.Error(c, response.ErrGrowthLeadNotFound, err)
+	case errors.Is(err, growth.ErrInvalidLead):
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+	case errors.Is(err, growth.ErrLeadExists):
+		response.Error(c, response.ErrGrowthLeadExists, err)
+	default:
+		logger.FromContext(c).WithError(err).Errorf("%s", msg)
+		response.Error(c, response.ErrInternal, err)
+	}
 }
 
 // ListRuns is a function to return lead collection rounds
