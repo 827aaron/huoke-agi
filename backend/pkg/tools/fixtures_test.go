@@ -921,6 +921,7 @@ type fakeGrowthBackend struct {
 	lastAllowPartial bool
 	lastFilter       growth.LeadFilter
 	lastSync         growth.SyncOptions
+	lastSyncIDs      []int64
 }
 
 func (f *fakeGrowthBackend) SearchSources(_ context.Context, scope growth.Scope, _ connectors.Platform, _ string, _ int) ([]growth.SourceView, error) {
@@ -947,7 +948,10 @@ func (f *fakeGrowthBackend) JoinSources(_ context.Context, scope growth.Scope, i
 }
 
 func (f *fakeGrowthBackend) SyncSources(_ context.Context, scope growth.Scope, ids []int64, opt growth.SyncOptions) ([]growth.SyncResult, error) {
-	f.lastScope, f.lastSync = scope, opt
+	f.lastScope, f.lastSync, f.lastSyncIDs = scope, opt, ids
+	if len(ids) == 0 && f.err != nil {
+		return nil, f.err
+	}
 	results := make([]growth.SyncResult, 0, len(ids))
 	for _, id := range ids {
 		if f.err != nil {

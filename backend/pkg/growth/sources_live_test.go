@@ -430,6 +430,29 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	assert.Len(t, requests, 3)
 }
 
+func TestSources_SyncSources_ReadsEveryJoinedSourceWhenGivenNoIDs(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
+	a := w.mustAddTelegramGroup(t, scope, tgGroup("370", "joined_a", "Joined A"), tgMessage(1, "31", "hi"))
+	w.mustAddTelegramGroup(t, scope, tgGroup("371", "left_b", "Left B"), tgMessage(1, "32", "hi"))
+	c := w.mustAddTelegramGroup(t, scope, tgGroup("372", "joined_c", "Joined C"), tgMessage(1, "33", "hi"), tgMessage(2, "34", "yo"))
+
+	_, err := w.svc.SyncSources(ctx, scope, nil, SyncOptions{})
+	assert.ErrorIs(t, err, ErrNoJoinedSource)
+
+	_, err = w.svc.JoinSources(ctx, scope, []int64{c, a})
+	require.NoError(t, err)
+	results, err := w.svc.SyncSources(ctx, scope, nil, SyncOptions{})
+	require.NoError(t, err)
+	got := map[int64]int{}
+	for _, r := range results {
+		got[r.Source.ID] = r.Read
+	}
+	assert.Equal(t, map[int64]int{a: 1, c: 2}, got)
+}
+
 func TestSources_SyncSource_KeepsTheCursorWhenTheJudgeKeyIsRefused(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()

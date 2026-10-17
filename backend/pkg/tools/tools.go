@@ -1063,6 +1063,12 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 		summarizer:  cfg.Summarizer,
 	}
 
+	// The assistant runs no task, so a call that counts against a round (a target,
+	// a delivery) answers with ErrNoTask; reads and source and lead writes work.
+	fte.addGrowthTools(ce, nil,
+		GrowthSearchSourcesToolName, GrowthAddSourcesToolName, GrowthJoinSourceToolName, GrowthSyncSourceToolName,
+		GrowthUpsertLeadsToolName, GrowthGetProgressToolName, GrowthDeliverLeadsToolName, GrowthListLeadsToolName)
+
 	return ce, nil
 }
 

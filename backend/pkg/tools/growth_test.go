@@ -101,6 +101,19 @@ func TestGrowth_Handle_TurnsDomainErrorsIntoInstructions(t *testing.T) {
 	}
 }
 
+func TestGrowth_Handle_SyncWithoutIDsAsksForEveryJoinedSource(t *testing.T) {
+	backend := &fakeGrowthBackend{}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(`{"action":"history"}`))
+	require.NoError(t, err)
+	assert.Empty(t, backend.lastSyncIDs)
+	assert.JSONEq(t, `{"results":[]}`, out)
+
+	out, err = newGrowthTools(&fakeGrowthBackend{err: growth.ErrNoJoinedSource}, 1, 42, nil).
+		Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(`{}`))
+	require.NoError(t, err)
+	assert.Equal(t, "no source in the pool is joined yet. Join sources with growth_join_source first, or pass source_ids.", out)
+}
+
 func TestGrowth_Handle_ReturnsTheErrorOfACancelledCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

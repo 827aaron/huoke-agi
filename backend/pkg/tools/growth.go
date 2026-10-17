@@ -166,9 +166,6 @@ func (g *growthTools) syncSource(ctx context.Context, args json.RawMessage) (str
 		if len(ids) == 0 && action.SourceID.Int64() > 0 {
 			ids = append(ids, action.SourceID.Int64())
 		}
-		if len(ids) == 0 {
-			return "", errors.New("source_id or source_ids is required for action=history")
-		}
 		opt := growth.SyncOptions{Direction: action.Direction.String(), Limit: action.Limit.Int(), All: action.AllMessages.Bool()}
 		results, err := g.backend.SyncSources(ctx, g.scope, ids, opt)
 		if len(ids) == 1 {
@@ -402,6 +399,8 @@ func growthFailureText(err error) string {
 		return fmt.Sprintf("%v. Use a source_id returned by %s or %s.", err, GrowthSearchSourcesToolName, GrowthAddSourcesToolName)
 	case errors.Is(err, growth.ErrNoJudge):
 		return fmt.Sprintf("%v. Retrying will not help: report exactly this to the user and end this subtask.", err)
+	case errors.Is(err, growth.ErrNoJoinedSource):
+		return fmt.Sprintf("%v. Join sources with %s first, or pass source_ids.", err, GrowthJoinSourceToolName)
 	case errors.Is(err, growth.ErrNoTask):
 		return fmt.Sprintf("%v.", err)
 	default:
