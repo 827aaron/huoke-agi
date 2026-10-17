@@ -171,6 +171,26 @@ jobs:
           GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o /tmp/pentagi-arm64 ./cmd/pentagi
           echo "✓ Successfully built for linux/arm64"
 
+  # The service image's own base: it carries the Chromium that playwright-core 1.56.1 drives, so
+  # the tests that launch a browser run here as they do in production.
+  browser-service:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    defaults:
+      run:
+        working-directory: services/browser
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
   docker-build:
     needs: lint-and-test
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
