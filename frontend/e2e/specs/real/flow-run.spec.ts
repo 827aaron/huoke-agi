@@ -14,11 +14,11 @@ test.describe('real backend flow run', { tag: '@real' }, () => {
         page.on('pageerror', (error) => pageErrors.push(String(error)));
 
         await page.goto('/flows/new');
-        await page.getByPlaceholder(/Describe what you would like PentAGI to test/).fill('Say hello');
+        await page.getByPlaceholder(/给我找 50 个/).fill('Say hello');
 
         // The form is invalid until the providers query lands, so a cold stack keeps Submit
         // disabled for a while — clicking straight away spends the whole test timeout on it.
-        const submit = page.getByRole('button', { name: 'Submit' });
+        const submit = page.getByRole('button', { exact: true, name: '发送' });
 
         await expect(submit).toBeEnabled({ timeout: 60_000 });
         await submit.click();

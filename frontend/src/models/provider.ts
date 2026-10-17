@@ -24,3 +24,11 @@ export const findProviderByName = (providerName: string, providers: Provider[]):
 export const sortProviders = (providers: Provider[]): Provider[] => {
     return [...providers].sort((a, b) => a.name.localeCompare(b.name));
 };
+
+// Prefers the provider of the type picked on the growth LLM card, and among those the env-backed default whose
+// name is the type itself; without a match the first provider stays the default.
+export const pickDefaultProvider = (providers: Provider[], preferredType?: null | string): null | Provider => {
+    const matching = preferredType ? providers.filter((provider) => provider.type === preferredType) : [];
+
+    return matching.find((provider) => provider.name === preferredType) ?? matching[0] ?? providers[0] ?? null;
+};

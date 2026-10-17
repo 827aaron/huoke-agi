@@ -56,15 +56,15 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
 
             await expect(page.getByRole('row', { name: /E2E seed token/ })).toBeVisible();
 
-            await page.getByRole('button', { name: 'Create Token' }).click();
-            await page.getByPlaceholder('Token name (optional)').fill('E2E created token');
+            await page.getByRole('button', { name: '新建令牌' }).click();
+            await page.getByPlaceholder('令牌名称（可选）').fill('E2E created token');
 
-            const submit = page.getByRole('button', { name: 'Submit' });
+            const submit = page.getByRole('button', { name: '提交' });
 
             await expect(submit).toBeDisabled();
 
-            await page.getByRole('button', { name: 'Pick date' }).click();
-            await page.getByRole('button', { name: 'Tuesday, January 20th, 2026' }).click();
+            await page.getByRole('button', { name: '选择日期' }).click();
+            await page.getByRole('button', { name: '2026年1月20日 星期二' }).click();
             await page.keyboard.press('Escape');
 
             await expect(submit).toBeEnabled();
@@ -85,12 +85,12 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByText('API Token Created')).toBeVisible();
+            await expect(dialog.getByText('令牌已创建')).toBeVisible();
             await expect(dialog.getByText(CREATED_TOKEN_SECRET)).toBeVisible();
 
-            await dialog.getByRole('button', { name: 'Copy Token' }).click();
+            await dialog.getByRole('button', { name: '复制令牌' }).click();
 
-            await expect(page.getByText('Token copied to clipboard')).toBeVisible();
+            await expect(page.getByText('令牌已复制到剪贴板')).toBeVisible();
             expect(await clipboardWrites(page)).toEqual([CREATED_TOKEN_SECRET]);
 
             await page.keyboard.press('Escape');
@@ -110,11 +110,11 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
 
             await page
                 .getByRole('row', { name: /E2E seed token/ })
-                .getByRole('button', { name: 'Open menu' })
+                .getByRole('button', { name: '打开菜单' })
                 .click();
-            await page.getByRole('menuitem', { name: 'Copy Token ID' }).click();
+            await page.getByRole('menuitem', { name: '复制令牌 ID' }).click();
 
-            await expect(page.getByText('Token ID copied to clipboard')).toBeVisible();
+            await expect(page.getByText('令牌 ID 已复制到剪贴板')).toBeVisible();
             expect(await clipboardWrites(page)).toEqual([SEED_TOKEN.tokenId]);
             expectCleanPage(pageErrorLog);
         });
@@ -153,15 +153,15 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
             const row = page.getByRole('row', { name: /E2E seed token/ });
 
             await row.hover();
-            await row.getByRole('button', { name: 'Open menu' }).click();
-            await page.getByRole('menuitem', { name: 'Edit' }).click();
+            await row.getByRole('button', { name: '打开菜单' }).click();
+            await page.getByRole('menuitem', { name: '编辑' }).click();
 
-            await page.getByPlaceholder('Token name (optional)').fill('E2E renamed token');
-            await page.getByRole('combobox', { name: 'Token status' }).click();
-            await page.getByRole('option', { name: 'revoked' }).click();
-            await page.getByRole('button', { name: 'Submit' }).click();
+            await page.getByPlaceholder('令牌名称（可选）').fill('E2E renamed token');
+            await page.getByRole('combobox', { name: '令牌状态' }).click();
+            await page.getByRole('option', { name: '已吊销' }).click();
+            await page.getByRole('button', { name: '提交' }).click();
 
-            await expect(page.getByRole('row', { name: /E2E renamed token/ })).toContainText('revoked');
+            await expect(page.getByRole('row', { name: /E2E renamed token/ })).toContainText('已吊销');
             expectCleanPage(pageErrorLog);
         });
     });
@@ -191,13 +191,13 @@ test.describe('api tokens crud', { tag: '@crud' }, () => {
             const doomedRow = page.getByRole('row', { name: /E2E doomed token/ });
 
             await doomedRow.hover();
-            await doomedRow.getByRole('button', { name: 'Open menu' }).click();
-            await page.getByRole('menuitem', { name: 'Delete' }).click();
+            await doomedRow.getByRole('button', { name: '打开菜单' }).click();
+            await page.getByRole('menuitem', { name: '删除' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByText('Delete token')).toBeVisible();
-            await dialog.getByRole('button', { name: 'Delete' }).click();
+            await expect(dialog.getByRole('heading', { name: '删除令牌' })).toBeVisible();
+            await dialog.getByRole('button', { name: '删除' }).click();
 
             await expect(doomedRow).toBeHidden();
             await expect(page.getByRole('row', { name: /E2E seed token/ })).toBeVisible();

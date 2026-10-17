@@ -72,6 +72,7 @@ export const makeMessage = (
     overrides: Partial<MessageLogFragmentFragment> = {},
 ): MessageLogFragmentFragment =>
     entity('MessageLog', {
+        agent: null,
         createdAt: T,
         flowId,
         id,

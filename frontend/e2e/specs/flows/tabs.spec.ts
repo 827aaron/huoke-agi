@@ -14,7 +14,7 @@ test.describe('flow detail tabs', { tag: '@flows' }, () => {
 
     test('each tab renders its populated content', async ({ page, pageErrorLog }) => {
         await page.goto('/flows/5');
-        await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
+        await expect(page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' })).toBeEnabled();
 
         for (const { name, ready } of FLOW_DETAIL_TABS) {
             // Pins that the click is what reveals the panel. Ordering this sweep so a tab is already
@@ -29,8 +29,8 @@ test.describe('flow detail tabs', { tag: '@flows' }, () => {
 
     test('the screenshot image decodes from its REST endpoint', async ({ page, pageErrorLog }) => {
         await page.goto('/flows/5');
-        await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
-        await page.getByRole('tab', { name: 'Screenshots' }).click();
+        await expect(page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' })).toBeEnabled();
+        await page.getByRole('tab', { name: '截图' }).click();
 
         const image = page.getByRole('img', { name: TABS_SCREENSHOT_NEWEST_NAME });
         await image.scrollIntoViewIfNeeded();
@@ -48,10 +48,10 @@ test.describe('flow detail tabs', { tag: '@flows' }, () => {
         pageErrorLog,
     }) => {
         await page.goto('/flows/5');
-        await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
-        await page.getByRole('tab', { name: 'Screenshots' }).click();
+        await expect(page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' })).toBeEnabled();
+        await page.getByRole('tab', { name: '截图' }).click();
 
-        const shots = page.getByRole('tabpanel', { name: 'Screenshots' }).getByRole('link');
+        const shots = page.getByRole('tabpanel', { name: '截图' }).getByRole('link');
 
         await expect(shots).toHaveText([TABS_SCREENSHOT_URL, TABS_SCREENSHOT_NEWER_URL, TABS_SCREENSHOT_NEWEST_URL]);
 

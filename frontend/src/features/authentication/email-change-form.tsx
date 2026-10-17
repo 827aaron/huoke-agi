@@ -9,24 +9,25 @@ import { Input } from '@/components/ui/input';
 import { InputPassword } from '@/components/ui/input-password';
 import { useAppForm } from '@/hooks/use-app-form';
 import { api, resolveApiErrorMessage } from '@/lib/axios';
+import { copy } from '@/lib/copy';
 import { useUser } from '@/providers/user-provider';
 
 const emailChangeFormSchema = z.object({
-    currentPassword: z.string().min(1, { message: 'Current password is required' }),
+    currentPassword: z.string().min(1, { message: copy.auth.currentPasswordRequired }),
     newEmail: z
         .string()
         .trim()
         .toLowerCase()
-        .min(1, { message: 'Email is required' })
-        .email({ message: 'Invalid email address' })
-        .max(50, { message: 'Email must not exceed 50 characters' }),
+        .min(1, { message: copy.auth.emailRequired })
+        .email({ message: copy.auth.emailInvalid })
+        .max(50, { message: copy.auth.emailTooLong }),
 });
 
 const ERROR_BY_CODE: Record<string, string> = {
-    'Users.ChangeEmailCurrentUser.EmailAlreadyExists': 'Email address is already in use',
-    'Users.ChangeEmailCurrentUser.InvalidCurrentPassword': 'Current password is incorrect',
-    'Users.ChangeEmailCurrentUser.InvalidEmail': 'New email does not meet requirements',
-    'Users.NotFound': 'User not found',
+    'Users.ChangeEmailCurrentUser.EmailAlreadyExists': copy.auth.emailInUse,
+    'Users.ChangeEmailCurrentUser.InvalidCurrentPassword': copy.auth.currentPasswordIncorrect,
+    'Users.ChangeEmailCurrentUser.InvalidEmail': copy.auth.emailRejected,
+    'Users.NotFound': copy.auth.userNotFound,
 };
 
 interface EmailChangeFormProps {
@@ -58,14 +59,14 @@ export function EmailChangeForm({ onCancel, onSuccess }: EmailChangeFormProps) {
             });
 
             form.reset();
-            toast.success('Email successfully updated');
+            toast.success(copy.auth.emailUpdated);
 
             patchUser({ mail: values.newEmail });
             await refreshAuthInfo();
 
             onSuccess?.();
         } catch (err: unknown) {
-            setError(resolveApiErrorMessage(err, ERROR_BY_CODE, 'Failed to update email'));
+            setError(resolveApiErrorMessage(err, ERROR_BY_CODE, copy.auth.emailFailed));
         }
     };
 
@@ -83,11 +84,11 @@ export function EmailChangeForm({ onCancel, onSuccess }: EmailChangeFormProps) {
                     name="currentPassword"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Current Password</FormLabel>
+                            <FormLabel>{copy.auth.currentPassword}</FormLabel>
                             <FormControl>
                                 <InputPassword
                                     {...field}
-                                    placeholder="Enter your current password"
+                                    placeholder={copy.auth.currentPasswordPlaceholder}
                                 />
                             </FormControl>
                             <FormMessage />
@@ -100,11 +101,11 @@ export function EmailChangeForm({ onCancel, onSuccess }: EmailChangeFormProps) {
                     name="newEmail"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>New Email</FormLabel>
+                            <FormLabel>{copy.auth.newEmail}</FormLabel>
                             <FormControl>
                                 <Input
                                     {...field}
-                                    placeholder="Enter your new email address"
+                                    placeholder={copy.auth.newEmailPlaceholder}
                                     type="email"
                                 />
                             </FormControl>
@@ -123,11 +124,11 @@ export function EmailChangeForm({ onCancel, onSuccess }: EmailChangeFormProps) {
                             type="button"
                             variant="outline"
                         >
-                            Cancel
+                            {copy.action.cancel}
                         </Button>
                     )}
                     <FormSubmitButton size="sm">
-                        <span>Update Email</span>
+                        <span>{copy.auth.updateEmail}</span>
                     </FormSubmitButton>
                 </div>
             </form>

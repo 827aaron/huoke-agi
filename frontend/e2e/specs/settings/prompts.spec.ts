@@ -16,18 +16,18 @@ test.describe('settings prompts', { tag: '@coverage' }, () => {
     test('renders agent and tool tables and expands an agent row to its templates', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/prompts');
 
-        await expect(page.getByRole('heading', { name: 'Agent Prompts' })).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Tool Prompts' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: '智能体提示词' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: '工具提示词' })).toBeVisible();
 
-        const pentesterRow = page.getByRole('row', { name: /Pentester/ });
+        const pentesterRow = page.getByRole('row', { name: /潜客研究员/ });
 
         await expect(pentesterRow).toBeVisible();
         await expect(page.getByRole('row', { name: /Get Flow Description/ })).toBeVisible();
 
         await pentesterRow.click();
 
-        await expect(page.getByRole('heading', { name: 'System Prompt' })).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Human Prompt' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: '系统提示词' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: '用户提示词' })).toBeVisible();
         await expect(page.getByText(promptTemplate(PromptType.Pentester))).toBeVisible();
         await expect(page.getByText(promptTemplate(PromptType.QuestionPentester))).toBeVisible();
 
@@ -53,11 +53,11 @@ test.describe('settings prompts, resetting from the list', { tag: '@coverage' },
     test('offers Reset System on the overridden agent and sends the override id', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/prompts');
 
-        const row = page.getByRole('row', { name: /Pentester/ }).first();
+        const row = page.getByRole('row', { name: /潜客研究员/ }).first();
 
-        await row.getByRole('button', { name: 'Open menu' }).click();
+        await row.getByRole('button', { name: '打开菜单' }).click();
 
-        const reset = page.getByRole('menuitem', { name: 'Reset System' });
+        const reset = page.getByRole('menuitem', { name: '恢复系统提示词' });
 
         await expect(reset).toBeVisible();
         await reset.click();
@@ -66,7 +66,7 @@ test.describe('settings prompts, resetting from the list', { tag: '@coverage' },
             (candidate) => candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'deletePrompt',
         );
 
-        await page.getByRole('dialog').getByRole('button', { exact: true, name: 'Reset' }).click();
+        await page.getByRole('dialog').getByRole('button', { exact: true, name: '恢复默认' }).click();
 
         expect((await request).postDataJSON().variables.promptId).toBe(PROMPT_OVERRIDE.id);
         expectCleanPage(pageErrorLog);
@@ -75,10 +75,10 @@ test.describe('settings prompts, resetting from the list', { tag: '@coverage' },
     test('offers no reset on an agent the operator never overrode', async ({ page }) => {
         await page.goto('/settings/prompts');
 
-        const row = page.getByRole('row', { name: /Generator/ }).first();
+        const row = page.getByRole('row', { name: /规划员/ }).first();
 
-        await row.getByRole('button', { name: 'Open menu' }).click();
+        await row.getByRole('button', { name: '打开菜单' }).click();
 
-        await expect(page.getByRole('menuitem', { name: 'Reset System' })).toHaveCount(0);
+        await expect(page.getByRole('menuitem', { name: '恢复系统提示词' })).toHaveCount(0);
     });
 });

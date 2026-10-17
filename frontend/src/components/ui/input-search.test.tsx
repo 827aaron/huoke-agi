@@ -9,12 +9,12 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { InputSearch } from './input-search';
 
-// Collapsed state shows a single `<button aria-label="Search docs">` (the
+// Collapsed state shows a single `<button aria-label="搜索文档">` (the
 // expand trigger). Expanded state replaces that button with a non-interactive
 // `<Search>` icon and exposes the controlled `<input>`. The presence of the
 // trigger button is therefore the canonical "is it collapsed" signal — the
 // input itself always lives in the DOM (just behind a `width: 0` motion box).
-const queryTrigger = () => screen.queryByRole('button', { name: 'Search docs' });
+const queryTrigger = () => screen.queryByRole('button', { name: '搜索文档' });
 const getInput = () => screen.getByPlaceholderText('Search…') as HTMLInputElement;
 
 // Real-time `sleep` — comfortably past the 150ms debounce.
@@ -59,7 +59,7 @@ const SearchHost = ({ emitted, initialQuery = '', onSetExternalRef }: SearchHost
 
     return (
         <InputSearch
-            ariaLabel="Search docs"
+            ariaLabel="搜索文档"
             onSearchChange={(next) => {
                 emitted.push(next);
                 setValue(next);
@@ -138,7 +138,7 @@ describe('InputSearch — typing and outbound emit', () => {
 });
 
 describe('InputSearch — trailing clear button', () => {
-    const queryClearButton = () => screen.queryByRole('button', { name: 'Clear search docs' });
+    const queryClearButton = () => screen.queryByRole('button', { name: '清除搜索文档' });
 
     it('does not render the clear button when the field is empty', () => {
         render(

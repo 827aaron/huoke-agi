@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAppForm } from '@/hooks/use-app-form';
+import { copy } from '@/lib/copy';
 import { useResources } from '@/providers/resources-provider';
 
 import { computeCommonParent, computeTargets } from './resources-utils';
@@ -104,7 +105,7 @@ export function ResourcesCopyDialog({ files, onClose }: ResourcesCopyDialogProps
 }
 
 function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProps) {
-    const { copy, isCopying } = useResourcesCopy();
+    const { copy: copyResources, isCopying } = useResourcesCopy();
     const { resources } = useResources();
     const isMulti = files.length > 1;
 
@@ -133,7 +134,7 @@ function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProp
      * DB transaction (all-or-nothing).
      */
     const overwriteAction = useOverwrite<CopyPlan>({
-        execute: (plan, force) => copy(plan.sources, plan.destination, force),
+        execute: (plan, force) => copyResources(plan.sources, plan.destination, force),
         // Copy never deletes the sources, so collisions with sources are real
         // conflicts (unlike move). Just intersect targets with existing paths.
         findConflicts: (plan) => plan.targets.filter((t) => resourcePaths.has(t.destination)),
@@ -152,8 +153,12 @@ function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProp
     // Convention: stay enabled until the first submit, then reflect validity (so an invalid submit surfaces
     // errors instead of a silently-dead button). Mirrors FormSubmitButton's requireValid gate.
     const isSubmitDisabled = form.formState.isSubmitted && !form.formState.isValid;
-    const titleText = isMulti ? `Copy ${files.length} items` : files[0].isDir ? 'Copy directory' : 'Copy resource';
-    const overwriteCtaLabel = isMulti ? `Copy ${files.length} with overwrite` : 'Copy with overwrite';
+    const titleText = isMulti
+        ? copy.resources.copyItems(files.length)
+        : files[0].isDir
+          ? copy.resources.copyDirectory
+          : copy.resources.copyResource;
+    const overwriteCtaLabel = isMulti ? copy.resources.copyOverwriteItems(files.length) : copy.resources.copyOverwrite;
 
     return (
         <>
@@ -165,10 +170,12 @@ function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProp
                     </DialogTitle>
                     <DialogDescription>
                         {isMulti ? (
-                            <>Duplicate every selected item into the destination directory.</>
+                            <>{copy.resources.copyMultiDescription}</>
                         ) : (
                             <>
-                                Duplicate <code>{files[0].path}</code> to a new path.
+                                {copy.resources.copyDescription.before}
+                                <code>{files[0].path}</code>
+                                {copy.resources.copyDescription.after}
                             </>
                         )}
                     </DialogDescription>
@@ -185,26 +192,23 @@ function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProp
                             name="destination"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>{isMulti ? 'Destination directory' : 'Destination path'}</FormLabel>
+                                    <FormLabel>
+                                        {isMulti ? copy.resources.destinationDirectory : copy.resources.destinationPath}
+                                    </FormLabel>
                                     <FormControl>
                                         <Input
                                             {...field}
                                             autoComplete="off"
                                             autoFocus
                                             disabled={isCopying}
-                                            placeholder={
-                                                isMulti ? 'Leave empty to copy into the library root' : undefined
-                                            }
+                                            placeholder={isMulti ? copy.resources.rootCopyPlaceholder : undefined}
                                         />
                                     </FormControl>
                                     <FormDescription>
                                         {isMulti ? (
-                                            <>
-                                                Relative directory inside your library. Leave empty for the root. Each
-                                                item keeps its current filename.
-                                            </>
+                                            <>{copy.resources.multiDestinationHint}</>
                                         ) : (
-                                            <>Relative path inside your library.</>
+                                            <>{copy.resources.relativePath}</>
                                         )}
                                     </FormDescription>
                                     <FormMessage />
@@ -219,7 +223,7 @@ function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProp
                                 type="button"
                                 variant="outline"
                             >
-                                Cancel
+                                {copy.action.cancel}
                             </Button>
                             <OverwriteButtons
                                 isDisabled={isSubmitDisabled}
@@ -229,7 +233,7 @@ function ResourcesCopyDialogForm({ files, onClose }: ResourcesCopyDialogFormProp
                                 }}
                                 overwriteLabel={overwriteCtaLabel}
                                 primaryIcon={Copy}
-                                primaryLabel="Copy"
+                                primaryLabel={copy.resources.copy}
                                 primaryType="submit"
                             />
                         </div>

@@ -90,37 +90,37 @@ describe('formatModifiedRelative', () => {
     });
 
     it('handles "just now"', () => {
-        expect(formatModifiedRelative(new Date(NOW - 10_000))).toBe('just now');
+        expect(formatModifiedRelative(new Date(NOW - 10_000))).toBe('刚刚');
     });
 
     it('formats minutes / hours / days within a week', () => {
-        expect(formatModifiedRelative(new Date(NOW - 5 * 60_000))).toBe('5m ago');
-        expect(formatModifiedRelative(new Date(NOW - 3 * 60 * 60_000))).toBe('3h ago');
-        expect(formatModifiedRelative(new Date(NOW - 4 * 24 * 60 * 60_000))).toBe('4d ago');
+        expect(formatModifiedRelative(new Date(NOW - 5 * 60_000))).toBe('5 分钟前');
+        expect(formatModifiedRelative(new Date(NOW - 3 * 60 * 60_000))).toBe('3 小时前');
+        expect(formatModifiedRelative(new Date(NOW - 4 * 24 * 60 * 60_000))).toBe('4 天前');
     });
 
     it('formats weeks for entries within 4 weeks', () => {
-        expect(formatModifiedRelative(new Date(NOW - 14 * 24 * 60 * 60_000))).toBe('2w ago');
-        expect(formatModifiedRelative(new Date(NOW - 21 * 24 * 60 * 60_000))).toBe('3w ago');
+        expect(formatModifiedRelative(new Date(NOW - 14 * 24 * 60 * 60_000))).toBe('2 周前');
+        expect(formatModifiedRelative(new Date(NOW - 21 * 24 * 60 * 60_000))).toBe('3 周前');
     });
 
     it('formats months for entries within a year', () => {
         // 90 days ≈ 2 calendar months from the fake `NOW`. Using subMonths
         // instead of arithmetic keeps the test robust against month-length
         // variation (date-fns' differenceInMonths is calendar-based, not 30d).
-        expect(formatModifiedRelative(subMonths(new Date(NOW), 2))).toBe('2mo ago');
-        expect(formatModifiedRelative(subMonths(new Date(NOW), 6))).toBe('6mo ago');
+        expect(formatModifiedRelative(subMonths(new Date(NOW), 2))).toBe('2 个月前');
+        expect(formatModifiedRelative(subMonths(new Date(NOW), 6))).toBe('6 个月前');
     });
 
     it('formats years for entries older than a year', () => {
-        expect(formatModifiedRelative(subYears(new Date(NOW), 1))).toBe('1y ago');
-        expect(formatModifiedRelative(subYears(new Date(NOW), 5))).toBe('5y ago');
+        expect(formatModifiedRelative(subYears(new Date(NOW), 1))).toBe('1 年前');
+        expect(formatModifiedRelative(subYears(new Date(NOW), 5))).toBe('5 年前');
     });
 
     it('accepts ISO strings', () => {
         const iso = new Date(NOW - 10 * 60_000).toISOString();
 
-        expect(formatModifiedRelative(iso)).toBe('10m ago');
+        expect(formatModifiedRelative(iso)).toBe('10 分钟前');
     });
 });
 

@@ -11,6 +11,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 import { returnFocusToEditor } from './markdown-editor-focus';
@@ -28,13 +29,13 @@ interface HeadingOption {
 }
 
 const OPTIONS: HeadingOption[] = [
-    { icon: Heading1, label: 'Heading 1', value: 1 },
-    { icon: Heading2, label: 'Heading 2', value: 2 },
-    { icon: Heading3, label: 'Heading 3', value: 3 },
-    { icon: Heading4, label: 'Heading 4', value: 4 },
-    { icon: Heading5, label: 'Heading 5', value: 5 },
-    { icon: Heading6, label: 'Heading 6', value: 6 },
-    { icon: Type, iconClassName: 'scale-[0.75]', label: 'Text', value: 'paragraph' },
+    { icon: Heading1, label: copy.editor.heading(1), value: 1 },
+    { icon: Heading2, label: copy.editor.heading(2), value: 2 },
+    { icon: Heading3, label: copy.editor.heading(3), value: 3 },
+    { icon: Heading4, label: copy.editor.heading(4), value: 4 },
+    { icon: Heading5, label: copy.editor.heading(5), value: 5 },
+    { icon: Heading6, label: copy.editor.heading(6), value: 6 },
+    { icon: Type, iconClassName: 'scale-[0.75]', label: copy.editor.text, value: 'paragraph' },
 ];
 
 interface HeadingMenuProps {
@@ -58,7 +59,7 @@ export function HeadingMenu({ activeLevel, disabled, editor, isInTableCell }: He
                 <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
                         <Button
-                            aria-label={`Text style: ${active?.label ?? 'Text'}`}
+                            aria-label={copy.editor.textStyleLabel(active?.label ?? copy.editor.text)}
                             className="gap-0.5 px-1.5"
                             data-toolbar-item=""
                             disabled={disabled}
@@ -71,7 +72,7 @@ export function HeadingMenu({ activeLevel, disabled, editor, isInTableCell }: He
                         </Button>
                     </DropdownMenuTrigger>
                 </TooltipTrigger>
-                <TooltipContent>Text style</TooltipContent>
+                <TooltipContent>{copy.editor.textStyle}</TooltipContent>
             </Tooltip>
             <DropdownMenuContent
                 align="start"

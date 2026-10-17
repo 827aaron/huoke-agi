@@ -4,11 +4,18 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { BrowserRouter, useLocation, useNavigate } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
-const currentFlow = { id: '1', messageLogs: [{ id: '1' }] as { id: string }[] };
+import { StatusType } from '@/graphql/types';
+
+const currentFlow: { id: string; messageLogs: { id: string }[]; status: StatusType | undefined } = {
+    id: '1',
+    messageLogs: [{ id: '1' }],
+    status: undefined,
+};
 
 vi.mock('@/providers/flow-provider', () => ({
     useFlow: () => ({
         flowData: { flow: { id: currentFlow.id }, messageLogs: currentFlow.messageLogs },
+        flowStatus: currentFlow.status,
         isLoading: false,
     }),
 }));
@@ -165,12 +172,22 @@ describe('useFlowSideTab', () => {
         expect(result.current.central.resolvedTab, 'the central panel kept its own tab').toBe('dashboard');
     });
 
-    it('opens the terminal when the address names no side tab', () => {
-        expect(renderFlowPage('/flows/1').result.current.side.resolvedTab).toBe('terminal');
+    it('opens the prospects when the address names no side tab and no round is running', () => {
+        expect(renderFlowPage('/flows/1').result.current.side.resolvedTab).toBe('leads');
+    });
+
+    it('opens the tasks when the address names no side tab and a round is running', () => {
+        currentFlow.status = StatusType.Running;
+
+        try {
+            expect(renderFlowPage('/flows/1').result.current.side.resolvedTab).toBe('tasks');
+        } finally {
+            currentFlow.status = undefined;
+        }
     });
 
     it('refuses a central value planted in its own parameter', () => {
-        expect(renderFlowPage('/flows/1?side=dashboard').result.current.side.resolvedTab).toBe('terminal');
+        expect(renderFlowPage('/flows/1?side=dashboard').result.current.side.resolvedTab).toBe('leads');
     });
 
     it('keeps a linked side tab when the central strip rewrites its own parameter', async () => {

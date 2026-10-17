@@ -18,6 +18,7 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/comp
 import { InputGroup, InputGroupTextareaAutosize } from '@/components/ui/input-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
+import { copy } from '@/lib/copy';
 
 import type { FormValues } from './knowledge-form';
 
@@ -93,15 +94,15 @@ export function KnowledgeContentField({
             name="content"
             render={({ field }) => (
                 <FormItem className={fillParent ? 'flex min-h-0 flex-1 flex-col' : undefined}>
-                    {hasLabel ? <FormLabel>Content</FormLabel> : null}
+                    {hasLabel ? <FormLabel>{copy.knowledge.content}</FormLabel> : null}
                     <FormControl>
                         <MarkdownEditorField
-                            aria-label="Content"
+                            aria-label={copy.knowledge.content}
                             disabled={isSaving}
                             mode={viewMode}
                             onBlur={field.onBlur}
                             onChange={field.onChange}
-                            placeholder="Knowledge content (will be embedded into the vector store)"
+                            placeholder={copy.knowledge.contentPlaceholder}
                             ref={field.ref}
                             value={field.value}
                         />
@@ -150,7 +151,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                     name="docType"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Document type</FormLabel>
+                            <FormLabel>{copy.knowledge.docType}</FormLabel>
                             <Select
                                 disabled={isSaving}
                                 onValueChange={(value) =>
@@ -160,7 +161,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                             >
                                 <FormControl>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select type" />
+                                        <SelectValue placeholder={copy.knowledge.selectType} />
                                     </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
@@ -169,7 +170,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                             key={value}
                                             value={value}
                                         >
-                                            {value}
+                                            {copy.knowledge.docTypeLabel[value] ?? value}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -185,7 +186,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                         name="guideType"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Guide type</FormLabel>
+                                <FormLabel>{copy.knowledge.guideType}</FormLabel>
                                 <Select
                                     disabled={isSaving}
                                     onValueChange={field.onChange}
@@ -193,7 +194,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                 >
                                     <FormControl>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select guide type" />
+                                            <SelectValue placeholder={copy.knowledge.selectGuideType} />
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
@@ -202,7 +203,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                                 key={value}
                                                 value={value}
                                             >
-                                                {value}
+                                                {copy.knowledge.guideTypeLabel[value] ?? value}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -219,7 +220,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                         name="answerType"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Answer type</FormLabel>
+                                <FormLabel>{copy.knowledge.answerType}</FormLabel>
                                 <Select
                                     disabled={isSaving}
                                     onValueChange={field.onChange}
@@ -227,7 +228,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                 >
                                     <FormControl>
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Select answer type" />
+                                            <SelectValue placeholder={copy.knowledge.selectAnswerType} />
                                         </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
@@ -236,7 +237,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                                 key={value}
                                                 value={value}
                                             >
-                                                {value}
+                                                {copy.knowledge.answerTypeLabel[value] ?? value}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -253,7 +254,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                         name="codeLang"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Code language</FormLabel>
+                                <FormLabel>{copy.knowledge.codeLang}</FormLabel>
                                 {/* Backend accepts any string — the dropdown is a UX hint, not a closed enum. */}
                                 <Autocomplete
                                     onValueChange={field.onChange}
@@ -270,7 +271,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                         />
                                     </FormControl>
                                     <AutocompleteContent>
-                                        <AutocompleteEmpty>No matching language</AutocompleteEmpty>
+                                        <AutocompleteEmpty>{copy.knowledge.noLanguage}</AutocompleteEmpty>
                                         <AutocompleteGroup>
                                             {LANGUAGES.map((lang) => (
                                                 <AutocompleteItem
@@ -295,7 +296,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                 name="question"
                 render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Question</FormLabel>
+                        <FormLabel>{copy.knowledge.question}</FormLabel>
                         <FormControl>
                             <InputGroup className="block">
                                 <InputGroupTextareaAutosize
@@ -306,7 +307,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                     maxLength={KNOWLEDGE_LIMITS.question}
                                     maxRows={6}
                                     minRows={1}
-                                    placeholder="Short title or question this document answers"
+                                    placeholder={copy.knowledge.questionPlaceholder}
                                 />
                             </InputGroup>
                         </FormControl>
@@ -320,7 +321,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                 name="description"
                 render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Description (optional)</FormLabel>
+                        <FormLabel>{copy.knowledge.descriptionOptional}</FormLabel>
                         <FormControl>
                             <InputGroup className="block">
                                 <InputGroupTextareaAutosize
@@ -330,7 +331,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                     maxLength={KNOWLEDGE_LIMITS.description}
                                     maxRows={8}
                                     minRows={1}
-                                    placeholder="Optional short description"
+                                    placeholder={copy.knowledge.descriptionPlaceholder}
                                 />
                             </InputGroup>
                         </FormControl>

@@ -39,11 +39,11 @@ test.describe('flow create', { tag: ['@flows', '@smoke'] }, () => {
         await page.goto('/flows/new');
 
         await expect(page.getByText(PROVIDER.name)).toBeVisible();
-        await page.getByPlaceholder(/Describe what you would like PentAGI to test/).fill('Say hello');
-        await page.getByRole('button', { name: 'Submit' }).click();
+        await page.getByPlaceholder(/给我找 50 个/).fill('Say hello');
+        await page.getByRole('button', { exact: true, name: '发送' }).click();
 
         await expect(page).toHaveURL(/\/flows\/7/);
-        await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
+        await expect(page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' })).toBeEnabled();
         await expect(page.locator('header').getByText('Say Hello Flow')).toBeVisible();
         expectCleanPage(pageErrorLog);
     });

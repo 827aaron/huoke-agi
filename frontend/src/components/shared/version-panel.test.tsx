@@ -18,8 +18,6 @@ import {
     describeTiming,
     describeVersion,
     formatVersionLabel,
-    PENTAGI_RELEASES_URL,
-    releaseNotesUrl,
     splitVersion,
     UPDATE_INSTRUCTION,
     VersionPanel,
@@ -38,9 +36,9 @@ function info(overrides: Partial<VersionInfoFragmentFragment> = {}): VersionInfo
     };
 }
 
-const trigger = () => screen.getByRole('button', { name: /PentAGI v2\.1\.0/ });
+const trigger = () => screen.getByRole('button', { name: /客来 AGI v2\.1\.0/ });
 
-function renderPanel({ isOpen = true, title = 'PentAGI' } = {}) {
+function renderPanel({ isOpen = true, title = '客来 AGI' } = {}) {
     return render(
         <SidebarProvider defaultOpen={isOpen}>
             <VersionPanel
@@ -60,7 +58,7 @@ describe('VersionPanel', () => {
         provider.value = { isLoading: true, versionInfo: null };
         renderPanel();
 
-        expect(screen.getByText('PentAGI')).toBeInTheDocument();
+        expect(screen.getByText('客来 AGI')).toBeInTheDocument();
         expect(screen.getByTestId('probe-icon')).toBeInTheDocument();
         expect(screen.getByTestId('skeleton')).toBeInTheDocument();
         expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -77,7 +75,7 @@ describe('VersionPanel', () => {
     it('keeps the icon and the title, and no placeholder, when the query settles without an answer', () => {
         renderPanel();
 
-        expect(screen.getByText('PentAGI')).toBeInTheDocument();
+        expect(screen.getByText('客来 AGI')).toBeInTheDocument();
         expect(screen.getByTestId('probe-icon')).toBeInTheDocument();
         expect(screen.queryByTestId('skeleton')).not.toBeInTheDocument();
         expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -140,9 +138,7 @@ describe('VersionPanel', () => {
         renderPanel({ isOpen: false });
         await user.hover(trigger());
 
-        expect(await screen.findByRole('tooltip')).toHaveTextContent(
-            'New version v2.4.0 is available. Run the installer tool to update.',
-        );
+        expect(await screen.findByRole('tooltip')).toHaveTextContent('新版本 v2.4.0 可用，运行安装工具即可更新。');
     });
 
     it('opens the details with the build, the channel, the instruction and the release links', async () => {
@@ -162,23 +158,16 @@ describe('VersionPanel', () => {
 
         const dialog = await screen.findByRole('menu');
 
-        expect(dialog).toHaveTextContent('PentAGI v2.1.0');
-        expect(dialog).toHaveTextContent('build b1d7c0de');
+        expect(dialog).toHaveTextContent('客来 AGI v2.1.0');
+        expect(dialog).toHaveTextContent('构建 b1d7c0de');
         expect(dialog).toHaveTextContent('stable');
-        expect(dialog).toHaveTextContent('New version v2.4.0 is available');
-        expect(dialog).toHaveTextContent('Run the installer tool on the host where PentAGI is deployed');
-        expect(dialog).toHaveTextContent('Installed');
-        expect(dialog).toHaveTextContent('Available');
-        expect(dialog).toHaveTextContent('Checked');
-        expect(dialog).toHaveTextContent('10 minutes ago');
-        expect(screen.getByRole('menuitem', { name: /Release notes for v2\.4\.0/ })).toHaveAttribute(
-            'href',
-            'https://github.com/vxcontrol/pentagi/releases/tag/v2.4.0',
-        );
-        expect(screen.getByRole('menuitem', { name: /All releases/ })).toHaveAttribute(
-            'href',
-            'https://github.com/vxcontrol/pentagi/releases',
-        );
+        expect(dialog).toHaveTextContent('新版本 v2.4.0 可用');
+        expect(dialog).toHaveTextContent('在部署客来 AGI 的服务器上运行安装工具');
+        expect(dialog).toHaveTextContent('当前版本');
+        expect(dialog).toHaveTextContent('可更新到');
+        expect(dialog).toHaveTextContent('上次检查');
+        expect(dialog).toHaveTextContent('10 分钟前');
+        expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
     });
 
     it('names the newest published version in prose without offering it as an update', async () => {
@@ -193,10 +182,9 @@ describe('VersionPanel', () => {
 
         const dialog = await screen.findByRole('menu');
 
-        expect(dialog).toHaveTextContent('Update status unknown');
-        expect(dialog).toHaveTextContent('The newest published version is v2.4.0.');
-        expect(dialog).not.toHaveTextContent('Available');
-        expect(screen.queryByRole('menuitem', { name: /Release notes/ })).not.toBeInTheDocument();
+        expect(dialog).toHaveTextContent('更新状态未知');
+        expect(dialog).toHaveTextContent('已发布的最新版本是 v2.4.0。');
+        expect(dialog).not.toHaveTextContent('可更新到');
     });
 
     it('says what the channel badge means, in its name and on hover', async () => {
@@ -206,11 +194,11 @@ describe('VersionPanel', () => {
 
         await user.click(trigger());
 
-        const badge = await screen.findByLabelText('Update channel: stable');
+        const badge = await screen.findByLabelText('更新渠道：stable');
 
         await user.hover(badge);
 
-        expect(await screen.findByRole('tooltip')).toHaveTextContent('Updates are offered from the stable channel');
+        expect(await screen.findByRole('tooltip')).toHaveTextContent('更新来自 stable 渠道');
     });
 
     it('names the base version of a build cut from a branch beside its build', async () => {
@@ -221,9 +209,9 @@ describe('VersionPanel', () => {
         };
         renderPanel();
 
-        await user.click(screen.getByRole('button', { name: /PentAGI v2\.1\.0-ce/ }));
+        await user.click(screen.getByRole('button', { name: /客来 AGI v2\.1\.0-ce/ }));
 
-        expect(await screen.findByRole('menu')).toHaveTextContent('build b1d7c0de');
+        expect(await screen.findByRole('menu')).toHaveTextContent('构建 b1d7c0de');
     });
 
     it('shows the build of an edition that carries no version number', async () => {
@@ -231,9 +219,9 @@ describe('VersionPanel', () => {
         provider.value = { isLoading: false, versionInfo: info({ current: 'ce.h93e99748' }) };
         renderPanel();
 
-        await user.click(screen.getByRole('button', { name: /PentAGI ce/ }));
+        await user.click(screen.getByRole('button', { name: /客来 AGI ce/ }));
 
-        expect(await screen.findByRole('menu')).toHaveTextContent('build b1d7c0de');
+        expect(await screen.findByRole('menu')).toHaveTextContent('构建 b1d7c0de');
     });
 
     it('offers no release notes link when there is no release to point at', async () => {
@@ -243,9 +231,7 @@ describe('VersionPanel', () => {
 
         await user.click(trigger());
 
-        expect(await screen.findByRole('menu')).toHaveTextContent('Update status unknown');
-        expect(screen.queryByRole('menuitem', { name: /Release notes/ })).not.toBeInTheDocument();
-        expect(screen.getByRole('menuitem', { name: /All releases/ })).toBeInTheDocument();
+        expect(await screen.findByRole('menu')).toHaveTextContent('更新状态未知');
     });
 });
 
@@ -294,25 +280,6 @@ describe('formatVersionLabel', () => {
     });
 });
 
-describe('releaseNotesUrl', () => {
-    it('points at the tagged release, whether or not the version already carries the v', () => {
-        expect(releaseNotesUrl('2.4.0')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
-        expect(releaseNotesUrl('v2.4.0')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
-    });
-
-    it('builds no link from a value that does not name a release', () => {
-        expect(releaseNotesUrl('latest')).toBeNull();
-        expect(releaseNotesUrl('ce')).toBeNull();
-        expect(releaseNotesUrl('ee')).toBeNull();
-    });
-
-    it('drops the edition, because the tag is the release and not the build', () => {
-        expect(releaseNotesUrl('2.4.0-ce')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
-        expect(releaseNotesUrl('2.4.0-ee')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
-        expect(releaseNotesUrl('v2.4.0-ce')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
-    });
-});
-
 describe('describeVersion', () => {
     it('shows the yellow arrow and tells the operator to run the installer when an update is offered', () => {
         const presentation = describeVersion(info({ latest: '2.4.0', state: UpdateState.UpdateAvailable }));
@@ -320,8 +287,8 @@ describe('describeVersion', () => {
         expect(presentation.indicator).toBe('update');
         expect(presentation.label).toBe('v2.1.0');
         expect(presentation.latest).toBe('v2.4.0');
-        expect(presentation.headline).toBe('New version v2.4.0 is available');
-        expect(presentation.tooltip).toBe('New version v2.4.0 is available. Run the installer tool to update.');
+        expect(presentation.headline).toBe('新版本 v2.4.0 可用');
+        expect(presentation.tooltip).toBe('新版本 v2.4.0 可用，运行安装工具即可更新。');
         expect(presentation.action).toBe(UPDATE_INSTRUCTION);
     });
 
@@ -329,19 +296,16 @@ describe('describeVersion', () => {
         const presentation = describeVersion(info());
 
         expect(presentation.indicator).toBe('none');
-        expect(presentation.tooltip).toBe('PentAGI v2.1.0 is up to date.');
-        expect(presentation.detail).toContain('preview channel');
+        expect(presentation.tooltip).toBe('客来 AGI v2.1.0 已是最新版本');
+        expect(presentation.detail).toContain('preview 渠道');
         expect(presentation.action).toBeNull();
     });
 
     it.each([
-        [UpdateState.Pending, 'Checking for updates…'],
-        [UpdateState.Unreachable, 'Update status unknown: the update service could not be reached.'],
-        [
-            UpdateState.Unknown,
-            'Update status unknown: the update service could not tell whether a newer version exists.',
-        ],
-        [UpdateState.Disabled, 'Update checks are disabled in the server configuration.'],
+        [UpdateState.Pending, '正在检查更新…'],
+        [UpdateState.Unreachable, '更新状态未知：无法连接更新服务。'],
+        [UpdateState.Unknown, '更新状态未知：更新服务无法判断是否有新版本。'],
+        [UpdateState.Disabled, '服务器配置里关闭了更新检查。'],
     ])('shows the yellow question mark for %s', (state, tooltip) => {
         const presentation = describeVersion(info({ state }));
 
@@ -353,7 +317,7 @@ describe('describeVersion', () => {
         const presentation = describeVersion(info({ latest: '2.4.0', state: UpdateState.Unknown }));
 
         expect(presentation.indicator).toBe('question');
-        expect(presentation.detail).toContain('The newest published version is v2.4.0.');
+        expect(presentation.detail).toContain('已发布的最新版本是 v2.4.0。');
     });
 
     it('treats an update that names no version as unknown rather than pointing an arrow at nothing', () => {
@@ -395,8 +359,8 @@ describe('describeTiming', () => {
         expect(
             describeTiming(info({ checkedAt: '2026-09-02T09:00:00Z', failedAt: '2026-09-02T11:55:00Z' }), now),
         ).toEqual([
-            { label: 'Checked', value: 'about 3 hours ago' },
-            { label: 'Last check failed', value: '5 minutes ago' },
+            { label: '上次检查', value: '大约 3 小时前' },
+            { label: '上次检查失败', value: '5 分钟前' },
         ]);
     });
 });

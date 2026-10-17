@@ -5,6 +5,7 @@ import { ResponsiveContainer } from 'recharts';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
+import { copy } from '@/lib/copy';
 
 import { DashboardError } from './dashboard-error';
 
@@ -55,7 +56,7 @@ export function ChartCard({
                         style={{ height }}
                     >
                         <BarChart2 className="text-muted-foreground/30 size-10" />
-                        <p className="text-muted-foreground text-sm">No data for this period</p>
+                        <p className="text-muted-foreground text-sm">{copy.dashboard.noData}</p>
                     </div>
                 ) : (
                     <ResponsiveContainer

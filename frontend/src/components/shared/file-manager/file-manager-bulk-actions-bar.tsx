@@ -10,11 +10,12 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 import type { FileManagerBulkAction, FileManagerLabels, FileNode } from './file-manager-types';
 
-import { formatFileSize, pluralizeItemsEnglish } from './file-manager-utils';
+import { formatFileSize } from './file-manager-utils';
 
 interface BulkActionButtonProps {
     action: FileManagerBulkAction;
@@ -133,13 +134,13 @@ export function FileManagerBulkActionsBar({
         return null;
     }
 
-    const pluralize = labels.pluralizeItems ?? pluralizeItemsEnglish;
+    const pluralize = labels.pluralizeItems ?? copy.fileManager.items;
     const countLabel = pluralize(affectedCount);
-    const baseSelectedText = labels.selectedLabel?.(affectedCount) ?? `${affectedCount} selected`;
+    const baseSelectedText = labels.selectedLabel?.(affectedCount) ?? copy.fileManager.selected(affectedCount);
     const sizeSuffix = (labels.formatSelectionSize ?? formatFileSize)(selectionTotalBytes);
     const selectedText = sizeSuffix ? `${baseSelectedText} · ${sizeSuffix}` : baseSelectedText;
-    const cancelText = labels.bulkCancel ?? 'Cancel';
-    const moreActionsText = labels.bulkMoreActions ?? 'More actions';
+    const cancelText = labels.bulkCancel ?? copy.action.cancel;
+    const moreActionsText = labels.bulkMoreActions ?? copy.fileManager.moreActions;
 
     return (
         <>

@@ -34,9 +34,7 @@ describe('the flow template form schema', () => {
         ['spaces', '   '],
         ['line breaks and tabs', '\n\t \n'],
     ])('refuses a text of nothing but %s', (_name, text) => {
-        expect(parse({ text }).error?.issues.find((issue) => issue.path[0] === 'text')?.message).toBe(
-            'Text is required',
-        );
+        expect(parse({ text }).error?.issues.find((issue) => issue.path[0] === 'text')?.message).toBe('请填写内容');
     });
 
     it('hands the text on as it was written and trims the title', () => {

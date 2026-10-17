@@ -45,28 +45,28 @@ describe('FlowTask', () => {
     it('does not say a failed task waits for subtasks', () => {
         renderTask(task({ status: StatusType.Failed }));
 
-        expect(screen.queryByText('Waiting for subtasks to be created...')).not.toBeInTheDocument();
-        expect(screen.getByText('The task failed before any subtasks were created.')).toBeInTheDocument();
+        expect(screen.queryByText('正在拆分子任务…')).not.toBeInTheDocument();
+        expect(screen.getByText('任务在拆分子任务之前就失败了。')).toBeInTheDocument();
     });
 
     it('still says a running task waits for its subtasks', () => {
         renderTask(task({ status: StatusType.Running }));
 
-        expect(screen.getByText('Waiting for subtasks to be created...')).toBeInTheDocument();
+        expect(screen.getByText('正在拆分子任务…')).toBeInTheDocument();
     });
 
     it('names the status icons of the task and its subtasks', () => {
         renderTask(task({ status: StatusType.Failed, subtasks: [subtask({ status: StatusType.Finished })] }));
 
-        expect(screen.getByRole('img', { name: 'Failed' })).toBeInTheDocument();
-        expect(screen.getByRole('img', { name: 'Finished' })).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: '失败' })).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: '已完成' })).toBeInTheDocument();
     });
 
     it('shows why a failed task stopped', async () => {
         const user = userEvent.setup({ delay: null });
         renderTask(task({ result: 'failed to generate subtasks: status code 404', status: StatusType.Failed }));
 
-        await user.click(screen.getByText('Show details'));
+        await user.click(screen.getByText('查看详情'));
 
         expect(screen.getByText(/status code 404/)).toBeInTheDocument();
     });

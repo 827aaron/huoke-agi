@@ -40,6 +40,7 @@ import { useTemplateDetailNavigation } from '@/features/templates/use-template-d
 import { FlowTemplateDocument } from '@/graphql/types';
 import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { copy } from '@/lib/copy';
 import { isNotFoundError } from '@/lib/errors';
 import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
@@ -54,22 +55,22 @@ export const formSchema = z.object({
     // limit counts all of it, as the mutation does.
     text: z
         .string()
-        .refine((value) => value.trim() !== '', { message: 'Text is required' })
+        .refine((value) => value.trim() !== '', { message: copy.templatePage.textRequired })
         .refine((value) => [...value].length <= MAX_TEMPLATE_TEXT_LENGTH, {
-            message: `Text must not exceed ${MAX_TEMPLATE_TEXT_LENGTH} characters`,
+            message: copy.templatePage.textTooLong(MAX_TEMPLATE_TEXT_LENGTH),
         }),
     title: z
         .string()
         .trim()
-        .min(1, { message: 'Title is required' })
+        .min(1, { message: copy.templatePage.titleRequired })
         .refine((value) => [...value].length <= MAX_TEMPLATE_TITLE_LENGTH, {
-            message: `Title must not exceed ${MAX_TEMPLATE_TITLE_LENGTH} characters`,
+            message: copy.templatePage.titleTooLong(MAX_TEMPLATE_TITLE_LENGTH),
         }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-const PRESETS_TITLE = 'Preset templates';
+const PRESETS_TITLE = copy.templates.presetsTitle;
 
 const PRESET_TEMPLATES: { text: string; title: string }[] = [
     {
@@ -259,7 +260,7 @@ function TemplateForm({ templateId }: { templateId?: string }) {
             // Send the server's current `text`, not the form's, so renaming the title never persists the
             // user's unsaved body edits — those stay dirty in the form (kept by `keepDirtyValues`) until they save.
             await updateTemplate(templateId, { text: template.text, title: newTitle });
-            toast.success('Template renamed successfully');
+            toast.success(copy.templatePage.renamed);
             handleTemplateRenameCancel();
         } catch {
             // Error already handled in provider with toast
@@ -382,7 +383,7 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                                         inputRef={editingInputRef}
                                         onCancel={handleTemplateRenameCancel}
                                         onSave={handleTemplateRenameSave}
-                                        placeholder="Template title"
+                                        placeholder={copy.templatePage.renamePlaceholder}
                                     />
                                 ) : hasTemplate ? (
                                     <Tooltip>
@@ -391,14 +392,16 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                                                 className="max-w-64 min-w-0 cursor-text truncate select-none"
                                                 onDoubleClick={handleTemplateRenameStart}
                                             >
-                                                {templateName ?? 'Template'}
+                                                {templateName ?? copy.templatePage.template}
                                             </BreadcrumbPage>
                                         </TooltipTrigger>
-                                        <TooltipContent>Double-click to rename</TooltipContent>
+                                        <TooltipContent>{copy.flows.doubleClickRename}</TooltipContent>
                                     </Tooltip>
                                 ) : (
                                     <BreadcrumbPage className="min-w-0 truncate">
-                                        {isNew ? 'New template' : (templateName ?? 'Template')}
+                                        {isNew
+                                            ? copy.templatePage.newTemplate
+                                            : (templateName ?? copy.templatePage.template)}
                                     </BreadcrumbPage>
                                 )}
                             </BreadcrumbItem>
@@ -412,21 +415,21 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                                 controller={templateNav}
                                 renderItem={renderTemplateItem}
                                 sheetIcon={<FileText className="size-4" />}
-                                sheetTitle="Templates"
+                                sheetTitle={copy.templatePage.titles}
                             />
                         )}
                         <AppHeaderAction
                             disabled={isTemplatePending || (!isNew && !hasUnsavedChanges)}
                             form="template-form"
                             icon={<Save />}
-                            label={isNew ? 'Create' : 'Save'}
+                            label={isNew ? copy.action.create : copy.action.save}
                             loading={isSaving}
                             type="submit"
                         />
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    aria-label="Template actions"
+                                    aria-label={copy.templatePage.actions}
                                     className="size-8 p-0"
                                     variant="ghost"
                                 >
@@ -447,11 +450,11 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                                                     onSelect={(event) => event.preventDefault()}
                                                 >
                                                     <FileText />
-                                                    Templates
+                                                    {copy.templatePage.titles}
                                                     <div className="-my-1.5 -mr-2 ml-auto flex items-center">
                                                         <DetailNavigationButtons<Template>
                                                             controller={templateNav}
-                                                            sheetTitle="Templates"
+                                                            sheetTitle={copy.templatePage.titles}
                                                             size="sm"
                                                         />
                                                     </div>
@@ -464,7 +467,7 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                                             onClick={handleTemplateRenameStart}
                                         >
                                             <Pencil />
-                                            Rename
+                                            {copy.action.rename}
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                     </>
@@ -473,12 +476,12 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                                     className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
                                     onSelect={(event) => event.preventDefault()}
                                 >
-                                    View
+                                    {copy.prompt.view}
                                     <EditorViewModeToggle
                                         className="-my-1.5 -mr-2 ml-auto"
                                         mode={viewMode}
                                         onModeChange={setViewMode}
-                                        rawTooltip="Edit the raw template"
+                                        rawTooltip={copy.templatePage.editRaw}
                                     />
                                 </DropdownMenuItem>
                                 {!isNew && (
@@ -491,12 +494,12 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                                             {isDeleting ? (
                                                 <>
                                                     <Spinner variant="circle" />
-                                                    Deleting...
+                                                    {copy.action.deleting}
                                                 </>
                                             ) : (
                                                 <>
                                                     <Trash />
-                                                    Delete
+                                                    {copy.action.delete}
                                                 </>
                                             )}
                                         </DropdownMenuItem>
@@ -512,7 +515,7 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                     controller={templateNav}
                     renderItem={renderTemplateItem}
                     sheetIcon={<FileText className="size-4" />}
-                    sheetTitle="Templates"
+                    sheetTitle={copy.templatePage.titles}
                 />
             )}
         </>
@@ -586,9 +589,7 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                         {PRESET_TEMPLATES.length}
                     </Badge>
                 </h4>
-                <p className="text-muted-foreground mt-1 text-xs">
-                    Click a preset to fill the form, or expand it to preview the content.
-                </p>
+                <p className="text-muted-foreground mt-1 text-xs">{copy.templatePage.presetsHint}</p>
             </div>
             {presetsList()}
         </div>
@@ -624,8 +625,10 @@ function TemplateForm({ templateId }: { templateId?: string }) {
 
     const introBlock = (
         <div className="flex flex-col gap-2 text-center">
-            <h2 className="text-2xl font-semibold">{isNew ? 'Create a new template' : 'Edit template'}</h2>
-            <p className="text-muted-foreground">Add a title and content, or start from a preset.</p>
+            <h2 className="text-2xl font-semibold">
+                {isNew ? copy.templatePage.createTitle : copy.templatePage.editTitle}
+            </h2>
+            <p className="text-muted-foreground">{copy.templatePage.subtitle}</p>
         </div>
     );
 
@@ -635,12 +638,12 @@ function TemplateForm({ templateId }: { templateId?: string }) {
             name="title"
             render={({ field }) => (
                 <FormItem>
-                    <FormLabel>Title</FormLabel>
+                    <FormLabel>{copy.templatePage.title}</FormLabel>
                     <FormControl>
                         <Input
                             autoFocus={isNew}
                             disabled={isSaving}
-                            placeholder="A short name for this template"
+                            placeholder={copy.templatePage.titlePlaceholder}
                             {...field}
                         />
                     </FormControl>
@@ -658,12 +661,12 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                 <FormItem className="flex min-h-0 flex-1 flex-col">
                     <FormControl>
                         <MarkdownEditorField
-                            aria-label="Template content"
+                            aria-label={copy.templatePage.contentLabel}
                             disabled={isSaving}
                             mode={viewMode}
                             onBlur={field.onBlur}
                             onChange={field.onChange}
-                            placeholder="Describe the task, or start from a preset"
+                            placeholder={copy.templatePage.contentPlaceholder}
                             ref={field.ref}
                             value={field.value}
                         />
@@ -695,7 +698,7 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                     <ErrorState
                         message={templateLoadError.message}
                         onRetry={() => refetchTemplate()}
-                        title="Error loading template"
+                        title={copy.templatePage.loadFailed}
                     />
                 </div>
             </div>
@@ -709,9 +712,9 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                 <div className="flex flex-1 items-center justify-center p-4">
                     <Card className="w-full max-w-2xl">
                         <CardContent className="flex flex-col items-center gap-4 pt-6 text-center">
-                            <h2 className="text-xl font-semibold">Template not found</h2>
-                            <p className="text-muted-foreground">The template you are looking for does not exist.</p>
-                            <Button onClick={() => navigate(routes.templates)}>Back to Templates</Button>
+                            <h2 className="text-xl font-semibold">{copy.templatePage.notFound}</h2>
+                            <p className="text-muted-foreground">{copy.templatePage.notFoundHint}</p>
+                            <Button onClick={() => navigate(routes.templates)}>{copy.templatePage.backToList}</Button>
                         </CardContent>
                     </Card>
                 </div>
@@ -752,9 +755,9 @@ function TemplateForm({ templateId }: { templateId?: string }) {
             </Form>
             <ConfirmationDialog
                 confirmIcon={<FileSymlink />}
-                confirmText="Replace"
+                confirmText={copy.action.replace}
                 confirmVariant="default"
-                description="Current form has content. Replace with the selected preset?"
+                description={copy.templatePage.replaceConfirm}
                 handleConfirm={handleConfirmReplacePreset}
                 handleOpenChange={(open) => {
                     if (!open) {
@@ -764,16 +767,16 @@ function TemplateForm({ templateId }: { templateId?: string }) {
                     setIsReplaceConfirmOpen(open);
                 }}
                 isOpen={isReplaceConfirmOpen}
-                title="Replace content?"
+                title={copy.templatePage.replaceTitle}
             />
             <ConfirmationDialog
-                cancelText="Cancel"
-                confirmText="Delete"
+                cancelText={copy.action.cancel}
+                confirmText={copy.action.delete}
                 handleConfirm={handleTemplateDelete}
                 handleOpenChange={setIsDeleteDialogOpen}
                 isOpen={isDeleteDialogOpen}
                 itemName={templateName ?? undefined}
-                itemType="template"
+                itemType={copy.itemType.template}
             />
             <UnsavedChangesDialog
                 canSave={isValid}

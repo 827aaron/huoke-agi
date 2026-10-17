@@ -3,8 +3,8 @@ import { toast } from 'sonner';
 
 import type { OverwriteOutcome } from '@/components/shared/overwrite';
 
-import { pluralizeItems } from '@/components/shared/file-manager';
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
+import { copy } from '@/lib/copy';
 
 import { CONTAINER_TARGET_DIRECTORY, FLOW_FILES_PULL_API_PATH } from './flow-files-constants';
 import { type FlowFilesResponse } from './flow-files-utils';
@@ -56,10 +56,10 @@ export function useFlowFilesPull({ flowId, onSuccess }: UseFlowFilesPullParams):
 
                 const description =
                     paths.length === 1
-                        ? `Saved to local cache under ${CONTAINER_TARGET_DIRECTORY}`
-                        : `Saved ${paths.length} ${pluralizeItems(paths.length)} to local cache under ${CONTAINER_TARGET_DIRECTORY}`;
+                        ? copy.flowFiles.pulledOne(CONTAINER_TARGET_DIRECTORY)
+                        : copy.flowFiles.pulledMany(paths.length, CONTAINER_TARGET_DIRECTORY);
 
-                toast.success('Pulled from container', { description });
+                toast.success(copy.flowFiles.pulled, { description });
                 onSuccess();
 
                 return { kind: 'ok' };
@@ -70,9 +70,9 @@ export function useFlowFilesPull({ flowId, onSuccess }: UseFlowFilesPullParams):
                     return { kind: 'conflict' };
                 }
 
-                const description = getApiErrorMessage(error, 'Failed to pull from container');
+                const description = getApiErrorMessage(error, copy.flowFiles.pullFailedHint);
 
-                toast.error('Pull failed', { description });
+                toast.error(copy.flowFiles.pullFailed, { description });
 
                 return { kind: 'error' };
             } finally {

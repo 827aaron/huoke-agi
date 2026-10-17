@@ -3,16 +3,19 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import type { Provider } from '@/models/provider';
 
+import { growthApi } from '@/features/growth/growth-api';
+import { useGrowthPoll } from '@/features/growth/use-growth-poll';
 import {
     ProviderCreatedDocument,
     ProviderDeletedDocument,
     ProvidersDocument,
     ProviderUpdatedDocument,
 } from '@/graphql/types';
-import { findProviderByName, sortProviders } from '@/models/provider';
+import { findProviderByName, pickDefaultProvider, sortProviders } from '@/models/provider';
 import { useUser } from '@/providers/user-provider';
 
 const SELECTED_PROVIDER_KEY = 'selectedProvider';
+const APPLIED_LLM_TYPE_KEY = 'selectedProviderLlmType';
 
 interface ProvidersContextValue {
     providers: Provider[];
@@ -59,27 +62,41 @@ export function ProvidersProvider({ children }: ProvidersProviderProps) {
         return localStorage.getItem(SELECTED_PROVIDER_KEY);
     });
 
-    const selectedProvider = useMemo(() => {
-        if (providers.length === 0) {
-            return null;
-        }
+    const { data: growthSettings } = useGrowthPoll(
+        isAuthenticated() ? 'settings:default-provider' : null,
+        () => growthApi.listSettings(),
+        null,
+    );
+    const llmProviderType = growthSettings?.find((setting) => setting.kind === 'llm')?.provider;
 
-        if (selectedProviderName) {
-            const savedProvider = findProviderByName(selectedProviderName, providers);
+    // Choosing a provider on the growth LLM card overrides the remembered pick once, so the two never disagree;
+    // a later pick in the composer stays until the card changes again.
+    const [appliedLlmType, setAppliedLlmType] = useState(() => localStorage.getItem(APPLIED_LLM_TYPE_KEY));
+    const cardProvider =
+        llmProviderType && llmProviderType !== appliedLlmType ? pickDefaultProvider(providers, llmProviderType) : null;
 
-            if (savedProvider) {
-                return savedProvider;
-            }
-        }
-
-        return providers[0] ?? null;
-    }, [providers, selectedProviderName]);
+    if (llmProviderType && cardProvider?.type === llmProviderType) {
+        setAppliedLlmType(llmProviderType);
+        setSelectedProviderName(cardProvider.name);
+    }
 
     useEffect(() => {
-        if (selectedProvider) {
-            localStorage.setItem(SELECTED_PROVIDER_KEY, selectedProvider.name);
+        if (appliedLlmType) {
+            localStorage.setItem(APPLIED_LLM_TYPE_KEY, appliedLlmType);
         }
-    }, [selectedProvider]);
+    }, [appliedLlmType]);
+
+    useEffect(() => {
+        if (selectedProviderName) {
+            localStorage.setItem(SELECTED_PROVIDER_KEY, selectedProviderName);
+        }
+    }, [selectedProviderName]);
+
+    const selectedProvider = useMemo(() => {
+        const savedProvider = selectedProviderName ? findProviderByName(selectedProviderName, providers) : undefined;
+
+        return savedProvider ?? pickDefaultProvider(providers, llmProviderType);
+    }, [llmProviderType, providers, selectedProviderName]);
 
     const setSelectedProvider = useCallback((provider: Provider) => {
         setSelectedProviderName(provider.name);

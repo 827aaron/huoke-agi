@@ -17,7 +17,7 @@ describe('the reader learns their live data stopped', () => {
 
         fire('ws:disconnected');
 
-        expect(screen.getByRole('status')).toHaveTextContent(/not receiving updates/i);
+        expect(screen.getByRole('status')).toHaveTextContent('暂时收不到实时更新');
 
         fire('ws:connected');
 

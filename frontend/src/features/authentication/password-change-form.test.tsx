@@ -26,13 +26,13 @@ describe('PasswordChangeForm', () => {
         const user = userEvent.setup();
         render(<PasswordChangeForm />);
 
-        const current = screen.getByPlaceholderText('Enter your current password') as HTMLInputElement;
+        const current = screen.getByPlaceholderText('输入当前密码') as HTMLInputElement;
         expect(current.type).toBe('password');
 
-        const [showButton] = screen.getAllByRole('button', { name: 'Show password' });
+        const [showButton] = screen.getAllByRole('button', { name: '显示密码' });
 
         if (!showButton) {
-            throw new Error('expected a Show password toggle');
+            throw new Error('expected a 显示密码 toggle');
         }
 
         await user.click(showButton);
@@ -45,10 +45,10 @@ describe('PasswordChangeForm', () => {
         const onSuccess = vi.fn();
         render(<PasswordChangeForm onSuccess={onSuccess} />);
 
-        await user.type(screen.getByPlaceholderText('Enter your current password'), 'Oldpass0!');
-        await user.type(screen.getByPlaceholderText('Enter your new password'), 'Abcdef1!gh');
-        await user.type(screen.getByPlaceholderText('Confirm your new password'), 'Abcdef1!gh');
-        await user.click(screen.getByRole('button', { name: 'Update Password' }));
+        await user.type(screen.getByPlaceholderText('输入当前密码'), 'Oldpass0!');
+        await user.type(screen.getByPlaceholderText('输入新密码'), 'Abcdef1!gh');
+        await user.type(screen.getByPlaceholderText('再输入一次新密码'), 'Abcdef1!gh');
+        await user.click(screen.getByRole('button', { name: '修改密码' }));
 
         await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce());
         expect(put).toHaveBeenCalledWith('/user/password', {
@@ -60,7 +60,7 @@ describe('PasswordChangeForm', () => {
 
     it('renders Skip only with onSkip, and puts submit before skip in the vertical layout', () => {
         const { rerender } = render(<PasswordChangeForm />);
-        expect(screen.queryByRole('button', { name: 'Skip for now' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: '暂时跳过' })).not.toBeInTheDocument();
 
         rerender(
             <PasswordChangeForm
@@ -70,8 +70,8 @@ describe('PasswordChangeForm', () => {
             />,
         );
 
-        const submit = screen.getByRole('button', { name: 'Update Password' });
-        const skip = screen.getByRole('button', { name: 'Skip for now' });
+        const submit = screen.getByRole('button', { name: '修改密码' });
+        const skip = screen.getByRole('button', { name: '暂时跳过' });
         expect(submit.compareDocumentPosition(skip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
@@ -82,12 +82,12 @@ describe('PasswordChangeForm', () => {
         );
         render(<PasswordChangeForm />);
 
-        await user.type(screen.getByPlaceholderText('Enter your current password'), 'Oldpass0!');
-        await user.type(screen.getByPlaceholderText('Enter your new password'), 'Abcdef1!gh');
-        await user.type(screen.getByPlaceholderText('Confirm your new password'), 'Abcdef1!gh');
-        await user.click(screen.getByRole('button', { name: 'Update Password' }));
+        await user.type(screen.getByPlaceholderText('输入当前密码'), 'Oldpass0!');
+        await user.type(screen.getByPlaceholderText('输入新密码'), 'Abcdef1!gh');
+        await user.type(screen.getByPlaceholderText('再输入一次新密码'), 'Abcdef1!gh');
+        await user.click(screen.getByRole('button', { name: '修改密码' }));
 
-        expect(await screen.findByText('Current password is incorrect')).toBeInTheDocument();
+        expect(await screen.findByText('当前密码不正确')).toBeInTheDocument();
         expect(screen.queryByText('invalid current password')).not.toBeInTheDocument();
     });
     it.each([
@@ -97,12 +97,12 @@ describe('PasswordChangeForm', () => {
         const user = userEvent.setup();
         render(<PasswordChangeForm />);
 
-        await user.type(screen.getByPlaceholderText('Enter your current password'), 'Oldpass0!');
-        await user.type(screen.getByPlaceholderText('Enter your new password'), password);
-        await user.type(screen.getByPlaceholderText('Confirm your new password'), password);
-        await user.click(screen.getByRole('button', { name: 'Update Password' }));
+        await user.type(screen.getByPlaceholderText('输入当前密码'), 'Oldpass0!');
+        await user.type(screen.getByPlaceholderText('输入新密码'), password);
+        await user.type(screen.getByPlaceholderText('再输入一次新密码'), password);
+        await user.click(screen.getByRole('button', { name: '修改密码' }));
 
-        expect(await screen.findByText(/Password must be either longer than 15 characters/)).toBeInTheDocument();
+        expect(await screen.findByText(/密码需要超过 15 个字符/)).toBeInTheDocument();
         expect(put).not.toHaveBeenCalled();
     });
 
@@ -110,10 +110,10 @@ describe('PasswordChangeForm', () => {
         const user = userEvent.setup();
         render(<PasswordChangeForm />);
 
-        await user.type(screen.getByPlaceholderText('Enter your current password'), 'Oldpass0!');
-        await user.type(screen.getByPlaceholderText('Enter your new password'), 'abcdefghijklmnop');
-        await user.type(screen.getByPlaceholderText('Confirm your new password'), 'abcdefghijklmnop');
-        await user.click(screen.getByRole('button', { name: 'Update Password' }));
+        await user.type(screen.getByPlaceholderText('输入当前密码'), 'Oldpass0!');
+        await user.type(screen.getByPlaceholderText('输入新密码'), 'abcdefghijklmnop');
+        await user.type(screen.getByPlaceholderText('再输入一次新密码'), 'abcdefghijklmnop');
+        await user.click(screen.getByRole('button', { name: '修改密码' }));
 
         await waitFor(() => expect(put).toHaveBeenCalled());
     });

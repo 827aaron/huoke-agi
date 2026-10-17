@@ -43,14 +43,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useResourcesUpload } from '@/features/resources/use-resources-upload';
 import { useAppForm } from '@/hooks/use-app-form';
+import { copy } from '@/lib/copy';
 import { getProviderDisplayName } from '@/models/provider';
 import { useProviders } from '@/providers/providers-provider';
 import { useResources } from '@/providers/resources-provider';
 import { type Template, useTemplates } from '@/providers/templates-provider';
 
 const formSchema = z.object({
-    message: z.string().trim().min(1, { message: 'Message cannot be empty' }),
-    providerName: z.string().trim().min(1, { message: 'Provider must be selected' }),
+    message: z.string().trim().min(1, { message: copy.flowForm.messageRequired }),
+    providerName: z.string().trim().min(1, { message: copy.flowForm.providerRequired }),
     resourceIds: z.array(z.string()),
     useAgents: z.boolean(),
 });
@@ -79,7 +80,7 @@ export function FlowForm({
     isSubmitting,
     onCancel,
     onSubmit,
-    placeholder = 'Describe what you would like PentAGI to test...',
+    placeholder = copy.newFlow.placeholder,
     type,
 }: FlowFormProps) {
     const { providers, setSelectedProvider } = useProviders();
@@ -339,13 +340,13 @@ export function FlowForm({
                         onChange={(event) => setTemplateSearch(event.target.value)}
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
-                        placeholder="Search..."
+                        placeholder={copy.flowForm.search}
                         value={templateSearch}
                     />
                     {templateSearch && (
                         <InputGroupAddon align="inline-end">
                             <InputGroupButton
-                                aria-label="Clear template search"
+                                aria-label={copy.flowForm.clearTemplateSearch}
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     setTemplateSearch('');
@@ -364,7 +365,7 @@ export function FlowForm({
                         className="min-h-16 justify-center"
                         disabled
                     >
-                        {templateSearch ? 'No results found' : 'No available templates'}
+                        {templateSearch ? copy.flowForm.noResults : copy.flowForm.noTemplates}
                     </DropdownMenuItem>
                 ) : (
                     filteredTemplates.map((template) => (
@@ -394,13 +395,13 @@ export function FlowForm({
                         onChange={(event) => setResourceSearch(event.target.value)}
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
-                        placeholder="Search..."
+                        placeholder={copy.flowForm.search}
                         value={resourceSearch}
                     />
                     {resourceSearch && (
                         <InputGroupAddon align="inline-end">
                             <InputGroupButton
-                                aria-label="Clear resource search"
+                                aria-label={copy.flowForm.clearResourceSearch}
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     setResourceSearch('');
@@ -419,7 +420,7 @@ export function FlowForm({
                         className="min-h-16 justify-center"
                         disabled
                     >
-                        {resourceSearch ? 'No results found' : 'No available resources'}
+                        {resourceSearch ? copy.flowForm.noResults : copy.flowForm.noResources}
                     </DropdownMenuItem>
                 ) : (
                     filteredResources.map((resource) => {
@@ -475,7 +476,7 @@ export function FlowForm({
                 }}
             >
                 {upload.isUploading ? <Spinner variant="circle" /> : <Plus />}
-                {upload.isUploading ? 'Uploading…' : 'Upload files'}
+                {upload.isUploading ? copy.resources.uploading : copy.resources.uploadFiles}
             </DropdownMenuItem>
         </>
     );
@@ -512,7 +513,7 @@ export function FlowForm({
                                                         {resource.name}
                                                     </span>
                                                     <Button
-                                                        aria-label={`Remove ${resource.name}`}
+                                                        aria-label={copy.flowForm.remove(resource.name)}
                                                         className="text-muted-foreground hover:text-destructive -my-[5px] -mr-1.5 -ml-1 size-[26px] shrink-0 [&_svg]:size-3.5"
                                                         disabled={isFormDisabled}
                                                         onClick={() => handleRemoveAttachment(resourceId)}
@@ -562,7 +563,7 @@ export function FlowForm({
                                                             <span className="max-w-40 truncate">
                                                                 {currentProvider
                                                                     ? getProviderDisplayName(currentProvider)
-                                                                    : 'Select Provider'}
+                                                                    : copy.provider.selectProvider}
                                                             </span>
                                                             <ChevronDown />
                                                         </InputGroupButton>
@@ -579,13 +580,15 @@ export function FlowForm({
                                                                     }
                                                                     onClick={(event) => event.stopPropagation()}
                                                                     onKeyDown={(event) => event.stopPropagation()}
-                                                                    placeholder="Search..."
+                                                                    placeholder={copy.flowForm.search}
                                                                     value={providerSearch}
                                                                 />
                                                                 {providerSearch && (
                                                                     <InputGroupAddon align="inline-end">
                                                                         <InputGroupButton
-                                                                            aria-label="Clear provider search"
+                                                                            aria-label={
+                                                                                copy.flowForm.clearProviderSearch
+                                                                            }
                                                                             onClick={(event) => {
                                                                                 event.stopPropagation();
                                                                                 setProviderSearch('');
@@ -605,8 +608,8 @@ export function FlowForm({
                                                                     disabled
                                                                 >
                                                                     {providerSearch
-                                                                        ? 'No results found'
-                                                                        : 'No available providers'}
+                                                                        ? copy.flowForm.noResults
+                                                                        : copy.flowForm.noProviders}
                                                                 </DropdownMenuItem>
                                                             ) : (
                                                                 filteredProviders.map((provider) => (
@@ -667,14 +670,12 @@ export function FlowForm({
                                                                         useAgentsField.onChange(!useAgentsField.value)
                                                                     }
                                                                 >
-                                                                    Use Agents
+                                                                    {copy.flowForm.useAgents}
                                                                 </FormLabel>
                                                             </FormItem>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
-                                                            <p className="max-w-48">
-                                                                Enable multi-agent collaboration for complex tasks
-                                                            </p>
+                                                            <p className="max-w-64">{copy.flowForm.useAgentsHint}</p>
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </TooltipProvider>
@@ -692,7 +693,7 @@ export function FlowForm({
                                     >
                                         <DropdownMenuTrigger asChild>
                                             <InputGroupButton
-                                                aria-label="Templates and resources"
+                                                aria-label={copy.flowForm.templatesAndResources}
                                                 className="ml-auto shrink-0"
                                                 disabled={isFormDisabled}
                                                 size="icon-xs"
@@ -742,14 +743,14 @@ export function FlowForm({
                                                         value="templates"
                                                     >
                                                         <FileText className="size-3.5" />
-                                                        Templates
+                                                        {copy.flowForm.templates}
                                                     </TabsTrigger>
                                                     <TabsTrigger
                                                         className="gap-1.5"
                                                         value="resources"
                                                     >
                                                         <Paperclip className="size-3.5" />
-                                                        Resources
+                                                        {copy.flowForm.resources}
                                                         {flowResources.length > 0 && (
                                                             <span className="bg-muted-foreground/20 text-foreground flex h-4 min-w-4 items-center justify-center rounded px-1 text-[10px] font-medium tabular-nums">
                                                                 {flowResources.length}
@@ -763,7 +764,7 @@ export function FlowForm({
 
                                     {!isLoading || isSubmitting ? (
                                         <InputGroupButton
-                                            aria-label={isSubmitting ? 'Submitting…' : 'Submit'}
+                                            aria-label={isSubmitting ? copy.flowForm.submitting : copy.flowForm.submit}
                                             className="shrink-0"
                                             disabled={isSubmitting || !isValid || upload.isUploading}
                                             size="icon-xs"
@@ -774,7 +775,7 @@ export function FlowForm({
                                         </InputGroupButton>
                                     ) : (
                                         <InputGroupButton
-                                            aria-label={isCanceling ? 'Stopping…' : 'Stop'}
+                                            aria-label={isCanceling ? copy.flowForm.stopping : copy.flowForm.stop}
                                             className="shrink-0"
                                             disabled={isCanceling || !onCancel}
                                             onClick={() => onCancel?.()}
@@ -803,9 +804,9 @@ export function FlowForm({
             />
             <ConfirmationDialog
                 confirmIcon={<FileSymlink />}
-                confirmText="Replace"
+                confirmText={copy.action.replace}
                 confirmVariant="default"
-                description="Current message has content. Replace with the selected template?"
+                description={copy.flowForm.replaceContentHint}
                 handleConfirm={handleConfirmReplaceTemplate}
                 handleOpenChange={(open) => {
                     if (!open) {
@@ -815,7 +816,7 @@ export function FlowForm({
                     setIsReplaceConfirmOpen(open);
                 }}
                 isOpen={isReplaceConfirmOpen}
-                title="Replace content?"
+                title={copy.flowForm.replaceContent}
             />
         </Form>
     );

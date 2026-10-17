@@ -7,6 +7,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
 import { Spinner } from '@/components/ui/spinner';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 import { createMarkdownExtensions } from './markdown-editor-extensions';
@@ -166,7 +167,7 @@ function useMarkdownEditor({
     id,
     onBlur,
     onChange,
-    placeholder = 'Write something…',
+    placeholder = copy.editor.placeholder,
     value,
 }: UseMarkdownEditorOptions): Editor | null {
     // Suppress echoes of our own output: the markdown round-trip can re-serialize a document (a decoded HTML

@@ -24,8 +24,8 @@ test.describe('flow tab deep link', { tag: '@flows' }, () => {
             pageErrorLog,
         }) => {
             await page.goto('/flows/5?tab=assistant');
-            await expectSelectedTab(page, 'Assistant');
-            await expect(page.getByText('New assistant', { exact: true })).toBeVisible();
+            await expectSelectedTab(page, '助手');
+            await expect(page.getByText('新的助手对话', { exact: true })).toBeVisible();
 
             expectCleanPage(pageErrorLog);
         });
@@ -39,27 +39,27 @@ test.describe('flow tab deep link', { tag: '@flows' }, () => {
             pageErrorLog,
         }) => {
             await page.goto('/flows/5?tab=automation');
-            await expectSelectedTab(page, 'Automation');
-            await expect(page.getByRole('tabpanel', { name: 'Automation' })).toBeVisible();
+            await expectSelectedTab(page, '自动执行');
+            await expect(page.getByRole('tabpanel', { name: '自动执行' })).toBeVisible();
 
             expectCleanPage(pageErrorLog);
         });
 
         test('a tab click records itself in the URL', async ({ page, pageErrorLog }) => {
             await page.goto('/flows/5');
-            await expectSelectedTab(page, 'Assistant');
+            await expectSelectedTab(page, '助手');
 
-            await page.getByRole('tab', { name: 'Automation' }).click();
+            await page.getByRole('tab', { name: '自动执行' }).click();
 
             await expect(page).toHaveURL(/[?&]tab=automation/);
-            await expectSelectedTab(page, 'Automation');
+            await expectSelectedTab(page, '自动执行');
 
             expectCleanPage(pageErrorLog);
         });
 
         test('an unknown tab falls back to the auto-detect', async ({ page, pageErrorLog }) => {
             await page.goto('/flows/5?tab=not-a-tab');
-            await expectSelectedTab(page, 'Assistant');
+            await expectSelectedTab(page, '助手');
             // The bogus value is left alone rather than rewritten, so a shared link keeps working
             // once the tab it names exists again.
             await expect(page).toHaveURL(/[?&]tab=not-a-tab/);
@@ -76,7 +76,7 @@ test.describe('flow side panel tab', { tag: '@flows' }, () => {
         await page.setViewportSize({ height: 800, width: 1440 });
         await page.goto('/flows/5?tab=screenshots');
 
-        await expectSelectedTab(page, 'Screenshots');
+        await expectSelectedTab(page, '截图');
         await expect(page, 'the link is read, not rewritten').toHaveURL(/[?&]tab=screenshots/);
         expectCleanPage(pageErrorLog);
     });
@@ -85,15 +85,15 @@ test.describe('flow side panel tab', { tag: '@flows' }, () => {
         await page.setViewportSize({ height: 800, width: 1440 });
         await page.goto('/flows/5?tab=assistant');
 
-        await page.getByRole('tab', { name: 'Searches' }).click();
+        await page.getByRole('tab', { name: '搜索记录' }).click();
 
         await expect(page).toHaveURL(/[?&]side=tools/);
-        await expectSelectedTab(page, 'Searches');
+        await expectSelectedTab(page, '搜索记录');
 
         await page.reload();
 
-        await expectSelectedTab(page, 'Searches');
-        await expectSelectedTab(page, 'Assistant');
+        await expectSelectedTab(page, '搜索记录');
+        await expectSelectedTab(page, '助手');
         expectCleanPage(pageErrorLog);
     });
 
@@ -104,19 +104,19 @@ test.describe('flow side panel tab', { tag: '@flows' }, () => {
         await page.setViewportSize({ height: 800, width: 1100 });
         await page.goto('/flows/5');
 
-        await page.getByRole('tab', { name: 'Screenshots' }).click();
+        await page.getByRole('tab', { name: '截图' }).click();
         await expect(page).toHaveURL(/[?&]tab=screenshots/);
 
         await page.setViewportSize({ height: 800, width: 1440 });
-        await expectSelectedTab(page, 'Screenshots');
+        await expectSelectedTab(page, '截图');
 
-        await page.getByRole('tab', { name: 'Assistant' }).click();
+        await page.getByRole('tab', { name: '助手' }).click();
         await expect(page).toHaveURL(/[?&]tab=assistant/);
-        await expectSelectedTab(page, 'Screenshots');
+        await expectSelectedTab(page, '截图');
 
         await page.setViewportSize({ height: 800, width: 1100 });
 
-        await expectSelectedTab(page, 'Assistant');
+        await expectSelectedTab(page, '助手');
         expectCleanPage(pageErrorLog);
     });
 });

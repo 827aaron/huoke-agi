@@ -5,6 +5,7 @@ import type { OverwriteOutcome } from '@/components/shared/overwrite';
 
 import { resourceIdsToWire } from '@/features/resources/resources-rest';
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
+import { copy } from '@/lib/copy';
 
 import type { FlowFilesResponse } from './flow-files-utils';
 
@@ -51,9 +52,9 @@ export function useFlowFilesAttachResources({
             } catch (error) {
                 // Non-numeric IDs indicate an upstream cache contract bug, not a user
                 // mistake. Surface a developer-friendly toast and bail out loudly.
-                const description = error instanceof Error ? error.message : 'Invalid resource IDs.';
+                const description = error instanceof Error ? error.message : copy.flowFiles.attachInvalidIds;
 
-                toast.error('Attach failed', { description });
+                toast.error(copy.flowFiles.attachFailed, { description });
 
                 return { kind: 'error' };
             }
@@ -70,8 +71,8 @@ export function useFlowFilesAttachResources({
                     { timeout: 0 },
                 );
 
-                toast.success('Resources attached', {
-                    description: `Copied ${numericIds.length} ${numericIds.length === 1 ? 'item' : 'items'} to ${RESOURCES_TARGET_DIRECTORY}`,
+                toast.success(copy.flowFiles.attached, {
+                    description: copy.flowFiles.attachedHint(numericIds.length, RESOURCES_TARGET_DIRECTORY),
                 });
                 onSuccess?.();
 
@@ -81,9 +82,9 @@ export function useFlowFilesAttachResources({
                     return { kind: 'conflict' };
                 }
 
-                const description = getApiErrorMessage(error, 'Failed to attach resources');
+                const description = getApiErrorMessage(error, copy.flowFiles.attachFailedHint);
 
-                toast.error('Attach failed', { description });
+                toast.error(copy.flowFiles.attachFailed, { description });
 
                 return { kind: 'error' };
             } finally {

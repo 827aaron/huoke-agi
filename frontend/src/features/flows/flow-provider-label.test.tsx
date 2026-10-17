@@ -15,7 +15,7 @@ const openai: Provider = { name: 'openai', type: ProviderType.Openai };
 const custom: Provider = { name: 'my-gateway', type: ProviderType.Custom };
 
 const render = (ui: ReactElement) => renderUi(<TooltipProvider delayDuration={0}>{ui}</TooltipProvider>);
-const unavailableMark = () => screen.queryByRole('img', { name: 'Unavailable' });
+const unavailableMark = () => screen.queryByRole('img', { name: '不可用' });
 
 describe('FlowProviderLabel', () => {
     it('leaves a flow alone while its provider is still configured', () => {
@@ -57,9 +57,9 @@ describe('FlowProviderLabel', () => {
             />,
         );
 
-        await user.hover(screen.getByRole('img', { name: 'Unavailable' }));
+        await user.hover(screen.getByRole('img', { name: '不可用' }));
 
-        expect(await screen.findByRole('tooltip')).toHaveTextContent('Unavailable');
+        expect(await screen.findByRole('tooltip')).toHaveTextContent('不可用');
     });
 
     it('says the same to a keyboard user who tabs onto the mark', async () => {
@@ -76,7 +76,7 @@ describe('FlowProviderLabel', () => {
         await user.tab();
 
         expect(unavailableMark()).toHaveFocus();
-        expect(await screen.findByRole('tooltip')).toHaveTextContent('Unavailable');
+        expect(await screen.findByRole('tooltip')).toHaveTextContent('不可用');
     });
 
     it('says nothing while the provider list has not arrived', () => {

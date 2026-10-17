@@ -69,7 +69,7 @@ describe('NewFlow', () => {
         renderPage();
 
         await user.type(screen.getByRole('textbox'), 'scan 10.0.0.5');
-        await user.click(screen.getByRole('button', { name: 'Submit' }));
+        await user.click(screen.getByRole('button', { name: '发送' }));
 
         await waitFor(() => expect(createFlow).toHaveBeenCalledOnce());
         await waitFor(() => expect(screen.getByRole('textbox')).not.toBeDisabled());
@@ -83,7 +83,7 @@ describe('NewFlow', () => {
         renderPage();
 
         await user.type(screen.getByRole('textbox'), 'scan 10.0.0.5');
-        await user.click(screen.getByRole('button', { name: 'Submit' }));
+        await user.click(screen.getByRole('button', { name: '发送' }));
 
         expect(await screen.findByText('flow page')).toBeInTheDocument();
     });

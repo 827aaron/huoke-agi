@@ -15,7 +15,6 @@ import {
     type FileManagerAction,
     type FileManagerBulkAction,
     type FileNode,
-    pluralizeItems,
 } from '@/components/shared/file-manager';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -26,6 +25,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { StatusType } from '@/graphql/types';
 import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
 import { copyToClipboard } from '@/lib/clipboard';
+import { copy } from '@/lib/copy';
 import { useFlow } from '@/providers/flow-provider';
 
 import { FlowFilesAttachResourcesDialog } from './flow-files-attach-resources-dialog';
@@ -66,12 +66,12 @@ function FlowFiles() {
         const wasCopied = await copyToClipboard(file.path);
 
         if (wasCopied) {
-            toast.success('Path copied to clipboard');
+            toast.success(copy.resources.pathCopied);
 
             return;
         }
 
-        toast.error('Failed to copy path');
+        toast.error(copy.resources.pathCopyFailed);
     }, []);
 
     /**
@@ -86,12 +86,12 @@ function FlowFiles() {
         const wasCopied = await copyToClipboard(paths.join('\n'));
 
         if (wasCopied) {
-            toast.success(`${paths.length} ${pluralizeItems(paths.length)} copied to clipboard`);
+            toast.success(copy.resources.pathsCopied(paths.length));
 
             return;
         }
 
-        toast.error('Failed to copy paths');
+        toast.error(copy.resources.pathsCopyFailed);
     }, []);
 
     // `flowId` may be missing (no flow selected yet) — return '' so FileManager
@@ -117,7 +117,7 @@ function FlowFiles() {
             appliesToDirs: true,
             icon: FolderOutput,
             id: 'flow-files-save-as-resource',
-            label: 'Save as resource',
+            label: copy.flowFiles.promoteOne,
             onSelect: handleRequestPromote,
         }),
         [handleRequestPromote],
@@ -164,10 +164,11 @@ function FlowFiles() {
                 <EmptyMedia variant="icon">
                     <FolderUp />
                 </EmptyMedia>
-                <EmptyTitle>No files in cache</EmptyTitle>
+                <EmptyTitle>{copy.flowFiles.empty}</EmptyTitle>
                 <EmptyDescription>
-                    Upload files to make them available at <code>/work/uploads</code>, or use Pull to sync files from
-                    the running container. You can also drag &amp; drop files here.
+                    {copy.flowFiles.emptyHint.before}
+                    <code>/work/uploads</code>
+                    {copy.flowFiles.emptyHint.after}
                 </EmptyDescription>
             </EmptyHeader>
         </Empty>
@@ -179,9 +180,11 @@ function FlowFiles() {
                 <EmptyMedia variant="icon">
                     <Search />
                 </EmptyMedia>
-                <EmptyTitle>No matches</EmptyTitle>
+                <EmptyTitle>{copy.resources.noMatches}</EmptyTitle>
                 <EmptyDescription>
-                    No files match <code>{search.debouncedQuery.trim()}</code>. Try a different query.
+                    {copy.flowFiles.noMatchesHint.before}
+                    <code>{search.debouncedQuery.trim()}</code>
+                    {copy.flowFiles.noMatchesHint.after}
                 </EmptyDescription>
             </EmptyHeader>
         </Empty>
@@ -207,7 +210,7 @@ function FlowFiles() {
                 <div className="bg-primary/10 border-primary pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-lg border-2 border-dashed">
                     <div className="text-link flex flex-col items-center gap-2">
                         <FolderUp className="size-8" />
-                        <span className="text-sm font-medium">Drop files to upload</span>
+                        <span className="text-sm font-medium">{copy.resources.dropToUpload}</span>
                     </div>
                 </div>
             )}
@@ -228,13 +231,13 @@ function FlowFiles() {
                                             <InputGroupInput
                                                 {...field}
                                                 autoComplete="off"
-                                                placeholder="Search files..."
+                                                placeholder={copy.flowFiles.search}
                                                 type="text"
                                             />
                                             {field.value && (
                                                 <InputGroupAddon align="inline-end">
                                                     <InputGroupButton
-                                                        aria-label="Clear file search"
+                                                        aria-label={copy.flowFiles.clearSearch}
                                                         onClick={search.resetSearch}
                                                         type="button"
                                                     >
@@ -252,7 +255,7 @@ function FlowFiles() {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
-                                        aria-label="Upload files"
+                                        aria-label={copy.resources.uploadFiles}
                                         disabled={upload.isUploading || isLoading}
                                         onClick={upload.openFilePicker}
                                         size="icon-sm"
@@ -264,9 +267,11 @@ function FlowFiles() {
                                 </span>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-64 text-center text-xs">
-                                <p className="font-medium">Upload files</p>
+                                <p className="font-medium">{copy.resources.uploadFiles}</p>
                                 <p className="mt-1">
-                                    Pushed to <code>/work/uploads</code> — immediately accessible inside the container.
+                                    {copy.flowFiles.uploadsHint.before}
+                                    <code>/work/uploads</code>
+                                    {copy.flowFiles.uploadsHint.after}
                                 </p>
                             </TooltipContent>
                         </Tooltip>
@@ -275,7 +280,7 @@ function FlowFiles() {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
-                                        aria-label="Attach resources"
+                                        aria-label={copy.flowFiles.attachResources}
                                         disabled={isAttachResourcesDisabled}
                                         onClick={handleOpenAttachResourcesDialog}
                                         size="icon-sm"
@@ -287,10 +292,11 @@ function FlowFiles() {
                                 </span>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-64 text-center text-xs">
-                                <p className="font-medium">Attach resources</p>
+                                <p className="font-medium">{copy.flowFiles.attachResources}</p>
                                 <p className="mt-1">
-                                    Copied from the library to <code>/work/resources</code> — immediately accessible
-                                    inside the container.
+                                    {copy.flowFiles.attachResourcesHint.before}
+                                    <code>/work/resources</code>
+                                    {copy.flowFiles.attachResourcesHint.after}
                                 </p>
                             </TooltipContent>
                         </Tooltip>
@@ -299,7 +305,7 @@ function FlowFiles() {
                             <TooltipTrigger asChild>
                                 <span>
                                     <Button
-                                        aria-label="Pull from container"
+                                        aria-label={copy.flowFiles.pullFromContainer}
                                         disabled={isPullDisabled}
                                         onClick={handleOpenPullDialog}
                                         size="icon-sm"
@@ -313,13 +319,15 @@ function FlowFiles() {
                             <TooltipContent className="max-w-64 text-center text-xs">
                                 {isContainerRunning ? (
                                     <>
-                                        <p className="font-medium">Pull file or directory from container</p>
+                                        <p className="font-medium">{copy.flowFiles.pullTooltip}</p>
                                         <p className="mt-1">
-                                            Snapshots are stored separately under <strong>Container</strong>.
+                                            {copy.flowFiles.pullHint.before}
+                                            <strong>{copy.flowFiles.container}</strong>
+                                            {copy.flowFiles.pullHint.after}
                                         </p>
                                     </>
                                 ) : (
-                                    <p className="font-medium">Container is not running</p>
+                                    <p className="font-medium">{copy.flowFiles.containerNotRunning}</p>
                                 )}
                             </TooltipContent>
                         </Tooltip>
@@ -359,13 +367,13 @@ function FlowFiles() {
             />
 
             <ConfirmationDialog
-                confirmText="Delete"
+                confirmText={copy.action.delete}
                 handleConfirm={deletion.confirmDelete}
                 handleOpenChange={handleDeleteDialogOpenChange}
                 isOpen={!!deletion.fileToDelete}
                 itemName={deletion.fileToDelete?.name}
-                itemType={deletion.fileToDelete?.isDir ? 'directory' : 'file'}
-                title={deletion.fileToDelete?.isDir ? 'Delete Directory' : 'Delete File'}
+                itemType={deletion.fileToDelete?.isDir ? copy.itemType.directory : copy.itemType.file}
+                title={deletion.fileToDelete?.isDir ? copy.flowFiles.deleteDirectory : copy.flowFiles.deleteFile}
             />
         </div>
     );

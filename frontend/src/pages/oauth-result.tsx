@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 
 import Logo from '@/components/icons/logo';
+import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 
 function OAuthResult() {
-    const [statusMessage, setStatusMessage] = useState('Authentication in progress...');
+    const [statusMessage, setStatusMessage] = useState(copy.oauth.inProgress);
 
     const successDelay = 2000;
     const errorDelay = 5000;
@@ -62,15 +63,15 @@ function OAuthResult() {
                     window.location.origin,
                 );
 
-                updateMessage('Authentication complete, closing window...');
+                updateMessage(copy.oauth.complete);
                 handleClose(successDelay);
             } catch (e) {
                 console.error('Failed to send message to opener:', e);
-                updateMessage('Error communicating with parent window. Closing in a few seconds...');
+                updateMessage(copy.oauth.parentError);
                 handleClose(errorDelay);
             }
         } else {
-            updateMessage('Authentication window opened directly. Redirecting to login page...');
+            updateMessage(copy.oauth.direct);
             handleRedirect(routes.login(), errorDelay / 2);
             handleClose(errorDelay);
         }
@@ -92,7 +93,11 @@ function OAuthResult() {
 
     return (
         <div className="flex h-screen w-full items-center justify-center bg-linear-to-r from-slate-800 to-slate-950">
-            <Logo className="animate-logo-spin m-auto size-32 text-white delay-10000" />
+            <Logo
+                className="m-auto w-72"
+                tone="dark"
+                variant="horizontal"
+            />
             <div className="fixed bottom-4 text-sm text-white">{statusMessage}</div>
         </div>
     );

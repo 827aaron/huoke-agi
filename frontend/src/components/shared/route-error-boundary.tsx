@@ -5,6 +5,7 @@ import { useRouteError } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { isChunkLoadError, isDomDesyncError, reloadOnce } from '@/lib/chunk-reload';
+import { copy } from '@/lib/copy';
 
 const subscribeToConnection = (onChange: () => void) => {
     window.addEventListener('online', onChange);
@@ -28,18 +29,18 @@ const describeFailure = ({
     isOnline: boolean;
 }) => {
     if (isChunk && !isOnline) {
-        return 'You are offline, so this page could not load. It will reload once the connection is back.';
+        return copy.routeError.offline;
     }
 
     if (isChunk) {
-        return 'A new version was likely just deployed. Reloading will load the latest one.';
+        return copy.routeError.chunk;
     }
 
     if (isDesync) {
-        return 'The page hit a display glitch. Reloading usually clears it.';
+        return copy.routeError.desync;
     }
 
-    return 'The page ran into an unexpected error. Reloading usually clears it.';
+    return copy.routeError.unexpected;
 };
 
 /**
@@ -72,7 +73,7 @@ function RouteErrorBoundary() {
                     <EmptyMedia variant="icon">
                         <TriangleAlert />
                     </EmptyMedia>
-                    <EmptyTitle>Something went wrong</EmptyTitle>
+                    <EmptyTitle>{copy.routeError.title}</EmptyTitle>
                     <EmptyDescription>{describeFailure({ isChunk, isDesync, isOnline })}</EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
@@ -81,7 +82,7 @@ function RouteErrorBoundary() {
                         onClick={() => window.location.reload()}
                         variant="secondary"
                     >
-                        Reload
+                        {copy.action.reload}
                     </Button>
                 </EmptyContent>
             </Empty>

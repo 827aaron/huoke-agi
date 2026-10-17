@@ -3,8 +3,8 @@ import { toast } from 'sonner';
 
 import type { UserResourceFragmentFragment } from '@/graphql/types';
 
-import { pluralizeItems } from '@/components/shared/file-manager';
 import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
+import { copy } from '@/lib/copy';
 import { validateUploadBatch } from '@/lib/upload-validation';
 
 import {
@@ -62,18 +62,18 @@ interface UseResourcesUploadResult {
     uploadFiles: (selectedFiles: File[], options?: UploadOptions) => Promise<null | UploadResponse>;
 }
 
-const UPLOAD_OVERWRITE_HINT = 'Resource already exists — please rename or remove the existing entry';
+const UPLOAD_OVERWRITE_HINT = copy.resources.uploadExists;
 
 const buildUploadSuccessMessage = (uploadedCount: number, dir?: string) => {
-    const target = dir ? `to /${dir}` : 'to your library';
+    const target = dir ? copy.resources.toPath(dir) : copy.resources.toLibrary;
 
     if (uploadedCount === 1) {
-        return { description: `Uploaded ${target}`, title: 'File uploaded' };
+        return { description: copy.resources.uploaded(target), title: copy.resources.fileUploaded };
     }
 
     return {
-        description: `${uploadedCount} files uploaded ${target}`,
-        title: `${uploadedCount} ${pluralizeItems(uploadedCount)} uploaded`,
+        description: copy.resources.filesUploadedTo(uploadedCount, target),
+        title: copy.resources.filesUploaded(uploadedCount),
     };
 };
 
@@ -128,7 +128,7 @@ export function useResourcesUpload({ defaultDir, onSuccess }: UseResourcesUpload
             });
 
             if (validationError) {
-                toast.error('Upload failed', { description: validationError });
+                toast.error(copy.resources.uploadFailed, { description: validationError });
 
                 return null;
             }
@@ -169,11 +169,11 @@ export function useResourcesUpload({ defaultDir, onSuccess }: UseResourcesUpload
 
                 return data;
             } catch (error) {
-                const description = getApiErrorMessage(error, 'Failed to upload files', {
+                const description = getApiErrorMessage(error, copy.resources.uploadFailedHint, {
                     409: UPLOAD_OVERWRITE_HINT,
                 });
 
-                toast.error('Upload failed', { description });
+                toast.error(copy.resources.uploadFailed, { description });
 
                 return null;
             } finally {

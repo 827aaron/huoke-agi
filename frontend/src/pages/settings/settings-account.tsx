@@ -1,5 +1,4 @@
-import { format, isValid } from 'date-fns';
-import { enUS } from 'date-fns/locale';
+import { isValid } from 'date-fns';
 import { Lock, Mail, User } from 'lucide-react';
 import { useState } from 'react';
 
@@ -10,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { EmailChangeForm } from '@/features/authentication/email-change-form';
 import { NameChangeForm } from '@/features/authentication/name-change-form';
 import { PasswordChangeForm } from '@/features/authentication/password-change-form';
+import { copy } from '@/lib/copy';
 import { formatAccountProvider } from '@/lib/utils/format';
 import { useUser } from '@/providers/user-provider';
 
@@ -37,14 +37,16 @@ function SettingsAccount() {
     const displayName = user.name?.trim() || user.mail;
     const initial = ([...(displayName || '?')][0] ?? '?').toUpperCase();
     const createdAt = user.created_at ? new Date(user.created_at) : null;
-    const memberSince = createdAt && isValid(createdAt) ? format(createdAt, 'MMMM yyyy', { locale: enUS }) : null;
-    const accountLabel = isLocal ? 'Local account' : (formatAccountProvider(user.provider) ?? 'OAuth account');
+    const memberSince = createdAt && isValid(createdAt) ? copy.account.memberSince(createdAt) : null;
+    const accountLabel = isLocal
+        ? copy.account.localAccount
+        : (formatAccountProvider(user.provider) ?? copy.account.oauthAccount);
 
     return (
         <>
             <AppHeader>
                 <AppHeaderContent>
-                    <AppHeaderTitle icon={<User className="size-4 shrink-0" />}>Account</AppHeaderTitle>
+                    <AppHeaderTitle icon={<User className="size-4 shrink-0" />}>{copy.account.title}</AppHeaderTitle>
                 </AppHeaderContent>
             </AppHeader>
             <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
@@ -55,9 +57,7 @@ function SettingsAccount() {
                         </div>
                         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                             <CardTitle className="truncate">{displayName}</CardTitle>
-                            {memberSince && (
-                                <CardDescription className="truncate">Member since {memberSince}</CardDescription>
-                            )}
+                            {memberSince && <CardDescription className="truncate">{memberSince}</CardDescription>}
                         </div>
                         <Badge
                             className="shrink-0"
@@ -71,8 +71,8 @@ function SettingsAccount() {
                 <Card>
                     <CardHeader className="flex-row items-start justify-between gap-4">
                         <div className="grid gap-1.5">
-                            <CardTitle>Display name</CardTitle>
-                            <CardDescription>The name shown across the app.</CardDescription>
+                            <CardTitle>{copy.auth.displayName}</CardTitle>
+                            <CardDescription>{copy.account.displayNameHint}</CardDescription>
                         </div>
                         {!editingSections.has('name') && (
                             <Button
@@ -80,7 +80,7 @@ function SettingsAccount() {
                                 size="sm"
                                 variant="outline"
                             >
-                                Change
+                                {copy.account.change}
                             </Button>
                         )}
                     </CardHeader>
@@ -102,9 +102,9 @@ function SettingsAccount() {
                 <Card>
                     <CardHeader className="flex-row items-start justify-between gap-4">
                         <div className="grid gap-1.5">
-                            <CardTitle>Email address</CardTitle>
+                            <CardTitle>{copy.account.email}</CardTitle>
                             <CardDescription>
-                                {isLocal ? 'The email you use to sign in.' : `Linked from your ${accountLabel}.`}
+                                {isLocal ? copy.account.emailHint : copy.account.linkedFrom(accountLabel)}
                             </CardDescription>
                         </div>
                         {isLocal && !editingSections.has('email') && (
@@ -113,7 +113,7 @@ function SettingsAccount() {
                                 size="sm"
                                 variant="outline"
                             >
-                                Change
+                                {copy.account.change}
                             </Button>
                         )}
                     </CardHeader>
@@ -136,8 +136,8 @@ function SettingsAccount() {
                     <Card>
                         <CardHeader className="flex-row items-start justify-between gap-4">
                             <div className="grid gap-1.5">
-                                <CardTitle>Password</CardTitle>
-                                <CardDescription>Change your account password.</CardDescription>
+                                <CardTitle>{copy.auth.password}</CardTitle>
+                                <CardDescription>{copy.account.changePassword}</CardDescription>
                             </div>
                             {!editingSections.has('password') && (
                                 <Button
@@ -145,7 +145,7 @@ function SettingsAccount() {
                                     size="sm"
                                     variant="outline"
                                 >
-                                    Change
+                                    {copy.account.change}
                                 </Button>
                             )}
                         </CardHeader>

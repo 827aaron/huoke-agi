@@ -12,7 +12,7 @@ PLAYWRIGHT_VERSION="$(node -p "require('$FRONTEND/node_modules/@playwright/test/
 IMAGE="mcr.microsoft.com/playwright:v${PLAYWRIGHT_VERSION}-noble"
 
 if [[ "${E2E_SKIP_BUILD:-}" != "1" ]]; then
-    (cd "$FRONTEND" && corepack pnpm run build)
+    (cd "$FRONTEND" && VITE_GROWTH_API=mock corepack pnpm run build)
 fi
 
 UPDATE_ARGS=()

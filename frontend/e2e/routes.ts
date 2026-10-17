@@ -41,15 +41,16 @@ export interface RouteTab {
 
 /** Order matters: the flow auto-opens Assistant, so tabs.spec pins that no entry is already open. */
 export const FLOW_DETAIL_TABS: RouteTab[] = [
-    { name: 'Dashboard', ready: (page) => page.getByText('Usage by Agent Type') },
-    { name: 'Assistant', ready: (page) => page.getByText('New assistant', { exact: true }) },
-    { name: 'Automation', ready: (page) => page.getByText('No active tasks') },
-    { name: 'Tasks', ready: (page) => page.getByText('E2E Task Alpha') },
-    { name: 'Agents', ready: (page) => page.getByText('E2E agent reconnaissance') },
-    { name: 'Searches', ready: (page) => page.getByText('E2E search for the CVE') },
-    { name: 'Vector Store', ready: (page) => page.getByText('E2E recall prior findings') },
-    { name: 'Files', ready: (page) => page.getByText(TABS_FILE_NAME) },
-    { name: 'Screenshots', ready: (page) => page.getByText(TABS_SCREENSHOT_URL) },
+    { name: '概览', ready: (page) => page.getByText('按智能体类型统计') },
+    { name: '助手', ready: (page) => page.getByText('新的助手对话', { exact: true }) },
+    { name: '自动执行', ready: (page) => page.getByText('没有进行中的任务') },
+    { name: '任务', ready: (page) => page.getByText('E2E Task Alpha') },
+    { name: '智能体', ready: (page) => page.getByText('E2E agent reconnaissance') },
+    { name: '搜索记录', ready: (page) => page.getByText('E2E search for the CVE') },
+    { name: '记忆库', ready: (page) => page.getByText('E2E recall prior findings') },
+    { name: '文件', ready: (page) => page.getByText(TABS_FILE_NAME) },
+    { name: '截图', ready: (page) => page.getByText(TABS_SCREENSHOT_URL) },
+    { name: '来源池', ready: (page) => page.getByRole('row', { name: /手游退坑互助群/ }) },
 ];
 
 /**
@@ -73,23 +74,17 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         // fix, each scoped to the tab whose panel owns it so it cannot silence the rule elsewhere.
         a11yWaivers: [
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/50/ },
-            { rule: 'aria-progressbar-name', tabs: ['Tasks'], target: /\.bg-primary\\\/20/ },
-            { rule: 'button-name', tabs: ['Files'], target: /tooltip-trigger.*size-8\[data-slot="button"\]/ },
-            { rule: 'target-size', tabs: ['Files'], target: /text-blue-400|button\[aria-label="Select / },
+            { rule: 'aria-progressbar-name', tabs: ['任务'], target: /\.bg-primary\\\/20/ },
+            { rule: 'button-name', tabs: ['文件'], target: /tooltip-trigger.*size-8\[data-slot="button"\]/ },
+            { rule: 'target-size', tabs: ['文件'], target: /text-blue-400|button\[aria-label="选择 / },
             // The same file-manager row metadata waived on /resources — the Files tab embeds it.
-            { rule: 'color-contrast', tabs: ['Files'], target: /text-muted-foreground\\?\/80/ },
-            {
-                rule: 'scrollable-region-focusable',
-                tabs: ['Dashboard', 'Files'],
-                target: /\[data-slot="table-container"\]/,
-            },
+            { rule: 'color-contrast', tabs: ['文件'], target: /text-muted-foreground\\?\/80/ },
         ],
         // Must stay the populated cassette: the empty seed renders none of the sources below.
         cassette: flowTabsCassette,
         path: routes.flow('5'),
-        // The terminal mounts after the header, and the visual spec masks it —
-        // capturing before it exists compares live pixels against a masked baseline.
-        ready: (page) => page.locator('.xterm').first(),
+        // A finished flow opens the prospects tab, filled from the in-bundle growth sample data.
+        ready: (page) => page.getByRole('row', { name: /阿杰 Jay/ }),
         sources: [
             'src/pages/flows/flow.tsx',
             'src/features/flows',
@@ -97,6 +92,10 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
             'src/providers/flows-provider.tsx',
             'src/components/shared/file-manager',
             'src/components/dashboard',
+            // Not the whole growth dir: the app shell mounts its global alerts on every route.
+            'src/features/growth/leads',
+            'src/features/growth/progress',
+            'src/features/growth/sources',
             // Assistant-tab FlowForm reads useTemplates, so a provider change reaches this route too.
             'src/providers/templates-provider.tsx',
         ],
@@ -134,18 +133,18 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         path: routes.dashboard,
         ready: (page) => page.getByText('E2E Alpha'),
         sources: ['src/pages/dashboard', 'src/components/dashboard'],
-        tabs: [{ name: 'Overview', ready: (page) => page.getByRole('cell', { exact: true, name: 'e2e-provider' }) }],
+        tabs: [{ name: '概览', ready: (page) => page.getByRole('cell', { exact: true, name: 'e2e-provider' }) }],
     },
     {
         cassette: settingsPromptsCassette,
         path: routes.settings.prompts,
-        ready: (page) => page.getByRole('heading', { name: 'Agent Prompts' }),
+        ready: (page) => page.getByRole('heading', { name: '智能体提示词' }),
         sources: ['src/pages/settings/settings-prompts.tsx'],
     },
     {
         cassette: settingsProvidersCassette,
         path: routes.settings.providers,
-        ready: (page) => page.getByText('No providers configured'),
+        ready: (page) => page.getByText('还没有配置模型服务'),
         sources: ['src/pages/settings/settings-providers.tsx'],
     },
     {
@@ -155,10 +154,10 @@ export const ROUTE_MANIFEST: RouteManifestEntry[] = [
         a11yWaivers: [
             { rule: 'color-contrast', target: /text-muted-foreground\\?\/80/ },
             // `.rounded` is anchored with a boundary so it can't match every rounded-* utility. axe
-            // emits the row-select buttons as a bare `button[aria-label="Select <name>"]` with no
+            // emits the row-select buttons as a bare `button[aria-label="选择 <name>"]` with no
             // parent path, so the label is the only available anchor — require the button tag at
-            // least, rather than a bare `aria-label="Select ` that would also waive a non-button.
-            { rule: 'target-size', target: /\.rounded(?![-\w])|button\[aria-label="Select / },
+            // least, rather than a bare `aria-label="选择 ` that would also waive a non-button.
+            { rule: 'target-size', target: /\.rounded(?![-\w])|button\[aria-label="选择 / },
         ],
         cassette: resourcesCassette,
         path: routes.resources,

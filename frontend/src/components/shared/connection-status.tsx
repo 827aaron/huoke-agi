@@ -1,6 +1,8 @@
 import { WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { copy } from '@/lib/copy';
+
 export function ConnectionStatus() {
     const [isDisconnected, setIsDisconnected] = useState(false);
 
@@ -28,7 +30,7 @@ export function ConnectionStatus() {
             role="status"
         >
             <WifiOff className="size-3.5" />
-            Not receiving updates — reconnecting
+            {copy.connection.reconnecting}
         </div>
     );
 }

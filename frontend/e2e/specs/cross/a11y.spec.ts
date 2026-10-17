@@ -21,7 +21,7 @@ for (const theme of THEMES) {
 
             test('login page', async ({ page }) => {
                 await page.goto('/login');
-                await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+                await expect(page.getByRole('button', { exact: true, name: '登录' })).toBeVisible();
                 // Same guard as the manifest scan: a dark seed that stops applying must not
                 // silently re-scan the light page under a dark label.
                 await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /dark/ : /light/);
@@ -81,7 +81,7 @@ test.describe('dialog keyboard contract', { tag: '@cross' }, () => {
     test('Escape returns focus to the control that opened the dialog', async ({ page, pageErrorLog }) => {
         await page.goto('/resources');
 
-        const opener = page.getByRole('button', { name: 'New folder' });
+        const opener = page.getByRole('button', { name: '新建文件夹' });
 
         await opener.focus();
         await page.keyboard.press('Enter');
@@ -99,9 +99,9 @@ test.describe('dialog keyboard contract', { tag: '@cross' }, () => {
     // restore it on navigation instead. This case is what tells the two apart.
     test('Escape returns focus for a dialog whose content is always mounted', async ({ page, pageErrorLog }) => {
         await page.goto('/resources');
-        await page.getByRole('checkbox', { name: `Select ${FILE_RESOURCE.name}` }).click();
+        await page.getByRole('checkbox', { name: `选择 ${FILE_RESOURCE.name}` }).click();
 
-        const opener = page.getByRole('button', { exact: true, name: 'Delete' });
+        const opener = page.getByRole('button', { exact: true, name: '删除' });
 
         await opener.click();
         await expect(page.getByRole('dialog')).toBeVisible();

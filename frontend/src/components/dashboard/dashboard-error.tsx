@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 
 import { AlertCircle } from 'lucide-react';
 
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 export function DashboardError({
@@ -19,7 +20,7 @@ export function DashboardError({
             style={style}
         >
             <AlertCircle className={cn('text-muted-foreground/40 size-6', iconClassName)} />
-            <p className="text-sm">Couldn't load</p>
+            <p className="text-sm">{copy.dashboard.couldNotLoad}</p>
         </div>
     );
 }

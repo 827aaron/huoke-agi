@@ -1,3 +1,5 @@
+import { copy } from '@/lib/copy';
+
 const BINARY_SAMPLE_SIZE = 512;
 const BINARY_CONTROL_RATIO = 0.1;
 const MAX_CSI_LENGTH = 256;
@@ -89,7 +91,7 @@ export function sanitizeTerminalOutput(input: string): string {
     }
 
     if (isBinaryContent(input)) {
-        return '[binary data]';
+        return copy.terminal.binary;
     }
 
     const result: string[] = [];

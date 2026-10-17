@@ -26,36 +26,36 @@ test.describe('live panels', { tag: '@flows' }, () => {
     // none of these strings, so a frame wired to the wrong cache field leaves its panel stale.
     test('every streamed panel picks up its own frame', async ({ page, pageErrorLog }) => {
         await page.goto('/flows/5');
-        await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
+        await expect(page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' })).toBeEnabled();
 
-        await page.getByRole('tab', { name: 'Tasks' }).click();
+        await page.getByRole('tab', { name: '任务' }).click();
         await expect(page.getByText(STREAMED.task)).toBeVisible();
         await expect(page.getByText(STREAMED.taskRetitled)).toBeVisible();
 
-        await page.getByRole('tab', { name: 'Agents' }).click();
+        await page.getByRole('tab', { name: '智能体' }).click();
         await expect(page.getByText(STREAMED.agent)).toBeVisible();
 
-        await page.getByRole('tab', { name: 'Searches' }).click();
+        await page.getByRole('tab', { name: '搜索记录' }).click();
         await expect(page.getByText(STREAMED.search)).toBeVisible();
 
-        await page.getByRole('tab', { name: 'Vector Store' }).click();
+        await page.getByRole('tab', { name: '记忆库' }).click();
         await expect(page.getByText(STREAMED.vector)).toBeVisible();
 
-        await page.getByRole('tab', { name: 'Screenshots' }).click();
+        await page.getByRole('tab', { name: '截图' }).click();
         await expect(page.getByRole('img', { name: STREAMED_SCREENSHOT_NAME })).toBeVisible();
-        await expect(page.getByRole('tabpanel', { name: 'Screenshots' }).getByRole('link')).toHaveText([
+        await expect(page.getByRole('tabpanel', { name: '截图' }).getByRole('link')).toHaveText([
             TABS_SCREENSHOT_URL,
             TABS_SCREENSHOT_NEWER_URL,
             TABS_SCREENSHOT_NEWEST_URL,
             STREAMED_SCREENSHOT_URL,
         ]);
 
-        await page.getByRole('tab', { name: 'Files' }).click();
+        await page.getByRole('tab', { name: '文件' }).click();
         await expect(page.getByRole('treeitem', { name: new RegExp(TABS_FILE_NAME) })).toContainText(
             STREAMED_FILE_SIZE_RENDERED,
         );
 
-        await page.getByRole('tab', { name: 'Terminal' }).click();
+        await page.getByRole('tab', { name: '终端' }).click();
         await expect(async () => {
             expect(await readTerminalBuffer(page)).toContain(STREAMED.terminal);
         }).toPass();

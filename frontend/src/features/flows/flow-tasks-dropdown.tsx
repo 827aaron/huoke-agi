@@ -12,6 +12,7 @@ import {
     CommandSeparator,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { useFlow } from '@/providers/flow-provider';
 
@@ -114,7 +115,7 @@ function FlowTasksDropdown({ disabled, onChange, value }: FlowTasksDropdownProps
         >
             <PopoverTrigger asChild>
                 <Button
-                    aria-label="Filter tasks"
+                    aria-label={copy.flowLogs.filterTasks}
                     aria-pressed={hasActiveFilters}
                     disabled={disabled}
                     size="icon"
@@ -128,9 +129,9 @@ function FlowTasksDropdown({ disabled, onChange, value }: FlowTasksDropdownProps
                 className="w-[360px] p-0"
             >
                 <Command>
-                    <CommandInput placeholder="Search tasks..." />
+                    <CommandInput placeholder={copy.flowLogs.searchTasks} />
                     <CommandList>
-                        <CommandEmpty>Tasks not found</CommandEmpty>
+                        <CommandEmpty>{copy.flowLogs.taskNotFound}</CommandEmpty>
                         {tasks?.length ? (
                             tasks.map((task) => (
                                 <CommandGroup key={task.id}>
@@ -198,7 +199,7 @@ function FlowTasksDropdown({ disabled, onChange, value }: FlowTasksDropdownProps
                                 className="text-muted-foreground justify-center py-6 text-center"
                                 disabled
                             >
-                                No available tasks
+                                {copy.flowLogs.noTasks}
                             </CommandItem>
                         )}
                     </CommandList>
@@ -213,7 +214,7 @@ function FlowTasksDropdown({ disabled, onChange, value }: FlowTasksDropdownProps
                                     }}
                                 >
                                     <X />
-                                    Clear filter
+                                    {copy.flowLogs.clearFilter}
                                 </CommandItem>
                             </CommandGroup>
                         </>

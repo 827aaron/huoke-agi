@@ -38,7 +38,7 @@ describe('FlowDashboardOverview', () => {
 
         expect(placeholders()).toBe(0);
         expect(screen.getByText('42')).toBeInTheDocument();
-        expect(screen.getByText('pentester')).toBeInTheDocument();
+        expect(screen.getByText('潜客研究员')).toBeInTheDocument();
     });
 
     it('keeps them on screen when a refetch fails', () => {
@@ -46,7 +46,7 @@ describe('FlowDashboardOverview', () => {
 
         render(<FlowDashboardOverview flowId="5" />);
 
-        expect(screen.queryByText("Couldn't load")).not.toBeInTheDocument();
+        expect(screen.queryByText('加载失败')).not.toBeInTheDocument();
         expect(screen.getByText('42')).toBeInTheDocument();
     });
 });

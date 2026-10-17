@@ -5,6 +5,7 @@ import type { KnowledgeDocumentFragmentFragment } from '@/graphql/types';
 import { DetailSplitLayout } from '@/components/shared/detail-split-layout';
 import { type EditorViewMode } from '@/components/shared/markdown-editor';
 import { Badge } from '@/components/ui/badge';
+import { copy } from '@/lib/copy';
 
 import type { FormValues } from './knowledge-form';
 
@@ -85,12 +86,10 @@ function KnowledgeIntroBlock({ isNew, knowledge }: KnowledgeIntroBlockProps) {
         <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-2 text-center">
                 <h2 className="text-2xl font-semibold">
-                    {isNew ? 'Create a new knowledge document' : 'Edit knowledge document'}
+                    {isNew ? copy.knowledge.createTitle : copy.knowledge.editTitle}
                 </h2>
                 <p className="text-muted-foreground">
-                    {isNew
-                        ? 'Add an entry to the vector knowledge base'
-                        : 'Edits to content or metadata will trigger re-embedding'}
+                    {isNew ? copy.knowledge.createSubtitle : copy.knowledge.editSubtitle}
                 </p>
             </div>
 

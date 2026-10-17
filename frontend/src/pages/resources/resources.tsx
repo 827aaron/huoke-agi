@@ -30,7 +30,6 @@ import {
     type FileNode,
     formatModifiedAbsolute,
     formatModifiedRelative,
-    pluralizeItems,
 } from '@/components/shared/file-manager';
 import { OverwriteDialog, useOverwrite } from '@/components/shared/overwrite';
 import { Button } from '@/components/ui/button';
@@ -62,6 +61,7 @@ import { useEffectAfterMount } from '@/hooks/use-effect-after-mount';
 import { useFilesDragAndDrop } from '@/hooks/use-files-drag-and-drop';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
 import { copyToClipboard } from '@/lib/clipboard';
+import { copy } from '@/lib/copy';
 import { saveViewOptions } from '@/lib/view-options-storage';
 import { useResources } from '@/providers/resources-provider';
 
@@ -186,12 +186,12 @@ function Resources() {
         const wasCopied = await copyToClipboard(file.path);
 
         if (wasCopied) {
-            toast.success('Path copied to clipboard');
+            toast.success(copy.resources.pathCopied);
 
             return;
         }
 
-        toast.error('Failed to copy path');
+        toast.error(copy.resources.pathCopyFailed);
     }, []);
 
     // Join the selected paths with `\n` so the result pastes as a clean
@@ -204,12 +204,12 @@ function Resources() {
         const wasCopied = await copyToClipboard(paths.join('\n'));
 
         if (wasCopied) {
-            toast.success(`${paths.length} ${pluralizeItems(paths.length)} copied to clipboard`);
+            toast.success(copy.resources.pathsCopied(paths.length));
 
             return;
         }
 
-        toast.error('Failed to copy paths');
+        toast.error(copy.resources.pathsCopyFailed);
     }, []);
 
     /**
@@ -266,7 +266,7 @@ function Resources() {
                 appliesToFiles: false,
                 icon: FolderPlus,
                 id: 'resources-mkdir-here',
-                label: 'New folder',
+                label: copy.resources.newFolder,
                 onSelect: handleMkdirHere,
                 separatorBefore: true,
             },
@@ -275,14 +275,14 @@ function Resources() {
                 appliesToFiles: false,
                 icon: Upload,
                 id: 'resources-upload-here',
-                label: 'Upload files',
+                label: copy.resources.uploadFiles,
                 onSelect: handleUploadHere,
             },
             {
                 appliesToDirs: true,
                 icon: FileSymlink,
                 id: 'resources-rename',
-                label: 'Rename or move',
+                label: copy.resources.rename,
                 onSelect: (file) => setFilesToMove([file]),
                 separatorBefore: true,
             },
@@ -290,7 +290,7 @@ function Resources() {
                 appliesToDirs: true,
                 icon: Copy,
                 id: 'resources-copy',
-                label: 'Copy to…',
+                label: copy.fileManager.copyTo,
                 onSelect: (file) => setFilesToCopy([file]),
             },
             deleteAction(deletion.requestDelete),
@@ -320,13 +320,13 @@ function Resources() {
             {
                 icon: FolderPlus,
                 id: 'resources-empty-mkdir',
-                label: 'New folder',
+                label: copy.resources.newFolder,
                 onSelect: () => setIsMkdirOpen(true),
             },
             {
                 icon: Upload,
                 id: 'resources-empty-upload',
-                label: 'Upload files',
+                label: copy.resources.uploadFiles,
                 onSelect: upload.openFilePicker,
             },
         ],
@@ -345,21 +345,21 @@ function Resources() {
     const pageHeader = (
         <AppHeader>
             <AppHeaderContent>
-                <AppHeaderTitle icon={<Folder className="size-4 shrink-0" />}>Resources</AppHeaderTitle>
+                <AppHeaderTitle icon={<Folder className="size-4 shrink-0" />}>{copy.resources.title}</AppHeaderTitle>
             </AppHeaderContent>
             <AppHeaderActions>
                 <AppHeaderAction
                     disabled={upload.isUploading}
                     icon={<FolderPlus />}
-                    label="New folder"
+                    label={copy.resources.newFolder}
                     onClick={() => setIsMkdirOpen(true)}
                     variant="outline"
                 />
                 <AppHeaderAction
-                    aria-label={upload.isUploading ? 'Uploading...' : 'Upload files'}
+                    aria-label={upload.isUploading ? copy.resources.uploading : copy.resources.uploadFiles}
                     disabled={upload.isUploading}
                     icon={upload.isUploading ? <Spinner variant="circle" /> : <Upload />}
-                    label={upload.isUploading ? 'Uploading...' : 'Upload files'}
+                    label={upload.isUploading ? copy.resources.uploading : copy.resources.uploadFiles}
                     onClick={upload.openFilePicker}
                     variant="secondary"
                 />
@@ -371,13 +371,13 @@ function Resources() {
 
     const noResourcesState = (
         <FileDropZone
-            actionLabel="Upload files"
-            description="Upload documents so PentAGI agents can reference them during your flows. You can also drag & drop files anywhere in this panel."
-            hint="Up to 300 MB per file · 2 GB per upload"
+            actionLabel={copy.resources.uploadFiles}
+            description={copy.resources.emptyHint}
+            hint={copy.resources.uploadLimits}
             isDragging={isDragging}
             isUploading={upload.isUploading}
             onBrowse={upload.openFilePicker}
-            title="No resources yet"
+            title={copy.resources.empty}
         />
     );
 
@@ -387,9 +387,11 @@ function Resources() {
                 <EmptyMedia variant="icon">
                     <Search />
                 </EmptyMedia>
-                <EmptyTitle>No matches</EmptyTitle>
+                <EmptyTitle>{copy.resources.noMatches}</EmptyTitle>
                 <EmptyDescription>
-                    No resources match <code>{search.debouncedQuery.trim()}</code>. Try a different query.
+                    {copy.resources.noMatchesHint.before}
+                    <code>{search.debouncedQuery.trim()}</code>
+                    {copy.resources.noMatchesHint.after}
                 </EmptyDescription>
             </EmptyHeader>
         </Empty>
@@ -404,7 +406,7 @@ function Resources() {
                     <ErrorState
                         message={error.message}
                         onRetry={refetch}
-                        title="Error loading resources"
+                        title={copy.resources.loadFailed}
                     />
                 </div>
             </>
@@ -433,7 +435,7 @@ function Resources() {
                     <div className="bg-primary/10 border-primary pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-lg border-2 border-dashed">
                         <div className="text-link flex flex-col items-center gap-2">
                             <FolderUp className="size-8" />
-                            <span className="text-sm font-medium">Drop files to upload</span>
+                            <span className="text-sm font-medium">{copy.resources.dropToUpload}</span>
                         </div>
                     </div>
                 )}
@@ -441,17 +443,17 @@ function Resources() {
                 <div className="flex items-center gap-2">
                     <InputGroup className="max-w-sm flex-1">
                         <InputGroupInput
-                            aria-label="Search resources"
+                            aria-label={copy.resources.search}
                             autoComplete="off"
                             onChange={(event) => search.setQuery(event.target.value)}
-                            placeholder="Search resources..."
+                            placeholder={copy.resources.searchPlaceholder}
                             type="text"
                             value={search.rawQuery}
                         />
                         {search.rawQuery ? (
                             <InputGroupAddon align="inline-end">
                                 <InputGroupButton
-                                    aria-label="Clear resource search"
+                                    aria-label={copy.resources.clearSearch}
                                     onClick={search.resetSearch}
                                     type="button"
                                 >
@@ -463,7 +465,7 @@ function Resources() {
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
-                                aria-label="Column settings"
+                                aria-label={copy.resources.columnSettings}
                                 className="ml-auto"
                                 size="icon"
                                 variant="outline"
@@ -477,14 +479,14 @@ function Resources() {
                                 onCheckedChange={() => toggleViewOption('isSizeVisible')}
                                 onSelect={(event) => event.preventDefault()}
                             >
-                                Size
+                                {copy.resources.size}
                             </DropdownMenuCheckboxItem>
                             <DropdownMenuCheckboxItem
                                 checked={viewOptions.isModifiedVisible}
                                 onCheckedChange={() => toggleViewOption('isModifiedVisible')}
                                 onSelect={(event) => event.preventDefault()}
                             >
-                                Modified
+                                {copy.resources.modified}
                             </DropdownMenuCheckboxItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuCheckboxItem
@@ -492,7 +494,7 @@ function Resources() {
                                 onCheckedChange={() => toggleViewOption('isFoldersFirst')}
                                 onSelect={(event) => event.preventDefault()}
                             >
-                                Folders first
+                                {copy.resources.foldersFirst}
                             </DropdownMenuCheckboxItem>
                             <DropdownMenuCheckboxItem
                                 checked={viewOptions.isModifiedRelative}
@@ -500,7 +502,7 @@ function Resources() {
                                 onCheckedChange={() => toggleViewOption('isModifiedRelative')}
                                 onSelect={(event) => event.preventDefault()}
                             >
-                                Relative dates
+                                {copy.resources.relativeDates}
                             </DropdownMenuCheckboxItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -549,13 +551,15 @@ function Resources() {
                 />
 
                 <ConfirmationDialog
-                    confirmText="Delete"
+                    confirmText={copy.action.delete}
                     handleConfirm={deletion.confirmDelete}
                     handleOpenChange={handleDeleteDialogOpenChange}
                     isOpen={!!deletion.fileToDelete}
                     itemName={deletion.fileToDelete?.name}
-                    itemType={deletion.fileToDelete?.isDir ? 'directory' : 'resource'}
-                    title={deletion.fileToDelete?.isDir ? 'Delete directory' : 'Delete resource'}
+                    itemType={deletion.fileToDelete?.isDir ? copy.itemType.directory : copy.itemType.resource}
+                    title={
+                        deletion.fileToDelete?.isDir ? copy.resources.deleteDirectory : copy.resources.deleteResource
+                    }
                 />
             </div>
         </>

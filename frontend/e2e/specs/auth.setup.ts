@@ -9,13 +9,13 @@ setup('authenticate', async ({ page }) => {
     // A real backend login + the websocket teardown can outrun the 30s default.
     setup.setTimeout(90_000);
     await page.goto('/login');
-    await page.getByLabel('Login').fill(E2E_USER);
-    await page.getByRole('textbox', { name: 'Password' }).fill(E2E_PASSWORD);
-    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByLabel('账号').fill(E2E_USER);
+    await page.getByRole('textbox', { name: '密码' }).fill(E2E_PASSWORD);
+    await page.getByRole('button', { exact: true, name: '登录' }).click();
 
     // The migration-seeded admin carries password_change_required — the forced
     // change screen is skippable and must not block the suite.
-    const skip = page.getByRole('button', { name: 'Skip for now' });
+    const skip = page.getByRole('button', { name: '暂时跳过' });
     // The user menu is labelled with the signed-in address, so derive the "logged in" signal
     // from E2E_USER rather than a hardcoded admin@ (there is no button named "flows").
     const loggedIn = page.getByRole('button', {

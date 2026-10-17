@@ -31,7 +31,7 @@ const sidebarCassette = (overrides: Cassette = {}): Cassette =>
     mergeCassettes({ queries: baseQueries(), rest: baseRest() }, overrides);
 
 const root = (page: Page) => page.locator('[data-side][data-state][data-variant]');
-const header = (page: Page) => page.getByRole('button', { name: /PentAGI e2e/ });
+const header = (page: Page) => page.getByRole('button', { name: /客来 AGI.*e2e/ });
 
 test.describe('sidebar header', { tag: '@cross' }, () => {
     test.describe('a build with nothing to act on', () => {
@@ -41,7 +41,7 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
             await page.goto('/flows');
 
             await expect(header(page)).toBeVisible();
-            await expect(header(page)).toContainText('PentAGI');
+            await expect(header(page)).toContainText('客来 AGI');
             await expect(header(page)).toContainText('e2e');
             expectCleanPage(pageErrorLog);
         });
@@ -52,10 +52,8 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
 
             const panel = page.getByRole('menu');
 
-            await expect(panel).toContainText('Update checks are disabled');
+            await expect(panel).toContainText('已关闭更新检查');
             await expect(page.locator('[data-slot^="version-indicator"]')).toHaveCount(0);
-            await expect(page.getByRole('menuitem', { name: /Release notes/ })).toHaveCount(0);
-            await expect(page.getByRole('menuitem', { name: 'All releases' })).toBeVisible();
         });
 
         test('closes the panel on Escape', async ({ page }) => {
@@ -72,9 +70,9 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
             await page.goto('/flows');
             await header(page).click();
 
-            await page.getByLabel('Update channel: preview').hover();
+            await page.getByLabel('更新渠道：preview').hover();
 
-            await expect(page.getByRole('tooltip')).toContainText('preview channel');
+            await expect(page.getByRole('tooltip')).toContainText('preview 渠道');
         });
     });
 
@@ -85,18 +83,15 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
             }),
         });
 
-        test('raises the indicator and points at the release', async ({ page, pageErrorLog }) => {
+        test('raises the indicator and names the new version', async ({ page, pageErrorLog }) => {
             await page.goto('/flows');
 
             await expect(page.locator('[data-slot="version-indicator-update"]')).toBeVisible();
 
             await header(page).click();
 
-            await expect(page.getByRole('menu')).toContainText('New version v2.4.0 is available');
-            await expect(page.getByRole('menuitem', { name: /Release notes for v2\.4\.0/ })).toHaveAttribute(
-                'href',
-                'https://github.com/vxcontrol/pentagi/releases/tag/v2.4.0',
-            );
+            await expect(page.getByRole('menu')).toContainText('新版本 v2.4.0 可用');
+            await expect(page.getByRole('menuitem')).toHaveCount(0);
             expectCleanPage(pageErrorLog);
         });
 
@@ -111,7 +106,7 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
 
             await page.keyboard.press('Enter');
 
-            await expect(page.getByRole('menu')).toContainText('New version v2.4.0 is available');
+            await expect(page.getByRole('menu')).toContainText('新版本 v2.4.0 可用');
         });
     });
 });
@@ -123,7 +118,7 @@ test.describe('sidebar collapse', { tag: '@cross' }, () => {
         await page.goto('/flows');
         await expect(root(page)).toHaveAttribute('data-state', 'expanded');
 
-        const trigger = page.getByRole('button', { name: 'Toggle Sidebar' }).first();
+        const trigger = page.getByRole('button', { name: '展开/收起侧边栏' }).first();
 
         await trigger.click();
         await expect(root(page)).toHaveAttribute('data-state', 'collapsed');
@@ -145,7 +140,7 @@ test.describe('sidebar collapse', { tag: '@cross' }, () => {
 
     test('remembers the collapsed state across a reload', async ({ context, page }) => {
         await page.goto('/flows');
-        await page.getByRole('button', { name: 'Toggle Sidebar' }).first().click();
+        await page.getByRole('button', { name: '展开/收起侧边栏' }).first().click();
         await expect(root(page)).toHaveAttribute('data-state', 'collapsed');
 
         const cookie = (await context.cookies()).find((entry) => entry.name === 'sidebar:state');
@@ -173,7 +168,7 @@ test.describe('sidebar account badge', { tag: '@cross' }, () => {
         test('is named local', async ({ page, pageErrorLog }) => {
             await openMenu(page, 'admin@pentagi.com');
 
-            await expect(page.getByRole('menu').getByText('Local')).toBeVisible();
+            await expect(page.getByRole('menu').getByText('本地账号')).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });

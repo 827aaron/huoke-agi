@@ -7,6 +7,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { useAppForm } from '@/hooks/use-app-form';
+import { copy } from '@/lib/copy';
 
 import { resourcesMkdirFormSchema, type ResourcesMkdirFormValues, useResourcesMkdir } from './use-resources-mkdir';
 
@@ -72,12 +73,9 @@ function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdir
             <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                     <FolderPlus className="size-4" />
-                    Create directory
+                    {copy.resources.createDirectory}
                 </DialogTitle>
-                <DialogDescription>
-                    Create a virtual directory inside your resource library. Existing parent directories are reused
-                    automatically.
-                </DialogDescription>
+                <DialogDescription>{copy.resources.createDirectoryHint}</DialogDescription>
             </DialogHeader>
 
             <Form {...form}>
@@ -91,7 +89,7 @@ function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdir
                         name="path"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Path</FormLabel>
+                                <FormLabel>{copy.resources.path}</FormLabel>
                                 <FormControl>
                                     <Input
                                         {...field}
@@ -102,7 +100,9 @@ function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdir
                                     />
                                 </FormControl>
                                 <FormDescription>
-                                    Relative path. Use <code>/</code> to nest into subdirectories.
+                                    {copy.resources.pathHint.before}
+                                    <code>/</code>
+                                    {copy.resources.pathHint.after}
                                 </FormDescription>
                                 <FormMessage />
                             </FormItem>
@@ -116,9 +116,9 @@ function ResourcesMkdirDialogForm({ defaultParentPath, onClose }: ResourcesMkdir
                             type="button"
                             variant="outline"
                         >
-                            Cancel
+                            {copy.action.cancel}
                         </Button>
-                        <FormSubmitButton icon={<FolderPlus />}>Create</FormSubmitButton>
+                        <FormSubmitButton icon={<FolderPlus />}>{copy.action.create}</FormSubmitButton>
                     </div>
                 </form>
             </Form>
