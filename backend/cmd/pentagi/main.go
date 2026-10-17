@@ -255,12 +255,8 @@ func main() {
 
 	fc := withBusinessProfile(controller)
 	if svc := growth.Default(); svc != nil {
-		go flowctl.NewScheduler(fc, svc, func(ctx context.Context, name provider.ProviderName, userID int64) (provider.ProviderType, error) {
-			prv, err := providers.GetProvider(ctx, name, userID)
-			if err != nil {
-				return "", err
-			}
-			return prv.Type(), nil
+		go flowctl.NewScheduler(fc, svc, func(ctx context.Context, name provider.ProviderName, userID int64) (provider.Provider, error) {
+			return controller.ProviderFor(ctx, userID, name)
 		}).Run(ctx)
 	}
 

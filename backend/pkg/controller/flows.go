@@ -258,6 +258,14 @@ func (fc *flowController) LoadFlows(ctx context.Context) error {
 		return fmt.Errorf("failed to load flows: %w", err)
 	}
 
+	// A provider removed while the backend was down leaves its name on the rows, and
+	// the UI looks that name up in the provider list; repoint before anything is served.
+	if fc.repointUsersOf(ctx, flows) {
+		if flows, err = fc.db.GetFlows(ctx); err != nil {
+			return fmt.Errorf("failed to load flows: %w", err)
+		}
+	}
+
 	for _, flow := range flows {
 		fw, err := LoadFlowWorker(ctx, flow, fc.flowWorkerCtx())
 		if err != nil {
@@ -833,6 +841,21 @@ func (fc *flowController) RepointDanglingProviders(ctx context.Context, userID i
 		errs = append(errs, fc.reassignFlowsProvider(ctx, userID, prvname, current.Name()))
 	}
 	return errors.Join(errs...)
+}
+
+func (fc *flowController) repointUsersOf(ctx context.Context, flows []database.Flow) bool {
+	seen := make(map[int64]bool)
+	for _, flow := range flows {
+		if seen[flow.UserID] {
+			continue
+		}
+		seen[flow.UserID] = true
+		if err := fc.RepointDanglingProviders(ctx, flow.UserID); err != nil {
+			logrus.WithContext(ctx).WithError(err).WithField("user_id", flow.UserID).
+				Warn("failed to repoint the flows of a provider that is gone")
+		}
+	}
+	return len(seen) > 0
 }
 
 // reassignFlowsProvider rewrites the provider reference stored on a user's flow
