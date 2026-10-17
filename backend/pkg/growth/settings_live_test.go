@@ -446,11 +446,10 @@ func TestSettings_ListSettings_SaysWhetherTheJudgeKeyIsConfigured(t *testing.T) 
 	v := settingOf(t, w, SettingScreening)
 	assert.False(t, v.Configured)
 	assert.False(t, settingOf(t, w, SettingTelegram).Configured)
-	assert.Equal(t, "0.6", v.Fields["threshold"])
 	p, err := w.svc.Progress(ctx, scope)
 	require.NoError(t, err)
 	assert.ErrorContains(t, ErrNoJudge, p.Warning)
-	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, "", map[string]string{"threshold": "0.5"})
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, "", map[string]string{"model": "jev-latest"})
 	assert.ErrorIs(t, err, ErrInvalidSetting, "the key is required")
 
 	saved, err := w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningCustom, map[string]string{

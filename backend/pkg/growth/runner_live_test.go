@@ -237,7 +237,7 @@ func TestRunner_Deliver_HasContactDeliversOnlyReachableLeads(t *testing.T) {
 	scope := w.seedTask(t)
 	src := w.mustAddTelegramGroup(t, scope, tgGroup("711", "mmo_trade", "MMO"))
 	reachable := qualified("51", src, "m1")
-	reachable.Contacts = []Contact{{Type: "messenger", Value: "Line ann_51"}}
+	reachable.Contacts = []Contact{{Type: "line", Value: "ann_51"}}
 	_, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{reachable, qualified("52", src, "m2")})
 	require.NoError(t, err)
 

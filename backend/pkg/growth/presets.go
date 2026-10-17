@@ -44,7 +44,7 @@ func ProfilePresets() []ProfilePreset {
 					Qualified: 8,
 					Watchlist: WatchlistMinScore,
 				},
-				ContactTypes: []string{ContactPlatformHandle},
+				ContactTypes: []string{ContactPlatformHandle, ContactWhatsApp, ContactLine, ContactTelegram},
 			},
 		},
 		{

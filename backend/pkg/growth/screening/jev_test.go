@@ -29,8 +29,8 @@ func TestJev_Judge_AsksOneNoulPerMessage(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, map[string]Judgement{
-		"45": {Customer: 0.91, Signals: map[string]float64{}},
-		"44": {Customer: 0.12, Signals: map[string]float64{}},
+		"45": {Excluded: 0.91, Signals: map[string]float64{}},
+		"44": {Excluded: 0.12, Signals: map[string]float64{}},
 	}, out)
 	assert.Equal(t, "jev-1.13.0", model)
 
@@ -64,8 +64,8 @@ func TestJev_Judge_AsksEverySignalOfEveryMessageOverOneState(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, map[string]Judgement{
-		"7": {Customer: 0.9, Signals: map[string]float64{"player": 0.8, "paying": 0.1}},
-		"8": {Customer: -1, Signals: map[string]float64{"player": 0.6}},
+		"7": {Excluded: 0.9, Signals: map[string]float64{"player": 0.8, "paying": 0.1}},
+		"8": {Excluded: -1, Signals: map[string]float64{"player": 0.6}},
 	}, out)
 
 	questions := got["questions"].(map[string]any)
@@ -112,7 +112,7 @@ func TestJev_Judge_RetriesARateLimitAndStopsOnARefusedKey(t *testing.T) {
 			switch {
 			case tt.statuses[len(tt.statuses)-1] == 200:
 				require.NoError(t, err)
-				assert.Equal(t, map[string]Judgement{"1": {Customer: 0.7, Signals: map[string]float64{}}}, out)
+				assert.Equal(t, map[string]Judgement{"1": {Excluded: 0.7, Signals: map[string]float64{}}}, out)
 				assert.Equal(t, tt.waits, waits)
 			case tt.err != nil:
 				assert.ErrorIs(t, err, tt.err)

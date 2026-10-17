@@ -1,6 +1,6 @@
 // Package screening asks the Jev model, in yes/no judgments per message, whether a
-// message's sender may be a customer of the business and which buying signals it shows. It knows nothing
-// about platforms: the caller passes the platform and source as plain text.
+// message shows its sender is someone the business cannot serve and which buying signals it shows. It knows
+// nothing about platforms: the caller passes the platform and source as plain text.
 package screening
 
 import (
@@ -50,7 +50,7 @@ type Message struct {
 }
 
 // Batch is a set of messages from one source judged against one business. Signals are
-// asked of every message beside the customer question.
+// asked of every message beside the exclusion question.
 type Batch struct {
 	Platform string    `json:"platform"`
 	Source   string    `json:"source"`
@@ -66,11 +66,11 @@ type Signal struct {
 	Criteria map[string]string
 }
 
-// Judgement is the probability that a message's sender is a potential customer, and
-// that it shows each signal asked, by key. A question missing from the answer is
-// missing from Signals; Customer is -1 when its own question went unanswered.
+// Judgement is the probability that a message shows its sender is excluded, and that
+// it shows each signal asked, by key. A question missing from the answer is missing
+// from Signals; Excluded is -1 when its own question went unanswered.
 type Judgement struct {
-	Customer float64
+	Excluded float64
 	Signals  map[string]float64
 }
 
@@ -136,16 +136,16 @@ type Client struct {
 	Sleep   func(ctx context.Context, d time.Duration) error
 }
 
-// question is asked of each message in turn; %s is its key under `messages`.
-const question = "Could the sender of `messages.%s` (posted on `platform`, in `source`) be a potential customer of " +
-	"the business in `business`: a person who plays, wants, asks about, compares or pays for what it offers, " +
-	"or complains about an alternative?"
+// question is asked of each message in turn; %s is its key under `messages`. A yes
+// drops the message whatever its signals score, so it asks for explicit evidence only.
+const question = "Does `messages.%s` (posted on `platform`, in `source`) itself show that its sender is someone the " +
+	"business in `business` cannot serve: spam, advertising, a bot, a seller or booster, a competitor, someone " +
+	"`business` says is usually not a customer, or a person outside its regions or with no use for its offer?"
 
 var criteria = map[string]string{
-	"true": "The message shows the sender may want or use what the business offers, even indirectly",
-	"false": "Spam, advertising, a bot, a seller or booster, a competitor, someone `business` says is usually " +
-		"not a customer, or nothing to do with the business. Exclusions apply only on explicit evidence in the " +
-		"message; never infer them from style, age cues or platform",
+	"true": "The message states it explicitly, in the sender's own words or as a plain fact",
+	"false": "The message does not state it. Exclusions apply only on explicit evidence in the message; never " +
+		"infer them from style, age cues, language or platform",
 }
 
 // Judge returns the judgement of each message by id, and the model version that
@@ -177,10 +177,10 @@ func (c *Client) Judge(ctx context.Context, b Batch) (map[string]Judgement, stri
 				}
 				j, seen := out[q.id]
 				if !seen {
-					j = Judgement{Customer: -1, Signals: map[string]float64{}}
+					j = Judgement{Excluded: -1, Signals: map[string]float64{}}
 				}
 				if q.signal == "" {
-					j.Customer = *a.Noul
+					j.Excluded = *a.Noul
 				} else {
 					j.Signals[q.signal] = *a.Noul
 				}

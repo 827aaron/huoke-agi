@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
@@ -63,8 +64,8 @@ type Profile struct {
 	Notes         string   `json:"notes"`
 	// Scoring turns the judgement model's answers into a lead score; nil is DefaultScoring.
 	Scoring *Scoring `json:"scoring,omitempty"`
-	// ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty
-	// means the platform handle alone.
+	// ContactTypes are the contacts a lead is looked for with: values of ContactTypes or
+	// names the owner chose, up to 30 characters each; empty means the platform handle alone.
 	ContactTypes []string `json:"contact_types"`
 }
 
@@ -107,11 +108,34 @@ const (
 	ContactPlatformHandle = "platform_handle"
 	ContactPhone          = "phone"
 	ContactEmail          = "email"
-	ContactMessenger      = "messenger"
+	ContactWhatsApp       = "whatsapp"
+	ContactLine           = "line"
+	ContactTelegram       = "telegram"
 	ContactOther          = "other"
 )
 
-var ContactTypes = []string{ContactPlatformHandle, ContactPhone, ContactEmail, ContactMessenger, ContactOther}
+var ContactTypes = []string{
+	ContactPlatformHandle, ContactPhone, ContactEmail, ContactWhatsApp, ContactLine, ContactTelegram, ContactOther,
+}
+
+// contactMessenger is the one type that stood for every messaging app; a profile saved
+// with it asks for each app that replaced it. Leads keep the contacts stored under it.
+const contactMessenger = "messenger"
+
+var messengerApps = []string{ContactWhatsApp, ContactLine, ContactTelegram}
+
+// A contact type outside ContactTypes is a name the owner chose, such as "WeChat"; it
+// is kept as written and only its length is limited.
+const maxContactTypeRunes = 30
+
+// contactType is t in canonical form: a built-in type in lower case, any other name as
+// written.
+func contactType(t string) string {
+	if lower := strings.ToLower(t); slices.Contains(ContactTypes, lower) || lower == contactMessenger {
+		return lower
+	}
+	return t
+}
 
 // ScoringOrDefault is the profile's scoring, or DefaultScoring when it sets none.
 func (p Profile) ScoringOrDefault() Scoring {
@@ -162,8 +186,14 @@ func (p *Profile) normalize() {
 	p.Signals, p.Excludes = trim(p.Signals), trim(p.Excludes)
 	types := make([]string, 0, len(p.ContactTypes))
 	for _, t := range trim(p.ContactTypes) {
-		if t = strings.ToLower(t); !slices.Contains(types, t) {
-			types = append(types, t)
+		expanded := []string{contactType(t)}
+		if expanded[0] == contactMessenger {
+			expanded = messengerApps
+		}
+		for _, t := range expanded {
+			if !slices.ContainsFunc(types, func(have string) bool { return strings.EqualFold(have, t) }) {
+				types = append(types, t)
+			}
 		}
 	}
 	if len(types) == 0 {
@@ -180,8 +210,8 @@ func (p Profile) validate() error {
 		return fmt.Errorf("%w: default_target cannot be negative", ErrInvalidProfile)
 	}
 	for _, t := range p.ContactTypes {
-		if !slices.Contains(ContactTypes, t) {
-			return fmt.Errorf("%w: contact type %q is not one of %s", ErrInvalidProfile, t, strings.Join(ContactTypes, ", "))
+		if utf8.RuneCountInString(t) > maxContactTypeRunes {
+			return fmt.Errorf("%w: contact type %q is longer than %d characters", ErrInvalidProfile, t, maxContactTypeRunes)
 		}
 	}
 	if sc := p.Scoring; sc != nil {

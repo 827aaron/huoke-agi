@@ -234,15 +234,13 @@ var settingSpecs = map[string]settingSpec{
 			}
 		},
 	},
-	// The Jev pre-screen of synced messages; threshold is the yes probability a message
-	// needs to reach scoring. api_key is a TypeSafe or an OpenRouter key by provider; an
-	// empty model is the newest Jev.
+	// The Jev pre-screen of synced messages. api_key is a TypeSafe or an OpenRouter key by
+	// provider; an empty model is the newest Jev.
 	SettingScreening: {
 		providers:       []string{screeningCustom, screeningOpenRouter, screeningTypeSafe},
 		defaultProvider: screeningTypeSafe,
 		fields: []settingField{
 			{name: "api_key", secret: true, required: true},
-			{name: "threshold", def: "0.6"},
 			{name: "api_url"},
 			{name: "model"},
 		},
@@ -448,7 +446,11 @@ func (s *Service) SaveSetting(
 		}
 	}
 	prevCredential := merged["api_id"] + "\x00" + merged["api_hash"]
+	delete(merged, retiredScreeningThreshold)
 	for name, value := range values {
+		if kind == SettingScreening && name == retiredScreeningThreshold {
+			continue
+		}
 		if !slices.ContainsFunc(spec.fields, func(f settingField) bool { return f.name == name }) {
 			return SettingView{}, fmt.Errorf("%w: %s has no field %q", ErrInvalidSetting, kind, name)
 		}
@@ -528,9 +530,6 @@ func validateSetting(kind, provider string, v map[string]string) error {
 			return err
 		}
 	case SettingScreening:
-		if _, err := parseScreening(v); err != nil {
-			return err
-		}
 		if provider == screeningCustom && v["api_url"] == "" {
 			return fmt.Errorf("%w: a custom Jev endpoint needs api_url", ErrInvalidSetting)
 		}

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/growth/connectors"
@@ -56,7 +57,7 @@ type LeadInput struct {
 }
 
 // Contact is a way to reach a lead beside its platform account; Type is one of
-// ContactTypes other than the platform handle.
+// ContactTypes other than the platform handle, or a name the profile asks for.
 type Contact struct {
 	Type  string `json:"type"`
 	Value string `json:"value"`
@@ -324,12 +325,12 @@ func cleanContacts(in []Contact) ([]Contact, string) {
 	out := make([]Contact, 0, len(in))
 	var dropped []string
 	for _, c := range in {
-		c.Type, c.Value = strings.ToLower(strings.TrimSpace(c.Type)), strings.TrimSpace(c.Value)
+		c.Type, c.Value = contactType(strings.TrimSpace(c.Type)), strings.TrimSpace(c.Value)
 		switch {
 		case c.Value == "" || c.Type == ContactPlatformHandle:
 			continue
-		case !slices.Contains(ContactTypes, c.Type):
-			dropped = append(dropped, fmt.Sprintf("contact type %q is not one of %s", c.Type, strings.Join(ContactTypes[1:], ", ")))
+		case c.Type == "" || utf8.RuneCountInString(c.Type) > maxContactTypeRunes:
+			dropped = append(dropped, fmt.Sprintf("contact type %q is empty or longer than %d characters", c.Type, maxContactTypeRunes))
 			continue
 		}
 		out = mergeContacts(out, []Contact{c})

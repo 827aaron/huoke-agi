@@ -10509,7 +10509,7 @@
                     }
                 },
                 "contact_types": {
-                    "description": "ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty\nmeans the platform handle alone.",
+                    "description": "ContactTypes are the contacts a lead is looked for with: values of ContactTypes or\nnames the owner chose, up to 30 characters each; empty means the platform handle alone.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -10591,7 +10591,7 @@
                     }
                 },
                 "contact_types": {
-                    "description": "ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty\nmeans the platform handle alone.",
+                    "description": "ContactTypes are the contacts a lead is looked for with: values of ContactTypes or\nnames the owner chose, up to 30 characters each; empty means the platform handle alone.",
                     "type": "array",
                     "items": {
                         "type": "string"
