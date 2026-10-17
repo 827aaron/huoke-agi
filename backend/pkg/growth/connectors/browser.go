@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"pentagi/pkg/config"
 )
 
 // WebErrorCode is the error vocabulary of the browser service in
@@ -687,6 +689,67 @@ func browserProfile(acc Account) BrowserProfile {
 // one profile per name.
 func BrowserAccountID(platform Platform, accountID int64) string {
 	return fmt.Sprintf("%s-%d", platform, accountID)
+}
+
+// browserRemoteLogin is the operator sign-in of a browser_session account:
+// the service's mirrored login page, opened in the account's own browser so
+// login and later automation share one proxy and fingerprint.
+type browserRemoteLogin struct {
+	platform Platform
+}
+
+func (l browserRemoteLogin) client(acc Account) (*BrowserClient, string, error) {
+	browser, err := browserFromEnv()
+	if err != nil {
+		return nil, "", err
+	}
+	name := BrowserAccountID(l.platform, acc.ID)
+	browser.SetProfile(name, browserProfile(acc))
+	return browser, name, nil
+}
+
+func (l browserRemoteLogin) Start(ctx context.Context, _ *config.Config, acc Account) (RemoteLoginView, error) {
+	browser, name, err := l.client(acc)
+	if err != nil {
+		return RemoteLoginView{}, err
+	}
+	login, err := browser.StartLogin(ctx, name, l.platform, "")
+	if err != nil {
+		return RemoteLoginView{}, err
+	}
+	view := RemoteLoginView{ViewURL: login.LoginURL, ExpiresAt: login.ExpiresAt}
+	if len(login.Fingerprint) > 0 && string(login.Fingerprint) != "null" {
+		view.Fingerprint = login.Fingerprint
+	}
+	return view, nil
+}
+
+func (l browserRemoteLogin) Finish(ctx context.Context, _ *config.Config, acc Account) (bool, string, error) {
+	browser, name, err := l.client(acc)
+	if err != nil {
+		return false, "", err
+	}
+	res, err := browser.ConfirmLogin(ctx, name)
+	if err != nil {
+		return false, "", err
+	}
+	if res.State == "ok" {
+		return true, "", nil
+	}
+	reason := res.Reason
+	if reason == "" {
+		reason = res.StateReason
+	}
+	return false, reason, nil
+}
+
+func (l browserRemoteLogin) Cancel(ctx context.Context, _ *config.Config, acc Account) error {
+	browser, name, err := l.client(acc)
+	if err != nil {
+		return err
+	}
+	_, err = browser.CancelLogin(ctx, name)
+	return err
 }
 
 var (

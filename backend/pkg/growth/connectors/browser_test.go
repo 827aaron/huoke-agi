@@ -219,3 +219,66 @@ func TestBrowser_SetProfile_EveryCallForTheAccountCarriesIt(t *testing.T) {
 	}
 	assert.NotContains(t, bodies["/sessions/other/navigate"], "proxy", "another account keeps its own settings")
 }
+
+func TestBrowser_RemoteLogin_StartFinishCancelDriveTheAccountsBrowser(t *testing.T) {
+	var mu sync.Mutex
+	var seen []string
+	var startBody map[string]any
+	signedIn := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		defer mu.Unlock()
+		seen = append(seen, r.URL.Path)
+		switch r.URL.Path {
+		case "/sessions/instagram-7/login/start":
+			startBody = body
+			_, _ = w.Write([]byte(`{"account_id":"instagram-7","state":"new","login_url":"/login/instagram-7?ticket=t","expires_at":"2026-10-17T01:00:00Z","fingerprint":{"platform":"MacIntel"}}`))
+		case "/sessions/instagram-7/login/confirm":
+			if signedIn {
+				_, _ = w.Write([]byte(`{"account_id":"instagram-7","state":"ok"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"account_id":"instagram-7","state":"new","reason":"login form is shown"}`))
+		case "/sessions/instagram-7/login/cancel":
+			_, _ = w.Write([]byte(`{"account_id":"instagram-7","state":"new"}`))
+		default:
+			w.WriteHeader(404)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("BROWSER_SERVICE_URL", srv.URL)
+	resetSharedBrowser(t)
+
+	login, ok := LookupRemoteLogin(PlatformInstagram)
+	require.True(t, ok)
+	acc := Account{ID: 7, Platform: PlatformInstagram, Kind: "browser_session", Proxy: "socks5://10.0.0.1:1080"}
+
+	view, err := login.Start(context.Background(), nil, acc)
+	require.NoError(t, err)
+	assert.Equal(t, "/login/instagram-7?ticket=t", view.ViewURL)
+	assert.Equal(t, time.Date(2026, 10, 17, 1, 0, 0, 0, time.UTC), view.ExpiresAt.UTC())
+	assert.JSONEq(t, `{"platform":"MacIntel"}`, string(view.Fingerprint))
+	assert.Equal(t, "socks5://10.0.0.1:1080", startBody["proxy"])
+	assert.Equal(t, "instagram", startBody["platform"])
+
+	done, reason, err := login.Finish(context.Background(), nil, acc)
+	require.NoError(t, err)
+	assert.False(t, done)
+	assert.Equal(t, "login form is shown", reason)
+
+	mu.Lock()
+	signedIn = true
+	mu.Unlock()
+	done, reason, err = login.Finish(context.Background(), nil, acc)
+	require.NoError(t, err)
+	assert.True(t, done)
+	assert.Empty(t, reason)
+
+	require.NoError(t, login.Cancel(context.Background(), nil, acc))
+	assert.Equal(t, []string{"/sessions/instagram-7/login/start", "/sessions/instagram-7/login/confirm", "/sessions/instagram-7/login/confirm", "/sessions/instagram-7/login/cancel"}, seen)
+
+	_, ok = LookupRemoteLogin(PlatformFacebook)
+	assert.True(t, ok)
+}

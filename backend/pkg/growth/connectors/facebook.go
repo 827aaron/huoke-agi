@@ -67,6 +67,7 @@ func (f *Facebook) Account() string { return f.account }
 var _ Connector = (*Facebook)(nil)
 
 func init() {
+	RegisterRemoteLogin(PlatformFacebook, browserRemoteLogin{platform: PlatformFacebook})
 	Register(PlatformFacebook, func(_ context.Context, _ *config.Config, acc Account) (Connector, error) {
 		browser, err := browserFromEnv()
 		if err != nil {
