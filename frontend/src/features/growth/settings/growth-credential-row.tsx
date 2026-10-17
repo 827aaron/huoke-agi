@@ -38,7 +38,7 @@ export const LLM_PROVIDERS = [
     'custom',
 ] as const;
 
-// The embedders PentAGI ships; the vector memory and the knowledge base depend on one of them.
+// The embedders the backend ships; the vector memory and the knowledge base depend on one of them.
 export const EMBEDDING_PROVIDERS = [
     'openai',
     'openrouter',
