@@ -1940,8 +1940,15 @@ function SettingsProvider() {
         );
     }
 
+    // Only types with a configured key, as in the list's create menu: picking another one sets a
+    // `?type=` that the bounce above sends back to the list, which the dirty form then blocks.
+    const enabledTypes = data?.settingsProviders?.enabled;
     const providers = data?.settingsProviders?.models
-        ? Object.keys(data?.settingsProviders.models).filter((key) => key !== '__typename')
+        ? Object.keys(data?.settingsProviders.models).filter(
+              (key) =>
+                  key !== '__typename' &&
+                  (key === selectedType || enabledTypes?.[key as keyof typeof enabledTypes] === true),
+          )
         : [];
 
     const metaFields = (
