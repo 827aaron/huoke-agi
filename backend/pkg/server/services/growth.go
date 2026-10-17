@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"io"
@@ -64,10 +65,26 @@ type growthRuns struct {
 // owned by the authenticated user; flows and tasks are filters only.
 type GrowthService struct {
 	svc *growth.Service
+	// repoint moves the user's flows and assistants off a provider the new LLM key no
+	// longer builds; nil leaves them to repoint on their next input.
+	repoint func(ctx context.Context, userID int64) error
 }
 
 func NewGrowthService(svc *growth.Service) *GrowthService {
 	return &GrowthService{svc: svc}
+}
+
+func (s *GrowthService) RepointProvidersWith(fn func(ctx context.Context, userID int64) error) {
+	s.repoint = fn
+}
+
+func (s *GrowthService) llmChanged(c *gin.Context, uid int64) {
+	if c.Param("kind") != growth.SettingLLM || s.repoint == nil {
+		return
+	}
+	if err := s.repoint(c, uid); err != nil {
+		logger.FromContext(c).WithError(err).Warn("failed to repoint flows after the LLM key changed")
+	}
 }
 
 // ListSources is a function to return the source pool
@@ -1120,6 +1137,7 @@ func (s *GrowthService) SaveSetting(c *gin.Context) {
 		settingError(c, err)
 		return
 	}
+	s.llmChanged(c, uid)
 
 	response.Success(c, http.StatusOK, view)
 }
@@ -1142,6 +1160,7 @@ func (s *GrowthService) DeleteSetting(c *gin.Context) {
 		settingError(c, err)
 		return
 	}
+	s.llmChanged(c, uid)
 
 	response.Success(c, http.StatusOK, struct{}{})
 }

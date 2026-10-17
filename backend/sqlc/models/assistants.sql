@@ -91,6 +91,12 @@ SET tool_call_id_template = $1
 WHERE id = $2
 RETURNING *;
 
+-- name: UpdateAssistantProvider :one
+UPDATE assistants
+SET model_provider_name = $1, model_provider_type = $2, tool_call_id_template = $3, model = $4
+WHERE id = $5
+RETURNING *;
+
 -- name: UpdateAssistantsProviderNameByOldName :many
 -- The assistants counterpart of UpdateFlowsProviderNameByOldName. Assistants
 -- carry their own provider reference, independent of their flow's, and the

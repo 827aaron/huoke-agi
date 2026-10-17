@@ -1,14 +1,17 @@
 package providers
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/big"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -104,6 +107,7 @@ type ProviderController interface {
 		ctx context.Context,
 		userID int64,
 	) (provider.Providers, error)
+	CurrentProvider(ctx context.Context, userID int64) (provider.Provider, error)
 
 	NewProvider(prv database.Provider) (provider.Provider, error)
 	CreateProvider(
@@ -521,7 +525,7 @@ func (pc *providerController) LoadFlowProvider(
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.LoadFlowProvider")
 	defer span.End()
 
-	prv, err := pc.GetProvider(ctx, prvname, userID)
+	prv, err := pc.loadProvider(ctx, prvname, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get provider: %w", err)
 	}
@@ -670,7 +674,7 @@ func (pc *providerController) LoadAssistantProvider(
 	ctx, span := obs.Observer.NewSpan(ctx, obs.SpanKindInternal, "providers.LoadAssistantProvider")
 	defer span.End()
 
-	prv, err := pc.GetProvider(ctx, prvname, userID)
+	prv, err := pc.loadProvider(ctx, prvname, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get provider: %w", err)
 	}
@@ -749,6 +753,28 @@ func (pc *providerController) GetProvider(
 	}
 
 	return pc.withFallback(ctx, prv, userID), nil
+}
+
+// loadProvider resolves the provider a stored flow or assistant names, or the user's
+// current one when that name is gone, so the work goes on after the user replaced the
+// key behind it; the stored name is repointed on the next input.
+func (pc *providerController) loadProvider(
+	ctx context.Context,
+	prvname provider.ProviderName,
+	userID int64,
+) (provider.Provider, error) {
+	prv, err := pc.GetProvider(ctx, prvname, userID)
+	if !errors.Is(err, provider.ErrProviderNotFound) {
+		return prv, err
+	}
+	current, cerr := pc.CurrentProvider(ctx, userID)
+	if cerr != nil {
+		return nil, errors.Join(err, cerr)
+	}
+	logrus.WithContext(ctx).WithFields(logrus.Fields{
+		"user_id": userID, "stored": prvname, "current": current.Name(),
+	}).Warn("stored provider is gone, loading the current one")
+	return current, nil
 }
 
 func (pc *providerController) withFallback(
@@ -848,6 +874,39 @@ func (pc *providerController) GetProviders(
 	}
 
 	return providersMap, nil
+}
+
+// ErrNoProvider means the user has no LLM provider at all.
+var ErrNoProvider = errors.New("no LLM provider is configured: fill in the LLM key on the settings page")
+
+// CurrentProvider is what a flow or assistant runs on once the provider it names is
+// gone: the one the user's own saved key builds, else a built-in of .env, else one the
+// user defined, each by name.
+func (pc *providerController) CurrentProvider(ctx context.Context, userID int64) (provider.Provider, error) {
+	all, err := pc.GetProviders(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	own := pc.userDefaults(pc.userConfig(ctx, userID))
+	rank := func(name provider.ProviderName) int {
+		_, builtIn := pc.Providers[name]
+		_, saved := own[name]
+		switch {
+		case saved && !builtIn:
+			return 0
+		case builtIn:
+			return 1
+		default:
+			return 2
+		}
+	}
+	names := slices.SortedFunc(maps.Keys(all), func(a, b provider.ProviderName) int {
+		return cmp.Or(cmp.Compare(rank(a), rank(b)), cmp.Compare(a, b))
+	})
+	if len(names) == 0 {
+		return nil, ErrNoProvider
+	}
+	return pc.withFallback(ctx, all[names[0]], userID), nil
 }
 
 func (pc *providerController) NewProvider(prv database.Provider) (provider.Provider, error) {
