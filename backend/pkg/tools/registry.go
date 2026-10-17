@@ -536,7 +536,8 @@ func getMessageType(name string) database.MsglogType {
 		return database.MsglogTypeBrowser
 	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, FirecrawlToolName,
 		TraversaalToolName, PerplexityToolName, SearxngToolName, SploitusToolName, WebSearchToolName,
-		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName:
+		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName,
+		GrowthSearchSourcesToolName, GrowthSyncSourceToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:
 		return database.MsglogTypeAdvice
@@ -553,7 +554,10 @@ func getMessageResultFormat(name string) database.MsglogResultFormat {
 	switch name {
 	case TerminalToolName:
 		return database.MsglogResultFormatTerminal
-	case FileToolName, BrowserToolName:
+	case FileToolName, BrowserToolName,
+		GrowthSearchSourcesToolName, GrowthAddSourcesToolName, GrowthJoinSourceToolName, GrowthSyncSourceToolName,
+		GrowthUpsertLeadsToolName, GrowthGetProgressToolName, GrowthDeliverLeadsToolName, GrowthListLeadsToolName:
+		// The growth tools answer in JSON, which the Markdown view runs together.
 		return database.MsglogResultFormatPlain
 	default:
 		return database.MsglogResultFormatMarkdown

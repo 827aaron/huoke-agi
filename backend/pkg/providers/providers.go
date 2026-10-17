@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -163,6 +164,8 @@ type providerController struct {
 	defaultConfigErrors map[provider.ProviderType]error
 
 	userConfigFn UserConfigFunc
+	// userEmbedders caches the embedders built from users' own settings, keyed by embeddingKey.
+	userEmbedders sync.Map
 
 	provider.Providers
 }
@@ -178,6 +181,42 @@ func (pc *providerController) userConfig(ctx context.Context, userID int64) *con
 		return pc.cfg
 	}
 	return cfg
+}
+
+// embeddingKey names the configuration an embedder is built from: every field
+// embeddings.New reads.
+func embeddingKey(c *config.Config) string {
+	return strings.Join([]string{
+		c.EmbeddingProvider, c.EmbeddingURL, c.EmbeddingKey, c.EmbeddingModel,
+		strconv.FormatBool(c.EmbeddingStripNewLines), strconv.Itoa(c.EmbeddingBatchSize),
+		c.OpenAIKey, c.OpenAIServerURL, c.OllamaServerURL, c.OllamaServerAPIKey,
+		c.MistralAPIKey, c.MistralServerURL, c.MistralProvider,
+	}, "\x00")
+}
+
+// embedderFor is the embedder of a user's flows and assistants: the server's, unless
+// the user's saved settings change what it is built from. One that fails to build
+// falls back to the server's, which behaves as PentAGI does without a key.
+func (pc *providerController) embedderFor(ctx context.Context, userID int64) embeddings.Embedder {
+	ucfg := pc.userConfig(ctx, userID)
+	if ucfg == pc.cfg {
+		return pc.embedder
+	}
+	key := embeddingKey(ucfg)
+	if key == embeddingKey(pc.cfg) {
+		return pc.embedder
+	}
+	if e, ok := pc.userEmbedders.Load(key); ok {
+		return e.(embeddings.Embedder)
+	}
+	e, err := embeddings.New(ucfg)
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).
+			Warnf("failed to create the user's embedder '%s', using the server's", ucfg.EmbeddingProvider)
+		return pc.embedder
+	}
+	actual, _ := pc.userEmbedders.LoadOrStore(key, e)
+	return actual.(embeddings.Embedder)
 }
 
 // userDefaults builds the built-in providers a user's own credentials enable, keyed by
@@ -438,7 +477,7 @@ func (pc *providerController) NewFlowProvider(
 		db:              pc.db,
 		mx:              &sync.RWMutex{},
 		cfg:             pc.cfg,
-		embedder:        pc.embedder,
+		embedder:        pc.embedderFor(ctx, userID),
 		graphitiClient:  pc.graphitiClient,
 		flowID:          flowID,
 		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
@@ -488,7 +527,7 @@ func (pc *providerController) LoadFlowProvider(
 		db:              pc.db,
 		mx:              &sync.RWMutex{},
 		cfg:             pc.cfg,
-		embedder:        pc.embedder,
+		embedder:        pc.embedderFor(ctx, userID),
 		graphitiClient:  pc.graphitiClient,
 		flowID:          flowID,
 		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
@@ -583,7 +622,7 @@ func (pc *providerController) NewAssistantProvider(
 			db:              pc.db,
 			mx:              &sync.RWMutex{},
 			cfg:             pc.cfg,
-			embedder:        pc.embedder,
+			embedder:        pc.embedderFor(ctx, userID),
 			graphitiClient:  pc.graphitiClient,
 			flowID:          flowID,
 			callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
@@ -636,7 +675,7 @@ func (pc *providerController) LoadAssistantProvider(
 			db:              pc.db,
 			mx:              &sync.RWMutex{},
 			cfg:             pc.cfg,
-			embedder:        pc.embedder,
+			embedder:        pc.embedderFor(ctx, userID),
 			graphitiClient:  pc.graphitiClient,
 			flowID:          flowID,
 			callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),

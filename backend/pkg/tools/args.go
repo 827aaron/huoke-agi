@@ -961,7 +961,7 @@ type GrowthAddSourcesAction struct {
 }
 
 type GrowthJoinSourceAction struct {
-	SourceIDs []int64 `json:"source_ids" jsonschema:"required" jsonschema_description:"Pool source_ids to join with the customer's Telegram account. Already joined sources are skipped; web sources need no joining."`
+	SourceIDs []Int64 `json:"source_ids" jsonschema:"required" jsonschema_description:"Pool source_ids to join with the customer's Telegram account. Already joined sources are skipped; web sources need no joining."`
 	Message   string  `json:"message" jsonschema:"required,title=Join sources message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on which sources are being joined and why. Written in the engagement language declared by your system prompt."`
 }
 

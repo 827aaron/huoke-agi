@@ -233,17 +233,32 @@ CREATE TABLE IF NOT EXISTS growth_settings (
   updated_at     TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
 
   CONSTRAINT growth_settings_user_kind_unique UNIQUE (user_id, kind),
-  CONSTRAINT growth_settings_kind_check CHECK (kind IN ('llm', 'telegram', 'youtube', 'web_search', 'email', 'proxy')),
+  CONSTRAINT growth_settings_kind_check CHECK (kind IN ('llm', 'embedding', 'telegram', 'youtube', 'web_search', 'email', 'proxy')),
   CONSTRAINT growth_settings_status_check CHECK (status IN ('untested', 'connected', 'invalid'))
 );
 
 CREATE OR REPLACE TRIGGER update_growth_settings_modified
   BEFORE UPDATE ON growth_settings
   FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
+
+-- One business profile per customer. Each task's input starts with its compact block,
+-- the whole profile is the user resource business_profile.md, and its long lists are
+-- the customer's guide documents in the knowledge store.
+CREATE TABLE IF NOT EXISTS growth_profiles (
+  user_id     BIGINT      PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  profile     JSONB       NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE TRIGGER update_growth_profiles_modified
+  BEFORE UPDATE ON growth_profiles
+  FOR EACH ROW EXECUTE PROCEDURE update_modified_column();
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
+DROP TABLE IF EXISTS growth_profiles;
 DROP TABLE IF EXISTS growth_settings;
 DROP TABLE IF EXISTS lead_evidence;
 DROP TABLE IF EXISTS leads;

@@ -4456,6 +4456,408 @@
                 }
             }
         },
+        "/growth/accounts/remote-login": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "account_id signs that account in again; without it a new account of platform is added. view_url is the live view to embed.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Open a Facebook or Instagram account's browser on the server for an operator to sign in by hand",
+                "parameters": [
+                    {
+                        "description": "the account, or the platform of a new one",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/growth.LoginStart"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "browser opened successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.RemoteLoginView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request data",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "adding accounts not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "account not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "no remote login for this platform in this build",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/accounts/remote-login/{sessionID}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Close the browser view; the account stays as it was and a new one is removed",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "remote login session id",
+                        "name": "sessionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "login cancelled successful",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "login not found or expired",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/accounts/remote-login/{sessionID}/finish": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Check that the operator signed the browser in; the account turns active",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "remote login session id",
+                        "name": "sessionID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "account signed in successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.AccountView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "login not found or expired",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "the browser is not signed in yet; the message says what the page shows",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/accounts/telegram/login": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "account_id signs that account in again; without it the phone number becomes a new account. next is code.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Add or re-sign a Telegram account: Telegram sends a code to the phone",
+                "parameters": [
+                    {
+                        "description": "phone in international format",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.growthTelegramLoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "code sent successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.LoginStep"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid phone or proxy",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "adding accounts not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "account not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Telegram asked to wait",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "no Telegram login in this build, or GROWTH_SECRET_KEY is not set",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/accounts/telegram/login/{loginID}/code": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Pass on the login code; next is done, or password for an account with two-step verification",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "login id",
+                        "name": "loginID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the code",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.growthCodeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "code accepted successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.LoginStep"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "the code was rejected; try again",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "login not found or expired",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Telegram asked to wait",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/accounts/telegram/login/{loginID}/password": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Pass on the two-step verification password; next is done",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "login id",
+                        "name": "loginID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "the password",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.growthPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "password accepted successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.LoginStep"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "the password was rejected; try again",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "login not found or expired",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "Telegram asked to wait",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/growth/accounts/{accountID}": {
             "put": {
                 "security": [
@@ -4544,6 +4946,213 @@
                 }
             }
         },
+        "/growth/accounts/{accountID}/disable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Keep an account and its session but never pick it for work",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "account disabled successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.AccountView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "changing accounts not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "account not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on disabling account",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/accounts/{accountID}/enable": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Return a disabled account to work: active when it was signed in before, needs_login otherwise",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "account enabled successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.AccountView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "changing accounts not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "account not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on enabling account",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/accounts/{accountID}/proxy": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Set the account's own proxy; null or empty falls back to the default proxy, else a direct connection",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "http, https, socks5 or socks5h URL, optionally with user:pass@",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.growthProxyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "proxy saved successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.AccountView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid proxy",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "changing accounts not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "account not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "GROWTH_SECRET_KEY is not set",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/growth/accounts/{accountID}/test-proxy": {
             "post": {
                 "security": [
@@ -4566,6 +5175,14 @@
                         "name": "accountID",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "a proxy to try before saving it; without one the account's own route is tested",
+                        "name": "json",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/services.growthProxyRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -4585,6 +5202,12 @@
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid proxy",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
                         }
                     },
                     "403": {
@@ -4699,6 +5322,75 @@
                     },
                     "500": {
                         "description": "internal error on getting leads",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/leads/email": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "With task_id: the round's delivered leads, or its qualified leads while none are delivered. Without: the flow's delivered leads, else its qualified ones.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Mail a round's lead list to the notification addresses, as the email of a finished round",
+                "parameters": [
+                    {
+                        "description": "the flow and optionally the round's task",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.growthLeadsEmailRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "email sent successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.growthTestEmailResult"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request, no SMTP server configured, or no leads to send",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "sending email not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "the email could not be sent",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -4843,6 +5535,207 @@
                     },
                     "500": {
                         "description": "internal error on getting lead",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/profiles": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "A user has at most one profile, so the list is empty or holds one.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Retrieve the business profile every task of the current user starts from",
+                "responses": {
+                    "200": {
+                        "description": "profiles received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/growth.ProfileView"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "getting the profile not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting the profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Saving when a profile exists replaces it. knowledge says whether the lists reached the knowledge store: seeded, or skipped with the reason.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Save the business profile; new tasks start with it",
+                "parameters": [
+                    {
+                        "description": "business profile",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/growth.Profile"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "profile saved successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.ProfileView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "saving the profile not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on saving the profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/profiles/{profileID}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Change the business profile; new tasks start with it",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "profile id",
+                        "name": "profileID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "business profile",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/growth.Profile"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "profile saved successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.ProfileView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "saving the profile not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "profile not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on saving the profile",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -5049,7 +5942,7 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "llm, telegram, youtube, web_search, email or proxy",
+                        "description": "llm, embedding, telegram, youtube, web_search, email or proxy",
                         "name": "kind",
                         "in": "path",
                         "required": true
@@ -5125,7 +6018,7 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "llm, telegram, youtube, web_search, email or proxy",
+                        "description": "llm, embedding, telegram, youtube, web_search, email or proxy",
                         "name": "kind",
                         "in": "path",
                         "required": true
@@ -5177,7 +6070,7 @@
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "llm, telegram, youtube, web_search, email or proxy",
+                        "description": "llm, embedding, telegram, youtube, web_search, email or proxy",
                         "name": "kind",
                         "in": "path",
                         "required": true
@@ -8951,7 +9844,7 @@
                 "label": {
                     "type": "string"
                 },
-                "proxy_url": {
+                "proxy": {
                     "type": "string"
                 },
                 "status": {
@@ -9001,11 +9894,11 @@
                 "platform": {
                     "type": "string"
                 },
-                "proxy_source": {
+                "proxy": {
+                    "description": "ProxyURL is the account's own proxy, masked; ProxySource says which proxy its\ntraffic takes: its own, the customer's default, or none.",
                     "type": "string"
                 },
-                "proxy_url": {
-                    "description": "ProxyURL is the account's own proxy, masked; ProxySource says which proxy its\ntraffic takes: its own, the customer's default, or none.",
+                "proxy_source": {
                     "type": "string"
                 },
                 "rate_limit_until": {
@@ -9112,6 +10005,161 @@
                 }
             }
         },
+        "growth.LoginStart": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "external_browser_ws": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "proxy": {
+                    "type": "string"
+                }
+            }
+        },
+        "growth.LoginStep": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "$ref": "#/definitions/growth.AccountView"
+                },
+                "login_id": {
+                    "type": "string"
+                },
+                "next": {
+                    "type": "string"
+                }
+            }
+        },
+        "growth.Profile": {
+            "type": "object",
+            "properties": {
+                "competitors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "default_target": {
+                    "type": "integer"
+                },
+                "excludes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "games": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "genre": {
+                    "type": "string"
+                },
+                "languages": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "pitch": {
+                    "type": "string"
+                },
+                "regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "signals": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "growth.ProfileView": {
+            "type": "object",
+            "properties": {
+                "competitors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "default_target": {
+                    "type": "integer"
+                },
+                "excludes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "games": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "genre": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "knowledge": {
+                    "type": "string"
+                },
+                "languages": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "pitch": {
+                    "type": "string"
+                },
+                "regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "signals": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "growth.ProxyCheck": {
             "type": "object",
             "properties": {
@@ -9128,6 +10176,23 @@
                     "type": "string"
                 },
                 "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "growth.RemoteLoginView": {
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "fingerprint": {
+                    "type": "object"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "view_url": {
                     "type": "string"
                 }
             }
@@ -11794,6 +12859,17 @@
                 }
             }
         },
+        "services.growthCodeRequest": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
         "services.growthCreateAccountRequest": {
             "type": "object",
             "required": [
@@ -11815,7 +12891,7 @@
                 "platform": {
                     "type": "string"
                 },
-                "proxy_url": {
+                "proxy": {
                     "type": "string"
                 },
                 "status": {
@@ -11834,6 +12910,40 @@
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "services.growthLeadsEmailRequest": {
+            "type": "object",
+            "required": [
+                "flow_id"
+            ],
+            "properties": {
+                "flow_id": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "task_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.growthPasswordRequest": {
+            "type": "object",
+            "required": [
+                "password"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.growthProxyRequest": {
+            "type": "object",
+            "properties": {
+                "proxy": {
+                    "type": "string"
                 }
             }
         },
@@ -11925,6 +13035,23 @@
                 },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "services.growthTelegramLoginRequest": {
+            "type": "object",
+            "required": [
+                "phone"
+            ],
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "proxy": {
+                    "type": "string"
                 }
             }
         },

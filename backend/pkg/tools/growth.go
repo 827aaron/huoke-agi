@@ -136,7 +136,11 @@ func (g *growthTools) joinSource(ctx context.Context, args json.RawMessage) (str
 	if len(action.SourceIDs) == 0 {
 		return "", errors.New("source_ids is required")
 	}
-	outcomes, err := g.backend.JoinSources(ctx, g.scope, action.SourceIDs)
+	ids := make([]int64, 0, len(action.SourceIDs))
+	for _, id := range action.SourceIDs {
+		ids = append(ids, int64(id))
+	}
+	outcomes, err := g.backend.JoinSources(ctx, g.scope, ids)
 	if err != nil && len(outcomes) == 0 {
 		return g.failure(ctx, err)
 	}

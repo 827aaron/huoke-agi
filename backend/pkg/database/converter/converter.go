@@ -214,8 +214,17 @@ func ConvertMessageLog(log database.Msglog) *model.MessageLog {
 		FlowID:       log.FlowID,
 		TaskID:       database.NullInt64ToInt64(log.TaskID),
 		SubtaskID:    database.NullInt64ToInt64(log.SubtaskID),
+		Agent:        nullAgentType(log.Agent),
 		CreatedAt:    log.CreatedAt.Time,
 	}
+}
+
+func nullAgentType(agent database.NullMsgchainType) *model.AgentType {
+	if !agent.Valid {
+		return nil
+	}
+	a := model.AgentType(agent.MsgchainType)
+	return &a
 }
 
 func ConvertPrompts(prompts []database.Prompt) []*model.UserPrompt {

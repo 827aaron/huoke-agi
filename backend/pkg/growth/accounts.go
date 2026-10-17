@@ -48,7 +48,7 @@ type AccountView struct {
 	LastError         string     `json:"last_error,omitempty"`
 	// ProxyURL is the account's own proxy, masked; ProxySource says which proxy its
 	// traffic takes: its own, the customer's default, or none.
-	ProxyURL          string          `json:"proxy_url,omitempty"`
+	ProxyURL          string          `json:"proxy,omitempty"`
 	ProxySource       string          `json:"proxy_source"`
 	Fingerprint       json.RawMessage `json:"fingerprint,omitempty" swaggertype:"object"`
 	ExternalBrowserWS string          `json:"external_browser_ws,omitempty"`
@@ -60,9 +60,33 @@ type AccountView struct {
 type AccountUpdate struct {
 	Label             *string         `json:"label,omitempty"`
 	Status            *string         `json:"status,omitempty"`
-	ProxyURL          *string         `json:"proxy_url,omitempty"`
+	ProxyURL          *string         `json:"proxy,omitempty"`
 	Fingerprint       json.RawMessage `json:"fingerprint,omitempty" swaggertype:"object"`
 	ExternalBrowserWS *string         `json:"external_browser_ws,omitempty"`
+}
+
+// keyedPlatforms are reached with the customer's API keys and no sign-in. They still need
+// an account row, for the picker and for health; it is added on first use, while keys exist,
+// and kept out of the accounts the customer manages.
+var keyedPlatforms = map[connectors.Platform]func(*config.Config) bool{
+	"youtube": func(c *config.Config) bool { return len(c.YouTubeAPIKeys()) > 0 },
+}
+
+const keyedAccountLabel = "api keys"
+
+func (s *Service) keyedAccount(ctx context.Context, userID int64, platform connectors.Platform) (database.ChannelAccount, bool, error) {
+	hasKeys, ok := keyedPlatforms[platform]
+	if !ok {
+		return database.ChannelAccount{}, false, nil
+	}
+	cfg, err := s.ConfigFor(ctx, userID)
+	if err != nil || !hasKeys(cfg) {
+		return database.ChannelAccount{}, false, err
+	}
+	acc, err := s.EnsureAccount(ctx, userID, AccountSpec{
+		Platform: platform, Kind: AccountKindAPISession, Label: keyedAccountLabel, Status: AccountStatusActive,
+	})
+	return acc, err == nil, err
 }
 
 func (s *Service) ListAccounts(ctx context.Context, userID int64) ([]AccountView, error) {
@@ -76,6 +100,9 @@ func (s *Service) ListAccounts(ctx context.Context, userID int64) ([]AccountView
 	}
 	views := make([]AccountView, 0, len(accounts))
 	for _, a := range accounts {
+		if _, keyed := keyedPlatforms[connectors.Platform(a.Platform)]; keyed {
+			continue
+		}
 		views = append(views, s.accountView(a, cfg))
 	}
 	return views, nil
@@ -275,8 +302,9 @@ func (s *Service) CreateAccount(ctx context.Context, userID int64, spec AccountS
 	return s.UpdateAccount(ctx, userID, acc.ID, u)
 }
 
-// TestAccountProxy fetches proxyCheckURL the way the account's traffic would go.
-func (s *Service) TestAccountProxy(ctx context.Context, userID, accountID int64) (ProxyCheck, error) {
+// TestAccountProxy fetches proxyCheckURL the way the account's traffic would go, or
+// through candidate when it is set: a proxy typed into the page and not saved yet.
+func (s *Service) TestAccountProxy(ctx context.Context, userID, accountID int64, candidate string) (ProxyCheck, error) {
 	a, err := s.userAccount(ctx, userID, accountID)
 	if err != nil {
 		return ProxyCheck{}, err
@@ -286,6 +314,12 @@ func (s *Service) TestAccountProxy(ctx context.Context, userID, accountID int64)
 		return ProxyCheck{}, err
 	}
 	proxyURL, source, err := s.resolveProxy(a, cfg)
+	if candidate = strings.TrimSpace(candidate); candidate != "" && !strings.Contains(candidate, "••••") {
+		if _, perr := parseProxyURL(candidate); perr != nil {
+			return ProxyCheck{}, perr
+		}
+		proxyURL, source, err = candidate, ProxySourceAccount, nil
+	}
 	if err != nil {
 		return ProxyCheck{Source: ProxySourceAccount, Error: err.Error()}, nil
 	}
@@ -352,6 +386,11 @@ func (s *Service) pickAccount(
 	})
 	if err != nil {
 		return database.ChannelAccount{}, fmt.Errorf("failed to load %s accounts: %w", platform, err)
+	}
+	if len(rows) == 0 && len(tried) == 0 {
+		if acc, ok, err := s.keyedAccount(ctx, userID, platform); ok || err != nil {
+			return acc, err
+		}
 	}
 
 	now := time.Now()
@@ -506,37 +545,12 @@ func (s *Service) connectorFor(ctx context.Context, acc database.ChannelAccount)
 		return nil, fmt.Errorf("%w: %s", connectors.ErrNoConnector, platform)
 	}
 
-	cfg, err := s.ConfigFor(ctx, acc.UserID)
+	account, cfg, err := s.connectorAccount(ctx, acc)
 	if err != nil {
 		return nil, err
-	}
-	proxyURL, _, err := s.resolveProxy(acc, cfg)
-	if err != nil {
-		return nil, err
-	}
-	browserWS, err := s.accountSecret(acc, accountFieldBrowserWS, acc.ExternalBrowserWs)
-	if err != nil {
-		return nil, err
-	}
-	var fingerprint json.RawMessage
-	if acc.Fingerprint.Valid {
-		fingerprint = acc.Fingerprint.RawMessage
 	}
 	// The connector outlives the request that happened to build it.
-	conn, err := factory(context.WithoutCancel(ctx), cfg, connectors.Account{
-		ID:         acc.ID,
-		UserID:     acc.UserID,
-		Platform:   platform,
-		Kind:       acc.Kind,
-		ExternalID: acc.ExternalID,
-		ProfileDir: acc.ProfileDir,
-		Session:    &accountSession{db: s.db, accountID: acc.ID},
-		Health:     &accountHealth{s: s, accountID: acc.ID},
-
-		Proxy:             proxyURL,
-		Fingerprint:       fingerprint,
-		ExternalBrowserWS: browserWS,
-	})
+	conn, err := factory(context.WithoutCancel(ctx), cfg, account)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start %s connector: %w", platform, err)
 	}

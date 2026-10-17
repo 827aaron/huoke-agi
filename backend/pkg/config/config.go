@@ -297,7 +297,7 @@ type Config struct {
 	PprofAddr string `env:"PPROF_ADDR" envDefault:""`
 
 	// === Growth: Telegram account ===
-	GrowthEnabled bool   `env:"GROWTH_ENABLED" envDefault:"false"`
+	GrowthEnabled bool   `env:"GROWTH_ENABLED" envDefault:"true"`
 	TGAPIID       int    `env:"TG_API_ID"`
 	TGAPIHash     string `env:"TG_API_HASH"`
 	TGSessionDir  string `env:"TG_SESSION_DIR" envDefault:"./data/tg-session"`
@@ -308,6 +308,10 @@ type Config struct {
 	// optionally with user:pass@); an account's own proxy wins. PROXY_URL is unrelated:
 	// it carries the server's own outbound calls.
 	GrowthProxyURL string `env:"GROWTH_PROXY_URL"`
+	// BrowserServiceURL is the browser service that keeps a logged-in browser per Facebook
+	// and Instagram account; BrowserToken authorises the backend to it.
+	BrowserServiceURL string `env:"BROWSER_SERVICE_URL"`
+	BrowserToken      string `env:"BROWSER_TOKEN"`
 
 	// SMTP that mails a delivered lead list; a customer's saved settings take precedence.
 	SMTPHost     string `env:"SMTP_HOST"`
@@ -565,6 +569,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.OAuthGithubClientSecret, "Github Client Secret"},
 		{c.TGAPIHash, "Telegram API Hash"},
 		{c.GrowthProxyURL, "Growth Proxy URL"},
+		{c.BrowserToken, "Browser Service Token"},
 		{c.GrowthSecretKey, "Growth Secret Key"},
 		{c.SMTPPassword, "SMTP Password"},
 		{c.ProxyURL, "Proxy URL"},

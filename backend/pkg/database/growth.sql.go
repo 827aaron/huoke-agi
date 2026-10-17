@@ -8,6 +8,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"github.com/lib/pq"
@@ -286,6 +287,22 @@ func (q *Queries) GetDeliverableLeads(ctx context.Context, arg GetDeliverableLea
 		return nil, err
 	}
 	return items, nil
+}
+
+const getGrowthProfile = `-- name: GetGrowthProfile :one
+SELECT user_id, profile, created_at, updated_at FROM growth_profiles WHERE user_id = $1
+`
+
+func (q *Queries) GetGrowthProfile(ctx context.Context, userID int64) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, getGrowthProfile, userID)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const getGrowthRun = `-- name: GetGrowthRun :one
@@ -1115,6 +1132,32 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 	return items, nil
 }
 
+const getUserResourceByPath = `-- name: GetUserResourceByPath :one
+SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at FROM user_resources WHERE user_id = $1 AND path = $2
+`
+
+type GetUserResourceByPathParams struct {
+	UserID int64  `json:"user_id"`
+	Path   string `json:"path"`
+}
+
+func (q *Queries) GetUserResourceByPath(ctx context.Context, arg GetUserResourceByPathParams) (UserResource, error) {
+	row := q.db.QueryRowContext(ctx, getUserResourceByPath, arg.UserID, arg.Path)
+	var i UserResource
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Hash,
+		&i.Name,
+		&i.Path,
+		&i.Size,
+		&i.IsDir,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserSourceStats = `-- name: GetUserSourceStats :one
 WITH per_source AS (
   SELECT gs.id, gs.status,
@@ -1927,6 +1970,29 @@ func (q *Queries) UpsertChannelAccount(ctx context.Context, arg UpsertChannelAcc
 	return i, err
 }
 
+const upsertGrowthProfile = `-- name: UpsertGrowthProfile :one
+INSERT INTO growth_profiles (user_id, profile) VALUES ($1, $2)
+ON CONFLICT (user_id) DO UPDATE SET profile = EXCLUDED.profile
+RETURNING user_id, profile, created_at, updated_at
+`
+
+type UpsertGrowthProfileParams struct {
+	UserID  int64           `json:"user_id"`
+	Profile json.RawMessage `json:"profile"`
+}
+
+func (q *Queries) UpsertGrowthProfile(ctx context.Context, arg UpsertGrowthProfileParams) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, upsertGrowthProfile, arg.UserID, arg.Profile)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const upsertGrowthSetting = `-- name: UpsertGrowthSetting :one
 INSERT INTO growth_settings (user_id, kind, provider, secret)
 VALUES ($1, $2, $3, $4)
@@ -2167,6 +2233,45 @@ func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, e
 		&i.LastTaskID,
 		&i.DeliveredAt,
 		&i.DeliveredRunID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertUserResourceFile = `-- name: UpsertUserResourceFile :one
+INSERT INTO user_resources (user_id, hash, name, path, size, is_dir)
+VALUES ($1, $2, $3, $4, $5, false)
+ON CONFLICT (user_id, path) DO UPDATE
+SET hash = EXCLUDED.hash, size = EXCLUDED.size, is_dir = false
+RETURNING id, user_id, hash, name, path, size, is_dir, created_at, updated_at
+`
+
+type UpsertUserResourceFileParams struct {
+	UserID int64  `json:"user_id"`
+	Hash   string `json:"hash"`
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+}
+
+func (q *Queries) UpsertUserResourceFile(ctx context.Context, arg UpsertUserResourceFileParams) (UserResource, error) {
+	row := q.db.QueryRowContext(ctx, upsertUserResourceFile,
+		arg.UserID,
+		arg.Hash,
+		arg.Name,
+		arg.Path,
+		arg.Size,
+	)
+	var i UserResource
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Hash,
+		&i.Name,
+		&i.Path,
+		&i.Size,
+		&i.IsDir,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
