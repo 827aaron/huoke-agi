@@ -295,13 +295,14 @@ export interface GrowthSetting {
     kind: GrowthSettingKind;
     // Email only: the server has its own SMTP server in .env, so the customer need not set one.
     platform_smtp?: boolean;
-    provider: null | string;
-    providers: string[];
+    // The server omits the empty ones of these.
+    provider?: null | string;
+    providers?: string[];
     source: GrowthSettingSource;
     status: GrowthSettingStatus;
-    status_reason: null | string;
-    tested_at: null | string;
-    updated_at: null | string;
+    status_reason?: null | string;
+    tested_at?: null | string;
+    updated_at?: null | string;
 }
 
 // A field left empty keeps the value already saved.
