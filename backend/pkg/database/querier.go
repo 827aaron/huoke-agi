@@ -150,6 +150,7 @@ type Querier interface {
 	GetKnowledgeDocument(ctx context.Context, uuid string) (GetKnowledgeDocumentRow, error)
 	GetLeadByPlatformUser(ctx context.Context, arg GetLeadByPlatformUserParams) (Lead, error)
 	GetLeadsEvidence(ctx context.Context, leadIds []int64) ([]LeadEvidence, error)
+	GetMessageScores(ctx context.Context, arg GetMessageScoresParams) ([]GrowthMessageScore, error)
 	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
 	// Get all msgchains for a flow (including task and subtask level)
 	GetMsgchainsForFlow(ctx context.Context, flowID int64) ([]GetMsgchainsForFlowRow, error)
@@ -405,6 +406,7 @@ type Querier interface {
 	UpsertGrowthSetting(ctx context.Context, arg UpsertGrowthSettingParams) (GrowthSetting, error)
 	UpsertGrowthSource(ctx context.Context, arg UpsertGrowthSourceParams) (UpsertGrowthSourceRow, error)
 	UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, error)
+	UpsertMessageScore(ctx context.Context, arg UpsertMessageScoreParams) error
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
 	UpsertUserResourceFile(ctx context.Context, arg UpsertUserResourceFileParams) (UserResource, error)
 }

@@ -1007,6 +1007,16 @@ type FlowTemplate struct {
 	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
+type GrowthMessageScore struct {
+	ID        int64        `json:"id"`
+	UserID    int64        `json:"user_id"`
+	SourceID  int64        `json:"source_id"`
+	MessageID string       `json:"message_id"`
+	Score     int32        `json:"score"`
+	Signals   string       `json:"signals"`
+	CreatedAt sql.NullTime `json:"created_at"`
+}
+
 type GrowthProfile struct {
 	UserID    int64           `json:"user_id"`
 	Profile   json.RawMessage `json:"profile"`
@@ -1087,24 +1097,25 @@ type LangchainPgEmbedding struct {
 }
 
 type Lead struct {
-	ID             int64         `json:"id"`
-	UserID         int64         `json:"user_id"`
-	Platform       string        `json:"platform"`
-	PlatformUserID string        `json:"platform_user_id"`
-	IdentityKind   string        `json:"identity_kind"`
-	Username       string        `json:"username"`
-	DisplayName    string        `json:"display_name"`
-	Score          int32         `json:"score"`
-	Tier           string        `json:"tier"`
-	MatchReason    string        `json:"match_reason"`
-	FirstFlowID    sql.NullInt64 `json:"first_flow_id"`
-	FirstTaskID    sql.NullInt64 `json:"first_task_id"`
-	LastFlowID     sql.NullInt64 `json:"last_flow_id"`
-	LastTaskID     sql.NullInt64 `json:"last_task_id"`
-	DeliveredAt    sql.NullTime  `json:"delivered_at"`
-	DeliveredRunID sql.NullInt64 `json:"delivered_run_id"`
-	CreatedAt      sql.NullTime  `json:"created_at"`
-	UpdatedAt      sql.NullTime  `json:"updated_at"`
+	ID             int64           `json:"id"`
+	UserID         int64           `json:"user_id"`
+	Platform       string          `json:"platform"`
+	PlatformUserID string          `json:"platform_user_id"`
+	IdentityKind   string          `json:"identity_kind"`
+	Username       string          `json:"username"`
+	DisplayName    string          `json:"display_name"`
+	Score          int32           `json:"score"`
+	Tier           string          `json:"tier"`
+	MatchReason    string          `json:"match_reason"`
+	FirstFlowID    sql.NullInt64   `json:"first_flow_id"`
+	FirstTaskID    sql.NullInt64   `json:"first_task_id"`
+	LastFlowID     sql.NullInt64   `json:"last_flow_id"`
+	LastTaskID     sql.NullInt64   `json:"last_task_id"`
+	DeliveredAt    sql.NullTime    `json:"delivered_at"`
+	DeliveredRunID sql.NullInt64   `json:"delivered_run_id"`
+	CreatedAt      sql.NullTime    `json:"created_at"`
+	UpdatedAt      sql.NullTime    `json:"updated_at"`
+	Contacts       json.RawMessage `json:"contacts"`
 }
 
 type LeadEvidence struct {

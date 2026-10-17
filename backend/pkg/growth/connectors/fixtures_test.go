@@ -2,6 +2,8 @@ package connectors
 
 import (
 	"encoding/json"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 // fakePage is what the fake browser service shows for a URL: the captures of
@@ -193,4 +197,45 @@ func resetSharedBrowser(t *testing.T) {
 		sharedBrowser = nil
 		sharedBrowserMu.Unlock()
 	})
+}
+
+// silentTelegramRoute is a SOCKS5 proxy URL that grants the greeting and CONNECT, then
+// says nothing, as a route that reaches no Telegram data centre does.
+func silentTelegramRoute(t *testing.T) string {
+	t.Helper()
+	silent, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	var mu sync.Mutex
+	var conns []net.Conn
+	t.Cleanup(func() {
+		_ = silent.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, conn := range conns {
+			_ = conn.Close()
+		}
+	})
+	go func() {
+		for {
+			conn, err := silent.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			conns = append(conns, conn)
+			mu.Unlock()
+			go func() {
+				buf := make([]byte, 262)
+				if _, err := io.ReadAtLeast(conn, buf, 3); err != nil {
+					return
+				}
+				_, _ = conn.Write([]byte{5, 0})
+				if _, err := io.ReadAtLeast(conn, buf, 10); err != nil {
+					return
+				}
+				_, _ = conn.Write([]byte{5, 0, 0, 1, 127, 0, 0, 1, 0, 80})
+			}()
+		}
+	}()
+	return "socks5://" + silent.Addr().String()
 }

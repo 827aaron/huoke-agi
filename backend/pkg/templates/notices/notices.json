@@ -1,0 +1,17 @@
+{
+  "assistant_failed": {
+    "english": "The assistant could not answer: %s",
+    "chinese": "助手没能回答：%s",
+    "traditional chinese": "助手沒能回答：%s"
+  },
+  "tool_failed": {
+    "english": "Failed: %s",
+    "chinese": "失败：%s",
+    "traditional chinese": "失敗：%s"
+  },
+  "tool_stopped": {
+    "english": "Stopped before it finished.",
+    "chinese": "未完成就已停止。",
+    "traditional chinese": "未完成就已停止。"
+  }
+}

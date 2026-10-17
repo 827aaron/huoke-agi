@@ -3,6 +3,7 @@ package services
 import (
 	"database/sql"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -1000,6 +1001,20 @@ type growthSaveSettingRequest struct {
 	Fields   map[string]string `json:"fields" binding:"required"`
 }
 
+// An empty field is the saved setting's, else the .env one's; server_url is the llm
+// kind's endpoint and api_url the screening kind's.
+type growthListModelsRequest struct {
+	Provider  string `json:"provider,omitempty"`
+	APIKey    string `json:"api_key,omitempty"`
+	APIURL    string `json:"api_url,omitempty"`
+	ServerURL string `json:"server_url,omitempty"`
+	Protocol  string `json:"protocol,omitempty"`
+}
+
+type growthModels struct {
+	Models []growth.ModelOption `json:"models"`
+}
+
 type growthTestEmailRequest struct {
 	To string `json:"to,omitempty"`
 }
@@ -1121,6 +1136,46 @@ func (s *GrowthService) TestSetting(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, view)
+}
+
+// ListModels is a function to fetch the models a provider's endpoint serves
+// @Summary List the models of a provider's endpoint, for a choice before saving
+// @Description For screening through OpenRouter only typesafe/ models are listed. A 502 means the list could not be fetched and the model is typed by name.
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param kind path string true "llm or screening"
+// @Param json body growthListModelsRequest false "provider, key and endpoint; empty fields are the saved ones"
+// @Success 200 {object} response.successResp{data=growthModels} "models received successful"
+// @Failure 400 {object} response.errorResp "invalid provider, endpoint or missing key"
+// @Failure 403 {object} response.errorResp "listing models not permitted"
+// @Failure 502 {object} response.errorResp "the endpoint did not return its models"
+// @Router /growth/settings/{kind}/models [post]
+func (s *GrowthService) ListModels(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	var req growthListModelsRequest
+	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+	values := map[string]string{"api_key": req.APIKey, "api_url": req.APIURL, "server_url": req.ServerURL, "protocol": req.Protocol}
+	if values["server_url"] == "" {
+		values["server_url"] = req.APIURL
+	}
+
+	models, err := s.svc.ListModels(c, uid, c.Param("kind"), req.Provider, values)
+	if errors.Is(err, growth.ErrModelList) {
+		response.Error(c, response.ErrGrowthModelList, err)
+		return
+	}
+	if err != nil {
+		settingError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, growthModels{Models: models})
 }
 
 // SendTestEmail is a function to send a test message with the email setting

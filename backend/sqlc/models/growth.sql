@@ -271,11 +271,11 @@ WHERE user_id = sqlc.arg(user_id) AND platform = sqlc.arg(platform) AND platform
 -- name: UpsertLead :one
 INSERT INTO leads (
   user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason,
-  first_flow_id, first_task_id, last_flow_id, last_task_id
+  contacts, first_flow_id, first_task_id, last_flow_id, last_task_id
 ) VALUES (
   sqlc.arg(user_id), sqlc.arg(platform), sqlc.arg(platform_user_id), sqlc.arg(identity_kind),
   sqlc.arg(username), sqlc.arg(display_name),
-  sqlc.arg(score), sqlc.arg(tier), sqlc.arg(match_reason),
+  sqlc.arg(score), sqlc.arg(tier), sqlc.arg(match_reason), sqlc.arg(contacts),
   sqlc.narg(flow_id), sqlc.narg(task_id), sqlc.narg(flow_id), sqlc.narg(task_id)
 )
 ON CONFLICT (user_id, platform, platform_user_id) DO UPDATE
@@ -284,6 +284,7 @@ SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
     score        = GREATEST(EXCLUDED.score, leads.score),
     tier         = CASE WHEN EXCLUDED.tier = 'qualified' OR leads.tier = 'qualified' THEN 'qualified' ELSE 'watchlist' END,
     match_reason = CASE WHEN EXCLUDED.score > leads.score THEN EXCLUDED.match_reason ELSE leads.match_reason END,
+    contacts     = EXCLUDED.contacts,
     last_flow_id = COALESCE(EXCLUDED.last_flow_id, leads.last_flow_id),
     last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id)
 RETURNING *;
@@ -320,6 +321,7 @@ WHERE user_id = sqlc.arg(user_id)
 SELECT * FROM leads
 WHERE user_id = sqlc.arg(user_id) AND last_flow_id = sqlc.arg(flow_id)
   AND tier = 'qualified' AND delivered_at IS NULL
+  AND (NOT sqlc.arg(has_contact)::boolean OR jsonb_array_length(contacts) > 0)
 ORDER BY score DESC, id ASC
 LIMIT sqlc.arg(lim);
 
@@ -341,6 +343,7 @@ WHERE user_id = sqlc.arg(user_id)
   AND (sqlc.narg(tier)::text IS NULL OR tier = sqlc.narg(tier)::text)
   AND (sqlc.narg(delivered)::boolean IS NULL OR (delivered_at IS NOT NULL) = sqlc.narg(delivered)::boolean)
   AND (sqlc.narg(since)::timestamptz IS NULL OR created_at >= sqlc.narg(since)::timestamptz)
+  AND (sqlc.narg(has_contact)::boolean IS NULL OR (jsonb_array_length(contacts) > 0) = sqlc.narg(has_contact)::boolean)
 ORDER BY score DESC, updated_at DESC, id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
@@ -424,3 +427,13 @@ RETURNING *;
 
 -- name: GetUserResourceByPath :one
 SELECT * FROM user_resources WHERE user_id = sqlc.arg(user_id) AND path = sqlc.arg(path);
+
+-- name: UpsertMessageScore :exec
+INSERT INTO growth_message_scores (user_id, source_id, message_id, score, signals)
+VALUES (sqlc.arg(user_id), sqlc.arg(source_id), sqlc.arg(message_id), sqlc.arg(score), sqlc.arg(signals))
+ON CONFLICT (user_id, source_id, message_id) DO UPDATE
+SET score = EXCLUDED.score, signals = EXCLUDED.signals;
+
+-- name: GetMessageScores :many
+SELECT * FROM growth_message_scores
+WHERE user_id = sqlc.arg(user_id) AND source_id = sqlc.arg(source_id) AND message_id = ANY(sqlc.arg(message_ids)::text[]);

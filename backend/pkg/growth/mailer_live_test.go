@@ -36,7 +36,7 @@ func TestMailer_EmailLeads_MailsTheRoundOrItsQualifiedLeads(t *testing.T) {
 
 	_, err = w.svc.SetTarget(ctx, scope, 1)
 	require.NoError(t, err)
-	_, err = w.svc.Deliver(ctx, scope, false)
+	_, err = w.svc.Deliver(ctx, scope, DeliverOptions{})
 	require.NoError(t, err)
 	_, err = w.svc.EmailLeads(ctx, w.user, scope.FlowID, scope.TaskID)
 	require.NoError(t, err)

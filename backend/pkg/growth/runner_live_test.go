@@ -22,7 +22,7 @@ func TestRunner_Deliver_RefusesShortOfTheTargetAndDeliversNothing(t *testing.T) 
 	require.NoError(t, err)
 	w.mustSaveQualified(t, scope, src, 1, 2)
 
-	d, err := w.svc.Deliver(ctx, scope, false)
+	d, err := w.svc.Deliver(ctx, scope, DeliverOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, DeliveryIncomplete, d.Status)
 	assert.Equal(t, 1, d.Gap)
@@ -49,14 +49,14 @@ func TestRunner_Deliver_CompletesAtTheTargetWithTheBestLeads(t *testing.T) {
 	_, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{best})
 	require.NoError(t, err)
 
-	d, err := w.svc.Deliver(ctx, scope, false)
+	d, err := w.svc.Deliver(ctx, scope, DeliverOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, RunStatusCompleted, d.Status)
 	require.Len(t, d.Leads, 2)
 	assert.Equal(t, "99", d.Leads[0].PlatformUserID)
 	assert.Equal(t, "skipped: no SMTP server is configured", d.Email)
 
-	again, err := w.svc.Deliver(ctx, scope, false)
+	again, err := w.svc.Deliver(ctx, scope, DeliverOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, RunStatusCompleted, again.Status)
 	assert.Len(t, again.Leads, 2)
@@ -72,14 +72,14 @@ func TestRunner_Deliver_PartialOnlyWhenAllowedAndTopsUpLater(t *testing.T) {
 	require.NoError(t, err)
 	w.mustSaveQualified(t, scope, src, 1, 1)
 
-	d, err := w.svc.Deliver(ctx, scope, true)
+	d, err := w.svc.Deliver(ctx, scope, DeliverOptions{AllowPartial: true})
 	require.NoError(t, err)
 	assert.Equal(t, RunStatusPartial, d.Status)
 	assert.Equal(t, 2, d.Gap)
 	assert.Len(t, d.Leads, 1)
 
 	w.mustSaveQualified(t, scope, src, 2, 2)
-	d, err = w.svc.Deliver(ctx, scope, false)
+	d, err = w.svc.Deliver(ctx, scope, DeliverOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, RunStatusCompleted, d.Status)
 	assert.Len(t, d.Leads, 3)
@@ -93,7 +93,7 @@ func TestRunner_Deliver_NeverDeliversAPersonTwiceEvenAfterTheFlowIsDeleted(t *te
 	_, err := w.svc.SetTarget(ctx, first, 2)
 	require.NoError(t, err)
 	w.mustSaveQualified(t, first, src, 1, 2)
-	d, err := w.svc.Deliver(ctx, first, false)
+	d, err := w.svc.Deliver(ctx, first, DeliverOptions{})
 	require.NoError(t, err)
 	require.Equal(t, RunStatusCompleted, d.Status)
 
@@ -115,7 +115,7 @@ func TestRunner_Deliver_NeverDeliversAPersonTwiceEvenAfterTheFlowIsDeleted(t *te
 	require.NoError(t, err)
 	assert.Equal(t, 1, p.NewLeads, "people delivered by the deleted flow do not count again")
 
-	d, err = w.svc.Deliver(ctx, second, true)
+	d, err = w.svc.Deliver(ctx, second, DeliverOptions{AllowPartial: true})
 	require.NoError(t, err)
 	require.Len(t, d.Leads, 1)
 	assert.Equal(t, "3", d.Leads[0].PlatformUserID)
@@ -136,7 +136,7 @@ func TestRunner_Deliver_MailsTheListWithTheCSVAttached(t *testing.T) {
 	require.NoError(t, err)
 	w.mustSaveQualified(t, scope, src, 1, 1)
 
-	d, err := w.svc.Deliver(ctx, scope, false)
+	d, err := w.svc.Deliver(ctx, scope, DeliverOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, NotifySent, d.Email)
 
@@ -169,7 +169,7 @@ func TestRunner_Deliver_KeepsTheDeliveryWhenMailFails(t *testing.T) {
 	require.NoError(t, err)
 	w.mustSaveQualified(t, scope, src, 1, 1)
 
-	d, err := w.svc.Deliver(ctx, scope, false)
+	d, err := w.svc.Deliver(ctx, scope, DeliverOptions{})
 	require.NoError(t, err)
 	assert.Equal(t, RunStatusCompleted, d.Status)
 	assert.True(t, strings.HasPrefix(d.Email, NotifyFailed+": "), d.Email)
@@ -228,4 +228,20 @@ func TestRunner_ProgressSince_CountsEveryLeadOfTheOwnerOutsideATask(t *testing.T
 		got = append(got, l.PlatformUserID)
 	}
 	assert.ElementsMatch(t, []string{"2", "3"}, got)
+}
+
+func TestRunner_Deliver_HasContactDeliversOnlyReachableLeads(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	src := w.mustAddTelegramGroup(t, scope, tgGroup("711", "mmo_trade", "MMO"))
+	reachable := qualified("51", src, "m1")
+	reachable.Contacts = []Contact{{Type: "messenger", Value: "Line ann_51"}}
+	_, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{reachable, qualified("52", src, "m2")})
+	require.NoError(t, err)
+
+	d, err := w.svc.Deliver(ctx, scope, DeliverOptions{AllowPartial: true, HasContact: true})
+	require.NoError(t, err)
+	require.Len(t, d.Leads, 1)
+	assert.Equal(t, "51", d.Leads[0].PlatformUserID)
 }

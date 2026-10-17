@@ -821,3 +821,14 @@ func TestTelegram_SessionStore_EmptyIsNotFound(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, `{"v":1}`, string(data))
 }
+
+func TestTelegram_Start_GivesUpAtTheConnectTimeoutWhenTelegramIsUnreachable(t *testing.T) {
+	tc := TelegramConfig{APIID: 12345, APIHash: "abc", SessionDir: t.TempDir(), ConnectTimeout: 300 * time.Millisecond, CallTimeout: 30 * time.Second}
+	conn, err := NewTelegram(tc, Account{ID: 1, Proxy: silentTelegramRoute(t)})
+	require.NoError(t, err)
+
+	start := time.Now()
+	err = conn.Start(t.Context())
+	assert.ErrorIs(t, err, ErrUnreachable)
+	assert.Less(t, time.Since(start), 5*time.Second)
+}

@@ -241,21 +241,28 @@ func (q *Queries) GetChannelAccountSession(ctx context.Context, id int64) ([]byt
 }
 
 const getDeliverableLeads = `-- name: GetDeliverableLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads
 WHERE user_id = $1 AND last_flow_id = $2
   AND tier = 'qualified' AND delivered_at IS NULL
+  AND (NOT $3::boolean OR jsonb_array_length(contacts) > 0)
 ORDER BY score DESC, id ASC
-LIMIT $3
+LIMIT $4
 `
 
 type GetDeliverableLeadsParams struct {
-	UserID int64         `json:"user_id"`
-	FlowID sql.NullInt64 `json:"flow_id"`
-	Lim    int64         `json:"lim"`
+	UserID     int64         `json:"user_id"`
+	FlowID     sql.NullInt64 `json:"flow_id"`
+	HasContact bool          `json:"has_contact"`
+	Lim        int64         `json:"lim"`
 }
 
 func (q *Queries) GetDeliverableLeads(ctx context.Context, arg GetDeliverableLeadsParams) ([]Lead, error) {
-	rows, err := q.db.QueryContext(ctx, getDeliverableLeads, arg.UserID, arg.FlowID, arg.Lim)
+	rows, err := q.db.QueryContext(ctx, getDeliverableLeads,
+		arg.UserID,
+		arg.FlowID,
+		arg.HasContact,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -282,6 +289,7 @@ func (q *Queries) GetDeliverableLeads(ctx context.Context, arg GetDeliverableLea
 			&i.DeliveredRunID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Contacts,
 		); err != nil {
 			return nil, err
 		}
@@ -446,7 +454,7 @@ func (q *Queries) GetGrowthSourceByKey(ctx context.Context, arg GetGrowthSourceB
 }
 
 const getLeadByPlatformUser = `-- name: GetLeadByPlatformUser :one
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads
 WHERE user_id = $1 AND platform = $2 AND platform_user_id = $3
 `
 
@@ -478,6 +486,7 @@ func (q *Queries) GetLeadByPlatformUser(ctx context.Context, arg GetLeadByPlatfo
 		&i.DeliveredRunID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Contacts,
 	)
 	return i, err
 }
@@ -524,8 +533,50 @@ func (q *Queries) GetLeadsEvidence(ctx context.Context, leadIds []int64) ([]Lead
 	return items, nil
 }
 
+const getMessageScores = `-- name: GetMessageScores :many
+SELECT id, user_id, source_id, message_id, score, signals, created_at FROM growth_message_scores
+WHERE user_id = $1 AND source_id = $2 AND message_id = ANY($3::text[])
+`
+
+type GetMessageScoresParams struct {
+	UserID     int64    `json:"user_id"`
+	SourceID   int64    `json:"source_id"`
+	MessageIds []string `json:"message_ids"`
+}
+
+func (q *Queries) GetMessageScores(ctx context.Context, arg GetMessageScoresParams) ([]GrowthMessageScore, error) {
+	rows, err := q.db.QueryContext(ctx, getMessageScores, arg.UserID, arg.SourceID, pq.Array(arg.MessageIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GrowthMessageScore
+	for rows.Next() {
+		var i GrowthMessageScore
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.SourceID,
+			&i.MessageID,
+			&i.Score,
+			&i.Signals,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRunDeliveredLeads = `-- name: GetRunDeliveredLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads WHERE delivered_run_id = $1 ORDER BY score DESC, id ASC
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads WHERE delivered_run_id = $1 ORDER BY score DESC, id ASC
 `
 
 func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64) ([]Lead, error) {
@@ -556,6 +607,7 @@ func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64)
 			&i.DeliveredRunID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Contacts,
 		); err != nil {
 			return nil, err
 		}
@@ -1107,7 +1159,7 @@ func (q *Queries) GetUserGrowthSources(ctx context.Context, userID int64) ([]Gro
 }
 
 const getUserLead = `-- name: GetUserLead :one
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads WHERE id = $1 AND user_id = $2
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads WHERE id = $1 AND user_id = $2
 `
 
 type GetUserLeadParams struct {
@@ -1137,12 +1189,13 @@ func (q *Queries) GetUserLead(ctx context.Context, arg GetUserLeadParams) (Lead,
 		&i.DeliveredRunID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Contacts,
 	)
 	return i, err
 }
 
 const getUserLeads = `-- name: GetUserLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads
 WHERE user_id = $1
   AND ($2::bigint IS NULL OR last_flow_id = $2::bigint)
   AND ($3::bigint IS NULL OR last_task_id = $3::bigint)
@@ -1150,20 +1203,22 @@ WHERE user_id = $1
   AND ($5::text IS NULL OR tier = $5::text)
   AND ($6::boolean IS NULL OR (delivered_at IS NOT NULL) = $6::boolean)
   AND ($7::timestamptz IS NULL OR created_at >= $7::timestamptz)
+  AND ($8::boolean IS NULL OR (jsonb_array_length(contacts) > 0) = $8::boolean)
 ORDER BY score DESC, updated_at DESC, id DESC
-LIMIT $9 OFFSET $8
+LIMIT $10 OFFSET $9
 `
 
 type GetUserLeadsParams struct {
-	UserID    int64          `json:"user_id"`
-	FlowID    sql.NullInt64  `json:"flow_id"`
-	TaskID    sql.NullInt64  `json:"task_id"`
-	RunID     sql.NullInt64  `json:"run_id"`
-	Tier      sql.NullString `json:"tier"`
-	Delivered sql.NullBool   `json:"delivered"`
-	Since     sql.NullTime   `json:"since"`
-	Off       int64          `json:"off"`
-	Lim       int64          `json:"lim"`
+	UserID     int64          `json:"user_id"`
+	FlowID     sql.NullInt64  `json:"flow_id"`
+	TaskID     sql.NullInt64  `json:"task_id"`
+	RunID      sql.NullInt64  `json:"run_id"`
+	Tier       sql.NullString `json:"tier"`
+	Delivered  sql.NullBool   `json:"delivered"`
+	Since      sql.NullTime   `json:"since"`
+	HasContact sql.NullBool   `json:"has_contact"`
+	Off        int64          `json:"off"`
+	Lim        int64          `json:"lim"`
 }
 
 func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]Lead, error) {
@@ -1175,6 +1230,7 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 		arg.Tier,
 		arg.Delivered,
 		arg.Since,
+		arg.HasContact,
 		arg.Off,
 		arg.Lim,
 	)
@@ -1204,6 +1260,7 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 			&i.DeliveredRunID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Contacts,
 		); err != nil {
 			return nil, err
 		}
@@ -1389,7 +1446,7 @@ const markLeadsDelivered = `-- name: MarkLeadsDelivered :many
 UPDATE leads
 SET delivered_at = CURRENT_TIMESTAMP, delivered_run_id = $1
 WHERE id = ANY($2::bigint[]) AND delivered_at IS NULL
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts
 `
 
 type MarkLeadsDeliveredParams struct {
@@ -1425,6 +1482,7 @@ func (q *Queries) MarkLeadsDelivered(ctx context.Context, arg MarkLeadsDelivered
 			&i.DeliveredRunID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Contacts,
 		); err != nil {
 			return nil, err
 		}
@@ -2327,12 +2385,12 @@ func (q *Queries) UpsertGrowthSource(ctx context.Context, arg UpsertGrowthSource
 const upsertLead = `-- name: UpsertLead :one
 INSERT INTO leads (
   user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason,
-  first_flow_id, first_task_id, last_flow_id, last_task_id
+  contacts, first_flow_id, first_task_id, last_flow_id, last_task_id
 ) VALUES (
   $1, $2, $3, $4,
   $5, $6,
-  $7, $8, $9,
-  $10, $11, $10, $11
+  $7, $8, $9, $10,
+  $11, $12, $11, $12
 )
 ON CONFLICT (user_id, platform, platform_user_id) DO UPDATE
 SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
@@ -2340,23 +2398,25 @@ SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
     score        = GREATEST(EXCLUDED.score, leads.score),
     tier         = CASE WHEN EXCLUDED.tier = 'qualified' OR leads.tier = 'qualified' THEN 'qualified' ELSE 'watchlist' END,
     match_reason = CASE WHEN EXCLUDED.score > leads.score THEN EXCLUDED.match_reason ELSE leads.match_reason END,
+    contacts     = EXCLUDED.contacts,
     last_flow_id = COALESCE(EXCLUDED.last_flow_id, leads.last_flow_id),
     last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id)
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts
 `
 
 type UpsertLeadParams struct {
-	UserID         int64         `json:"user_id"`
-	Platform       string        `json:"platform"`
-	PlatformUserID string        `json:"platform_user_id"`
-	IdentityKind   string        `json:"identity_kind"`
-	Username       string        `json:"username"`
-	DisplayName    string        `json:"display_name"`
-	Score          int32         `json:"score"`
-	Tier           string        `json:"tier"`
-	MatchReason    string        `json:"match_reason"`
-	FlowID         sql.NullInt64 `json:"flow_id"`
-	TaskID         sql.NullInt64 `json:"task_id"`
+	UserID         int64           `json:"user_id"`
+	Platform       string          `json:"platform"`
+	PlatformUserID string          `json:"platform_user_id"`
+	IdentityKind   string          `json:"identity_kind"`
+	Username       string          `json:"username"`
+	DisplayName    string          `json:"display_name"`
+	Score          int32           `json:"score"`
+	Tier           string          `json:"tier"`
+	MatchReason    string          `json:"match_reason"`
+	Contacts       json.RawMessage `json:"contacts"`
+	FlowID         sql.NullInt64   `json:"flow_id"`
+	TaskID         sql.NullInt64   `json:"task_id"`
 }
 
 func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, error) {
@@ -2370,6 +2430,7 @@ func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, e
 		arg.Score,
 		arg.Tier,
 		arg.MatchReason,
+		arg.Contacts,
 		arg.FlowID,
 		arg.TaskID,
 	)
@@ -2393,8 +2454,35 @@ func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, e
 		&i.DeliveredRunID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Contacts,
 	)
 	return i, err
+}
+
+const upsertMessageScore = `-- name: UpsertMessageScore :exec
+INSERT INTO growth_message_scores (user_id, source_id, message_id, score, signals)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (user_id, source_id, message_id) DO UPDATE
+SET score = EXCLUDED.score, signals = EXCLUDED.signals
+`
+
+type UpsertMessageScoreParams struct {
+	UserID    int64  `json:"user_id"`
+	SourceID  int64  `json:"source_id"`
+	MessageID string `json:"message_id"`
+	Score     int32  `json:"score"`
+	Signals   string `json:"signals"`
+}
+
+func (q *Queries) UpsertMessageScore(ctx context.Context, arg UpsertMessageScoreParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMessageScore,
+		arg.UserID,
+		arg.SourceID,
+		arg.MessageID,
+		arg.Score,
+		arg.Signals,
+	)
+	return err
 }
 
 const upsertUserResourceFile = `-- name: UpsertUserResourceFile :one
