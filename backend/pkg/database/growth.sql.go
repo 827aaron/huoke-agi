@@ -15,6 +15,75 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+const adoptGrowthRun = `-- name: AdoptGrowthRun :one
+UPDATE growth_runs SET task_id = $1
+WHERE id = (
+  SELECT r.id FROM growth_runs r
+  WHERE r.user_id = $2 AND r.flow_id = $3 AND r.task_id IS NULL AND r.status = 'running'
+  ORDER BY r.id
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id
+`
+
+type AdoptGrowthRunParams struct {
+	TaskID sql.NullInt64 `json:"task_id"`
+	UserID int64         `json:"user_id"`
+	FlowID sql.NullInt64 `json:"flow_id"`
+}
+
+func (q *Queries) AdoptGrowthRun(ctx context.Context, arg AdoptGrowthRunParams) (GrowthRun, error) {
+	row := q.db.QueryRowContext(ctx, adoptGrowthRun, arg.TaskID, arg.UserID, arg.FlowID)
+	var i GrowthRun
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FlowID,
+		&i.TaskID,
+		&i.Target,
+		&i.Status,
+		&i.DeliveredCount,
+		&i.FinishedAt,
+		&i.NotifyStatus,
+		&i.NotifyError,
+		&i.NotifiedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeadlineAt,
+		&i.ScheduleID,
+	)
+	return i, err
+}
+
+const advanceGrowthSchedule = `-- name: AdvanceGrowthSchedule :execrows
+UPDATE growth_schedules
+SET next_start_at = $1, enabled = $2
+WHERE id = $3 AND next_start_at = $4
+`
+
+type AdvanceGrowthScheduleParams struct {
+	NextStartAt    sql.NullTime `json:"next_start_at"`
+	Enabled        bool         `json:"enabled"`
+	ID             int64        `json:"id"`
+	HandledStartAt sql.NullTime `json:"handled_start_at"`
+}
+
+// AdvanceGrowthSchedule claims the start at handled_start_at by moving the schedule past
+// it; zero rows means another pass has claimed it already.
+func (q *Queries) AdvanceGrowthSchedule(ctx context.Context, arg AdvanceGrowthScheduleParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, advanceGrowthSchedule,
+		arg.NextStartAt,
+		arg.Enabled,
+		arg.ID,
+		arg.HandledStartAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const countUserLeads = `-- name: CountUserLeads :one
 SELECT
   COUNT(*) FILTER (WHERE tier = 'qualified' AND delivered_at IS NULL)::bigint AS deliverable,
@@ -45,6 +114,69 @@ func (q *Queries) CountUserLeads(ctx context.Context, arg CountUserLeadsParams) 
 	return i, err
 }
 
+const createGrowthSchedule = `-- name: CreateGrowthSchedule :one
+INSERT INTO growth_schedules (
+  user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at
+) VALUES (
+  $1, $2, $3, $4, $5, $6,
+  $7, $8, $9, $10, $11, $12
+)
+RETURNING id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at
+`
+
+type CreateGrowthScheduleParams struct {
+	UserID       int64         `json:"user_id"`
+	FlowID       sql.NullInt64 `json:"flow_id"`
+	Input        string        `json:"input"`
+	ProviderName string        `json:"provider_name"`
+	Days         string        `json:"days"`
+	Weekdays     []int64       `json:"weekdays"`
+	Date         string        `json:"date"`
+	StartTime    string        `json:"start_time"`
+	EndTime      string        `json:"end_time"`
+	Timezone     string        `json:"timezone"`
+	Enabled      bool          `json:"enabled"`
+	NextStartAt  sql.NullTime  `json:"next_start_at"`
+}
+
+func (q *Queries) CreateGrowthSchedule(ctx context.Context, arg CreateGrowthScheduleParams) (GrowthSchedule, error) {
+	row := q.db.QueryRowContext(ctx, createGrowthSchedule,
+		arg.UserID,
+		arg.FlowID,
+		arg.Input,
+		arg.ProviderName,
+		arg.Days,
+		pq.Array(arg.Weekdays),
+		arg.Date,
+		arg.StartTime,
+		arg.EndTime,
+		arg.Timezone,
+		arg.Enabled,
+		arg.NextStartAt,
+	)
+	var i GrowthSchedule
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FlowID,
+		&i.Input,
+		&i.ProviderName,
+		&i.Days,
+		pq.Array(&i.Weekdays),
+		&i.Date,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Timezone,
+		&i.Enabled,
+		&i.NextStartAt,
+		&i.LastRunID,
+		&i.LastError,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const deleteUserChannelAccount = `-- name: DeleteUserChannelAccount :execrows
 DELETE FROM channel_accounts WHERE id = $1 AND user_id = $2
 `
@@ -56,6 +188,23 @@ type DeleteUserChannelAccountParams struct {
 
 func (q *Queries) DeleteUserChannelAccount(ctx context.Context, arg DeleteUserChannelAccountParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, deleteUserChannelAccount, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const deleteUserGrowthSchedule = `-- name: DeleteUserGrowthSchedule :execrows
+DELETE FROM growth_schedules WHERE id = $1 AND user_id = $2
+`
+
+type DeleteUserGrowthScheduleParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteUserGrowthSchedule(ctx context.Context, arg DeleteUserGrowthScheduleParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUserGrowthSchedule, arg.ID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}
@@ -126,7 +275,7 @@ const ensureGrowthRun = `-- name: EnsureGrowthRun :one
 INSERT INTO growth_runs (user_id, flow_id, task_id, target)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (task_id) DO UPDATE SET task_id = EXCLUDED.task_id
-RETURNING id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at
+RETURNING id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id
 `
 
 type EnsureGrowthRunParams struct {
@@ -158,6 +307,8 @@ func (q *Queries) EnsureGrowthRun(ctx context.Context, arg EnsureGrowthRunParams
 		&i.NotifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeadlineAt,
+		&i.ScheduleID,
 	)
 	return i, err
 }
@@ -304,6 +455,53 @@ func (q *Queries) GetDeliverableLeads(ctx context.Context, arg GetDeliverableLea
 	return items, nil
 }
 
+const getDueGrowthSchedules = `-- name: GetDueGrowthSchedules :many
+SELECT id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at FROM growth_schedules
+WHERE enabled AND next_start_at IS NOT NULL AND next_start_at <= $1::timestamptz
+ORDER BY next_start_at, id
+`
+
+func (q *Queries) GetDueGrowthSchedules(ctx context.Context, now time.Time) ([]GrowthSchedule, error) {
+	rows, err := q.db.QueryContext(ctx, getDueGrowthSchedules, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GrowthSchedule
+	for rows.Next() {
+		var i GrowthSchedule
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.FlowID,
+			&i.Input,
+			&i.ProviderName,
+			&i.Days,
+			pq.Array(&i.Weekdays),
+			&i.Date,
+			&i.StartTime,
+			&i.EndTime,
+			&i.Timezone,
+			&i.Enabled,
+			&i.NextStartAt,
+			&i.LastRunID,
+			&i.LastError,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getGrowthProfile = `-- name: GetGrowthProfile :one
 SELECT user_id, profile, created_at, updated_at FROM growth_profiles WHERE user_id = $1
 `
@@ -321,7 +519,7 @@ func (q *Queries) GetGrowthProfile(ctx context.Context, userID int64) (GrowthPro
 }
 
 const getGrowthRun = `-- name: GetGrowthRun :one
-SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at FROM growth_runs WHERE id = $1
+SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id FROM growth_runs WHERE id = $1
 `
 
 func (q *Queries) GetGrowthRun(ctx context.Context, id int64) (GrowthRun, error) {
@@ -341,12 +539,14 @@ func (q *Queries) GetGrowthRun(ctx context.Context, id int64) (GrowthRun, error)
 		&i.NotifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeadlineAt,
+		&i.ScheduleID,
 	)
 	return i, err
 }
 
 const getGrowthRunByTask = `-- name: GetGrowthRunByTask :one
-SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at FROM growth_runs WHERE task_id = $1
+SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id FROM growth_runs WHERE task_id = $1
 `
 
 func (q *Queries) GetGrowthRunByTask(ctx context.Context, taskID sql.NullInt64) (GrowthRun, error) {
@@ -366,6 +566,8 @@ func (q *Queries) GetGrowthRunByTask(ctx context.Context, taskID sql.NullInt64) 
 		&i.NotifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeadlineAt,
+		&i.ScheduleID,
 	)
 	return i, err
 }
@@ -561,6 +763,51 @@ func (q *Queries) GetMessageScores(ctx context.Context, arg GetMessageScoresPara
 			&i.Score,
 			&i.Signals,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOverdueGrowthRuns = `-- name: GetOverdueGrowthRuns :many
+SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id FROM growth_runs
+WHERE status = 'running' AND deadline_at IS NOT NULL AND deadline_at <= $1::timestamptz
+ORDER BY deadline_at, id
+`
+
+func (q *Queries) GetOverdueGrowthRuns(ctx context.Context, now time.Time) ([]GrowthRun, error) {
+	rows, err := q.db.QueryContext(ctx, getOverdueGrowthRuns, now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GrowthRun
+	for rows.Next() {
+		var i GrowthRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.FlowID,
+			&i.TaskID,
+			&i.Target,
+			&i.Status,
+			&i.DeliveredCount,
+			&i.FinishedAt,
+			&i.NotifyStatus,
+			&i.NotifyError,
+			&i.NotifiedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeadlineAt,
+			&i.ScheduleID,
 		); err != nil {
 			return nil, err
 		}
@@ -916,7 +1163,7 @@ func (q *Queries) GetUserChannelAccounts(ctx context.Context, userID int64) ([]C
 }
 
 const getUserGrowthRun = `-- name: GetUserGrowthRun :one
-SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at FROM growth_runs WHERE id = $1 AND user_id = $2
+SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id FROM growth_runs WHERE id = $1 AND user_id = $2
 `
 
 type GetUserGrowthRunParams struct {
@@ -941,12 +1188,14 @@ func (q *Queries) GetUserGrowthRun(ctx context.Context, arg GetUserGrowthRunPara
 		&i.NotifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeadlineAt,
+		&i.ScheduleID,
 	)
 	return i, err
 }
 
 const getUserGrowthRuns = `-- name: GetUserGrowthRuns :many
-SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at FROM growth_runs
+SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id FROM growth_runs
 WHERE user_id = $1
   AND ($2::bigint IS NULL OR flow_id = $2::bigint)
 ORDER BY id DESC
@@ -978,6 +1227,95 @@ func (q *Queries) GetUserGrowthRuns(ctx context.Context, arg GetUserGrowthRunsPa
 			&i.NotifyStatus,
 			&i.NotifyError,
 			&i.NotifiedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeadlineAt,
+			&i.ScheduleID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserGrowthSchedule = `-- name: GetUserGrowthSchedule :one
+SELECT id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at FROM growth_schedules WHERE id = $1 AND user_id = $2
+`
+
+type GetUserGrowthScheduleParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetUserGrowthSchedule(ctx context.Context, arg GetUserGrowthScheduleParams) (GrowthSchedule, error) {
+	row := q.db.QueryRowContext(ctx, getUserGrowthSchedule, arg.ID, arg.UserID)
+	var i GrowthSchedule
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FlowID,
+		&i.Input,
+		&i.ProviderName,
+		&i.Days,
+		pq.Array(&i.Weekdays),
+		&i.Date,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Timezone,
+		&i.Enabled,
+		&i.NextStartAt,
+		&i.LastRunID,
+		&i.LastError,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserGrowthSchedules = `-- name: GetUserGrowthSchedules :many
+SELECT id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at FROM growth_schedules
+WHERE user_id = $1
+  AND ($2::bigint IS NULL OR flow_id = $2::bigint)
+ORDER BY id
+`
+
+type GetUserGrowthSchedulesParams struct {
+	UserID int64         `json:"user_id"`
+	FlowID sql.NullInt64 `json:"flow_id"`
+}
+
+func (q *Queries) GetUserGrowthSchedules(ctx context.Context, arg GetUserGrowthSchedulesParams) ([]GrowthSchedule, error) {
+	rows, err := q.db.QueryContext(ctx, getUserGrowthSchedules, arg.UserID, arg.FlowID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GrowthSchedule
+	for rows.Next() {
+		var i GrowthSchedule
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.FlowID,
+			&i.Input,
+			&i.ProviderName,
+			&i.Days,
+			pq.Array(&i.Weekdays),
+			&i.Date,
+			&i.StartTime,
+			&i.EndTime,
+			&i.Timezone,
+			&i.Enabled,
+			&i.NextStartAt,
+			&i.LastRunID,
+			&i.LastError,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1497,6 +1835,49 @@ func (q *Queries) MarkLeadsDelivered(ctx context.Context, arg MarkLeadsDelivered
 	return items, nil
 }
 
+const openScheduledGrowthRun = `-- name: OpenScheduledGrowthRun :one
+INSERT INTO growth_runs (user_id, flow_id, target, deadline_at, schedule_id)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id
+`
+
+type OpenScheduledGrowthRunParams struct {
+	UserID     int64         `json:"user_id"`
+	FlowID     sql.NullInt64 `json:"flow_id"`
+	Target     int32         `json:"target"`
+	DeadlineAt sql.NullTime  `json:"deadline_at"`
+	ScheduleID sql.NullInt64 `json:"schedule_id"`
+}
+
+func (q *Queries) OpenScheduledGrowthRun(ctx context.Context, arg OpenScheduledGrowthRunParams) (GrowthRun, error) {
+	row := q.db.QueryRowContext(ctx, openScheduledGrowthRun,
+		arg.UserID,
+		arg.FlowID,
+		arg.Target,
+		arg.DeadlineAt,
+		arg.ScheduleID,
+	)
+	var i GrowthRun
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FlowID,
+		&i.TaskID,
+		&i.Target,
+		&i.Status,
+		&i.DeliveredCount,
+		&i.FinishedAt,
+		&i.NotifyStatus,
+		&i.NotifyError,
+		&i.NotifiedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeadlineAt,
+		&i.ScheduleID,
+	)
+	return i, err
+}
+
 const recordChannelAccountError = `-- name: RecordChannelAccountError :exec
 UPDATE channel_accounts
 SET consecutive_errors = consecutive_errors + 1, last_error = $1
@@ -1561,6 +1942,23 @@ type RecordGrowthRunNotifyParams struct {
 
 func (q *Queries) RecordGrowthRunNotify(ctx context.Context, arg RecordGrowthRunNotifyParams) error {
 	_, err := q.db.ExecContext(ctx, recordGrowthRunNotify, arg.NotifyStatus, arg.NotifyError, arg.ID)
+	return err
+}
+
+const recordGrowthScheduleStart = `-- name: RecordGrowthScheduleStart :exec
+UPDATE growth_schedules
+SET last_run_id = COALESCE($1, last_run_id), last_error = $2
+WHERE id = $3
+`
+
+type RecordGrowthScheduleStartParams struct {
+	LastRunID sql.NullInt64 `json:"last_run_id"`
+	LastError string        `json:"last_error"`
+	ID        int64         `json:"id"`
+}
+
+func (q *Queries) RecordGrowthScheduleStart(ctx context.Context, arg RecordGrowthScheduleStartParams) error {
+	_, err := q.db.ExecContext(ctx, recordGrowthScheduleStart, arg.LastRunID, arg.LastError, arg.ID)
 	return err
 }
 
@@ -1883,7 +2281,7 @@ SET delivered_count = $1,
     status          = $2,
     finished_at     = CASE WHEN $2::text = 'running' THEN NULL ELSE CURRENT_TIMESTAMP END
 WHERE id = $3
-RETURNING id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at
+RETURNING id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id
 `
 
 type UpdateGrowthRunDeliveryParams struct {
@@ -1909,12 +2307,14 @@ func (q *Queries) UpdateGrowthRunDelivery(ctx context.Context, arg UpdateGrowthR
 		&i.NotifiedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeadlineAt,
+		&i.ScheduleID,
 	)
 	return i, err
 }
 
 const updateGrowthRunTarget = `-- name: UpdateGrowthRunTarget :one
-UPDATE growth_runs SET target = $1 WHERE id = $2 RETURNING id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at
+UPDATE growth_runs SET target = $1 WHERE id = $2 RETURNING id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id
 `
 
 type UpdateGrowthRunTargetParams struct {
@@ -1937,6 +2337,68 @@ func (q *Queries) UpdateGrowthRunTarget(ctx context.Context, arg UpdateGrowthRun
 		&i.NotifyStatus,
 		&i.NotifyError,
 		&i.NotifiedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeadlineAt,
+		&i.ScheduleID,
+	)
+	return i, err
+}
+
+const updateGrowthSchedule = `-- name: UpdateGrowthSchedule :one
+UPDATE growth_schedules
+SET input = $1, days = $2, weekdays = $3, date = $4,
+    start_time = $5, end_time = $6, timezone = $7,
+    enabled = $8, next_start_at = $9, last_error = ''
+WHERE id = $10 AND user_id = $11
+RETURNING id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at
+`
+
+type UpdateGrowthScheduleParams struct {
+	Input       string       `json:"input"`
+	Days        string       `json:"days"`
+	Weekdays    []int64      `json:"weekdays"`
+	Date        string       `json:"date"`
+	StartTime   string       `json:"start_time"`
+	EndTime     string       `json:"end_time"`
+	Timezone    string       `json:"timezone"`
+	Enabled     bool         `json:"enabled"`
+	NextStartAt sql.NullTime `json:"next_start_at"`
+	ID          int64        `json:"id"`
+	UserID      int64        `json:"user_id"`
+}
+
+func (q *Queries) UpdateGrowthSchedule(ctx context.Context, arg UpdateGrowthScheduleParams) (GrowthSchedule, error) {
+	row := q.db.QueryRowContext(ctx, updateGrowthSchedule,
+		arg.Input,
+		arg.Days,
+		pq.Array(arg.Weekdays),
+		arg.Date,
+		arg.StartTime,
+		arg.EndTime,
+		arg.Timezone,
+		arg.Enabled,
+		arg.NextStartAt,
+		arg.ID,
+		arg.UserID,
+	)
+	var i GrowthSchedule
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FlowID,
+		&i.Input,
+		&i.ProviderName,
+		&i.Days,
+		pq.Array(&i.Weekdays),
+		&i.Date,
+		&i.StartTime,
+		&i.EndTime,
+		&i.Timezone,
+		&i.Enabled,
+		&i.NextStartAt,
+		&i.LastRunID,
+		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

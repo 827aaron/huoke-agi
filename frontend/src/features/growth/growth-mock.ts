@@ -3,11 +3,15 @@ import type {
     GrowthAccount,
     GrowthEmailResult,
     GrowthLead,
+    GrowthModelOption,
+    GrowthModelsInput,
     GrowthProfile,
     GrowthProfileInput,
     GrowthProxyTestResult,
     GrowthRemoteLogin,
     GrowthRun,
+    GrowthSchedule,
+    GrowthScheduleInput,
     GrowthSetting,
     GrowthSettingInput,
     GrowthSettingKind,
@@ -33,6 +37,9 @@ let accounts: GrowthAccount[] = [
         external_id: '+8613800008842',
         fingerprint: null,
         id: 1,
+        join_advice: ['join_interval'],
+        joined_sources: 38,
+        joins_today: 2,
         kind: 'user',
         label: 'Growth Ops',
         last_error: null,
@@ -229,6 +236,7 @@ const lead = (
     const points: Record<string, number> = { genre_match: 3, paying: 2, player: 3, recent: 2, switching: 3 };
 
     return {
+        contacts: id % 3 === 1 ? [{ type: 'messenger', value: `line: ${username ?? name}` }] : [],
         delivered_at: delivered ? ago(5) : null,
         delivered_task_id: delivered ? 11 : null,
         display_name: name,
@@ -277,6 +285,47 @@ const lead = (
         username,
     };
 };
+
+// The mock does not compute the next start in the schedule's zone; a day ahead is enough to show the line.
+const toSchedule = (id: number, input: GrowthScheduleInput, current: GrowthSchedule | null): GrowthSchedule => {
+    const enabled = input.enabled ?? current?.enabled ?? true;
+
+    return {
+        date: input.days === 'once' ? (input.date ?? null) : null,
+        days: input.days,
+        enabled,
+        end_time: input.end_time,
+        flow_id: input.flow_id,
+        id,
+        input: input.input ?? '',
+        last_error: current?.last_error ?? null,
+        last_run: current?.last_run ?? null,
+        next_start_at: enabled ? new Date(now + 24 * 60 * 60_000).toISOString() : null,
+        start_time: input.start_time,
+        timezone: input.timezone,
+        weekdays: input.days === 'weekly' ? (input.weekdays ?? []) : null,
+    };
+};
+
+let nextScheduleId = 2;
+
+let schedules: GrowthSchedule[] = [
+    {
+        ...toSchedule(
+            1,
+            {
+                days: 'daily',
+                end_time: '18:00',
+                flow_id: 1,
+                input: '找 50 个泰国的 MOBA 玩家',
+                start_time: '09:00',
+                timezone: 'Asia/Bangkok',
+            },
+            null,
+        ),
+        last_run: { deadline_at: ago(900), delivered_count: 32, run_id: 11, status: 'delivered', target: 50 },
+    },
+];
 
 const [sea, tw] = sources as [GrowthSource, GrowthSource];
 
@@ -355,6 +404,7 @@ const providersOf: Record<GrowthSettingKind, string[]> = {
     embedding: ['openai', 'ollama', 'mistral', 'jina', 'huggingface', 'googleai', 'voyageai'],
     llm: ['openai', 'anthropic', 'gemini', 'deepseek', 'glm', 'kimi', 'qwen', 'minimax', 'mistral', 'xai', 'custom'],
     proxy: [],
+    screening: ['typesafe', 'openrouter', 'custom'],
     telegram: [],
     web_search: ['tavily', 'google', 'perplexity', 'firecrawl', 'traversaal'],
     youtube: [],
@@ -385,7 +435,31 @@ let settings: GrowthSetting[] = [
         updated_at: ago(600),
     },
     emptySetting('embedding'),
-    emptySetting('telegram'),
+    {
+        ...emptySetting('screening'),
+        fields: { api_key: '••••7c1e', api_url: '', model: 'typesafe/jev-latest', threshold: '0.6' },
+        provider: 'openrouter',
+        source: 'database',
+        status: 'connected',
+        tested_at: ago(120),
+        updated_at: ago(900),
+    },
+    {
+        ...emptySetting('telegram'),
+        fields: {
+            api_hash: '',
+            api_id: '',
+            first_sync_days: '7',
+            first_sync_messages: '300',
+            join_interval_minutes: '3-10',
+            join_ramp: '0,0,0,1,1,2,2,3,3,3,3,3,3,3',
+            joined_groups_warning: '450',
+            joins_per_day: '5',
+            private_joins_per_day: '2',
+            read_interval_seconds: '5-15',
+            risk_reminders: 'on',
+        },
+    },
     {
         ...emptySetting('web_search'),
         fields: { api_keys: '••••9f3c\n••••07de' },
@@ -403,7 +477,7 @@ let settings: GrowthSetting[] = [
         updated_at: ago(3600),
     },
     emptySetting('proxy'),
-    emptySetting('email'),
+    { ...emptySetting('email'), platform_smtp: true },
 ];
 
 // The masking rule the server applies to secrets: only the last 4 characters survive.
@@ -562,6 +636,16 @@ export const growthMock = {
 
         return delay(profile);
     },
+    createSchedule: (input: GrowthScheduleInput): Promise<GrowthSchedule> => {
+        const schedule = toSchedule(nextScheduleId++, input, null);
+        schedules = [...schedules, schedule];
+
+        return delay(schedule);
+    },
+    deleteSchedule: async (id: number) => {
+        schedules = schedules.filter((item) => item.id !== id);
+        await delay(null);
+    },
     finishRemoteLogin: (sessionId: string): Promise<GrowthAccount> => {
         const pending = remoteLogins.get(sessionId);
 
@@ -588,10 +672,21 @@ export const growthMock = {
     listAccounts: () => delay(accounts),
     // Every flow sees the same sample leads so any flow opened in development has something to show.
     listLeads: () => delay(leads),
+    listModels: (kind: GrowthSettingKind, input: GrowthModelsInput): Promise<GrowthModelOption[]> =>
+        input.api_key.includes('bad')
+            ? Promise.reject(new Error('mock: the key was refused'))
+            : delay(
+                  (kind === 'screening'
+                      ? ['typesafe/jev-latest', 'typesafe/jev-2026-09', 'typesafe/jev-2026-06']
+                      : ['openai/gpt-5.1-mini', 'deepseek/deepseek-chat', 'qwen/qwen3-max']
+                  ).map((id) => ({ id })),
+              ),
     listProfiles: () => delay(profiles),
     listRuns: (flowId: number | string) => delay(runs.map((run) => ({ ...run, flow_id: Number(flowId) }))),
+    listSchedules: (flowId: number | string) =>
+        delay(schedules.map((schedule) => ({ ...schedule, flow_id: Number(flowId) }))),
     listSettings: () => delay(settings),
-    listSources: () => delay(sources),
+    listSources: () => delay({ sources, total: sources.length, warnings: [] }),
     saveSetting: (kind: GrowthSettingKind, input: GrowthSettingInput): Promise<GrowthSetting> => {
         const current = findSetting(kind);
         const kept = current.provider === input.provider ? (storedValues.get(kind) ?? {}) : {};
@@ -704,5 +799,12 @@ export const growthMock = {
         profiles = [profile];
 
         return delay(profile);
+    },
+    updateSchedule: (id: number, input: GrowthScheduleInput): Promise<GrowthSchedule> => {
+        const current = schedules.find((item) => item.id === id) ?? null;
+        const schedule = toSchedule(id, { ...input, input: input.input || current?.input }, current);
+        schedules = schedules.map((item) => (item.id === id ? schedule : item));
+
+        return delay(schedule);
     },
 };

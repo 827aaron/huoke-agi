@@ -11,13 +11,20 @@ export interface GrowthAccount {
     external_id: string;
     // Generated per browser_session account; null for Telegram.
     fingerprint: GrowthFingerprint | null;
+    first_signed_in_at?: null | string;
     id: number;
+    // Reminder codes of a Telegram account past its suggested join pace; they never stop a join.
+    join_advice?: GrowthJoinAdvice[];
+    joined_sources?: number;
+    joins_today?: number;
     kind: string;
     label: string;
     last_error: null | string;
     last_rate_limited_at: null | string;
     last_success_at: null | string;
     last_used_at: null | string;
+    // When the suggested gap after the last join ends.
+    next_join_at?: null | string;
     platform: GrowthAccountPlatform;
     // Which route the account's traffic takes: its own proxy, the default proxy, or none.
     proxy_source: GrowthProxySource;
@@ -48,7 +55,25 @@ export interface GrowthEmailResult {
     to: string[];
 }
 
+export type GrowthJoinAdvice =
+    | 'daily_joins_reached'
+    | 'join_interval'
+    | 'joined_groups_high'
+    | 'private_joins_reached'
+    | 'warming_up';
+
+// A Telegram account that has joined as many groups as the warning line in its pace; Telegram refuses about 500.
+export interface GrowthJoinWarning {
+    account_id: number;
+    joined_sources: number;
+    label: string;
+    platform: string;
+    warn_at: number;
+}
+
 export interface GrowthLead {
+    // Ways to reach the lead beside its platform account; empty when it has none.
+    contacts?: GrowthLeadContact[];
     delivered_at: null | string;
     delivered_task_id: null | number;
     display_name: string;
@@ -70,6 +95,11 @@ export interface GrowthLead {
     source_title: string;
     tier: GrowthLeadTier;
     username: null | string;
+}
+
+export interface GrowthLeadContact {
+    type: Exclude<GrowthContactType, 'platform_handle'>;
+    value: string;
 }
 
 export interface GrowthLeadEvidence {
@@ -95,9 +125,30 @@ export type GrowthLeadSignal = 'competitor' | 'genre_match' | 'paying' | 'player
 
 export type GrowthLeadTier = 'qualified' | 'watch';
 
+// The relay's id is what the setting stores; name is its display name, when it has one.
+export interface GrowthModelOption {
+    id: string;
+    name?: string;
+}
+
+// An empty field asks the server to use the saved one. api_url is the screening endpoint, server_url the llm one.
+export interface GrowthModelsInput {
+    api_key: string;
+    api_url?: string;
+    protocol?: string;
+    provider: null | string;
+    server_url?: string;
+}
+
+export interface GrowthModelsResponse {
+    models: GrowthModelOption[];
+}
+
 export type GrowthPlatform = 'facebook' | 'instagram' | 'telegram' | 'tiktok' | 'web' | 'youtube';
 
 export const GROWTH_PLATFORMS: GrowthPlatform[] = ['telegram', 'facebook', 'instagram', 'tiktok', 'youtube', 'web'];
+
+export type GrowthContactType = 'email' | 'messenger' | 'other' | 'phone' | 'platform_handle';
 
 // Stored as the server generated it; only these keys are shown.
 export interface GrowthFingerprint {
@@ -108,6 +159,8 @@ export interface GrowthFingerprint {
 
 export interface GrowthProfile {
     competitors: string[];
+    // Empty means the platform account alone.
+    contact_types?: GrowthContactType[];
     default_target: number;
     excludes: string[];
     games: string[];
@@ -119,6 +172,8 @@ export interface GrowthProfile {
     notes: string;
     pitch: string;
     regions: string[];
+    // Absent means the server's default weighting.
+    scoring?: GrowthScoring | null;
     signals: string[];
     updated_at: string;
 }
@@ -146,6 +201,8 @@ export interface GrowthRemoteLogin {
 // One round is one Task of the flow. `target` is null for an assistant question that set no goal.
 export interface GrowthRun {
     current_action: null | string;
+    // A scheduled round is delivered at this time, found or not.
+    deadline_at?: null | string;
     delivered: number;
     error: null | string;
     finished_at: null | string;
@@ -156,6 +213,7 @@ export interface GrowthRun {
     // Outcome of emailing the delivered list; `skipped` when email notifications are not set up.
     notify_status: 'failed' | 'sent' | 'skipped' | null;
     round: number;
+    schedule_id?: null | number;
     sources: GrowthRunSources;
     started_at: string;
     status: GrowthRunStatus;
@@ -173,11 +231,70 @@ export interface GrowthRunSources {
 
 export type GrowthRunStatus = 'delivered' | 'failed' | 'missed' | 'running' | 'waiting';
 
+// A recurring round of a flow. Times are wall-clock in `timezone`; an end not after the start ends the next day.
+export interface GrowthSchedule {
+    date: null | string;
+    days: GrowthScheduleDays;
+    enabled: boolean;
+    end_time: string;
+    flow_id: number;
+    id: number;
+    input: string;
+    last_error?: null | string;
+    last_run?: GrowthScheduleLastRun | null;
+    // UTC; absent while paused or once a one-off date has passed.
+    next_start_at?: null | string;
+    start_time: string;
+    timezone: string;
+    // 0 is Sunday.
+    weekdays: null | number[];
+}
+
+export type GrowthScheduleDays = 'daily' | 'once' | 'weekdays' | 'weekly';
+
+// An empty input reuses the flow's first task input; flow_id is ignored on update.
+export interface GrowthScheduleInput {
+    date?: string;
+    days: GrowthScheduleDays;
+    enabled?: boolean;
+    end_time: string;
+    flow_id: number;
+    input?: string;
+    start_time: string;
+    timezone: string;
+    weekdays?: number[];
+}
+
+export interface GrowthScheduleLastRun {
+    deadline_at: null | string;
+    delivered_count: number;
+    run_id: number;
+    status: GrowthRunStatus;
+    target: null | number;
+}
+
+export interface GrowthSchedulesResponse {
+    schedules: GrowthSchedule[];
+    total: number;
+}
+
+// Each signal the judgement model sees in a message adds its weight; `active` adds it for a message of the last 7
+// days and half of it for one of the last 30.
+export interface GrowthScoring {
+    qualified: number;
+    watchlist: number;
+    weights: Record<GrowthScoringSignal, number>;
+}
+
+export type GrowthScoringSignal = 'active' | 'match' | 'pain' | 'paying' | 'player';
+
 // One card of the "Keys & connections" page. Secret fields come back masked ("••••abcd"); `source` says
 // whether the value was saved here, preset by the server, or is missing.
 export interface GrowthSetting {
     fields: Record<string, string>;
     kind: GrowthSettingKind;
+    // Email only: the server has its own SMTP server in .env, so the customer need not set one.
+    platform_smtp?: boolean;
     provider: null | string;
     providers: string[];
     source: GrowthSettingSource;
@@ -193,7 +310,15 @@ export interface GrowthSettingInput {
     provider: null | string;
 }
 
-export type GrowthSettingKind = 'email' | 'embedding' | 'llm' | 'proxy' | 'telegram' | 'web_search' | 'youtube';
+export type GrowthSettingKind =
+    | 'email'
+    | 'embedding'
+    | 'llm'
+    | 'proxy'
+    | 'screening'
+    | 'telegram'
+    | 'web_search'
+    | 'youtube';
 
 export type GrowthSettingSource = 'database' | 'env' | 'none';
 
@@ -233,6 +358,12 @@ export type GrowthSourceOrigin = 'ai' | 'manual';
 
 export interface GrowthSourcesAddResponse {
     results: GrowthSourceAddResult[];
+}
+
+export interface GrowthSourcesResponse {
+    sources: GrowthSource[];
+    total: number;
+    warnings: GrowthJoinWarning[] | null;
 }
 
 // Telegram sign-in is a short conversation: the phone gets a code, and an account with two-step

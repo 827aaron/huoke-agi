@@ -46,6 +46,13 @@ type growthRun struct {
 	NotifyError    string `json:"notify_error,omitempty"`
 	CreatedAt      string `json:"created_at,omitempty"`
 	FinishedAt     string `json:"finished_at,omitempty"`
+	DeadlineAt     string `json:"deadline_at,omitempty"`
+	ScheduleID     *int64 `json:"schedule_id,omitempty"`
+}
+
+type growthSchedules struct {
+	Schedules []growth.ScheduleView `json:"schedules"`
+	Total     uint64                `json:"total"`
 }
 
 type growthRuns struct {
@@ -277,6 +284,12 @@ func (s *GrowthService) ListRuns(c *gin.Context) {
 		}
 		if r.FinishedAt.Valid {
 			run.FinishedAt = r.FinishedAt.Time.UTC().Format("2006-01-02T15:04:05Z07:00")
+		}
+		if r.DeadlineAt.Valid {
+			run.DeadlineAt = r.DeadlineAt.Time.UTC().Format("2006-01-02T15:04:05Z07:00")
+		}
+		if r.ScheduleID.Valid {
+			run.ScheduleID = &r.ScheduleID.Int64
 		}
 		out = append(out, run)
 	}
@@ -1213,4 +1226,145 @@ func (s *GrowthService) SendTestEmail(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, growthTestEmailResult{Sent: true, To: to})
+}
+
+// ListSchedules is a function to return the schedules of the current user
+// @Summary Retrieve the schedules that repeat the user's tasks
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param flow_id query int false "only schedules repeating this flow"
+// @Success 200 {object} response.successResp{data=growthSchedules} "schedules received successful"
+// @Failure 400 {object} response.errorResp "invalid query"
+// @Failure 403 {object} response.errorResp "getting schedules not permitted"
+// @Failure 500 {object} response.errorResp "internal error on getting schedules"
+// @Router /growth/schedules [get]
+func (s *GrowthService) ListSchedules(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	flowID, err := optionalInt64(c, "flow_id")
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	out, err := s.svc.ListSchedules(c, uid, flowID)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error listing growth schedules")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, growthSchedules{Schedules: out, Total: uint64(len(out))})
+}
+
+// CreateSchedule is a function to repeat a task on a schedule
+// @Summary Repeat a task on the chosen days; each start opens a new task delivered by the end time
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param json body growth.ScheduleInput true "schedule"
+// @Success 201 {object} response.successResp{data=growth.ScheduleView} "schedule saved successful"
+// @Failure 400 {object} response.errorResp "invalid schedule"
+// @Failure 403 {object} response.errorResp "saving the schedule not permitted"
+// @Failure 404 {object} response.errorResp "task not found"
+// @Failure 500 {object} response.errorResp "internal error on saving the schedule"
+// @Router /growth/schedules [post]
+func (s *GrowthService) CreateSchedule(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	var req growth.ScheduleInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	saved, err := s.svc.CreateSchedule(c, uid, req)
+	if err != nil {
+		scheduleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, saved)
+}
+
+// UpdateSchedule is a function to change a schedule
+// @Summary Change a schedule; flow_id is ignored, an empty input keeps the saved one
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param scheduleID path int true "schedule id" minimum(0)
+// @Param json body growth.ScheduleInput true "schedule"
+// @Success 200 {object} response.successResp{data=growth.ScheduleView} "schedule saved successful"
+// @Failure 400 {object} response.errorResp "invalid schedule"
+// @Failure 403 {object} response.errorResp "saving the schedule not permitted"
+// @Failure 404 {object} response.errorResp "schedule not found"
+// @Failure 500 {object} response.errorResp "internal error on saving the schedule"
+// @Router /growth/schedules/{scheduleID} [put]
+func (s *GrowthService) UpdateSchedule(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	id, err := strconv.ParseInt(c.Param("scheduleID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+	var req growth.ScheduleInput
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	saved, err := s.svc.UpdateSchedule(c, uid, id, req)
+	if err != nil {
+		scheduleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, saved)
+}
+
+// DeleteSchedule is a function to remove a schedule
+// @Summary Remove a schedule; the tasks it started are kept
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param scheduleID path int true "schedule id" minimum(0)
+// @Success 200 {object} response.successResp "schedule deleted successful"
+// @Failure 400 {object} response.errorResp "invalid schedule id"
+// @Failure 403 {object} response.errorResp "deleting the schedule not permitted"
+// @Failure 404 {object} response.errorResp "schedule not found"
+// @Failure 500 {object} response.errorResp "internal error on deleting the schedule"
+// @Router /growth/schedules/{scheduleID} [delete]
+func (s *GrowthService) DeleteSchedule(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	id, err := strconv.ParseInt(c.Param("scheduleID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	if err := s.svc.DeleteSchedule(c, uid, id); err != nil {
+		scheduleError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, struct{}{})
+}
+
+func scheduleError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, growth.ErrInvalidSchedule):
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+	case errors.Is(err, growth.ErrScheduleNotFound):
+		response.Error(c, response.ErrGrowthScheduleNotFound, err)
+	case errors.Is(err, growth.ErrFlowNotFound):
+		response.Error(c, response.ErrGrowthFlowNotFound, err)
+	default:
+		logger.FromContext(c).WithError(err).Errorf("error saving growth schedule")
+		response.Error(c, response.ErrInternal, err)
+	}
 }

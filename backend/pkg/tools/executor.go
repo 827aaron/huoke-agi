@@ -9,6 +9,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"text/template"
 	"time"
 	"unicode/utf8"
@@ -159,6 +160,21 @@ type customExecutor struct {
 	handlers    map[string]ExecutorHandler
 	barriers    map[string]struct{}
 	summarizer  SummarizeHandler
+
+	// lang caches the flow's language once it is chosen, for the notices of failed calls.
+	lang atomic.Pointer[string]
+}
+
+func (ce *customExecutor) flowLanguage(ctx context.Context) string {
+	if lang := ce.lang.Load(); lang != nil {
+		return *lang
+	}
+	flow, err := ce.db.GetFlow(ctx, ce.flowID)
+	if err != nil || flow.Language == "" {
+		return ""
+	}
+	ce.lang.Store(&flow.Language)
+	return flow.Language
 }
 
 func (ce *customExecutor) Tools() []llms.Tool {
@@ -401,10 +417,7 @@ func (ce *customExecutor) Execute(
 			// delegation included.
 			msgCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closingWriteTimeout)
 			defer cancel()
-			lang := ""
-			if flow, err := ce.db.GetFlow(msgCtx, ce.flowID); err == nil {
-				lang = flow.Language
-			}
+			lang := ce.flowLanguage(msgCtx)
 			outcome := fmt.Sprintf(templates.NoticeText(templates.NoticeToolFailed, lang), err)
 			if errors.Is(err, context.Canceled) {
 				outcome = templates.NoticeText(templates.NoticeToolStopped, lang)

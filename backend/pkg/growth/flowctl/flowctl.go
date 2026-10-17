@@ -60,7 +60,7 @@ func (f *flowController) CreateAssistant(
 
 func (f *flowController) GetFlow(ctx context.Context, flowID int64) (controller.FlowWorker, error) {
 	fw, err := f.FlowController.GetFlow(ctx, flowID)
-	if err != nil {
+	if err != nil || fw == nil {
 		return fw, err
 	}
 	return &flowWorker{FlowWorker: fw, svc: f.svc}, nil

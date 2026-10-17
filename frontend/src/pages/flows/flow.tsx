@@ -47,6 +47,7 @@ import FlowCentralTabs from '@/features/flows/flow-central-tabs';
 import FlowTabs from '@/features/flows/flow-tabs';
 import { useFlowDetailNavigation } from '@/features/flows/use-flow-detail-navigation';
 import GrowthProgressBar from '@/features/growth/progress/growth-progress-bar';
+import { FlowScheduleButton } from '@/features/growth/schedules/flow-schedules';
 import { RenameFlowDocument, ResultType, StatusType } from '@/graphql/types';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { FLOW_TAB_VALUES, useFlowSideTab, useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
@@ -284,6 +285,7 @@ function Flow() {
                     </Breadcrumb>
                 </AppHeaderContent>
                 <AppHeaderActions>
+                    {flowId && <FlowScheduleButton flowId={Number(flowId)} />}
                     {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
                     {!isMobile && (
                         <DetailNavigationToolbar<FlowItem>

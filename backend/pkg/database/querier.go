@@ -7,10 +7,15 @@ package database
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 type Querier interface {
 	AddFavoriteFlow(ctx context.Context, arg AddFavoriteFlowParams) (UserPreference, error)
+	AdoptGrowthRun(ctx context.Context, arg AdoptGrowthRunParams) (GrowthRun, error)
+	// AdvanceGrowthSchedule claims the start at handled_start_at by moving the schedule past
+	// it; zero rows means another pass has claimed it already.
+	AdvanceGrowthSchedule(ctx context.Context, arg AdvanceGrowthScheduleParams) (int64, error)
 	CountAPITokens(ctx context.Context) (int64, error)
 	CountActiveFlows(ctx context.Context) (int64, error)
 	CountAssistants(ctx context.Context) (int64, error)
@@ -30,6 +35,7 @@ type Querier interface {
 	CreateContainer(ctx context.Context, arg CreateContainerParams) (Container, error)
 	CreateFlow(ctx context.Context, arg CreateFlowParams) (Flow, error)
 	CreateFlowTemplate(ctx context.Context, arg CreateFlowTemplateParams) (FlowTemplate, error)
+	CreateGrowthSchedule(ctx context.Context, arg CreateGrowthScheduleParams) (GrowthSchedule, error)
 	CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) (Msgchain, error)
 	CreateMsgLog(ctx context.Context, arg CreateMsgLogParams) (Msglog, error)
 	CreateProvider(ctx context.Context, arg CreateProviderParams) (Provider, error)
@@ -66,6 +72,7 @@ type Querier interface {
 	DeleteUserAPIToken(ctx context.Context, arg DeleteUserAPITokenParams) (ApiToken, error)
 	DeleteUserAPITokenByTokenID(ctx context.Context, arg DeleteUserAPITokenByTokenIDParams) (ApiToken, error)
 	DeleteUserChannelAccount(ctx context.Context, arg DeleteUserChannelAccountParams) (int64, error)
+	DeleteUserGrowthSchedule(ctx context.Context, arg DeleteUserGrowthScheduleParams) (int64, error)
 	DeleteUserGrowthSetting(ctx context.Context, arg DeleteUserGrowthSettingParams) (int64, error)
 	DeleteUserGrowthSource(ctx context.Context, arg DeleteUserGrowthSourceParams) (GrowthSource, error)
 	// Delete a knowledge document by UUID, only if it belongs to the given user.
@@ -101,6 +108,7 @@ type Querier interface {
 	GetContainerTermLogs(ctx context.Context, containerID int64) ([]Termlog, error)
 	GetContainers(ctx context.Context) ([]Container, error)
 	GetDeliverableLeads(ctx context.Context, arg GetDeliverableLeadsParams) ([]Lead, error)
+	GetDueGrowthSchedules(ctx context.Context, now time.Time) ([]GrowthSchedule, error)
 	GetFlow(ctx context.Context, id int64) (Flow, error)
 	GetFlowAgentLog(ctx context.Context, arg GetFlowAgentLogParams) (Agentlog, error)
 	GetFlowAgentLogs(ctx context.Context, flowID int64) ([]Agentlog, error)
@@ -154,6 +162,7 @@ type Querier interface {
 	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
 	// Get all msgchains for a flow (including task and subtask level)
 	GetMsgchainsForFlow(ctx context.Context, flowID int64) ([]GetMsgchainsForFlowRow, error)
+	GetOverdueGrowthRuns(ctx context.Context, now time.Time) ([]GrowthRun, error)
 	GetPrompts(ctx context.Context) ([]Prompt, error)
 	GetProvider(ctx context.Context, id int64) (Provider, error)
 	GetProviders(ctx context.Context) ([]Provider, error)
@@ -254,6 +263,8 @@ type Querier interface {
 	GetUserFlows(ctx context.Context, userID int64) ([]Flow, error)
 	GetUserGrowthRun(ctx context.Context, arg GetUserGrowthRunParams) (GrowthRun, error)
 	GetUserGrowthRuns(ctx context.Context, arg GetUserGrowthRunsParams) ([]GrowthRun, error)
+	GetUserGrowthSchedule(ctx context.Context, arg GetUserGrowthScheduleParams) (GrowthSchedule, error)
+	GetUserGrowthSchedules(ctx context.Context, arg GetUserGrowthSchedulesParams) ([]GrowthSchedule, error)
 	GetUserGrowthSetting(ctx context.Context, arg GetUserGrowthSettingParams) (GrowthSetting, error)
 	GetUserGrowthSettings(ctx context.Context, userID int64) ([]GrowthSetting, error)
 	GetUserGrowthSource(ctx context.Context, arg GetUserGrowthSourceParams) (GrowthSource, error)
@@ -298,10 +309,12 @@ type Querier interface {
 	MarkChannelAccountSignedIn(ctx context.Context, id int64) (ChannelAccount, error)
 	MarkChannelAccountUsed(ctx context.Context, id int64) error
 	MarkLeadsDelivered(ctx context.Context, arg MarkLeadsDeliveredParams) ([]Lead, error)
+	OpenScheduledGrowthRun(ctx context.Context, arg OpenScheduledGrowthRunParams) (GrowthRun, error)
 	RecordChannelAccountError(ctx context.Context, arg RecordChannelAccountErrorParams) error
 	RecordChannelAccountRateLimit(ctx context.Context, arg RecordChannelAccountRateLimitParams) error
 	RecordChannelAccountSuccess(ctx context.Context, id int64) error
 	RecordGrowthRunNotify(ctx context.Context, arg RecordGrowthRunNotifyParams) error
+	RecordGrowthScheduleStart(ctx context.Context, arg RecordGrowthScheduleStartParams) error
 	RecordSourceRead(ctx context.Context, arg RecordSourceReadParams) (GrowthSource, error)
 	RefreshSourceYield(ctx context.Context, ids []int64) error
 	ResolveGrowthSource(ctx context.Context, arg ResolveGrowthSourceParams) (GrowthSource, error)
@@ -361,6 +374,7 @@ type Querier interface {
 	UpdateFlowsProviderNameByOldName(ctx context.Context, arg UpdateFlowsProviderNameByOldNameParams) ([]Flow, error)
 	UpdateGrowthRunDelivery(ctx context.Context, arg UpdateGrowthRunDeliveryParams) (GrowthRun, error)
 	UpdateGrowthRunTarget(ctx context.Context, arg UpdateGrowthRunTargetParams) (GrowthRun, error)
+	UpdateGrowthSchedule(ctx context.Context, arg UpdateGrowthScheduleParams) (GrowthSchedule, error)
 	UpdateGrowthSettingStatus(ctx context.Context, arg UpdateGrowthSettingStatusParams) (GrowthSetting, error)
 	UpdateGrowthSourceStatus(ctx context.Context, arg UpdateGrowthSourceStatusParams) (GrowthSource, error)
 	// Update an existing document's embedding, text and metadata atomically.

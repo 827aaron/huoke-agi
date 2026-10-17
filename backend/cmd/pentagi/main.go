@@ -28,6 +28,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/profiling"
 	"pentagi/pkg/providers"
+	"pentagi/pkg/providers/provider"
 	router "pentagi/pkg/server"
 	"pentagi/pkg/server/update"
 	"pentagi/pkg/version"
@@ -252,7 +253,18 @@ func main() {
 		logrus.WithError(err).Fatal("Active flows restoration failed")
 	}
 
-	r := router.NewRouter(queries, orm, cfg, providers, withBusinessProfile(controller), subscriptions, client, updates)
+	fc := withBusinessProfile(controller)
+	if svc := growth.Default(); svc != nil {
+		go flowctl.NewScheduler(fc, svc, func(ctx context.Context, name provider.ProviderName, userID int64) (provider.ProviderType, error) {
+			prv, err := providers.GetProvider(ctx, name, userID)
+			if err != nil {
+				return "", err
+			}
+			return prv.Type(), nil
+		}).Run(ctx)
+	}
+
+	r := router.NewRouter(queries, orm, cfg, providers, fc, subscriptions, client, updates)
 
 	// Launch HTTP/HTTPS server in background goroutine
 	serverErrChan := make(chan error, 1)

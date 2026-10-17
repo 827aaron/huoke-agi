@@ -1,8 +1,11 @@
 import type { GrowthLead, GrowthLeadTier, GrowthPlatform } from '../growth-types';
 
+export type LeadContactFilter = 'all' | 'with' | 'without';
+
 export type LeadDeliveryFilter = 'all' | 'delivered' | 'not_delivered';
 
 export interface LeadFilters {
+    contact: LeadContactFilter;
     delivery: LeadDeliveryFilter;
     flags: LeadFlag[];
     platform: GrowthPlatform | null;
@@ -14,6 +17,7 @@ export interface LeadFilters {
 export type LeadFlag = 'competitor' | 'paying' | 'recent';
 
 export const EMPTY_LEAD_FILTERS: LeadFilters = {
+    contact: 'all',
     delivery: 'all',
     flags: [],
     platform: null,
@@ -45,6 +49,10 @@ export function filterLeads(leads: GrowthLead[], filters: LeadFilters, now = Dat
         }
 
         if (filters.delivery === 'not_delivered' && lead.delivered_at) {
+            return false;
+        }
+
+        if (filters.contact !== 'all' && !!lead.contacts?.length !== (filters.contact === 'with')) {
             return false;
         }
 

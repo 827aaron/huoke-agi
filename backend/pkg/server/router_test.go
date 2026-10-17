@@ -231,6 +231,10 @@ func TestRouter_SetGrowthGroup_RefusesAMissingPrivilege(t *testing.T) {
 		{http.MethodPost, "/growth/settings/llm/test", "growth.edit"},
 		{http.MethodPost, "/growth/settings/llm/models", "growth.edit"},
 		{http.MethodPost, "/growth/settings/test-email", "growth.edit"},
+		{http.MethodGet, "/growth/schedules", "growth.view"},
+		{http.MethodPost, "/growth/schedules", "growth.edit"},
+		{http.MethodPut, "/growth/schedules/7", "growth.edit"},
+		{http.MethodDelete, "/growth/schedules/7", "growth.edit"},
 	}
 
 	every := []string{"growth.view", "growth.edit", "growth.admin"}

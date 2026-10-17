@@ -51,7 +51,7 @@ const describeResult = ({ link, outcome }: GrowthSourceAddResult): null | string
 };
 
 function FlowSources() {
-    const { isSourcesLoading, refetchSources, sources, sourcesError } = useGrowthFlow();
+    const { isSourcesLoading, joinWarnings, refetchSources, sources, sourcesError } = useGrowthFlow();
     const { openLeads } = useGrowthTabLink();
     const [searchParams] = useSearchParams();
     const queryParam = searchParams.get(SOURCE_QUERY_PARAM);
@@ -130,6 +130,15 @@ function FlowSources() {
 
     return (
         <div className="flex h-full flex-col gap-4">
+            {joinWarnings.map((warning) => (
+                <p
+                    className="rounded-md border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-900 dark:text-yellow-300"
+                    key={warning.account_id}
+                    role="status"
+                >
+                    {copy.sources.joinWarning(warning.label, warning.joined_sources, warning.warn_at)}
+                </p>
+            ))}
             <div className="flex flex-col gap-2 p-px">
                 <Textarea
                     onChange={(event) => setLinksText(event.target.value)}
