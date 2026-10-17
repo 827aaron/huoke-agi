@@ -65,6 +65,7 @@ type Querier interface {
 	DeleteFlowTemplate(ctx context.Context, arg DeleteFlowTemplateParams) error
 	// Delete a knowledge document by UUID (admin — no user_id check).
 	DeleteKnowledgeDocument(ctx context.Context, uuid sql.NullString) error
+	DeleteMessageScores(ctx context.Context, userID int64) error
 	DeletePrompt(ctx context.Context, id int64) error
 	DeleteProvider(ctx context.Context, id int64) (Provider, error)
 	DeleteSubtask(ctx context.Context, id int64) error

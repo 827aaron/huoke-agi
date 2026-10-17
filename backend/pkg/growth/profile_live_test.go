@@ -62,22 +62,6 @@ func (m *memoryKnowledge) DeleteUserDocument(ctx context.Context, userID int64, 
 	return nil
 }
 
-func gameProfile() Profile {
-	return Profile{
-		Name:          "Starfall Studio",
-		Pitch:         " A fair MMORPG with no pay-to-win ",
-		Games:         []string{"Starfall Online"},
-		Genre:         "MMORPG",
-		Competitors:   []string{"Rival Saga"},
-		Regions:       []string{"SEA", " "},
-		Languages:     []string{"英语", "泰语"},
-		DefaultTarget: 50,
-		Signals:       []string{"s1", "s2", "s3", "s4", "s5", "s6"},
-		Excludes:      []string{"account sellers"},
-		Notes:         "Players who quit Rival Saga after the last patch are the best fit.",
-	}
-}
-
 func TestProfile_SaveProfile_WritesTheFileAndSeedsTheLists(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
@@ -148,8 +132,12 @@ func TestProfile_WithProfile_PutsTheCompactBlockFirstOnce(t *testing.T) {
 	w.svc.cfg.DataDir = t.TempDir()
 
 	input, res := w.svc.WithProfile(ctx, w.user, "find 50 players", nil)
-	assert.Equal(t, "find 50 players", input, "no profile, no change")
-	assert.Empty(t, res)
+	require.True(t, strings.HasPrefix(input, "<business_profile>\nOffer: A licensed, regulated online gaming operator"), input)
+	assert.Contains(t, input, "Signal words: deposit experience; withdrawal speed; bonus terms; cashback; VIP program; odds; "+
+		"platform reliability; looking for a new platform; platform recommendation\n", "nothing holds the rest, so nothing is cut")
+	assert.NotContains(t, input, "Full profile:")
+	assert.True(t, strings.HasSuffix(input, "</business_profile>\n\nfind 50 players"), input)
+	assert.Empty(t, res, "the default preset has no file")
 
 	_, err := w.svc.SaveProfile(ctx, w.user, gameProfile())
 	require.NoError(t, err)
@@ -219,4 +207,40 @@ func TestProfile_SaveProfile_ChecksTheScoringAndTheContactTypes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"phone", "email"}, saved.ContactTypes)
 	assert.Contains(t, saved.Compact(), "Contacts to find: phone, email")
+}
+
+func TestProfile_SaveProfile_DropsTheMessageScoresWhenTheAudienceChanges(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	src := w.mustAddTelegramGroup(t, w.seedTask(t), tgGroup("905", "rpg_chat", "RPG"))
+	scored := func() int {
+		rows, err := w.svc.db.GetMessageScores(ctx, database.GetMessageScoresParams{UserID: w.user, SourceID: src, MessageIds: []string{"m1"}})
+		require.NoError(t, err)
+		return len(rows)
+	}
+	_, err := w.svc.SaveProfile(ctx, w.user, gameProfile())
+	require.NoError(t, err)
+	require.NoError(t, w.svc.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
+		UserID: w.user, SourceID: src, MessageID: "m1", Score: 8, Signals: "player+3",
+	}))
+
+	same := gameProfile()
+	same.DefaultTarget = 80
+	_, err = w.svc.SaveProfile(ctx, w.user, same)
+	require.NoError(t, err)
+	assert.Equal(t, 1, scored(), "a change the judgement model does not read keeps the scores")
+
+	casino := gameProfile()
+	casino.Pitch = "A licensed online casino"
+	_, err = w.svc.SaveProfile(ctx, w.user, casino)
+	require.NoError(t, err)
+	assert.Equal(t, 0, scored())
+
+	require.NoError(t, w.svc.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
+		UserID: w.user, SourceID: src, MessageID: "m1", Score: 8, Signals: "player+3",
+	}))
+	casino.Scoring = &Scoring{Weights: ScoringWeights{Player: 1, Pain: 3, Paying: 3, Active: 2, Match: 3}, Qualified: 7, Watchlist: 4}
+	_, err = w.svc.SaveProfile(ctx, w.user, casino)
+	require.NoError(t, err)
+	assert.Equal(t, 0, scored(), "new weights drop the scores too")
 }

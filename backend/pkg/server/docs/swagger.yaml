@@ -316,6 +316,13 @@ definitions:
           type: string
         type: array
     type: object
+  growth.ProfilePreset:
+    properties:
+      id:
+        type: string
+      profile:
+        $ref: '#/definitions/growth.Profile'
+    type: object
   growth.ProfileView:
     properties:
       competitors:
@@ -6562,6 +6569,32 @@ paths:
       security:
       - BearerAuth: []
       summary: Change the business profile; new tasks start with it
+      tags:
+      - Growth
+  /growth/profiles/presets:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: presets received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/growth.ProfilePreset'
+                  type: array
+              type: object
+        "403":
+          description: getting the presets not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the starting profiles, one per kind of customer, to copy into
+        the profile form
       tags:
       - Growth
   /growth/runs/:

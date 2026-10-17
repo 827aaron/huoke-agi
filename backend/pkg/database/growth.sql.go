@@ -187,6 +187,15 @@ func (q *Queries) CreateGrowthSchedule(ctx context.Context, arg CreateGrowthSche
 	return i, err
 }
 
+const deleteMessageScores = `-- name: DeleteMessageScores :exec
+DELETE FROM growth_message_scores WHERE user_id = $1
+`
+
+func (q *Queries) DeleteMessageScores(ctx context.Context, userID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteMessageScores, userID)
+	return err
+}
+
 const deleteUserChannelAccount = `-- name: DeleteUserChannelAccount :execrows
 DELETE FROM channel_accounts WHERE id = $1 AND user_id = $2
 `

@@ -507,3 +507,6 @@ WHERE id = sqlc.arg(id) AND next_start_at = sqlc.arg(handled_start_at);
 UPDATE growth_schedules
 SET last_run_id = COALESCE(sqlc.narg(last_run_id), last_run_id), last_error = sqlc.arg(last_error)
 WHERE id = sqlc.arg(id);
+
+-- name: DeleteMessageScores :exec
+DELETE FROM growth_message_scores WHERE user_id = sqlc.arg(user_id);
