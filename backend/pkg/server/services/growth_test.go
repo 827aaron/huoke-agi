@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"pentagi/pkg/config"
@@ -45,4 +47,32 @@ func TestGrowth_DeleteSetting_RepointsTheFlowsOnlyWhenTheLLMKeyChanges(t *testin
 	assert.Empty(t, repointed)
 	remove(growth.SettingLLM)
 	assert.Equal(t, []int64{7}, repointed)
+}
+
+func TestGrowth_CreateSchedule_TellsThePageWhyItIsRefused(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := NewGrowthService(growth.NewService(growthSettingsQuerier{}, &config.Config{}))
+	for _, tc := range []struct {
+		name, body, reason string
+	}{
+		{"same start and end", `{"flow_id":3,"days":"daily","start_time":"09:00","end_time":"09:00","timezone":"Asia/Bangkok"}`,
+			"end_time must differ from start_time"},
+		{"unreadable body", `{"flow_id":"3"}`, "flow_id"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Set("uid", uint64(7))
+			c.Request = httptest.NewRequest(http.MethodPost, "/growth/schedules", strings.NewReader(tc.body))
+			c.Request.Header.Set("Content-Type", "application/json")
+
+			svc.CreateSchedule(c)
+
+			require.Equal(t, http.StatusBadRequest, w.Code)
+			var body struct{ Code, Msg string }
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+			assert.Equal(t, "Growth.InvalidRequest", body.Code)
+			assert.Contains(t, body.Msg, tc.reason)
+		})
+	}
 }
