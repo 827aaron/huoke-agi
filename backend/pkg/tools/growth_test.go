@@ -64,15 +64,16 @@ func TestGrowth_Handle_MarksLinksFoundInASourceAsDiscovered(t *testing.T) {
 	assert.Nil(t, backend.lastFrom)
 }
 
-func TestGrowth_Handle_DeliverPassesAllowPartial(t *testing.T) {
+func TestGrowth_Handle_DeliverPassesAllowPartialAndHasContact(t *testing.T) {
 	task := int64(3)
 	backend := &fakeGrowthBackend{delivery: growth.Delivery{
 		Status: growth.DeliveryIncomplete, Gap: 8, Progress: growth.Progress{Target: 50, NewLeads: 42},
 	}}
 	out, err := newGrowthTools(backend, 1, 42, &task).Handle(t.Context(), GrowthDeliverLeadsToolName,
-		json.RawMessage(`{"allow_partial":"true"}`))
+		json.RawMessage(`{"allow_partial":"true","has_contact":true}`))
 	require.NoError(t, err)
 	assert.True(t, backend.lastAllowPartial)
+	assert.True(t, backend.lastHasContact)
 	assert.Contains(t, out, `"status":"incomplete"`)
 	assert.True(t, strings.HasSuffix(out, "PROGRESS: new_leads_this_task=42 target=50"))
 }
@@ -137,6 +138,7 @@ func TestGrowth_Handle_ListLeadsScopesToTheFlow(t *testing.T) {
 
 	_, err := tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"scope":"delivered","tier":"QUALIFIED"}`))
 	require.NoError(t, err)
+	assert.Nil(t, backend.lastFilter.HasContact)
 	require.NotNil(t, backend.lastFilter.FlowID)
 	assert.Equal(t, int64(42), *backend.lastFilter.FlowID)
 	require.NotNil(t, backend.lastFilter.Delivered)
@@ -150,6 +152,11 @@ func TestGrowth_Handle_ListLeadsScopesToTheFlow(t *testing.T) {
 	assert.Nil(t, backend.lastFilter.TaskID)
 	assert.True(t, time.Date(2026, 10, 16, 17, 0, 0, 0, time.UTC).Equal(backend.lastFilter.Since), backend.lastFilter.Since)
 
+	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"has_contact":true}`))
+	require.NoError(t, err)
+	require.NotNil(t, backend.lastFilter.HasContact)
+	assert.True(t, *backend.lastFilter.HasContact)
+
 	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"scope":"everyone"}`))
 	assert.Error(t, err)
 	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"since":"today"}`))
@@ -162,4 +169,17 @@ func TestGrowth_Handle_ProgressCountsFromSince(t *testing.T) {
 		json.RawMessage(`{"since":"2026-10-17"}`))
 	require.NoError(t, err)
 	assert.True(t, time.Date(2026, 10, 17, 0, 0, 0, 0, time.UTC).Equal(backend.lastSince), backend.lastSince)
+}
+
+func TestGrowth_Handle_UpsertPassesTheContactsAndAnOmittedScore(t *testing.T) {
+	task := int64(3)
+	backend := &fakeGrowthBackend{}
+	_, err := newGrowthTools(backend, 1, 42, &task).Handle(t.Context(), GrowthUpsertLeadsToolName, json.RawMessage(`{"leads":[{
+		"platform_user_id":"31","match_reason":"wants a new game and tops up often",
+		"contacts":[{"type":"email","value":"ann@example.test"}],
+		"evidence":[{"source_id":7,"message_id":"1","excerpt":"bored of my RPG"}]}]}`))
+	require.NoError(t, err)
+	require.Len(t, backend.upserted, 1)
+	assert.Equal(t, 0, backend.upserted[0].Score)
+	assert.Equal(t, []growth.Contact{{Type: "email", Value: "ann@example.test"}}, backend.upserted[0].Contacts)
 }

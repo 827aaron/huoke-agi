@@ -919,6 +919,7 @@ type fakeGrowthBackend struct {
 	lastOrigin       string
 	lastFrom         *int64
 	lastAllowPartial bool
+	lastHasContact   bool
 	lastFilter       growth.LeadFilter
 	lastSync         growth.SyncOptions
 	lastSyncIDs      []int64
@@ -994,8 +995,8 @@ func (f *fakeGrowthBackend) SetTarget(_ context.Context, scope growth.Scope, tar
 	return f.progress, f.err
 }
 
-func (f *fakeGrowthBackend) Deliver(_ context.Context, scope growth.Scope, allowPartial bool) (growth.Delivery, error) {
-	f.lastScope, f.lastAllowPartial = scope, allowPartial
+func (f *fakeGrowthBackend) Deliver(_ context.Context, scope growth.Scope, opt growth.DeliverOptions) (growth.Delivery, error) {
+	f.lastScope, f.lastAllowPartial, f.lastHasContact = scope, opt.AllowPartial, opt.HasContact
 	return f.delivery, f.err
 }
 

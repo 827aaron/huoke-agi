@@ -129,3 +129,33 @@ func TestLeads_UpsertLeads_CountsQualifiedLeadsPerSource(t *testing.T) {
 	assert.Equal(t, poor, pool[1].ID)
 	assert.Equal(t, 0, pool[1].QualifiedLeads)
 }
+
+func TestLeads_UpsertLeads_KeepsEveryContactOnceAndListsByIt(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	src := w.mustAddTelegramGroup(t, scope, tgGroup("901", "card_fans", "Cards"))
+
+	reachable := qualified("41", src, "m1")
+	reachable.Contacts = []Contact{{Type: "email", Value: "ann@example.test"}, {Type: "fax", Value: "123"}, {Type: "platform_handle", Value: "@u41"}}
+	res, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{reachable, qualified("42", src, "m2")})
+	require.NoError(t, err)
+	assert.Contains(t, res[0].Reason, `contact type "fax" is not one of phone, email, messenger, other`)
+
+	again := qualified("41", src, "m3")
+	again.Contacts = []Contact{{Type: " Email ", Value: "ANN@example.test"}, {Type: "phone", Value: "+66 81 234 5678"}}
+	_, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{again})
+	require.NoError(t, err)
+
+	yes, no := true, false
+	with, err := w.svc.ListLeads(ctx, w.user, LeadFilter{HasContact: &yes})
+	require.NoError(t, err)
+	require.Len(t, with, 1)
+	assert.Equal(t, "41", with[0].PlatformUserID)
+	assert.Equal(t, []Contact{{Type: "email", Value: "ann@example.test"}, {Type: "phone", Value: "+66 81 234 5678"}}, with[0].Contacts)
+	without, err := w.svc.ListLeads(ctx, w.user, LeadFilter{HasContact: &no})
+	require.NoError(t, err)
+	require.Len(t, without, 1)
+	assert.Equal(t, "42", without[0].PlatformUserID)
+	assert.Equal(t, []Contact{}, without[0].Contacts)
+}

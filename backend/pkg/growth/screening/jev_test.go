@@ -28,7 +28,10 @@ func TestJev_Judge_AsksOneNoulPerMessage(t *testing.T) {
 		Messages: []Message{{ID: "45", Sender: "@ann", Text: "looking for a new MMO"}, {ID: "44", Sender: "@bob", Text: "lol"}},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, map[string]float64{"45": 0.91, "44": 0.12}, out)
+	assert.Equal(t, map[string]Judgement{
+		"45": {Customer: 0.91, Signals: map[string]float64{}},
+		"44": {Customer: 0.12, Signals: map[string]float64{}},
+	}, out)
 	assert.Equal(t, "jev-1.13.0", model)
 
 	assert.Equal(t, "jev-latest", got["model"])
@@ -43,6 +46,32 @@ func TestJev_Judge_AsksOneNoulPerMessage(t *testing.T) {
 	assert.Equal(t, "noul", q["type"])
 	assert.Contains(t, q["instructions"], "`messages.m1`")
 	assert.Contains(t, q["criteria"], "true")
+}
+
+func TestJev_Judge_AsksEverySignalOfEveryMessageOverOneState(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		_, _ = w.Write([]byte(`{"answers":{"m0":{"type":"noul","noul":0.9},"m0_player":{"type":"noul","noul":0.8},` +
+			`"m0_paying":{"type":"noul","noul":0.1},"m1_player":{"type":"noul","noul":0.6}}}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{URL: srv.URL, Key: "k"}
+	out, _, err := c.Judge(t.Context(), Batch{
+		Messages: []Message{{ID: "7", Text: "I topped up 50 in my RPG"}, {ID: "8", Text: "lol"}},
+		Signals:  Signals,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]Judgement{
+		"7": {Customer: 0.9, Signals: map[string]float64{"player": 0.8, "paying": 0.1}},
+		"8": {Customer: -1, Signals: map[string]float64{"player": 0.6}},
+	}, out)
+
+	questions := got["questions"].(map[string]any)
+	require.Len(t, questions, 10)
+	assert.Contains(t, questions["m1_pain"].(map[string]any)["instructions"], "`messages.m1`")
+	assert.Len(t, got["state"].(map[string]any)["messages"], 2)
 }
 
 func TestJev_Judge_RetriesARateLimitAndStopsOnARefusedKey(t *testing.T) {
@@ -83,7 +112,7 @@ func TestJev_Judge_RetriesARateLimitAndStopsOnARefusedKey(t *testing.T) {
 			switch {
 			case tt.statuses[len(tt.statuses)-1] == 200:
 				require.NoError(t, err)
-				assert.Equal(t, map[string]float64{"1": 0.7}, out)
+				assert.Equal(t, map[string]Judgement{"1": {Customer: 0.7, Signals: map[string]float64{}}}, out)
 				assert.Equal(t, tt.waits, waits)
 			case tt.err != nil:
 				assert.ErrorIs(t, err, tt.err)

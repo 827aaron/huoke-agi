@@ -163,6 +163,13 @@ definitions:
       source:
         $ref: '#/definitions/growth.SourceView'
     type: object
+  growth.Contact:
+    properties:
+      type:
+        type: string
+      value:
+        type: string
+    type: object
   growth.EvidenceView:
     properties:
       captured_at:
@@ -195,6 +202,10 @@ definitions:
     type: object
   growth.LeadView:
     properties:
+      contacts:
+        items:
+          $ref: '#/definitions/growth.Contact'
+        type: array
       created_at:
         type: string
       delivered_at:
@@ -250,9 +261,23 @@ definitions:
       next:
         type: string
     type: object
+  growth.ModelOption:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
   growth.Profile:
     properties:
       competitors:
+        items:
+          type: string
+        type: array
+      contact_types:
+        description: |-
+          ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty
+          means the platform handle alone.
         items:
           type: string
         type: array
@@ -282,6 +307,10 @@ definitions:
         items:
           type: string
         type: array
+      scoring:
+        $ref: '#/definitions/growth.Scoring'
+        description: Scoring turns the judgement model's answers into a lead score;
+          nil is DefaultScoring.
       signals:
         items:
           type: string
@@ -290,6 +319,13 @@ definitions:
   growth.ProfileView:
     properties:
       competitors:
+        items:
+          type: string
+        type: array
+      contact_types:
+        description: |-
+          ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty
+          means the platform handle alone.
         items:
           type: string
         type: array
@@ -323,6 +359,10 @@ definitions:
         items:
           type: string
         type: array
+      scoring:
+        $ref: '#/definitions/growth.Scoring'
+        description: Scoring turns the judgement model's answers into a lead score;
+          nil is DefaultScoring.
       signals:
         items:
           type: string
@@ -354,6 +394,28 @@ definitions:
       view_url:
         type: string
     type: object
+  growth.Scoring:
+    properties:
+      qualified:
+        type: integer
+      watchlist:
+        type: integer
+      weights:
+        $ref: '#/definitions/growth.ScoringWeights'
+    type: object
+  growth.ScoringWeights:
+    properties:
+      active:
+        type: integer
+      match:
+        type: integer
+      pain:
+        type: integer
+      paying:
+        type: integer
+      player:
+        type: integer
+    type: object
   growth.SettingView:
     properties:
       configured:
@@ -366,6 +428,11 @@ definitions:
         type: object
       kind:
         type: string
+      platform_smtp:
+        description: |-
+          PlatformSMTP, on the email kind only, says .env carries an SMTP server, so the
+          customer needs to give only the recipients.
+        type: boolean
       provider:
         type: string
       providers:
@@ -2289,6 +2356,26 @@ definitions:
         type: integer
     required:
     - flow_id
+    type: object
+  services.growthListModelsRequest:
+    properties:
+      api_key:
+        type: string
+      api_url:
+        type: string
+      protocol:
+        type: string
+      provider:
+        type: string
+      server_url:
+        type: string
+    type: object
+  services.growthModels:
+    properties:
+      models:
+        items:
+          $ref: '#/definitions/growth.ModelOption'
+        type: array
     type: object
   services.growthPasswordRequest:
     properties:
@@ -6525,6 +6612,52 @@ paths:
       security:
       - BearerAuth: []
       summary: Save the credential of one kind; an empty field keeps the saved value
+      tags:
+      - Growth
+  /growth/settings/{kind}/models:
+    post:
+      consumes:
+      - application/json
+      description: For screening through OpenRouter only typesafe/ models are listed.
+        A 502 means the list could not be fetched and the model is typed by name.
+      parameters:
+      - description: llm or screening
+        in: path
+        name: kind
+        required: true
+        type: string
+      - description: provider, key and endpoint; empty fields are the saved ones
+        in: body
+        name: json
+        schema:
+          $ref: '#/definitions/services.growthListModelsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: models received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthModels'
+              type: object
+        "400":
+          description: invalid provider, endpoint or missing key
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: listing models not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "502":
+          description: the endpoint did not return its models
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List the models of a provider's endpoint, for a choice before saving
       tags:
       - Growth
   /growth/settings/{kind}/test:

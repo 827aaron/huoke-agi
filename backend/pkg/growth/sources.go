@@ -108,6 +108,11 @@ type MessageView struct {
 	Link           string    `json:"link,omitempty"`
 	ReplyTo        string    `json:"reply_to,omitempty"`
 	Text           string    `json:"text"`
+	// Score, Tier and Signals are the judgement model's verdict on a screened message:
+	// a lead saved with this message as evidence takes this score.
+	Score   int    `json:"score,omitempty"`
+	Tier    string `json:"tier,omitempty"`
+	Signals string `json:"signals,omitempty"`
 }
 
 // SyncResult is one source's read. Read counts every message read, Skipped those the

@@ -6060,6 +6060,81 @@ const docTemplate = `{
                 }
             }
         },
+        "/growth/settings/{kind}/models": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "For screening through OpenRouter only typesafe/ models are listed. A 502 means the list could not be fetched and the model is typed by name.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "List the models of a provider's endpoint, for a choice before saving",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "llm or screening",
+                        "name": "kind",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "provider, key and endpoint; empty fields are the saved ones",
+                        "name": "json",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/services.growthListModelsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "models received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.growthModels"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid provider, endpoint or missing key",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "listing models not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "the endpoint did not return its models",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/growth/settings/{kind}/test": {
             "post": {
                 "security": [
@@ -9954,6 +10029,17 @@ const docTemplate = `{
                 }
             }
         },
+        "growth.Contact": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
         "growth.EvidenceView": {
             "type": "object",
             "properties": {
@@ -10003,6 +10089,12 @@ const docTemplate = `{
         "growth.LeadView": {
             "type": "object",
             "properties": {
+                "contacts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.Contact"
+                    }
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -10087,10 +10179,28 @@ const docTemplate = `{
                 }
             }
         },
+        "growth.ModelOption": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "growth.Profile": {
             "type": "object",
             "properties": {
                 "competitors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "contact_types": {
+                    "description": "ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty\nmeans the platform handle alone.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -10135,6 +10245,10 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "scoring": {
+                    "description": "Scoring turns the judgement model's answers into a lead score; nil is DefaultScoring.",
+                    "$ref": "#/definitions/growth.Scoring"
+                },
                 "signals": {
                     "type": "array",
                     "items": {
@@ -10147,6 +10261,13 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "competitors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "contact_types": {
+                    "description": "ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty\nmeans the platform handle alone.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -10197,6 +10318,10 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "scoring": {
+                    "description": "Scoring turns the judgement model's answers into a lead score; nil is DefaultScoring.",
+                    "$ref": "#/definitions/growth.Scoring"
+                },
                 "signals": {
                     "type": "array",
                     "items": {
@@ -10245,6 +10370,40 @@ const docTemplate = `{
                 }
             }
         },
+        "growth.Scoring": {
+            "type": "object",
+            "properties": {
+                "qualified": {
+                    "type": "integer"
+                },
+                "watchlist": {
+                    "type": "integer"
+                },
+                "weights": {
+                    "$ref": "#/definitions/growth.ScoringWeights"
+                }
+            }
+        },
+        "growth.ScoringWeights": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "integer"
+                },
+                "match": {
+                    "type": "integer"
+                },
+                "pain": {
+                    "type": "integer"
+                },
+                "paying": {
+                    "type": "integer"
+                },
+                "player": {
+                    "type": "integer"
+                }
+            }
+        },
         "growth.SettingView": {
             "type": "object",
             "properties": {
@@ -10260,6 +10419,10 @@ const docTemplate = `{
                 },
                 "kind": {
                     "type": "string"
+                },
+                "platform_smtp": {
+                    "description": "PlatformSMTP, on the email kind only, says .env carries an SMTP server, so the\ncustomer needs to give only the recipients.",
+                    "type": "boolean"
                 },
                 "provider": {
                     "type": "string"
@@ -12977,6 +13140,37 @@ const docTemplate = `{
                 },
                 "task_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "services.growthListModelsRequest": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "type": "string"
+                },
+                "api_url": {
+                    "type": "string"
+                },
+                "protocol": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "server_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.growthModels": {
+            "type": "object",
+            "properties": {
+                "models": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.ModelOption"
+                    }
                 }
             }
         },

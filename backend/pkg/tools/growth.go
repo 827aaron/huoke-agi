@@ -25,7 +25,7 @@ type GrowthBackend interface {
 	Progress(ctx context.Context, scope growth.Scope) (growth.Progress, error)
 	ProgressSince(ctx context.Context, scope growth.Scope, since time.Time) (growth.Progress, error)
 	SetTarget(ctx context.Context, scope growth.Scope, target int) (growth.Progress, error)
-	Deliver(ctx context.Context, scope growth.Scope, allowPartial bool) (growth.Delivery, error)
+	Deliver(ctx context.Context, scope growth.Scope, opt growth.DeliverOptions) (growth.Delivery, error)
 	ListLeads(ctx context.Context, userID int64, filter growth.LeadFilter) ([]growth.LeadView, error)
 }
 
@@ -249,6 +249,7 @@ func (g *growthTools) upsertLeads(ctx context.Context, args json.RawMessage) (st
 			Score:          l.Score.Int(),
 			Tier:           strings.ToLower(l.Tier.String()),
 			MatchReason:    l.MatchReason,
+			Contacts:       contactInputs(l.Contacts),
 		}
 		for j, e := range l.Evidence {
 			ev := growth.EvidenceInput{
@@ -312,7 +313,9 @@ func (g *growthTools) deliverLeads(ctx context.Context, args json.RawMessage) (s
 	if err := json.Unmarshal(args, &action); err != nil {
 		return "", fmt.Errorf("failed to parse %s args: %w", GrowthDeliverLeadsToolName, err)
 	}
-	d, err := g.backend.Deliver(ctx, g.scope, action.AllowPartial.Bool())
+	d, err := g.backend.Deliver(ctx, g.scope, growth.DeliverOptions{
+		AllowPartial: action.AllowPartial.Bool(), HasContact: action.HasContact.Bool(),
+	})
 	if err != nil {
 		return g.failure(ctx, err)
 	}
@@ -330,6 +333,10 @@ func (g *growthTools) listLeads(ctx context.Context, args json.RawMessage) (stri
 		return "", err
 	}
 	filter := growth.LeadFilter{Limit: action.Limit.Int(), Since: since}
+	if action.HasContact.Bool() {
+		hasContact := true
+		filter.HasContact = &hasContact
+	}
 	flowID := g.scope.FlowID
 	switch action.Scope {
 	case "all":
@@ -360,6 +367,14 @@ func (g *growthTools) listLeads(ctx context.Context, args json.RawMessage) (stri
 		return g.failure(ctx, err)
 	}
 	return g.respond(ctx, map[string]any{"count": len(leads), "leads": leads})
+}
+
+func contactInputs(args []GrowthContactArg) []growth.Contact {
+	out := make([]growth.Contact, 0, len(args))
+	for _, c := range args {
+		out = append(out, growth.Contact{Type: c.Type.String(), Value: c.Value})
+	}
+	return out
 }
 
 func parseSince(raw string) (time.Time, error) {

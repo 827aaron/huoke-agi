@@ -1,5 +1,5 @@
-// Package screening asks the Jev model, one yes/no judgment per message,
-// whether a message's sender may be a customer of the business. It knows nothing
+// Package screening asks the Jev model, in yes/no judgments per message, whether a
+// message's sender may be a customer of the business and which buying signals it shows. It knows nothing
 // about platforms: the caller passes the platform and source as plain text.
 package screening
 
@@ -45,12 +45,76 @@ type Message struct {
 	Text   string `json:"text"`
 }
 
-// Batch is a set of messages from one source judged against one business.
+// Batch is a set of messages from one source judged against one business. Signals are
+// asked of every message beside the customer question.
 type Batch struct {
 	Platform string    `json:"platform"`
 	Source   string    `json:"source"`
 	Business string    `json:"business"`
 	Messages []Message `json:"messages"`
+	Signals  []Signal  `json:"-"`
+}
+
+// Signal is one yes/no question about a message; Question has one %s, the message's key.
+type Signal struct {
+	Key      string
+	Question string
+	Criteria map[string]string
+}
+
+// Judgement is the probability that a message's sender is a potential customer, and
+// that it shows each signal asked, by key. A question missing from the answer is
+// missing from Signals; Customer is -1 when its own question went unanswered.
+type Judgement struct {
+	Customer float64
+	Signals  map[string]float64
+}
+
+// The buying signals of a player of a game, worded for any offer.
+const (
+	SignalPlayer = "player"
+	SignalPain   = "pain"
+	SignalPaying = "paying"
+	SignalMatch  = "match"
+)
+
+var Signals = []Signal{
+	{
+		Key: SignalPlayer,
+		Question: "Does the sender of `messages.%s` use, play or follow the kind of product the business in `business` " +
+			"offers, as its regular users or players do (talks about playing it, asks for guides, shares progress)?",
+		Criteria: map[string]string{
+			"true":  "The sender shows they use or play this kind of product themselves",
+			"false": "No sign the sender uses or plays this kind of product",
+		},
+	},
+	{
+		Key: SignalPain,
+		Question: "Is the sender of `messages.%s` unhappy with what they use now, bored with it, leaving it, " +
+			"or asking for an alternative like the offer in `business`?",
+		Criteria: map[string]string{
+			"true":  "Complaint, boredom, quitting, or a request for something similar or better",
+			"false": "No complaint and no search for an alternative",
+		},
+	},
+	{
+		Key: SignalPaying,
+		Question: "Does the sender of `messages.%s` mention paying for this kind of product: purchases, top-ups, " +
+			"subscriptions, in-app items, passes or memberships?",
+		Criteria: map[string]string{
+			"true":  "The sender mentions spending money on this kind of product",
+			"false": "No mention of spending",
+		},
+	},
+	{
+		Key: SignalMatch,
+		Question: "Does what the sender of `messages.%s` wants or uses fit the offer in `business`: " +
+			"its genre, platform and style?",
+		Criteria: map[string]string{
+			"true":  "Same or close genre, platform and style",
+			"false": "Unrelated or opposite to the offer",
+		},
+	},
 }
 
 // Client calls the System One HTTP API. The zero HTTP client and retry delay take
@@ -76,10 +140,9 @@ var criteria = map[string]string{
 	"false": "Spam, advertising, a bot, a seller or booster, a competitor, or nothing to do with the business",
 }
 
-// Judge returns, for each message id, the probability that its sender is a potential
-// customer, and the model version that answered. A message missing from the answer is
-// missing from the map.
-func (c *Client) Judge(ctx context.Context, b Batch) (map[string]float64, string, error) {
+// Judge returns the judgement of each message by id, and the model version that
+// answered. A message with no answer at all is missing from the map.
+func (c *Client) Judge(ctx context.Context, b Batch) (map[string]Judgement, string, error) {
 	body, ids := request(c.ResolvedModel(), b)
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -98,11 +161,22 @@ func (c *Client) Judge(ctx context.Context, b Batch) (map[string]float64, string
 		}
 		res, err := c.post(ctx, payload)
 		if err == nil {
-			out := make(map[string]float64, len(res.answers))
-			for qid, id := range ids {
-				if a, ok := res.answers[qid]; ok && a.Noul != nil {
-					out[id] = *a.Noul
+			out := make(map[string]Judgement, len(b.Messages))
+			for qid, q := range ids {
+				a, ok := res.answers[qid]
+				if !ok || a.Noul == nil {
+					continue
 				}
+				j, seen := out[q.id]
+				if !seen {
+					j = Judgement{Customer: -1, Signals: map[string]float64{}}
+				}
+				if q.signal == "" {
+					j.Customer = *a.Noul
+				} else {
+					j.Signals[q.signal] = *a.Noul
+				}
+				out[q.id] = j
 			}
 			return out, res.model, nil
 		}
@@ -176,20 +250,35 @@ func retryAfter(v string) time.Duration {
 	return min(time.Duration(n)*time.Second, maxRetryAfter)
 }
 
-// request asks one independent question per message over one shared state. Keys are
-// positional because a platform's message ids need not be valid keys.
-func request(model string, b Batch) (map[string]any, map[string]string) {
-	questions := make(map[string]any, len(b.Messages))
+type questionOf struct {
+	id     string
+	signal string
+}
+
+// request asks independent questions per message over one shared state, so the
+// messages are sent once however many questions there are. Keys are positional because
+// a platform's message ids need not be valid keys.
+func request(model string, b Batch) (map[string]any, map[string]questionOf) {
+	questions := make(map[string]any, len(b.Messages)*(1+len(b.Signals)))
 	messages := make(map[string]any, len(b.Messages))
-	ids := make(map[string]string, len(b.Messages))
+	ids := make(map[string]questionOf, len(questions))
 	for i, m := range b.Messages {
-		qid := fmt.Sprintf("m%d", i)
-		ids[qid] = m.ID
-		messages[qid] = m
-		questions[qid] = map[string]any{
+		key := fmt.Sprintf("m%d", i)
+		messages[key] = m
+		ids[key] = questionOf{id: m.ID}
+		questions[key] = map[string]any{
 			"type":         "noul",
-			"instructions": fmt.Sprintf(question, qid),
+			"instructions": fmt.Sprintf(question, key),
 			"criteria":     criteria,
+		}
+		for _, sig := range b.Signals {
+			qid := key + "_" + sig.Key
+			ids[qid] = questionOf{id: m.ID, signal: sig.Key}
+			questions[qid] = map[string]any{
+				"type":         "noul",
+				"instructions": fmt.Sprintf(sig.Question, key),
+				"criteria":     sig.Criteria,
+			}
 		}
 	}
 	return map[string]any{

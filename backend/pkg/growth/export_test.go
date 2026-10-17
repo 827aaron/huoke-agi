@@ -23,7 +23,10 @@ func TestExport_LeadsCSV_OneRowPerLeadWithItsFirstEvidence(t *testing.T) {
 				{Excerpt: "second"},
 			},
 		},
-		{ID: 2, Platform: "web", PlatformUserID: "forum.example.com/u/7", IdentityKind: "profile_url", Score: 7, Tier: "qualified"},
+		{
+			ID: 2, Platform: "web", PlatformUserID: "forum.example.com/u/7", IdentityKind: "profile_url", Score: 7, Tier: "qualified",
+			Contacts: []Contact{{Type: "email", Value: "ann@example.test"}, {Type: "messenger", Value: "WhatsApp +66 81 234 5678"}},
+		},
 	})
 
 	require.True(t, strings.HasPrefix(string(data), "\xEF\xBB\xBF"))
@@ -33,7 +36,9 @@ func TestExport_LeadsCSV_OneRowPerLeadWithItsFirstEvidence(t *testing.T) {
 	assert.Equal(t, []string{
 		"1", "telegram", "42", "gamer", "张三", "https://t.me/gamer", "9", "qualified", "player+3, quitting+3",
 		"想换个游戏, \"有推荐吗\"", "https://t.me/c/1/5", "2026-10-15T08:30:00Z", "2", "2026-10-16T09:00:00Z",
+		"platform account only",
 	}, rows[1])
 	assert.Equal(t, "https://forum.example.com/u/7", rows[2][5])
 	assert.Equal(t, "0", rows[2][12])
+	assert.Equal(t, "email: ann@example.test; messenger: WhatsApp +66 81 234 5678", rows[2][14])
 }

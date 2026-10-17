@@ -63,6 +63,7 @@ type screener struct {
 	threshold float64
 	// answeredBy is the model version that last answered, logged when it changes.
 	answeredBy string
+	now        func() time.Time
 }
 
 // screenerFor builds the owner's Jev client.
@@ -80,7 +81,7 @@ func (s *Service) screenerFor(ctx context.Context, userID int64) (*screener, err
 			threshold = t
 		}
 	}
-	return &screener{client: newJevClient(cfg), threshold: threshold}, nil
+	return &screener{client: newJevClient(cfg), threshold: threshold, now: time.Now}, nil
 }
 
 // jevBackoff is the first retry delay after a 429 or 529; a variable so tests run fast.
@@ -107,8 +108,9 @@ func (s *Service) savedValues(ctx context.Context, userID int64, kind string) (m
 	return stored.Values, true
 }
 
-// screen keeps the messages Jev judges likely to come from a customer. A batch Jev
-// fails on is kept whole, since a missed buyer costs more than scoring a few extra
+// screen keeps the messages Jev judges likely to come from a customer and scores each
+// by the owner's weights, dropping those below the watchlist line. A batch Jev fails on
+// is kept whole and unscored, since a missed buyer costs more than scoring a few extra
 // messages; a refused key fails the read.
 func (s *Service) screen(
 	ctx context.Context,
@@ -121,12 +123,18 @@ func (s *Service) screen(
 	if len(msgs) == 0 {
 		return msgs, nil
 	}
-	business := s.businessSummary(ctx, userID)
+	var profile Profile
+	if v, err := s.GetProfile(ctx, userID); err == nil {
+		profile = v.Profile
+	}
+	scoring := profile.ScoringOrDefault()
+	business := businessSummary(profile)
 	kept := make([]MessageView, 0, len(msgs))
 	for start := 0; start < len(msgs); start += screenBatch {
 		batch := msgs[start:min(start+screenBatch, len(msgs))]
-		probs, model, err := sc.client.Judge(ctx, screening.Batch{
+		judged, model, err := sc.client.Judge(ctx, screening.Batch{
 			Platform: platform, Source: source, Business: business, Messages: screenMessages(batch),
+			Signals: screening.Signals,
 		})
 		switch {
 		case errors.Is(err, screening.ErrUnauthorized):
@@ -146,12 +154,82 @@ func (s *Service) screen(
 			}).Info("pre-screen model")
 		}
 		for _, m := range batch {
-			if p, ok := probs[m.MessageID]; !ok || p >= sc.threshold {
+			j, ok := judged[m.MessageID]
+			if !ok {
 				kept = append(kept, m)
+				continue
 			}
+			if j.Customer >= 0 && j.Customer < sc.threshold {
+				continue
+			}
+			if len(j.Signals) > 0 {
+				m.Score, m.Signals = scoreMessage(scoring, j.Signals, m.Time, sc.now())
+				if m.Score < scoring.Watchlist {
+					continue
+				}
+				m.Tier = scoring.tier(m.Score)
+				if err := s.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
+					UserID: userID, SourceID: sourceID, MessageID: m.MessageID, Score: int32(m.Score), Signals: m.Signals,
+				}); err != nil {
+					return nil, fmt.Errorf("failed to store the score of message %s: %w", m.MessageID, err)
+				}
+			}
+			kept = append(kept, m)
 		}
 	}
 	return kept, nil
+}
+
+// signalYes is the probability from which Jev's answer counts as yes.
+const signalYes = 0.5
+
+// scoreMessage adds the weight of every signal Jev answered yes to, and the active
+// weight for a recent message; the text lists what fired, like "player+3, 7d+2 = 5".
+func scoreMessage(sc Scoring, signals map[string]float64, at, now time.Time) (int, string) {
+	w := sc.Weights
+	var (
+		score int
+		fired []string
+	)
+	add := func(label string, weight int) {
+		if weight > 0 {
+			score += weight
+			fired = append(fired, fmt.Sprintf("%s+%d", label, weight))
+		}
+	}
+	for _, sig := range []struct {
+		key    string
+		weight int
+	}{
+		{screening.SignalPlayer, w.Player}, {screening.SignalPain, w.Pain},
+		{screening.SignalPaying, w.Paying}, {screening.SignalMatch, w.Match},
+	} {
+		if signals[sig.key] >= signalYes {
+			add(sig.key, sig.weight)
+		}
+	}
+	switch age := now.Sub(at); {
+	case at.IsZero():
+	case age <= 7*24*time.Hour:
+		add("7d", w.Active)
+	case age <= 30*24*time.Hour:
+		add("30d", w.Active/2)
+	}
+	if len(fired) == 0 {
+		return 0, "no signal"
+	}
+	return score, fmt.Sprintf("%s = %d", strings.Join(fired, ", "), score)
+}
+
+func (sc Scoring) tier(score int) string {
+	switch {
+	case score >= sc.Qualified:
+		return TierQualified
+	case score >= sc.Watchlist:
+		return TierWatchlist
+	default:
+		return ""
+	}
 }
 
 func screenMessages(batch []MessageView) []screening.Message {
@@ -176,12 +254,7 @@ func screenMessages(batch []MessageView) []screening.Message {
 
 // businessSummary is the profile as Jev reads it; signal words and exclusions are
 // hints to its judgment, not a filter.
-func (s *Service) businessSummary(ctx context.Context, userID int64) string {
-	v, err := s.GetProfile(ctx, userID)
-	if err != nil {
-		return ""
-	}
-	p := v.Profile
+func businessSummary(p Profile) string {
 	var b strings.Builder
 	line := func(label, value string) {
 		if value = strings.Join(strings.Fields(value), " "); value != "" {

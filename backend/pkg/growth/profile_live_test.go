@@ -177,3 +177,46 @@ func TestProfile_WithProfile_PutsTheCompactBlockFirstOnce(t *testing.T) {
 	assert.True(t, strings.HasSuffix(again, "\n\nfind 50 players"))
 	assert.Len(t, res, 1, "the file is attached once")
 }
+
+func TestProfile_SaveProfile_ChecksTheScoringAndTheContactTypes(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+
+	saved, err := w.svc.SaveProfile(ctx, w.user, gameProfile())
+	require.NoError(t, err)
+	assert.Equal(t, []string{"platform_handle"}, saved.ContactTypes)
+	assert.Equal(t, DefaultScoring, saved.ScoringOrDefault())
+
+	tests := []struct {
+		name    string
+		edit    func(p *Profile)
+		wantErr string
+	}{
+		{"an unknown contact type", func(p *Profile) { p.ContactTypes = []string{"fax"} }, `contact type "fax"`},
+		{"a negative weight", func(p *Profile) {
+			p.Scoring = &Scoring{Weights: ScoringWeights{Player: -1, Match: 9}, Qualified: 7, Watchlist: 4}
+		}, "between 0 and 10"},
+		{"a watchlist line at the qualified line", func(p *Profile) {
+			p.Scoring = &Scoring{Weights: DefaultScoring.Weights, Qualified: 4, Watchlist: 4}
+		}, "1 <= watchlist < qualified"},
+		{"weights that never reach the qualified line", func(p *Profile) {
+			p.Scoring = &Scoring{Weights: ScoringWeights{Player: 1, Match: 1}, Qualified: 7, Watchlist: 1}
+		}, "no lead could qualify"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := gameProfile()
+			tt.edit(&p)
+			_, err := w.svc.SaveProfile(ctx, w.user, p)
+			assert.ErrorIs(t, err, ErrInvalidProfile)
+			assert.ErrorContains(t, err, tt.wantErr)
+		})
+	}
+
+	p := gameProfile()
+	p.ContactTypes = []string{" Phone", "email", "phone"}
+	saved, err = w.svc.SaveProfile(ctx, w.user, p)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"phone", "email"}, saved.ContactTypes)
+	assert.Contains(t, saved.Compact(), "Contacts to find: phone, email")
+}
