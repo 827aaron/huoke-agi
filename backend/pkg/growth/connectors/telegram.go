@@ -101,6 +101,7 @@ const (
 	defaultPageSize    = 100
 	maxPageSize        = 100
 	maxKnownUsers      = 50000
+	peerFloodRest      = 24 * time.Hour
 )
 
 var (
@@ -915,6 +916,9 @@ func errorOf(err error) error {
 		return fmt.Errorf("%w: telegram %s", ErrNotFound, rpc.Type)
 	case rpc.Code == 420 && rpc.Argument > 0:
 		return &FloodWaitError{Wait: time.Duration(rpc.Argument) * time.Second}
+	case rpc.IsOneOf("PEER_FLOOD"):
+		// Telegram's anti-spam limit on the account names no wait; rest it a day.
+		return &FloodWaitError{Wait: peerFloodRest}
 	}
 	return fmt.Errorf("telegram: %w", err)
 }

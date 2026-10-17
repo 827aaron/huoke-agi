@@ -733,6 +733,8 @@ func TestTelegram_ErrorOf(t *testing.T) {
 	assert.Equal(t, 30*time.Second, flood.Wait)
 	require.ErrorAs(t, errorOf(&joinPacingError{wait: 95 * time.Second}), &flood)
 	assert.Equal(t, 95*time.Second, flood.Wait)
+	require.ErrorAs(t, errorOf(tgerr.New(400, "PEER_FLOOD")), &flood)
+	assert.Equal(t, 24*time.Hour, flood.Wait)
 
 	other := errorOf(tgerr.New(400, "CHAT_WRITE_FORBIDDEN"))
 	assert.NotErrorIs(t, other, ErrNotFound)
