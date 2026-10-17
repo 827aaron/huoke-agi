@@ -1,9 +1,7 @@
 name: "\U0001F41B Bug report"
-description: "Report a bug in PentAGI"
+description: "Report a bug in KeLai AGI"
 title: "[Bug]: "
 labels: ["bug"]
-assignees:
-  - asdek
 body:
   - type: markdown
     attributes:
@@ -13,12 +11,12 @@ body:
     id: component
     attributes:
       label: Affected Component
-      description: Which component of PentAGI is affected by this bug?
+      description: Which component of KeLai AGI is affected by this bug?
       multiple: true
       options:
         - Core Services (Frontend UI/Backend API)
         - AI Agents (Researcher/Developer/...)
-        - Security Tools Integration
+        - Lead Sources and Accounts
         - Memory System (Vector Store/Knowledge Base)
         - Monitoring Stack Integration (Grafana/OpenTelemetry)
         - Analytics Platform Integration (Langfuse)
@@ -33,7 +31,7 @@ body:
       description: Please provide a clear and concise description of the bug, including expected and actual behavior.
       placeholder: |
         What happened:
-        - Actual behavior: When executing a penetration test against [target], the AI agent [behavior]
+        - Actual behavior: When running a task for [goal], the AI agent [behavior]
         
         What should happen:
         - Expected behavior: The system should [expected outcome]
@@ -48,7 +46,7 @@ body:
       label: Steps to Reproduce
       description: Please provide detailed steps to reproduce the bug.
       placeholder: |
-        1. Access PentAGI Web UI at [relative URL]
+        1. Access KeLai AGI Web UI at [relative URL]
         2. Start a new flow with parameters [...] or prompt [...]
         3. Configure target system as [...]
         4. Observe AI agent behavior in [...] or log from Langfuse
@@ -60,7 +58,7 @@ body:
       label: System Configuration
       description: Please provide details about your setup
       placeholder: |
-        PentAGI Version: [e.g., latest from Docker Hub]
+        KeLai AGI Version: [e.g., latest from Docker Hub]
         Deployment Type:
         - [ ] Docker Compose
         - [ ] Custom Deployment
@@ -121,6 +119,6 @@ body:
         - label: I have checked that this issue hasn't been already reported
         - label: I have provided all relevant configuration files (with sensitive data removed)
         - label: I have included relevant logs and error messages
-        - label: I am running the latest version of PentAGI
+        - label: I am running the latest version of KeLai AGI
     validations:
       required: true

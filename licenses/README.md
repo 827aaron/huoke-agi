@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-This directory contains license information for all PentAGI dependencies.
+This directory contains license information for all KeLai AGI dependencies.
 
 ## Quick Start
 
@@ -27,7 +27,7 @@ Run the generator script to create/update license reports (run from project root
 
 ## License
 
-PentAGI is licensed under **MIT License**.
+KeLai AGI is licensed under **MIT License**.
 
 All third-party dependencies use MIT-compatible licenses:
 - MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MPL-2.0, 0BSD
