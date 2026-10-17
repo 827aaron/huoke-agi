@@ -341,6 +341,9 @@ func (s *Service) UpdateSchedule(ctx context.Context, userID, id int64, in Sched
 		enabled = *in.Enabled
 	}
 	next, ok := sc.next(time.Now())
+	if sc.days == ScheduleOnce && !ok {
+		return ScheduleView{}, fmt.Errorf("%w: %s %s is already past", ErrInvalidSchedule, in.Date, in.StartTime)
+	}
 
 	row, err := s.db.UpdateGrowthSchedule(ctx, database.UpdateGrowthScheduleParams{
 		ID:          id,
@@ -469,7 +472,9 @@ func (s *Service) FailedSchedule(ctx context.Context, st ScheduledStart, cause e
 }
 
 // CloseOverdueRounds delivers what every round past its end time has qualified, short of
-// the target or not, and mails it as a delivery by the agents would.
+// the target or not, topping up a round the agents delivered in part, and mails it as a
+// delivery by the agents would. A round is returned on every pass until DeadlineHandled
+// marks it, so a task that could not be stopped is tried again.
 func (s *Service) CloseOverdueRounds(ctx context.Context, now time.Time) ([]ClosedRound, error) {
 	runs, err := s.db.GetOverdueGrowthRuns(ctx, now)
 	if err != nil {
@@ -505,4 +510,12 @@ func (s *Service) CloseOverdueRounds(ctx context.Context, now time.Time) ([]Clos
 		out = append(out, c)
 	}
 	return out, nil
+}
+
+// DeadlineHandled marks a round whose task has been stopped at its end time, or was not running.
+func (s *Service) DeadlineHandled(ctx context.Context, runID int64) error {
+	if err := s.db.CloseGrowthRunDeadline(ctx, runID); err != nil {
+		return fmt.Errorf("failed to mark round %d closed at its end time: %w", runID, err)
+	}
+	return nil
 }

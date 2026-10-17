@@ -113,8 +113,8 @@ type LeadFilter struct {
 	Since time.Time
 	// HasContact keeps leads with (true) or without (false) a contact beside the platform account.
 	HasContact *bool
-	Limit  int
-	Offset int
+	Limit      int
+	Offset     int
 }
 
 // UpsertLeads stores candidates with their evidence. A person is one lead per customer

@@ -36,7 +36,7 @@ var versionSegment = regexp.MustCompile(`^v\d+$`)
 // has the same provider, else the .env one's.
 func (s *Service) ListModels(ctx context.Context, userID int64, kind, provider string, values map[string]string) ([]ModelOption, error) {
 	spec, ok := settingSpecs[kind]
-	if !ok || (kind != SettingLLM && kind != SettingScreening) {
+	if !ok || (kind != SettingLLM && kind != SettingScreening && kind != SettingEmbedding) {
 		return nil, fmt.Errorf("%w: %q has no model list", ErrInvalidSetting, kind)
 	}
 	provider = strings.ToLower(strings.TrimSpace(provider))
@@ -70,10 +70,30 @@ func (s *Service) ListModels(ctx context.Context, userID int64, kind, provider s
 
 	var (
 		endpoint, key = "", v["api_key"]
+		listURL       string
 		anthropic     bool
 		keep          = func(string) bool { return true }
 	)
 	switch kind {
+	case SettingEmbedding:
+		endpoint = v["server_url"]
+		if key == "" {
+			key = s.reusedEmbeddingKey(ctx, userID, provider)
+		}
+		switch provider {
+		case embeddingOpenRouter:
+			if endpoint == "" {
+				endpoint = OpenRouterEmbeddingURL
+			}
+			listURL = strings.TrimRight(endpoint, "/") + "/embeddings/models"
+		case "openai":
+			if endpoint == "" {
+				endpoint = "https://api.openai.com/v1"
+			}
+			keep = func(id string) bool { return strings.Contains(id, "embedding") }
+		default:
+			return nil, fmt.Errorf("%w: %s embedding models are typed by name", ErrInvalidSetting, provider)
+		}
 	case SettingScreening:
 		endpoint = v["api_url"]
 		switch provider {
@@ -105,7 +125,10 @@ func (s *Service) ListModels(ctx context.Context, userID int64, kind, provider s
 		return nil, fmt.Errorf("%w: the model list needs the API key", ErrInvalidSetting)
 	}
 
-	models, err := s.fetchModels(ctx, modelsURL(endpoint), key, anthropic)
+	if listURL == "" {
+		listURL = modelsURL(endpoint)
+	}
+	models, err := s.fetchModels(ctx, listURL, key, anthropic)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrModelList, err)
 	}
@@ -117,6 +140,25 @@ func (s *Service) ListModels(ctx context.Context, userID int64, kind, provider s
 	}
 	slices.SortFunc(out, func(a, b ModelOption) int { return strings.Compare(a.ID, b.ID) })
 	return out, nil
+}
+
+// reusedEmbeddingKey is the key the embedder runs with when the embedding setting gives
+// none: the LLM's OpenAI key, or its OpenRouter key.
+func (s *Service) reusedEmbeddingKey(ctx context.Context, userID int64, provider string) string {
+	cfg, err := s.ConfigFor(ctx, userID)
+	if err != nil {
+		return ""
+	}
+	switch {
+	case provider == embeddingOpenRouter && isOpenRouter(cfg.EmbeddingURL):
+		return cfg.EmbeddingKey
+	case provider == "openai" && cfg.EmbeddingProvider == "openai" && !isOpenRouter(cfg.EmbeddingURL):
+		if cfg.EmbeddingKey != "" {
+			return cfg.EmbeddingKey
+		}
+		return cfg.OpenAIKey
+	}
+	return ""
 }
 
 // modelsURL appends the OpenAI-style /models to a base that ends in its API version,

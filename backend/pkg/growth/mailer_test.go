@@ -58,7 +58,7 @@ func decodePart(t *testing.T, part *multipart.Part) string {
 }
 
 func TestMailer_DeliverySummary_CountsScores(t *testing.T) {
-	subject, body := deliverySummary("Game X", []LeadView{{Score: 9}, {Score: 7}, {Score: 9}}, 50, time.Time{})
+	subject, body := deliverySummary("Game X", []LeadView{{Score: 9}, {Score: 7}, {Score: 9}}, 50, time.Time{}, "")
 	assert.Equal(t, "Game X: 3 leads delivered", subject)
 	assert.Contains(t, body, "Leads delivered: 3 (target 50)")
 	assert.Contains(t, body, "  score 9: 2\n  score 7: 1\n")
@@ -67,6 +67,15 @@ func TestMailer_DeliverySummary_CountsScores(t *testing.T) {
 
 func TestMailer_DeliverySummary_SaysTheRoundClosedAtTheEndTime(t *testing.T) {
 	deadline := time.Date(2026, 10, 19, 6, 0, 0, 0, time.FixedZone("ICT", 7*3600))
-	_, body := deliverySummary("Game X", []LeadView{{Score: 9}}, 50, deadline)
+	_, body := deliverySummary("Game X", []LeadView{{Score: 9}}, 50, deadline, "English")
 	assert.Contains(t, body, "Delivered at the schedule's end time, 2026-10-18 23:00 UTC: 1 of the target 50.\n")
+}
+
+func TestMailer_DeliverySummary_WritesInTheCustomersLanguage(t *testing.T) {
+	deadline := time.Date(2026, 10, 18, 23, 0, 0, 0, time.UTC)
+	subject, body := deliverySummary("", []LeadView{{Score: 9}, {Score: 9}}, 50, deadline, "Chinese")
+	assert.Equal(t, "获客任务：已交付 2 条线索", subject)
+	assert.Equal(t, "业务：获客任务\n已交付线索：2 条（目标 50 条）\n"+
+		"已按定时结束时间 2026-10-18 23:00（UTC）交付：2 条，目标 50 条。\n\n"+
+		"分数分布：\n  9 分：2 条\n\n完整名单和证据见附件 CSV。\n", body)
 }

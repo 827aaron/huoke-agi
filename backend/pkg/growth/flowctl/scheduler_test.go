@@ -22,6 +22,9 @@ type fakeSchedules struct {
 	calls   *[]string
 	started map[int64]int64
 	failed  map[int64]string
+	handled []int64
+	// openErr fails opening the round of every start.
+	openErr error
 }
 
 func (f *fakeSchedules) DueStarts(ctx context.Context, _ time.Time) ([]growth.ScheduledStart, error) {
@@ -30,7 +33,15 @@ func (f *fakeSchedules) DueStarts(ctx context.Context, _ time.Time) ([]growth.Sc
 }
 
 func (f *fakeSchedules) StartedSchedule(ctx context.Context, st growth.ScheduledStart, flowID int64) error {
+	if f.openErr != nil {
+		return f.openErr
+	}
 	f.started[st.ScheduleID] = flowID
+	return ctx.Err()
+}
+
+func (f *fakeSchedules) DeadlineHandled(ctx context.Context, runID int64) error {
+	f.handled = append(f.handled, runID)
 	return ctx.Err()
 }
 
@@ -81,6 +92,8 @@ type schedulingController struct {
 	running map[int64]controller.FlowWorker
 	stopped []int64
 	calls   *[]string
+	// stopFails is how many StopFlow calls fail before one succeeds.
+	stopFails int
 }
 
 func (s *schedulingController) CreateFlow(
@@ -104,6 +117,10 @@ func (s *schedulingController) GetFlow(_ context.Context, flowID int64) (control
 
 func (s *schedulingController) StopFlow(ctx context.Context, flowID int64) error {
 	*s.calls = append(*s.calls, "stop")
+	if s.stopFails > 0 {
+		s.stopFails--
+		return errors.New("flow is busy")
+	}
 	s.stopped = append(s.stopped, flowID)
 	return ctx.Err()
 }
@@ -155,5 +172,47 @@ func TestScheduler_Tick_LogsTheEndTimeDeliveryInTheTasksLanguageThenStopsIt(t *t
 	require.Len(t, msglog.msgs, 1)
 	assert.Equal(t, loggedMsg{database.MsglogTypeReport, "已到结束时间 2026-10-19 06:00：交付 2 条（目标 5 条），任务已停止。"}, msglog.msgs[0])
 	assert.Equal(t, []int64{9}, fc.stopped, "a task that is not running is not stopped")
+	assert.Equal(t, []int64{3, 4}, svc.handled)
 	assert.Equal(t, []string{"close", "stop", "due", "create"}, calls, "a round ends before the next one starts")
+}
+
+func TestScheduler_Tick_RetriesAStopThatFailedWithoutLoggingTwice(t *testing.T) {
+	var calls []string
+	msglog := &recordingMsgLog{}
+	svc := &fakeSchedules{
+		closed: []growth.ClosedRound{{RunID: 3, UserID: 7, FlowID: 9, Target: 5, Delivered: 2, Timezone: "UTC", Language: "english",
+			Deadline: time.Date(2026, 10, 18, 23, 0, 0, 0, time.UTC)}},
+		calls: &calls, started: map[int64]int64{}, failed: map[int64]string{},
+	}
+	fc := &schedulingController{
+		calls:     &calls,
+		stopFails: 1,
+		running:   map[int64]controller.FlowWorker{9: &contextWorker{fc: &controller.FlowContext{MsgLog: msglog}}},
+	}
+	s := NewScheduler(fc, svc, knownProviders)
+
+	s.Tick(context.Background())
+	assert.Empty(t, fc.stopped)
+	assert.Empty(t, svc.handled, "a round whose task is still running stays open")
+
+	s.Tick(context.Background())
+	assert.Equal(t, []int64{9}, fc.stopped)
+	assert.Equal(t, []int64{3}, svc.handled)
+	assert.Equal(t, []loggedMsg{{database.MsglogTypeReport,
+		"The end time 2026-10-18 23:00 was reached: 2 of the target 5 leads were delivered, and the task was stopped."}}, msglog.msgs)
+}
+
+func TestScheduler_Tick_StopsATaskWhoseRoundCouldNotBeOpened(t *testing.T) {
+	var calls []string
+	svc := &fakeSchedules{
+		starts:  []growth.ScheduledStart{{ScheduleID: 1, UserID: 7, ProviderName: "openai-main", Input: "find 50"}},
+		openErr: errors.New("failed to open the round of task 41: connection reset"),
+		calls:   &calls, started: map[int64]int64{}, failed: map[int64]string{},
+	}
+	fc := &schedulingController{calls: &calls}
+
+	NewScheduler(fc, svc, knownProviders).Tick(context.Background())
+
+	assert.Equal(t, []int64{41}, fc.stopped)
+	assert.Equal(t, map[int64]string{1: "failed to open the round of task 41: connection reset"}, svc.failed)
 }

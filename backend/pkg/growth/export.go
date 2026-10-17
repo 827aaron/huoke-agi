@@ -3,6 +3,7 @@ package growth
 import (
 	"bytes"
 	"encoding/csv"
+	"pentagi/pkg/templates"
 	"strconv"
 	"strings"
 	"time"
@@ -14,12 +15,11 @@ var leadsCSVHeader = []string{
 	"evidence_count", "delivered_at", "contacts",
 }
 
-// platformOnly fills the contacts cell of a lead reachable through its platform account alone.
-const platformOnly = "platform account only"
-
-// LeadsCSV renders leads one row each, with the first piece of evidence inline. It starts
-// with a UTF-8 byte order mark because Excel otherwise opens Chinese text as mojibake.
-func LeadsCSV(leads []LeadView) []byte {
+// LeadsCSV renders leads one row each, with the first piece of evidence inline, and the
+// text it writes itself in lang. It starts with a UTF-8 byte order mark because Excel
+// otherwise opens Chinese text as mojibake.
+func LeadsCSV(leads []LeadView, lang string) []byte {
+	platformOnly := templates.NoticeText(templates.NoticeCSVPlatformOnly, lang)
 	var buf bytes.Buffer
 	buf.WriteString("\xEF\xBB\xBF")
 	w := csv.NewWriter(&buf)
@@ -28,7 +28,7 @@ func LeadsCSV(leads []LeadView) []byte {
 		row := []string{
 			strconv.FormatInt(l.ID, 10), l.Platform, l.PlatformUserID, l.Username, l.DisplayName,
 			profileLink(l), strconv.Itoa(l.Score), l.Tier, l.MatchReason, "", "", "",
-			strconv.Itoa(len(l.Evidence)), formatTime(l.DeliveredAt), contactsCell(l.Contacts),
+			strconv.Itoa(len(l.Evidence)), formatTime(l.DeliveredAt), contactsCell(l.Contacts, platformOnly),
 		}
 		if len(l.Evidence) > 0 {
 			e := l.Evidence[0]
@@ -45,7 +45,8 @@ func LeadsCSV(leads []LeadView) []byte {
 	return buf.Bytes()
 }
 
-func contactsCell(contacts []Contact) string {
+// contactsCell gives platformOnly for a lead reachable through its platform account alone.
+func contactsCell(contacts []Contact, platformOnly string) string {
 	if len(contacts) == 0 {
 		return platformOnly
 	}

@@ -226,7 +226,7 @@ func (s *Service) deliverRun(ctx context.Context, scope Scope, run database.Grow
 
 	if need > 0 {
 		candidates, err := s.db.GetDeliverableLeads(ctx, database.GetDeliverableLeadsParams{
-			UserID: scope.UserID,
+			UserID:     scope.UserID,
 			FlowID:     scope.flowID(),
 			HasContact: opt.HasContact,
 			Lim:        int64(need),
@@ -300,7 +300,9 @@ func (s *Service) deliverRun(ctx context.Context, scope Scope, run database.Grow
 		Leads:     views,
 		Progress:  p,
 	}
-	if newlyDelivered {
+	// At the end time the customer gets a summary even when nothing new was delivered,
+	// unless an earlier delivery of the round has mailed one already.
+	if newlyDelivered || (opt.atDeadline && run.NotifyStatus == "") {
 		var deadline time.Time
 		if opt.atDeadline {
 			deadline = run.DeadlineAt.Time

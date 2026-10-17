@@ -5,9 +5,12 @@ package growth
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"strconv"
 	"strings"
 	"testing"
@@ -210,11 +213,11 @@ func TestSettings_SendTestEmail_GoesToTheLoginAddressByDefault(t *testing.T) {
 	sink := startSMTPSink(t)
 	w.saveSink(t, sink, "")
 
-	to, err := w.svc.SendTestEmail(ctx, w.user, "")
+	to, err := w.svc.SendTestEmail(ctx, w.user, "", "")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"owner@example.test"}, to)
 
-	_, err = w.svc.SendTestEmail(ctx, w.user, "qa@example.test")
+	_, err = w.svc.SendTestEmail(ctx, w.user, "qa@example.test", "")
 	require.NoError(t, err)
 
 	msgs := sink.Messages()
@@ -246,7 +249,7 @@ func TestSettings_SendTestEmail_UsesThePlatformServerWhenOnlyRecipientsAreSaved(
 	assert.True(t, *v.PlatformSMTP)
 	assert.True(t, *settingOf(t, w, SettingEmail).PlatformSMTP)
 
-	to, err := w.svc.SendTestEmail(ctx, w.user, "")
+	to, err := w.svc.SendTestEmail(ctx, w.user, "", "")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"qa@example.test"}, to)
 	msgs := sink.Messages()
@@ -477,4 +480,86 @@ func TestSettings_ConfigFor_PointsJevAtTheChosenProvider(t *testing.T) {
 	assert.ErrorContains(t, err, "needs api_url")
 	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningCustom, map[string]string{"api_key": "k", "api_url": "ftp://jev.example.test"})
 	assert.ErrorContains(t, err, "api_url must be an http(s) URL")
+}
+
+func TestSettings_ConfigFor_SendsEmbeddingsThroughOpenRouter(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+
+	_, err := w.svc.SaveSetting(ctx, w.user, SettingLLM, "custom", map[string]string{
+		"api_key": "sk-or-llm", "server_url": "https://openrouter.ai/api/v1", "model": "deepseek/deepseek-chat",
+	})
+	require.NoError(t, err)
+	cfg, err := w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"openai", "https://openrouter.ai/api/v1", "openai/text-embedding-3-small", "sk-or-llm"},
+		[]string{cfg.EmbeddingProvider, cfg.EmbeddingURL, cfg.EmbeddingModel, cfg.EmbeddingKey},
+		"an LLM on OpenRouter lends its key to the embedder")
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingEmbedding, embeddingOpenRouter, map[string]string{"model": "openai/text-embedding-3-large"})
+	require.NoError(t, err)
+	cfg, err = w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"openai", "https://openrouter.ai/api/v1", "openai/text-embedding-3-large", "sk-or-llm"},
+		[]string{cfg.EmbeddingProvider, cfg.EmbeddingURL, cfg.EmbeddingModel, cfg.EmbeddingKey})
+	assert.Equal(t, embeddingOpenRouter, settingOf(t, w, SettingEmbedding).Provider)
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingEmbedding, embeddingOpenRouter, map[string]string{"api_key": "sk-or-embed"})
+	require.NoError(t, err)
+	cfg, err = w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, "sk-or-embed", cfg.EmbeddingKey)
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingEmbedding, "ollama", map[string]string{"server_url": "http://ollama:11434"})
+	require.NoError(t, err)
+	cfg, err = w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ollama", "http://ollama:11434", "", ""},
+		[]string{cfg.EmbeddingProvider, cfg.EmbeddingURL, cfg.EmbeddingModel, cfg.EmbeddingKey},
+		"another provider drops what OpenRouter set")
+}
+
+func TestSettings_ListSettings_GivesEveryKindAProvidersArray(t *testing.T) {
+	w := newWorld(t)
+	w.savePace(t, nil)
+
+	views, err := w.svc.ListSettings(context.Background(), w.user)
+	require.NoError(t, err)
+	for _, v := range views {
+		raw, err := json.Marshal(v)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"providers":[`, v.Kind)
+	}
+	saved, err := json.Marshal(settingOf(t, w, SettingTelegram))
+	require.NoError(t, err)
+	assert.Contains(t, string(saved), `"providers":[]`)
+}
+
+func TestSettings_SendTestEmail_WritesInTheLanguageOfTheNewestTask(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	sink := startSMTPSink(t)
+	w.saveSink(t, sink, "")
+	scope := w.seedTask(t)
+	_, err := w.db.Exec(`UPDATE flows SET language = 'Chinese' WHERE id = $1`, scope.FlowID)
+	require.NoError(t, err)
+
+	_, err = w.svc.SendTestEmail(ctx, w.user, "", "")
+	require.NoError(t, err)
+	_, err = w.svc.SendTestEmail(ctx, w.user, "", "English")
+	require.NoError(t, err)
+
+	msgs := sink.Messages()
+	require.Len(t, msgs, 2)
+	assert.Equal(t, "线索交付邮件测试", mailSubject(t, msgs[0].Data))
+	assert.Equal(t, "Lead delivery email test", mailSubject(t, msgs[1].Data))
+}
+
+func mailSubject(t *testing.T, data string) string {
+	t.Helper()
+	msg, err := mail.ReadMessage(strings.NewReader(data))
+	require.NoError(t, err)
+	subject, err := new(mime.WordDecoder).DecodeHeader(msg.Header.Get("Subject"))
+	require.NoError(t, err)
+	return subject
 }

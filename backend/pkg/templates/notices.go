@@ -7,8 +7,8 @@ import (
 )
 
 // Notice is a user-visible line the backend writes itself, where no model is at hand to
-// write it in the conversation's language. Every language's text takes the same verbs in
-// the same order: one %s, except deadline_delivered's time, delivered and target.
+// write it in the conversation's language. Every language's text of a notice takes the
+// same verbs in the same order.
 type Notice string
 
 const (
@@ -16,7 +16,27 @@ const (
 	NoticeToolFailed        Notice = "tool_failed"
 	NoticeToolStopped       Notice = "tool_stopped"
 	NoticeDeadlineDelivered Notice = "deadline_delivered"
+
+	NoticeMailSubject         Notice = "mail_subject"
+	NoticeMailDefaultBusiness Notice = "mail_default_business"
+	NoticeMailBusiness        Notice = "mail_business"
+	NoticeMailDelivered       Notice = "mail_delivered"
+	NoticeMailAtDeadline      Notice = "mail_at_deadline"
+	NoticeMailScoreHeader     Notice = "mail_score_header"
+	NoticeMailScoreLine       Notice = "mail_score_line"
+	NoticeMailAttached        Notice = "mail_attached"
+	NoticeMailTestSubject     Notice = "mail_test_subject"
+	NoticeMailTestBody        Notice = "mail_test_body"
+	NoticeCSVPlatformOnly     Notice = "csv_platform_only"
 )
+
+// Notices lists every notice, for the check that each has every language.
+var Notices = []Notice{
+	NoticeAssistantFailed, NoticeToolFailed, NoticeToolStopped, NoticeDeadlineDelivered,
+	NoticeMailSubject, NoticeMailDefaultBusiness, NoticeMailBusiness, NoticeMailDelivered, NoticeMailAtDeadline,
+	NoticeMailScoreHeader, NoticeMailScoreLine, NoticeMailAttached, NoticeMailTestSubject, NoticeMailTestBody,
+	NoticeCSVPlatformOnly,
+}
 
 //go:embed notices/notices.json
 var noticesJSON []byte
