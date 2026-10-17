@@ -37,6 +37,7 @@ export function loadConfig(env = process.env) {
     locale: env.BROWSER_LOCALE || 'en-US',
     timezoneId: env.BROWSER_TIMEZONE || '',
     proxy: env.BROWSER_PROXY || '',
+    geoLookupUrl: env.BROWSER_GEO_LOOKUP_URL || 'https://ipinfo.io/json',
     navigationTimeoutMs: int(env, 'BROWSER_NAV_TIMEOUT_MS', 45000),
     actionDelayMinMs: int(env, 'BROWSER_ACTION_DELAY_MIN_MS', 1500),
     actionDelayMaxMs: int(env, 'BROWSER_ACTION_DELAY_MAX_MS', 4500),

@@ -10,6 +10,7 @@ import { loadConfig } from '../src/config.js';
 import { createServer } from '../src/server.js';
 import { SessionManager } from '../src/sessions.js';
 import { PLATFORMS } from '../src/detect.js';
+import { distance } from '../src/geo.js';
 
 const TOKEN = 'test-token';
 
@@ -59,7 +60,16 @@ const TIKTOK_VIDEO = `<!doctype html><html><head>
 <script>fetch('/api/comment/list/?aweme_id=123&cursor=0').then((r) => r.json());</script>
 </body></html>`;
 
+const WHERE = `<!doctype html><pre id="me">{}</pre><script>
+navigator.geolocation.getCurrentPosition(
+  (p) => { document.getElementById('me').textContent = JSON.stringify({ latitude: p.coords.latitude, longitude: p.coords.longitude }); },
+  (e) => { document.getElementById('me').textContent = JSON.stringify({ error: e.code }); },
+  { timeout: 2000 },
+);
+</script>`;
+
 const PAGES = {
+  '/where': WHERE,
   '/@creator/video/123': TIKTOK_VIDEO,
   '/@creator/video/124': '<!doctype html><div class="captcha">Drag the slider to fit the puzzle</div>',
   '/foryou': TIKTOK_VIDEO,
@@ -145,6 +155,7 @@ async function startService() {
     BROWSER_ACTION_DELAY_MAX_MS: '0',
     BROWSER_RATE_LIMIT_BACKOFF_SEC: '600',
     BROWSER_NAV_TIMEOUT_MS: '15000',
+    BROWSER_GEO_LOOKUP_URL: 'http://geo.invalid/json',
   });
   manager = new SessionManager(cfg);
   service = createServer(cfg, manager);
@@ -497,6 +508,8 @@ describe('per-account fingerprint', () => {
 describe('per-account proxy', () => {
   let proxy;
   let proxyUrl;
+  let geo;
+  let lookups = 0;
   const seen = [];
 
   before(async () => {
@@ -506,20 +519,70 @@ describe('per-account proxy', () => {
         res.writeHead(407, { 'Proxy-Authenticate': 'Basic realm="p"' });
         return res.end();
       }
+      if (req.url.endsWith('/where')) {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        return res.end(WHERE);
+      }
       res.writeHead(200, { 'Content-Type': 'text/html' });
       res.end(`<!doctype html><p id="me">{"via":"proxy","url":${JSON.stringify(req.url)}}</p>`);
+    });
+    // Playwright's request client tunnels even plain http through CONNECT.
+    geo = http.createServer((_, res) => {
+      lookups += 1;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ip: '203.0.113.7', loc: '13.7563,100.5018' }));
+    });
+    await new Promise((resolve) => geo.listen(0, '127.0.0.1', resolve));
+    proxy.on('connect', (req, socket) => {
+      if (req.url !== 'geo.invalid:80' || req.headers['proxy-authorization'] !== 'Basic ' + Buffer.from('alice:s3cr:t').toString('base64')) {
+        return socket.end('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="p"\r\n\r\n');
+      }
+      const upstream = net.connect(geo.address().port, '127.0.0.1', () => {
+        socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+        upstream.pipe(socket);
+        socket.pipe(upstream);
+      });
     });
     await new Promise((resolve) => proxy.listen(0, '127.0.0.1', resolve));
     proxyUrl = `http://alice:${encodeURIComponent('s3cr:t')}@127.0.0.1:${proxy.address().port}`;
   });
 
-  after(() => new Promise((resolve) => proxy.close(resolve)));
+  after(async () => {
+    await new Promise((resolve) => proxy.close(resolve));
+    await new Promise((resolve) => geo.close(resolve));
+  });
 
   test('pages load through the account proxy with its credentials', async () => {
     const r = await call('POST', '/sessions/px1/navigate', { platform: 'web', proxy: proxyUrl, url: 'http://site.invalid/home', wait_ms: 0 });
     assert.equal(r.status, 200, JSON.stringify(r.data));
     assert.deepEqual(await whoami('px1'), { via: 'proxy', url: 'http://site.invalid/home' });
     assert.ok(seen.some((s) => s.auth.startsWith('Basic ')));
+  });
+
+  test('a page that asks for the position gets one tens of metres from the exit IP', async () => {
+    const r = await call('POST', '/sessions/px1/navigate', { url: fixtureUrl + '/where', wait_ms: 0 });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    let where = {};
+    for (let i = 0; i < 20 && !('latitude' in where); i++) {
+      where = await whoami('px1');
+      if (!('latitude' in where)) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const metres = distance({ latitude: 13.7563, longitude: 100.5018 }, where);
+    assert.ok(metres >= 19 && metres <= 81, `${metres} m from the exit IP`);
+    assert.deepEqual(
+      { latitude: where.latitude, longitude: where.longitude },
+      (({ latitude, longitude }) => ({ latitude, longitude }))((await call('GET', '/sessions/px1')).data.geolocation),
+    );
+  });
+
+  test('the position is kept across a reopen without asking again', async () => {
+    const before = (await call('GET', '/sessions/px1')).data.geolocation;
+    const asked = lookups;
+    await manager.closeAll();
+    const r = await call('POST', '/sessions/px1/navigate', { url: fixtureUrl + '/where', wait_ms: 0 });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.deepEqual((await call('GET', '/sessions/px1')).data.geolocation, before);
+    assert.equal(lookups, asked);
   });
 
   test('the account shows its proxy without the password', async () => {
@@ -553,6 +616,7 @@ describe('per-account proxy', () => {
     assert.equal(typeof (await whoami('px1')).ua, 'string');
     assert.equal(seen.length, before);
     assert.equal((await call('GET', '/sessions/px1')).data.proxy, '');
+    assert.equal((await call('GET', '/sessions/px1')).data.geolocation, null, 'no position without a proxy');
   });
 
   test('a proxy the browser cannot use is refused', async () => {

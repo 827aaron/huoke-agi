@@ -291,6 +291,7 @@ services:
     environment:
       - BROWSER_TOKEN=${BROWSER_TOKEN:-}
       - BROWSER_PROXY=${BROWSER_PROXY:-}
+      - BROWSER_GEO_LOOKUP_URL=${BROWSER_GEO_LOOKUP_URL:-}
     # An empty BROWSER_TOKEN means the one the backend generated; the service must never start
     # without a token, since an empty one accepts every request.
     entrypoint:

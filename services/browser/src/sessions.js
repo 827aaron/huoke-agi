@@ -4,6 +4,7 @@ import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { agentMayOpen, detectState, platformSpec, shouldCapture } from './detect.js';
 import { ServiceError } from './errors.js';
+import { parseLookup, placeNear, proxyKey } from './geo.js';
 import {
   attachSuite,
   contextOptions,
@@ -180,6 +181,39 @@ class Session {
     this.context = await chromium.launchPersistentContext(path.join(this.dir, 'profile'), options);
     if (fp.suite) await attachSuite(this.context, fp);
     else await this.context.addInitScript(initScript(fp));
+    await this.applyGeolocation();
+  }
+
+  // A page that asks for the position gets one tens of metres from where the
+  // exit IP is placed, kept for as long as the proxy is. The exit IP of a
+  // rotating or residential proxy is not its host, so it is looked up through
+  // the proxy itself. Without a proxy nothing is claimed, and a failed lookup
+  // only leaves the position unset until the next launch.
+  async applyGeolocation() {
+    if (!this.proxy) return;
+    const key = proxyKey(this.proxy);
+    if (this.meta.geolocation?.proxy_key !== key) {
+      const exit = await this.lookupExit();
+      if (!exit) return;
+      this.meta.geolocation = { ...placeNear(exit), proxy_key: key };
+      await this.saveMeta();
+    }
+    const { latitude, longitude, accuracy } = this.meta.geolocation;
+    await this.context.grantPermissions(['geolocation']);
+    await this.context.setGeolocation({ latitude, longitude, accuracy });
+  }
+
+  async lookupExit() {
+    try {
+      const res = await this.context.request.get(this.cfg.geoLookupUrl, { timeout: 10000 });
+      if (!res.ok()) throw new Error(`HTTP ${res.status()}`);
+      const exit = parseLookup(await res.json());
+      if (!exit) throw new Error('the answer carries no coordinates');
+      return exit;
+    } catch (err) {
+      console.warn(`account ${this.accountId}: position left unset, exit IP lookup failed: ${err.message.split('\n')[0]}`);
+      return null;
+    }
   }
 
   // An external fingerprint browser (AdsPower, BitBrowser) owns its profile,
@@ -543,9 +577,12 @@ class Session {
       proxy: redactProxy(this.proxy),
       external_browser: Boolean(this.meta.external_browser_ws),
       fingerprint: this.meta.fingerprint || null,
+      geolocation: this.proxy && this.meta.geolocation?.proxy_key === proxyKey(this.proxy) ? geolocationOf(this.meta.geolocation) : null,
     };
   }
 }
+
+const geolocationOf = ({ latitude, longitude, accuracy }) => ({ latitude, longitude, accuracy });
 
 export class SessionManager {
   constructor(cfg) {

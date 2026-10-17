@@ -849,9 +849,6 @@ func profileOf(u *tg.User) UserProfile {
 	return p
 }
 
-// call runs fn against the live API, sleeping through flood waits no longer
-// than MaxInlineFloodWait. Telegram counts a flood wait per method, so the
-// retry repeats only the call that was refused.
 // CountDialogs asks for one dialog and reads the total Telegram reports beside it.
 func (t *Telegram) CountDialogs(ctx context.Context) (int, error) {
 	var count int
@@ -873,6 +870,9 @@ func (t *Telegram) CountDialogs(ctx context.Context) (int, error) {
 	return count, err
 }
 
+// call runs fn against the live API, sleeping through flood waits no longer
+// than MaxInlineFloodWait. Telegram counts a flood wait per method, so the
+// retry repeats only the call that was refused.
 func (t *Telegram) call(ctx context.Context, method string, fn func(ctx context.Context, api telegramAPI) error) error {
 	t.mu.RLock()
 	api := t.api
