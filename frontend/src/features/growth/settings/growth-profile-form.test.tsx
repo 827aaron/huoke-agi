@@ -183,4 +183,31 @@ describe('GrowthProfileForm', () => {
         expect(screen.getByLabelText(/业务名称/)).toHaveValue('');
         expect(growthApi.updateProfile).not.toHaveBeenCalled();
     });
+
+    it('keeps what was typed before the default template loaded', async () => {
+        const presets = await growthApi.listProfilePresets();
+
+        let release: (value: typeof presets) => void = () => {};
+
+        vi.mocked(growthApi.listProfilePresets).mockImplementationOnce(
+            () => new Promise((resolve) => (release = resolve)),
+        );
+        render(
+            <GrowthProfileForm
+                onSaved={() => {}}
+                profile={null}
+            />,
+        );
+
+        fireEvent.change(screen.getByLabelText(/产品类型/), { target: { value: 'Sportsbook' } });
+        release(presets);
+
+        expect(await screen.findByRole('combobox', { name: '从模板开始（可选）' })).toHaveTextContent(
+            '持牌线上娱乐城找玩家',
+        );
+        expect(screen.getByLabelText(/产品类型/)).toHaveValue('Sportsbook');
+        expect(screen.getByLabelText(/你想让目标人群知道什么/)).toHaveValue(
+            'A licensed online casino looking for adult players.',
+        );
+    });
 });

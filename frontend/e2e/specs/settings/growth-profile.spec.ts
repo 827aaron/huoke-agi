@@ -24,7 +24,7 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
 
         await expect(page.getByText('还没有业务档案')).toBeVisible();
         await expect(page.getByRole('combobox', { name: '从模板开始（可选）' })).toHaveText('持牌线上娱乐城找玩家');
-        await expect(page.getByLabel('产品类型')).toHaveValue('Licensed online casino and sportsbook');
+        await expect(page.getByLabel('产品类型')).toHaveValue('Licensed online gaming platform');
 
         await page.getByRole('button', { name: '保存' }).click();
 
