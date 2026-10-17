@@ -395,14 +395,14 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 		state := body["state"].(map[string]any)
 		answers := map[string]any{}
 		for qid, m := range state["messages"].(map[string]any) {
-			yes, text := 0.1, m.(map[string]any)["text"].(string)
+			excluded, text := 0.9, m.(map[string]any)["text"].(string)
 			switch {
 			case strings.Contains(text, "buy"):
-				yes = 0.8
+				excluded = 0.1
 			case strings.HasSuffix(text, "5"):
-				yes = 0.65
+				excluded = 0.55
 			}
-			answers[qid] = map[string]any{"type": "noul", "noul": yes}
+			answers[qid] = map[string]any{"type": "noul", "noul": excluded}
 		}
 		_ = json.NewEncoder(rw).Encode(map[string]any{"answers": answers})
 	}))
@@ -493,7 +493,7 @@ func TestSources_SyncSource_KeepsTheCursorWhenTheJudgeKeyIsRefused(t *testing.T)
 			rw.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		_, _ = rw.Write([]byte(`{"answers":{"m0":{"type":"noul","noul":0.9},"m1":{"type":"noul","noul":0.9}}}`))
+		_, _ = rw.Write([]byte(`{"answers":{"m0":{"type":"noul","noul":0.1},"m1":{"type":"noul","noul":0.1}}}`))
 	}))
 	t.Cleanup(jev.Close)
 	w.svc.cfg.TypeSafeAPIURL = jev.URL

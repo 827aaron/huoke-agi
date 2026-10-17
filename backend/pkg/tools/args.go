@@ -999,8 +999,8 @@ type GrowthLeadArg struct {
 }
 
 type GrowthContactArg struct {
-	Type  String `json:"type" jsonschema:"required,type=string,enum=phone,enum=email,enum=messenger,enum=other" jsonschema_description:"phone, email, messenger (an id on another messaging app, with the app's name) or other"`
-	Value string `json:"value" jsonschema:"required" jsonschema_description:"The contact exactly as published, e.g. 'WhatsApp +66 81 234 5678'"`
+	Type  String `json:"type" jsonschema:"required,type=string" jsonschema_description:"phone, email, whatsapp, line, telegram (a number or id on that app), other, or another type exactly as the profile's Contacts to find names it"`
+	Value string `json:"value" jsonschema:"required" jsonschema_description:"The contact exactly as published, e.g. '+66 81 234 5678' or '@ann'"`
 }
 
 type GrowthUpsertLeadsAction struct {

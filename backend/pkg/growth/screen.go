@@ -19,10 +19,13 @@ import (
 // screenBatch is how many messages one Jev request judges; screenRunes cuts each
 // message's text, since a buying signal shows in its opening lines.
 const (
-	screenBatch      = 40
-	screenRunes      = 400
-	defaultThreshold = 0.6
+	screenBatch = 40
+	screenRunes = 400
 )
+
+// retiredScreeningThreshold is a screening field a page may still send; it is dropped,
+// since every message Jev does not exclude is scored.
+const retiredScreeningThreshold = "threshold"
 
 // ErrNoJudge means the owner has no working key for Jev, the judgement model every read
 // is screened with; like the LLM key, only the customer can fix it.
@@ -46,21 +49,8 @@ func screeningProviderOf(rawURL string) string {
 	}
 }
 
-func parseScreening(v map[string]string) (float64, error) {
-	raw := strings.TrimSpace(v["threshold"])
-	if raw == "" {
-		return defaultThreshold, nil
-	}
-	t, err := strconv.ParseFloat(raw, 64)
-	if err != nil || t <= 0 || t >= 1 {
-		return 0, fmt.Errorf("%w: threshold must be a number between 0 and 1, like 0.6", ErrInvalidSetting)
-	}
-	return t, nil
-}
-
 type screener struct {
-	client    *screening.Client
-	threshold float64
+	client *screening.Client
 	// answeredBy is the model version that last answered, logged when it changes.
 	answeredBy string
 	now        func() time.Time
@@ -75,13 +65,7 @@ func (s *Service) screenerFor(ctx context.Context, userID int64) (*screener, err
 	if cfg.TypeSafeAPIKey == "" {
 		return nil, ErrNoJudge
 	}
-	threshold := defaultThreshold
-	if v, ok := s.savedValues(ctx, userID, SettingScreening); ok {
-		if t, err := parseScreening(v); err == nil {
-			threshold = t
-		}
-	}
-	return &screener{client: newJevClient(cfg), threshold: threshold, now: time.Now}, nil
+	return &screener{client: newJevClient(cfg), now: time.Now}, nil
 }
 
 // jevBackoff is the first retry delay after a 429 or 529; a variable so tests run fast.
@@ -95,21 +79,8 @@ func newJevClient(cfg *config.Config) *screening.Client {
 	return c
 }
 
-// savedValues returns a saved setting's fields, or false when none opens.
-func (s *Service) savedValues(ctx context.Context, userID int64, kind string) (map[string]string, bool) {
-	row, err := s.db.GetUserGrowthSetting(ctx, database.GetUserGrowthSettingParams{UserID: userID, Kind: kind})
-	if err != nil {
-		return nil, false
-	}
-	stored, err := s.open(row)
-	if err != nil {
-		return nil, false
-	}
-	return stored.Values, true
-}
-
-// screen keeps the messages Jev judges likely to come from a customer and scores each
-// by the owner's weights, dropping those below the watchlist line. A batch Jev fails on
+// screen drops the messages Jev finds explicit evidence of exclusion in and scores the
+// rest by the owner's weights, dropping those below the watchlist line. A batch Jev fails on
 // is kept whole and unscored, since a missed buyer costs more than scoring a few extra
 // messages; a refused key fails the read.
 func (s *Service) screen(
@@ -159,7 +130,7 @@ func (s *Service) screen(
 				kept = append(kept, m)
 				continue
 			}
-			if j.Customer >= 0 && j.Customer < sc.threshold {
+			if j.Excluded >= signalYes {
 				continue
 			}
 			if len(j.Signals) > 0 {
@@ -236,7 +207,7 @@ func (s *Service) judgeEvidence(
 			continue
 		}
 		scored = true
-		if j.Customer >= 0 && j.Customer < sc.threshold {
+		if j.Excluded >= signalYes {
 			continue
 		}
 		score, signals := scoreMessage(scoring, j.Signals, evidenceTime(ev), sc.now())
@@ -259,7 +230,7 @@ func evidenceTime(ev EvidenceInput) time.Time {
 	return time.Time{}
 }
 
-// signalYes is the probability from which Jev's answer counts as yes.
+// signalYes is the probability from which any of Jev's answers counts as yes.
 const signalYes = 0.5
 
 // scoreMessage adds the weight of every signal Jev answered yes to, and the active

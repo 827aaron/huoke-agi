@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// signalJev answers every question by keywords of the message: the customer question
-// yes unless "lol", player on "play", pain on "bored", paying on "top up", match on "RPG".
+// signalJev answers every question by keywords of the message: the exclusion question
+// yes on "lol", player on "play", pain on "bored", paying on "top up", match on "RPG".
 func signalJev(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
@@ -36,7 +36,7 @@ func signalJev(t *testing.T) *httptest.Server {
 		for qid := range body.Questions {
 			key, signal, _ := strings.Cut(qid, "_")
 			text := body.State.Messages[key].Text
-			yes := !strings.Contains(text, "lol")
+			yes := strings.Contains(text, "lol")
 			if signal != "" {
 				yes = strings.Contains(text, keyword[signal])
 			}
@@ -81,7 +81,7 @@ func TestScreen_SyncSources_ScoresEveryKeptMessageAndLeadsTakeThatScore(t *testi
 	for _, m := range results[0].Messages {
 		got[m.MessageID] = m
 	}
-	require.Len(t, got, 2, "the customer question drops 3, the watchlist line drops 4")
+	require.Len(t, got, 2, "the exclusion question drops 3, the watchlist line drops 4")
 	assert.Equal(t, 13, got["1"].Score)
 	assert.Equal(t, TierQualified, got["1"].Tier)
 	assert.Equal(t, "player+3, pain+3, paying+2, match+3, 7d+2 = 13", got["1"].Signals)

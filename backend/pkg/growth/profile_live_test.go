@@ -184,7 +184,7 @@ func TestProfile_SaveProfile_ChecksTheScoringAndTheContactTypes(t *testing.T) {
 		edit    func(p *Profile)
 		wantErr string
 	}{
-		{"an unknown contact type", func(p *Profile) { p.ContactTypes = []string{"fax"} }, `contact type "fax"`},
+		{"a contact type over 30 characters", func(p *Profile) { p.ContactTypes = []string{strings.Repeat("x", 31)} }, "longer than 30"},
 		{"a negative weight", func(p *Profile) {
 			p.Scoring = &Scoring{Weights: ScoringWeights{Player: -1, Match: 9}, Qualified: 7, Watchlist: 4}
 		}, "between 0 and 10"},
@@ -211,6 +211,12 @@ func TestProfile_SaveProfile_ChecksTheScoringAndTheContactTypes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"phone", "email"}, saved.ContactTypes)
 	assert.Contains(t, saved.Compact(), "Contacts to find: phone, email")
+
+	p.ContactTypes = []string{"LINE", "messenger", " WeChat", "wechat"}
+	saved, err = w.svc.SaveProfile(ctx, w.user, p)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"line", "whatsapp", "telegram", "WeChat"}, saved.ContactTypes)
+	assert.Contains(t, saved.Compact(), "Contacts to find: line, whatsapp, telegram, WeChat")
 }
 
 func TestProfile_SaveProfile_DropsTheMessageScoresWhenTheAudienceChanges(t *testing.T) {

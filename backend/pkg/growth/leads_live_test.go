@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -95,14 +96,14 @@ func TestLeads_UpsertLeads_JudgesTheExcerptsOfAWebLeadOnce(t *testing.T) {
 
 	res, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{
 		lead("gamer1", "p1", "bored of my RPG, I play daily and top up"),
-		lead("chef", "p2", "lol I play cooking games"),
+		lead("chef", "p2", "lol bored of my RPG, I play daily and top up"),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, LeadStatusNew, res[0].Status)
 	assert.Equal(t, 11, res[0].Score)
 	assert.Equal(t, TierQualified, res[0].Tier)
 	assert.Contains(t, res[0].Reason, "score 11 is the judgement model's for this evidence, not 3")
-	assert.Equal(t, LeadStatusRejected, res[1].Status, "Jev says the sender is no customer")
+	assert.Equal(t, LeadStatusRejected, res[1].Status, "the excerpt shows the sender is excluded, whatever its signals")
 	assert.Equal(t, int32(2), calls.Load())
 
 	res, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{lead("gamer1", "p1", "bored of my RPG, I play daily and top up")})
@@ -181,10 +182,11 @@ func TestLeads_UpsertLeads_KeepsEveryContactOnceAndListsByIt(t *testing.T) {
 	src := w.mustAddTelegramGroup(t, scope, tgGroup("901", "card_fans", "Cards"))
 
 	reachable := qualified("41", src, "m1")
-	reachable.Contacts = []Contact{{Type: "email", Value: "ann@example.test"}, {Type: "fax", Value: "123"}, {Type: "platform_handle", Value: "@u41"}}
+	reachable.Contacts = []Contact{{Type: "email", Value: "ann@example.test"}, {Type: "WeChat", Value: "ann_wx"},
+		{Type: strings.Repeat("x", 31), Value: "123"}, {Type: "platform_handle", Value: "@u41"}}
 	res, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{reachable, qualified("42", src, "m2")})
 	require.NoError(t, err)
-	assert.Contains(t, res[0].Reason, `contact type "fax" is not one of phone, email, messenger, other`)
+	assert.Contains(t, res[0].Reason, "is empty or longer than 30 characters")
 
 	again := qualified("41", src, "m3")
 	again.Contacts = []Contact{{Type: " Email ", Value: "ANN@example.test"}, {Type: "phone", Value: "+66 81 234 5678"}}
@@ -196,7 +198,9 @@ func TestLeads_UpsertLeads_KeepsEveryContactOnceAndListsByIt(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, with, 1)
 	assert.Equal(t, "41", with[0].PlatformUserID)
-	assert.Equal(t, []Contact{{Type: "email", Value: "ann@example.test"}, {Type: "phone", Value: "+66 81 234 5678"}}, with[0].Contacts)
+	assert.Equal(t, []Contact{
+		{Type: "email", Value: "ann@example.test"}, {Type: "WeChat", Value: "ann_wx"}, {Type: "phone", Value: "+66 81 234 5678"},
+	}, with[0].Contacts)
 	without, err := w.svc.ListLeads(ctx, w.user, LeadFilter{HasContact: &no})
 	require.NoError(t, err)
 	require.Len(t, without, 1)

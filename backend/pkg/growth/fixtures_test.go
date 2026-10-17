@@ -123,7 +123,7 @@ func (w *world) judgeAsAGamePublisher(t *testing.T) {
 	}
 }
 
-// keepEveryMessage is a Jev that answers yes to every question.
+// keepEveryMessage is a Jev that excludes no message and answers yes to every signal.
 func keepEveryMessage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Questions map[string]json.RawMessage `json:"questions"`
@@ -131,7 +131,11 @@ func keepEveryMessage(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&body)
 	answers := make(map[string]any, len(body.Questions))
 	for qid := range body.Questions {
-		answers[qid] = map[string]any{"type": "noul", "noul": 1.0}
+		yes := 1.0
+		if !strings.Contains(qid, "_") {
+			yes = 0
+		}
+		answers[qid] = map[string]any{"type": "noul", "noul": yes}
 	}
 	_ = json.NewEncoder(w).Encode(map[string]any{"answers": answers})
 }

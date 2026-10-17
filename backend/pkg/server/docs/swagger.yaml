@@ -276,8 +276,8 @@ definitions:
         type: array
       contact_types:
         description: |-
-          ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty
-          means the platform handle alone.
+          ContactTypes are the contacts a lead is looked for with: values of ContactTypes or
+          names the owner chose, up to 30 characters each; empty means the platform handle alone.
         items:
           type: string
         type: array
@@ -336,8 +336,8 @@ definitions:
         type: array
       contact_types:
         description: |-
-          ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty
-          means the platform handle alone.
+          ContactTypes are the contacts a lead is looked for with: values of ContactTypes or
+          names the owner chose, up to 30 characters each; empty means the platform handle alone.
         items:
           type: string
         type: array
