@@ -316,10 +316,13 @@ type Config struct {
 	// optionally with user:pass@); an account's own proxy wins. PROXY_URL is unrelated:
 	// it carries the server's own outbound calls.
 	GrowthProxyURL string `env:"GROWTH_PROXY_URL"`
-	// TypeSafeAPIKey turns on the Jev pre-screen of synced messages; without it the
-	// pre-screen runs on the summarizer role's model. An empty URL is TypeSafe's own.
+	// TypeSafeAPIKey is the key of Jev, the model every synced message is pre-screened
+	// with; without it no source is read. The URL is TypeSafe's own when empty, or
+	// https://openrouter.ai/api for Jev through OpenRouter. An empty model is the newest
+	// Jev under the endpoint's naming.
 	TypeSafeAPIKey string `env:"TYPESAFE_API_KEY"`
 	TypeSafeAPIURL string `env:"TYPESAFE_API_URL"`
+	TypeSafeModel  string `env:"TYPESAFE_MODEL"`
 	// BrowserServiceURL is the browser service that keeps a logged-in browser per Facebook
 	// and Instagram account; BrowserToken authorises the backend to it. Left empty while the
 	// URL is set, a generated token is kept in DataDir/browser/token for the service to read.

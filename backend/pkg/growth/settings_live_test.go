@@ -256,6 +256,19 @@ func TestSettings_SendTestEmail_UsesThePlatformServerWhenOnlyRecipientsAreSaved(
 	v, err = w.svc.TestSetting(ctx, w.user, SettingEmail)
 	require.NoError(t, err)
 	assert.Equal(t, SettingStatusConnected, v.Status)
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingEmail, "", map[string]string{
+		"host": "smtp.own.example.test", "from": "me@example.test", "password": "own-secret",
+	})
+	require.NoError(t, err)
+	v, err = w.svc.SaveSetting(ctx, w.user, SettingEmail, "", map[string]string{"host": "", "password": ""})
+	require.NoError(t, err)
+	assert.Empty(t, v.Fields["host"], "an empty host goes back to the platform server")
+	assert.Empty(t, v.Fields["password"])
+	assert.Equal(t, "qa@example.test", v.Fields["notify_emails"])
+	cfg, err := w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, sink.Host, cfg.SMTPHost)
 }
 
 func TestSettings_SaveSetting_StoresAKeyListMaskedKeyByKey(t *testing.T) {
@@ -415,7 +428,9 @@ func TestSettings_ListSettings_SaysWhetherTheJudgeKeyIsConfigured(t *testing.T) 
 	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, "", map[string]string{"threshold": "0.5"})
 	assert.ErrorIs(t, err, ErrInvalidSetting, "the key is required")
 
-	saved, err := w.svc.SaveSetting(ctx, w.user, SettingScreening, "", map[string]string{"api_key": "ts-secret-5678"})
+	saved, err := w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningCustom, map[string]string{
+		"api_key": "ts-secret-5678", "api_url": w.svc.cfg.TypeSafeAPIURL,
+	})
 	require.NoError(t, err)
 	assert.True(t, saved.Configured, "the saved view says so too")
 	tested, err := w.svc.TestSetting(ctx, w.user, SettingScreening)
@@ -427,4 +442,39 @@ func TestSettings_ListSettings_SaysWhetherTheJudgeKeyIsConfigured(t *testing.T) 
 	p, err = w.svc.Progress(ctx, scope)
 	require.NoError(t, err)
 	assert.Empty(t, p.Warning)
+}
+
+func TestSettings_ConfigFor_PointsJevAtTheChosenProvider(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+
+	secret, err := w.svc.seal(w.user, SettingScreening, storedSetting{Values: map[string]string{"api_key": "ts-legacy"}})
+	require.NoError(t, err)
+	_, err = w.svc.db.UpsertGrowthSetting(ctx, database.UpsertGrowthSettingParams{UserID: w.user, Kind: SettingScreening, Secret: secret})
+	require.NoError(t, err)
+	cfg, err := w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, "ts-legacy", cfg.TypeSafeAPIKey, "a row saved before providers existed is TypeSafe")
+	assert.Equal(t, "https://api.typesafe.ai", newJevClient(cfg).ResolvedURL())
+	assert.Equal(t, "jev-latest", newJevClient(cfg).ResolvedModel())
+	assert.Equal(t, screeningTypeSafe, settingOf(t, w, SettingScreening).Provider)
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningOpenRouter, map[string]string{"api_key": "sk-or-1234"})
+	require.NoError(t, err)
+	cfg, err = w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, "https://openrouter.ai/api", newJevClient(cfg).ResolvedURL())
+	assert.Equal(t, "typesafe/jev-latest", newJevClient(cfg).ResolvedModel())
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningOpenRouter, map[string]string{"model": "typesafe/jev-1.13"})
+	require.NoError(t, err)
+	cfg, err = w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, "sk-or-1234", cfg.TypeSafeAPIKey)
+	assert.Equal(t, "typesafe/jev-1.13", newJevClient(cfg).ResolvedModel())
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningCustom, map[string]string{"api_key": "k"})
+	assert.ErrorContains(t, err, "needs api_url")
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningCustom, map[string]string{"api_key": "k", "api_url": "ftp://jev.example.test"})
+	assert.ErrorContains(t, err, "api_url must be an http(s) URL")
 }

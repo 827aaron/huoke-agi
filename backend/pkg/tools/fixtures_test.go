@@ -1003,3 +1003,17 @@ func (f *fakeGrowthBackend) ListLeads(_ context.Context, _ int64, filter growth.
 	f.lastFilter = filter
 	return []growth.LeadView{}, f.err
 }
+
+// flowLanguageDB answers GetFlow with a flow in lang, for the lines the executor writes
+// in the flow's language.
+type flowLanguageDB struct {
+	database.Querier
+	lang string
+}
+
+func (q flowLanguageDB) GetFlow(ctx context.Context, id int64) (database.Flow, error) {
+	if err := ctx.Err(); err != nil {
+		return database.Flow{}, err
+	}
+	return database.Flow{ID: id, Language: q.lang}, nil
+}

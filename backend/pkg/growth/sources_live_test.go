@@ -109,6 +109,19 @@ func TestSources_JoinSources_StopsOnARateLimit(t *testing.T) {
 	assert.Len(t, out, 1, "the second source is not tried against the same limit")
 }
 
+func TestSources_SyncSources_StopsWhenThePlatformIsUnreachable(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	a := w.mustAddTelegramGroup(t, scope, tgGroup("312", "group_c", "C"), tgMessage(1, "11", "hi"))
+	b := w.mustAddTelegramGroup(t, scope, tgGroup("313", "group_d", "D"), tgMessage(1, "12", "hi"))
+	w.tg.Err = fmt.Errorf("%w: no connection to telegram within 15s", connectors.ErrUnreachable)
+
+	out, err := w.svc.SyncSources(ctx, scope, []int64{a, b}, SyncOptions{})
+	require.ErrorIs(t, err, connectors.ErrUnreachable)
+	assert.Len(t, out, 1, "the second source does not wait for the same dead route")
+}
+
 func TestSources_SyncSource_PagesBackwardsAndTracksYield(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
@@ -398,7 +411,9 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	require.Len(t, unjudged, 1, "a missing key stops the batch")
 	assert.Empty(t, requests)
 
-	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, "", map[string]string{"api_key": "ts-key", "threshold": "0.7"})
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningCustom, map[string]string{
+		"api_key": "ts-key", "threshold": "0.7", "api_url": w.svc.cfg.TypeSafeAPIURL,
+	})
 	require.NoError(t, err)
 	fail = true
 	results, err := w.svc.SyncSources(ctx, scope, []int64{a, 999999, b}, SyncOptions{})
@@ -468,7 +483,7 @@ func TestSources_SyncSource_KeepsTheCursorWhenTheJudgeKeyIsRefused(t *testing.T)
 	}))
 	t.Cleanup(jev.Close)
 	w.svc.cfg.TypeSafeAPIURL = jev.URL
-	_, err := w.svc.SaveSetting(ctx, w.user, SettingScreening, "", map[string]string{"api_key": "ts-bad"})
+	_, err := w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningCustom, map[string]string{"api_key": "ts-bad", "api_url": jev.URL})
 	require.NoError(t, err)
 	id := w.mustAddTelegramGroup(t, scope, tgGroup("362", "refused", "Refused"), tgMessage(1, "11", "a"), tgMessage(2, "12", "b"))
 

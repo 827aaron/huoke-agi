@@ -374,6 +374,7 @@ func TestExecutor_Execute_ClosesTheToolCallAndItsMessageEvenAfterTheFlowStops(t 
 		args        json.RawMessage
 		stopFlow    bool
 		handlerErr  error
+		lang        string
 		wantSuccess []string
 		wantFailed  []string
 		wantMessage string
@@ -398,6 +399,16 @@ func TestExecutor_Execute_ClosesTheToolCallAndItsMessageEvenAfterTheFlowStops(t 
 			wantMessage: "Stopped before it finished.",
 		},
 		{
+			name: "a failed call in a Chinese conversation", args: withMessage, handlerErr: errHandler, lang: "Chinese",
+			wantFailed:  []string{"failed to execute handler: docker daemon is not reachable"},
+			wantMessage: "失败：failed to execute handler: docker daemon is not reachable",
+		},
+		{
+			name: "a stop in a Chinese conversation", args: withMessage, stopFlow: true, handlerErr: context.Canceled, lang: "Chinese",
+			wantFailed:  []string{"failed to execute handler: context canceled"},
+			wantMessage: "未完成就已停止。",
+		},
+		{
 			name: "a result that arrives once its flow is stopped", args: withMessage, stopFlow: true,
 			wantSuccess: []string{"uid=0(root)"}, wantMessage: "uid=0(root)",
 		},
@@ -407,8 +418,13 @@ func TestExecutor_Execute_ClosesTheToolCallAndItsMessageEvenAfterTheFlowStops(t 
 			defer stop()
 
 			tclp, mlp := &executorToolCallLog{}, &executorMsgLog{}
+			lang := tc.lang
+			if lang == "" {
+				lang = "English"
+			}
 			ce := &customExecutor{
 				flowID:   1,
+				db:       flowLanguageDB{lang: lang},
 				mlp:      mlp,
 				tclp:     tclp,
 				replacer: identityReplacer{},

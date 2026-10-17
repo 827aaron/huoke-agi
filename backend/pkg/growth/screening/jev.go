@@ -1,4 +1,4 @@
-// Package screening asks TypeSafe's Jev model, one yes/no judgment per message,
+// Package screening asks the Jev model, one yes/no judgment per message,
 // whether a message's sender may be a customer of the business. It knows nothing
 // about platforms: the caller passes the platform and source as plain text.
 package screening
@@ -11,22 +11,31 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// DefaultURL is TypeSafe's public endpoint; DefaultModel tracks its newest Jev.
+// Jev is served by TypeSafe and, under the same System One API, by OpenRouter, which
+// names its models with a "typesafe/" prefix. The default models track the newest Jev.
 const (
-	DefaultURL   = "https://api.typesafe.ai"
-	DefaultModel = "jev-latest"
+	DefaultURL             = "https://api.typesafe.ai"
+	DefaultModel           = "jev-latest"
+	OpenRouterURL          = "https://openrouter.ai/api"
+	OpenRouterDefaultModel = "typesafe/jev-latest"
+	OpenRouterModelPrefix  = "typesafe/"
 )
+
+// maxRetryAfter caps the wait a server asks for, so one read is not held for minutes.
+const maxRetryAfter = time.Minute
 
 var (
 	// ErrUnauthorized means the key was refused; asking again with it is pointless.
-	ErrUnauthorized = errors.New("the TypeSafe API key was refused")
-	// ErrUnavailable means TypeSafe stayed rate-limited, overloaded or unreachable
-	// through every retry.
-	ErrUnavailable = errors.New("TypeSafe is unavailable")
+	ErrUnauthorized = errors.New("the Jev API key was refused")
+	// ErrUnavailable means Jev stayed rate-limited, out of balance, overloaded or
+	// unreachable through every retry.
+	ErrUnavailable = errors.New("jev is unavailable")
 )
 
 // Message is one message to judge. Sender is a display form ("@ann Ann").
@@ -51,7 +60,7 @@ type Client struct {
 	Key   string
 	Model string
 	HTTP  *http.Client
-	// Retries is how many times a 429, a 529, a 5xx or a transport error is retried.
+	// Retries is how many times a 402, a 429, a 529, a 5xx or a transport error is retried.
 	Retries int
 	Backoff time.Duration
 	Sleep   func(ctx context.Context, d time.Duration) error
@@ -68,37 +77,41 @@ var criteria = map[string]string{
 }
 
 // Judge returns, for each message id, the probability that its sender is a potential
-// customer. A message missing from the answer is missing from the map.
-func (c *Client) Judge(ctx context.Context, b Batch) (map[string]float64, error) {
-	body, ids := request(c.model(), b)
+// customer, and the model version that answered. A message missing from the answer is
+// missing from the map.
+func (c *Client) Judge(ctx context.Context, b Batch) (map[string]float64, string, error) {
+	body, ids := request(c.ResolvedModel(), b)
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode the TypeSafe request: %w", err)
+		return nil, "", fmt.Errorf("failed to encode the Jev request: %w", err)
 	}
 
-	var lastErr error
+	var (
+		lastErr error
+		wait    time.Duration
+	)
 	for attempt := 0; attempt <= c.Retries; attempt++ {
 		if attempt > 0 {
-			if err := c.sleep(ctx, c.backoff()<<(attempt-1)); err != nil {
-				return nil, err
+			if err := c.sleep(ctx, max(c.backoff()<<(attempt-1), wait)); err != nil {
+				return nil, "", err
 			}
 		}
-		answers, retry, err := c.post(ctx, payload)
+		res, err := c.post(ctx, payload)
 		if err == nil {
-			out := make(map[string]float64, len(answers))
+			out := make(map[string]float64, len(res.answers))
 			for qid, id := range ids {
-				if a, ok := answers[qid]; ok && a.Noul != nil {
+				if a, ok := res.answers[qid]; ok && a.Noul != nil {
 					out[id] = *a.Noul
 				}
 			}
-			return out, nil
+			return out, res.model, nil
 		}
-		if !retry || ctx.Err() != nil {
-			return nil, err
+		if !res.retry || ctx.Err() != nil {
+			return nil, "", err
 		}
-		lastErr = err
+		lastErr, wait = err, res.retryAfter
 	}
-	return nil, fmt.Errorf("%w: %v", ErrUnavailable, lastErr)
+	return nil, "", fmt.Errorf("%w: %v", ErrUnavailable, lastErr)
 }
 
 type answer struct {
@@ -106,39 +119,61 @@ type answer struct {
 	Noul *float64 `json:"noul"`
 }
 
-func (c *Client) post(ctx context.Context, payload []byte) (map[string]answer, bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.url(), "/")+"/v1/systemone", bytes.NewReader(payload))
+type result struct {
+	answers    map[string]answer
+	model      string
+	retry      bool
+	retryAfter time.Duration
+}
+
+func (c *Client) post(ctx context.Context, payload []byte) (result, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(c.ResolvedURL(), "/")+"/v1/systemone", bytes.NewReader(payload))
 	if err != nil {
-		return nil, false, fmt.Errorf("failed to build the TypeSafe request: %w", err)
+		return result{}, fmt.Errorf("failed to build the Jev request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.Key)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.client().Do(req)
 	if err != nil {
-		return nil, true, fmt.Errorf("TypeSafe request failed: %w", err)
+		return result{retry: true}, fmt.Errorf("jev request failed: %w", err)
 	}
 	defer resp.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
-		return nil, true, fmt.Errorf("failed to read the TypeSafe response: %w", err)
+		return result{retry: true}, fmt.Errorf("failed to read the Jev response: %w", err)
 	}
 
+	retryable := result{retry: true, retryAfter: retryAfter(resp.Header.Get("Retry-After"))}
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
-		return nil, false, ErrUnauthorized
+		return result{}, ErrUnauthorized
+	// OpenRouter answers 402 while the account's balance or spending limit is used up,
+	// and lifts it once the balance is topped up.
+	case resp.StatusCode == http.StatusPaymentRequired:
+		return retryable, fmt.Errorf("jev answered 402, the balance is too low: top it up and the reads resume: %s", snippet(data))
 	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == 529 || resp.StatusCode >= 500:
-		return nil, true, fmt.Errorf("TypeSafe answered %d: %s", resp.StatusCode, snippet(data))
+		return retryable, fmt.Errorf("jev answered %d: %s", resp.StatusCode, snippet(data))
 	case resp.StatusCode != http.StatusOK:
-		return nil, false, fmt.Errorf("TypeSafe refused the request with %d: %s", resp.StatusCode, snippet(data))
+		return result{}, fmt.Errorf("jev refused the request with %d: %s", resp.StatusCode, snippet(data))
 	}
 	var out struct {
+		Model   string            `json:"model"`
 		Answers map[string]answer `json:"answers"`
 	}
 	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, false, fmt.Errorf("unreadable TypeSafe response: %w", err)
+		return result{}, fmt.Errorf("unreadable Jev response: %w", err)
 	}
-	return out.Answers, false, nil
+	return result{answers: out.Answers, model: out.Model}, nil
+}
+
+// retryAfter reads the seconds form of Retry-After; the date form is rare on APIs.
+func retryAfter(v string) time.Duration {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return min(time.Duration(n)*time.Second, maxRetryAfter)
 }
 
 // request asks one independent question per message over one shared state. Keys are
@@ -177,18 +212,28 @@ func snippet(data []byte) string {
 	return s
 }
 
-func (c *Client) url() string {
+func (c *Client) ResolvedURL() string {
 	if c.URL == "" {
 		return DefaultURL
 	}
 	return c.URL
 }
 
-func (c *Client) model() string {
-	if c.Model == "" {
-		return DefaultModel
+// ResolvedModel is the model asked for: the set one, else the newest Jev under the
+// naming of the endpoint.
+func (c *Client) ResolvedModel() string {
+	if c.Model != "" {
+		return c.Model
 	}
-	return c.Model
+	return DefaultModelFor(c.ResolvedURL())
+}
+
+// DefaultModelFor is the newest Jev as the endpoint at rawURL names it.
+func DefaultModelFor(rawURL string) string {
+	if u, err := url.Parse(rawURL); err == nil && (u.Hostname() == "openrouter.ai" || strings.HasSuffix(u.Hostname(), ".openrouter.ai")) {
+		return OpenRouterDefaultModel
+	}
+	return DefaultModel
 }
 
 func (c *Client) client() *http.Client {

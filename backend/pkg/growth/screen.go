@@ -28,6 +28,24 @@ const (
 // is screened with; like the LLM key, only the customer can fix it.
 var ErrNoJudge = errors.New("no judgement model (Jev) is configured: ask the user to fill in its key on the settings page")
 
+const (
+	screeningTypeSafe   = "typesafe"
+	screeningOpenRouter = "openrouter"
+	screeningCustom     = "custom"
+)
+
+// screeningProviderOf names the provider a TYPESAFE_API_URL from .env points at.
+func screeningProviderOf(rawURL string) string {
+	switch {
+	case rawURL == "":
+		return screeningTypeSafe
+	case screening.DefaultModelFor(rawURL) == screening.OpenRouterDefaultModel:
+		return screeningOpenRouter
+	default:
+		return screeningCustom
+	}
+}
+
 func parseScreening(v map[string]string) (float64, error) {
 	raw := strings.TrimSpace(v["threshold"])
 	if raw == "" {
@@ -43,6 +61,8 @@ func parseScreening(v map[string]string) (float64, error) {
 type screener struct {
 	client    *screening.Client
 	threshold float64
+	// answeredBy is the model version that last answered, logged when it changes.
+	answeredBy string
 }
 
 // screenerFor builds the owner's Jev client.
@@ -67,7 +87,7 @@ func (s *Service) screenerFor(ctx context.Context, userID int64) (*screener, err
 var jevBackoff = 2 * time.Second
 
 func newJevClient(cfg *config.Config) *screening.Client {
-	c := &screening.Client{URL: cfg.TypeSafeAPIURL, Key: cfg.TypeSafeAPIKey, Retries: 3, Backoff: jevBackoff}
+	c := &screening.Client{URL: cfg.TypeSafeAPIURL, Key: cfg.TypeSafeAPIKey, Model: cfg.TypeSafeModel, Retries: 3, Backoff: jevBackoff}
 	if httpClient, err := system.GetHTTPClient(cfg); err == nil {
 		c.HTTP = httpClient
 	}
@@ -105,7 +125,7 @@ func (s *Service) screen(
 	kept := make([]MessageView, 0, len(msgs))
 	for start := 0; start < len(msgs); start += screenBatch {
 		batch := msgs[start:min(start+screenBatch, len(msgs))]
-		probs, err := sc.client.Judge(ctx, screening.Batch{
+		probs, model, err := sc.client.Judge(ctx, screening.Batch{
 			Platform: platform, Source: source, Business: business, Messages: screenMessages(batch),
 		})
 		switch {
@@ -118,6 +138,12 @@ func (s *Service) screen(
 				Warn("pre-screen failed; the batch goes to scoring unscreened")
 			kept = append(kept, batch...)
 			continue
+		}
+		if model != sc.answeredBy {
+			sc.answeredBy = model
+			logrus.WithContext(ctx).WithFields(logrus.Fields{
+				"source_id": sourceID, "asked": sc.client.ResolvedModel(), "answered": model,
+			}).Info("pre-screen model")
 		}
 		for _, m := range batch {
 			if p, ok := probs[m.MessageID]; !ok || p >= sc.threshold {
@@ -180,12 +206,17 @@ func probeScreening(ctx context.Context, cfg *config.Config) (string, string) {
 	}
 	c := newJevClient(cfg)
 	c.Retries = 0
-	_, err := c.Judge(ctx, screening.Batch{
+	_, model, err := c.Judge(ctx, screening.Batch{
 		Platform: "telegram", Source: "test", Business: "Offer: a mobile game",
 		Messages: []screening.Message{{ID: "1", Sender: "@player", Text: "any good new mobile games?"}},
 	})
 	if err != nil {
 		return SettingStatusInvalid, err.Error()
 	}
-	return SettingStatusConnected, ""
+	if model == "" {
+		model = c.ResolvedModel()
+	}
+	logrus.WithContext(ctx).WithFields(logrus.Fields{"url": c.ResolvedURL(), "asked": c.ResolvedModel(), "answered": model}).
+		Info("pre-screen model tested")
+	return SettingStatusConnected, "answered by " + model
 }

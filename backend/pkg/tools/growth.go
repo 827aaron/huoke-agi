@@ -412,6 +412,9 @@ func growthFailureText(err error) string {
 	case errors.Is(err, growth.ErrNoAccount), errors.Is(err, connectors.ErrUnauthorized):
 		return fmt.Sprintf("the platform account is not logged in (%v). Retrying will not help: "+
 			"an operator has to log the account in. Work with web sources meanwhile and report this blocker.", err)
+	case errors.Is(err, connectors.ErrUnreachable):
+		return fmt.Sprintf("%v. Retrying now will not help: the proxy or the network has to be fixed. "+
+			"Report this to the user and work with web sources meanwhile.", err)
 	case errors.Is(err, connectors.ErrNoConnector):
 		return fmt.Sprintf("%v. This platform is not available in this deployment; work with other sources.", err)
 	case errors.Is(err, connectors.ErrUnsupported):

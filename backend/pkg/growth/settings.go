@@ -24,6 +24,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/growth/connectors"
+	"pentagi/pkg/growth/screening"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/system"
 
@@ -69,7 +70,10 @@ type settingField struct {
 
 type settingSpec struct {
 	providers []string
-	fields    []settingField
+	// defaultProvider is what an empty provider means, so rows saved before a kind had
+	// providers keep working.
+	defaultProvider string
+	fields          []settingField
 	// apply copies the stored values onto cfg; values hold every field, empty when unset.
 	apply func(cfg *config.Config, provider string, values map[string]string)
 }
@@ -214,15 +218,24 @@ var settingSpecs = map[string]settingSpec{
 		},
 	},
 	// The Jev pre-screen of synced messages; threshold is the yes probability a message
-	// needs to reach scoring.
+	// needs to reach scoring. api_key is a TypeSafe or an OpenRouter key by provider; an
+	// empty model is the newest Jev.
 	SettingScreening: {
+		providers:       []string{screeningCustom, screeningOpenRouter, screeningTypeSafe},
+		defaultProvider: screeningTypeSafe,
 		fields: []settingField{
 			{name: "api_key", secret: true, required: true},
 			{name: "threshold", def: "0.6"},
+			{name: "api_url"},
+			{name: "model"},
 		},
-		apply: func(c *config.Config, _ string, v map[string]string) {
+		apply: func(c *config.Config, provider string, v map[string]string) {
 			if v["api_key"] != "" {
 				c.TypeSafeAPIKey = v["api_key"]
+			}
+			c.TypeSafeAPIURL, c.TypeSafeModel = v["api_url"], v["model"]
+			if provider == screeningOpenRouter && c.TypeSafeAPIURL == "" {
+				c.TypeSafeAPIURL = screening.OpenRouterURL
 			}
 		},
 	},
@@ -347,6 +360,9 @@ func (s *Service) open(row database.GrowthSetting) (storedSetting, error) {
 	if err := json.Unmarshal(plain, &v); err != nil {
 		return v, fmt.Errorf("stored %s credential is corrupt: %w", row.Kind, err)
 	}
+	if v.Provider == "" {
+		v.Provider = settingSpecs[row.Kind].defaultProvider
+	}
 	return v, nil
 }
 
@@ -363,6 +379,9 @@ func (s *Service) SaveSetting(
 		return SettingView{}, fmt.Errorf("%w: unknown kind %q", ErrInvalidSetting, kind)
 	}
 	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" {
+		provider = spec.defaultProvider
+	}
 	if len(spec.providers) == 0 {
 		provider = ""
 	} else if !slices.Contains(spec.providers, provider) {
@@ -384,6 +403,13 @@ func (s *Service) SaveSetting(
 		return SettingView{}, fmt.Errorf("failed to load %s setting: %w", kind, err)
 	}
 
+	// An empty host is the one empty value that is not "keep": the customer goes back to
+	// the platform's server, so the fields of their own go with it.
+	if host, ok := values["host"]; ok && kind == SettingEmail && strings.TrimSpace(host) == "" {
+		for _, f := range []string{"host", "port", "username", "password", "from", "tls"} {
+			delete(merged, f)
+		}
+	}
 	prevCredential := merged["api_id"] + "\x00" + merged["api_hash"]
 	for name, value := range values {
 		if !slices.ContainsFunc(spec.fields, func(f settingField) bool { return f.name == name }) {
@@ -468,6 +494,9 @@ func validateSetting(kind, provider string, v map[string]string) error {
 		if _, err := parseScreening(v); err != nil {
 			return err
 		}
+		if provider == screeningCustom && v["api_url"] == "" {
+			return fmt.Errorf("%w: a custom Jev endpoint needs api_url", ErrInvalidSetting)
+		}
 	case SettingLLM:
 		if p := v["protocol"]; p != "" && (provider != "custom" || (p != llmProtocolOpenAI && p != llmProtocolAnthropic)) {
 			return fmt.Errorf("%w: protocol applies to custom only and is %s or %s",
@@ -477,13 +506,17 @@ func validateSetting(kind, provider string, v map[string]string) error {
 			return fmt.Errorf("%w: a custom endpoint needs server_url", ErrInvalidSetting)
 		}
 	}
-	if raw := v["server_url"]; raw != "" {
-		u, err := url.Parse(raw)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return fmt.Errorf("%w: server_url must be an http(s) URL", ErrInvalidSetting)
+	for _, name := range []string{"server_url", "api_url"} {
+		if raw := v[name]; raw != "" && !isHTTPURL(raw) {
+			return fmt.Errorf("%w: %s must be an http(s) URL", ErrInvalidSetting, name)
 		}
 	}
 	return nil
+}
+
+func isHTTPURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 var telegramHash = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
@@ -636,7 +669,9 @@ func envValues(cfg *config.Config, kind string) (string, map[string]string) {
 	case SettingProxy:
 		return "", map[string]string{"url": cfg.GrowthProxyURL}
 	case SettingScreening:
-		return "", map[string]string{"api_key": cfg.TypeSafeAPIKey}
+		return screeningProviderOf(cfg.TypeSafeAPIURL), map[string]string{
+			"api_key": cfg.TypeSafeAPIKey, "api_url": cfg.TypeSafeAPIURL, "model": cfg.TypeSafeModel,
+		}
 	case SettingEmbedding:
 		return cfg.EmbeddingProvider, map[string]string{
 			"api_key": cfg.EmbeddingKey, "model": cfg.EmbeddingModel, "server_url": cfg.EmbeddingURL,
