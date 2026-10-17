@@ -43,6 +43,11 @@ document.getElementById('me').textContent = JSON.stringify({
   ua: navigator.userAgent, platform: navigator.platform, cores: navigator.hardwareConcurrency,
   language: navigator.language, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
   screen: screen.width + 'x' + screen.height, dpr: window.devicePixelRatio,
+  gpu: (() => {
+    const gl = document.createElement('canvas').getContext('webgl');
+    const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
+  })(),
 });
 </script>`;
 
@@ -64,6 +69,16 @@ const PAGES = {
   '/blocked': "<!doctype html><h1>You're Temporarily Blocked</h1><p>It looks like you were misusing this feature.</p>",
   '/group': `<!doctype html><h1>Indie Gamers</h1><p class="about">A place for players</p>
 <button onclick="fetch('/api/graphql/', {method:'POST', body:'join'}).then(()=>{this.textContent='Cancel request'})">Join group</button>`,
+};
+
+// The feed tests count scrolls, which depend on the viewport height.
+const FIXED_FP = {
+  user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+  platform: 'Win32',
+  locale: 'en-US',
+  timezone: 'America/New_York',
+  viewport: { width: 1366, height: 638 },
+  screen: { width: 1366, height: 768 },
 };
 
 let fixture;
@@ -199,7 +214,7 @@ describe('auth and routing', () => {
 
 describe('facebook account lifecycle', () => {
   test('a new account refuses work until an operator logs in', async () => {
-    const r = await call('POST', '/sessions/fb1/navigate', { platform: 'facebook', url: fixtureUrl + '/feed' });
+    const r = await call('POST', '/sessions/fb1/navigate', { platform: 'facebook', fingerprint: FIXED_FP, url: fixtureUrl + '/feed' });
     assert.equal(r.status, 423);
     assert.equal(r.data.error.code, 'needs_login');
     assert.equal(r.data.error.account_state, 'new');
@@ -436,6 +451,7 @@ describe('per-account fingerprint', () => {
     const r = await call('POST', '/sessions/fp1/navigate', { platform: 'web', region: 'jp', url: fixtureUrl + '/whoami', wait_ms: 0 });
     assert.equal(r.status, 200, JSON.stringify(r.data));
     first = (await call('GET', '/sessions/fp1')).data.fingerprint;
+    assert.equal(first.version, 2);
     assert.equal(first.region, 'JP');
     assert.equal(first.locale, 'ja-JP');
     assert.equal(first.timezone, 'Asia/Tokyo');
@@ -448,6 +464,7 @@ describe('per-account fingerprint', () => {
     assert.equal(seen.tz, 'Asia/Tokyo');
     assert.equal(seen.screen, `${first.screen.width}x${first.screen.height}`);
     assert.equal(seen.dpr, first.device_scale_factor);
+    assert.equal(seen.gpu, first.suite.fingerprint.videoCard.renderer);
   });
 
   test('the fingerprint survives a reopen and a service restart', async () => {

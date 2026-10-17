@@ -5,6 +5,7 @@ import { chromium } from 'playwright-core';
 import { agentMayOpen, detectState, platformSpec, shouldCapture } from './detect.js';
 import { ServiceError } from './errors.js';
 import {
+  attachSuite,
   contextOptions,
   generateFingerprint,
   initScript,
@@ -177,7 +178,8 @@ class Session {
     const proxy = parseProxy(this.proxy);
     if (proxy) options.proxy = proxy;
     this.context = await chromium.launchPersistentContext(path.join(this.dir, 'profile'), options);
-    await this.context.addInitScript(initScript(fp));
+    if (fp.suite) await attachSuite(this.context, fp);
+    else await this.context.addInitScript(initScript(fp));
   }
 
   // An external fingerprint browser (AdsPower, BitBrowser) owns its profile,
