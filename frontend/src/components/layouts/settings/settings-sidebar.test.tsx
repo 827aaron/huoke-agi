@@ -18,6 +18,12 @@ vi.mock('@/providers/version-info-provider', () => ({
     }),
 }));
 
+const authInfo: { privileges: string[] } = { privileges: [] };
+
+vi.mock('@/providers/user-provider', () => ({
+    useUser: () => ({ authInfo }),
+}));
+
 import { SidebarProvider } from '@/components/ui/sidebar';
 
 import { SettingsSidebar } from './settings-sidebar';
@@ -75,5 +81,20 @@ describe('SettingsSidebar "Back to App"', () => {
         await user.click(screen.getByRole('link', { name: '模型服务' }));
 
         expect(backToApp()).toHaveAttribute('href', '/dashboard');
+    });
+});
+
+describe('SettingsSidebar users', () => {
+    it('shows user management only to a holder of users.view', () => {
+        authInfo.privileges = [];
+        const { unmount } = renderSidebar({ pathname: '/settings/account' });
+
+        expect(screen.queryByRole('link', { name: '用户管理' })).not.toBeInTheDocument();
+        unmount();
+
+        authInfo.privileges = ['users.view'];
+        renderSidebar({ pathname: '/settings/account' });
+
+        expect(screen.getByRole('link', { name: '用户管理' })).toHaveAttribute('href', '/settings/users');
     });
 });

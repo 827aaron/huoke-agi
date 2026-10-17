@@ -30,6 +30,7 @@ const EXCLUDED: Record<string, string> = {
     '/settings/accounts': 'needs a /growth REST cassette + visual baseline before joining the sweep',
     '/settings/business-profile': 'needs a /growth REST cassette + visual baseline before joining the sweep',
     '/settings/credentials': 'needs a /growth REST cassette + visual baseline before joining the sweep',
+    '/settings/users': 'needs a /users REST cassette + visual baseline before joining the sweep',
     '/templates/new': 'create-mode variant of the template detail page',
 };
 

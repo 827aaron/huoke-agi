@@ -11,35 +11,38 @@ import { api, resolveApiErrorMessage } from '@/lib/axios';
 import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
+// The password policy of every form that sets a password; backend/pkg/password/policy.go enforces the same.
+export const newPasswordSchema = z
+    .string()
+    .min(8, { message: copy.auth.passwordTooShort })
+    // bcrypt, which hashes it server-side, refuses anything longer than 72 bytes.
+    .refine((password) => new TextEncoder().encode(password).length <= 72, {
+        message: copy.auth.passwordTooLong,
+    })
+    .refine(
+        (password) => {
+            const length = [...password].length;
+
+            if (length > 15) {
+                return true;
+            }
+
+            return (
+                length >= 8 &&
+                /[0-9]/.test(password) &&
+                /[a-z]/.test(password) &&
+                /[A-Z]/.test(password) &&
+                /[!@#$&*]/.test(password)
+            );
+        },
+        { message: copy.auth.passwordPolicy },
+    );
+
 const passwordChangeFormSchema = z
     .object({
         confirmPassword: z.string().min(1, { message: copy.auth.confirmPasswordRequired }),
         currentPassword: z.string().min(1, { message: copy.auth.currentPasswordRequired }),
-        newPassword: z
-            .string()
-            .min(8, { message: copy.auth.passwordTooShort })
-            // bcrypt, which hashes it server-side, refuses anything longer than 72 bytes.
-            .refine((password) => new TextEncoder().encode(password).length <= 72, {
-                message: copy.auth.passwordTooLong,
-            })
-            .refine(
-                (password) => {
-                    const length = [...password].length;
-
-                    if (length > 15) {
-                        return true;
-                    }
-
-                    return (
-                        length >= 8 &&
-                        /[0-9]/.test(password) &&
-                        /[a-z]/.test(password) &&
-                        /[A-Z]/.test(password) &&
-                        /[!@#$&*]/.test(password)
-                    );
-                },
-                { message: copy.auth.passwordPolicy },
-            ),
+        newPassword: newPasswordSchema,
     })
     .refine((data) => data.newPassword === data.confirmPassword, {
         message: copy.auth.passwordMismatch,
