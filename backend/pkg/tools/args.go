@@ -1004,6 +1004,7 @@ type GrowthUpsertLeadsAction struct {
 
 type GrowthGetProgressAction struct {
 	Target  Int64  `json:"target,omitempty" jsonschema:"type=integer" jsonschema_description:"Set the round's target when the customer named a number (default 50); omit to only read progress"`
+	Since   string `json:"since,omitempty" jsonschema_description:"Outside a task: count only leads first found at or after this time, RFC 3339 with the user's offset (e.g. 2026-10-17T00:00:00+07:00 for today in Bangkok); a bare date counts from 00:00 UTC"`
 	Message string `json:"message" jsonschema:"required,title=Progress message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are checking progress. Written in the engagement language declared by your system prompt."`
 }
 
@@ -1013,7 +1014,8 @@ type GrowthDeliverLeadsAction struct {
 }
 
 type GrowthListLeadsAction struct {
-	Scope   String `json:"scope,omitempty" jsonschema:"type=string,enum=flow,enum=task,enum=delivered" jsonschema_description:"'flow' (default) leads seen in this flow; 'task' leads touched by the current task; 'delivered' leads already delivered from this flow"`
+	Scope   String `json:"scope,omitempty" jsonschema:"type=string,enum=flow,enum=task,enum=delivered,enum=all" jsonschema_description:"'flow' (default) leads seen in this flow; 'task' leads touched by the current task; 'delivered' leads already delivered from this flow; 'all' every lead of the user"`
+	Since   string `json:"since,omitempty" jsonschema_description:"Only leads first found at or after this time, RFC 3339 with the user's offset (e.g. 2026-10-17T00:00:00+07:00); a bare date counts from 00:00 UTC"`
 	Tier    String `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist,enum=all" jsonschema_description:"Filter by tier (default all)"`
 	Limit   Int64  `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum leads (1-500, default 100)"`
 	Message string `json:"message" jsonschema:"required,title=List leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are listing leads. Written in the engagement language declared by your system prompt."`

@@ -149,7 +149,7 @@ External search engines and the vector store are indexed in English and shared a
   - Specific expected output format and success criteria
   - Constraints and platform considerations
 - Integrate specialist results seamlessly into your response to the user
-- Do a simple lead operation yourself with the lead tools; hand larger lead work to `{{.SearchToolName}}` (finding many sources) or `{{.PentesterToolName}}` (joining and reading many groups, scoring and saving their leads)
+- Lead work by size, as a guide: finding 10 or more new sources goes to `{{.SearchToolName}}`; reading 4 or more sources, or all of them, goes to `{{.PentesterToolName}}`, which also scores and saves their leads; anything smaller you do yourself with the lead tools
 - When a specialist reports that it failed or ran out of time, tell the user plainly which specialist failed, the reason it gave, and what they can do next (for example a key, an account or a model to fix in the settings). Do NOT work around it with the browser or the terminal, and do not delegate the same work again unless the user asks you to
 - Maintain overall task coherence across multiple delegations
 </delegation_rules>
@@ -161,7 +161,7 @@ External search engines and the vector store are indexed in English and shared a
 - Terminal operations: `{{.TerminalToolName}}` for executing commands and system operations inside the Docker container
 - File operations: `{{.FileToolName}}` for reading and modifying files inside the container
 - Web browsing: `{{.BrowserToolName}}` for accessing specific websites and retrieving content
-- Lead tools: `growth_search_sources`, `growth_add_sources`, `growth_join_source`, `growth_sync_source`, `growth_upsert_leads`, `growth_list_leads`, `growth_get_progress` and `growth_deliver_leads` work on the user's source pool and lead list through their authorized accounts. Use them for every lead operation and NEVER page through a group, channel or profile with the browser or the terminal in their place: nothing found that way reaches the user's lead list. A delivery and a progress target belong to a task, so in this chat answer with `growth_list_leads` and `growth_get_progress`
+- Lead tools: `growth_search_sources`, `growth_add_sources`, `growth_join_source`, `growth_sync_source`, `growth_upsert_leads`, `growth_list_leads`, `growth_get_progress` and `growth_deliver_leads` work on the user's source pool and lead list through their authorized accounts. Use them for every lead operation and NEVER page through a group, channel or profile with the browser or the terminal in their place: nothing found that way reaches the user's lead list. A delivery and a progress target belong to a task, so in this chat answer with `growth_list_leads` and `growth_get_progress`: outside a task they cover every lead of the user, and `since` set to the start of the user's day (from the current time) answers "how many today"
 {{- if .UseAgents}}
 - Web research and memory: delegated to specialists (see TEAM COLLABORATION & DELEGATION above) — you do NOT invoke search engines or vector-store searches directly in this mode
 {{- else}}

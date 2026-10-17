@@ -96,8 +96,10 @@ type LeadFilter struct {
 	RunID     *int64
 	Tier      string
 	Delivered *bool
-	Limit     int
-	Offset    int
+	// Since keeps leads first found at or after it; the zero time keeps all.
+	Since  time.Time
+	Limit  int
+	Offset int
 }
 
 // UpsertLeads stores candidates with their evidence. A person is one lead per customer
@@ -340,6 +342,9 @@ func (s *Service) ListLeads(ctx context.Context, userID int64, f LeadFilter) ([]
 	}
 	if f.Delivered != nil {
 		params.Delivered = sql.NullBool{Bool: *f.Delivered, Valid: true}
+	}
+	if !f.Since.IsZero() {
+		params.Since = sql.NullTime{Time: f.Since, Valid: true}
 	}
 
 	leads, err := s.db.GetUserLeads(ctx, params)

@@ -143,6 +143,23 @@ func TestGrowth_Handle_ListLeadsScopesToTheFlow(t *testing.T) {
 	assert.True(t, *backend.lastFilter.Delivered)
 	assert.Equal(t, "qualified", backend.lastFilter.Tier)
 
+	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName,
+		json.RawMessage(`{"scope":"all","since":"2026-10-17T00:00:00+07:00"}`))
+	require.NoError(t, err)
+	assert.Nil(t, backend.lastFilter.FlowID, "all is every lead of the user")
+	assert.Nil(t, backend.lastFilter.TaskID)
+	assert.True(t, time.Date(2026, 10, 16, 17, 0, 0, 0, time.UTC).Equal(backend.lastFilter.Since), backend.lastFilter.Since)
+
 	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"scope":"everyone"}`))
 	assert.Error(t, err)
+	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"since":"today"}`))
+	assert.ErrorContains(t, err, "is not a time")
+}
+
+func TestGrowth_Handle_ProgressCountsFromSince(t *testing.T) {
+	backend := &fakeGrowthBackend{}
+	_, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthGetProgressToolName,
+		json.RawMessage(`{"since":"2026-10-17"}`))
+	require.NoError(t, err)
+	assert.True(t, time.Date(2026, 10, 17, 0, 0, 0, 0, time.UTC).Equal(backend.lastSince), backend.lastSince)
 }

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"pentagi/pkg/database"
 )
@@ -34,15 +35,19 @@ type SourceStats struct {
 // new_leads_this_task: leads this round delivered plus qualified, undelivered leads
 // seen in this flow, so it never drops when the round delivers.
 type Progress struct {
-	RunID            int64       `json:"run_id,omitempty"`
-	TaskID           int64       `json:"task_id,omitempty"`
-	Status           string      `json:"status,omitempty"`
-	Target           int         `json:"target"`
-	NewLeads         int         `json:"new_leads_this_task"`
-	Watchlist        int         `json:"watchlist"`
-	DeliveredThisRun int         `json:"delivered_this_round"`
-	Remaining        int         `json:"remaining"`
-	Sources          SourceStats `json:"sources"`
+	RunID            int64  `json:"run_id,omitempty"`
+	TaskID           int64  `json:"task_id,omitempty"`
+	Status           string `json:"status,omitempty"`
+	Target           int    `json:"target"`
+	NewLeads         int    `json:"new_leads_this_task"`
+	Watchlist        int    `json:"watchlist"`
+	DeliveredThisRun int    `json:"delivered_this_round"`
+	Remaining        int    `json:"remaining"`
+	// Qualified and Delivered count the owner's leads outside a task, from Since when set.
+	Qualified int         `json:"qualified,omitempty"`
+	Delivered int         `json:"delivered,omitempty"`
+	Since     string      `json:"since,omitempty"`
+	Sources   SourceStats `json:"sources"`
 	// Warning names a blocker only the customer can clear, such as a missing Jev key.
 	Warning string `json:"warning,omitempty"`
 }
@@ -100,9 +105,15 @@ func (s *Service) SetTarget(ctx context.Context, scope Scope, target int) (Progr
 	return s.Progress(ctx, scope)
 }
 
-// Progress reports the round of the calling task. Without a task it reports the flow's
-// lead counts and the pool, with no target.
+// Progress reports the round of the calling task. Without a task it reports every lead
+// of the owner and the pool, with no target.
 func (s *Service) Progress(ctx context.Context, scope Scope) (Progress, error) {
+	return s.ProgressSince(ctx, scope, time.Time{})
+}
+
+// ProgressSince is Progress counting only leads first found at or after since; the zero
+// time counts them all.
+func (s *Service) ProgressSince(ctx context.Context, scope Scope, since time.Time) (Progress, error) {
 	var p Progress
 	if scope.TaskID != nil {
 		run, err := s.EnsureRun(ctx, scope)
@@ -118,16 +129,24 @@ func (s *Service) Progress(ctx context.Context, scope Scope) (Progress, error) {
 		p.DeliveredThisRun = len(delivered)
 	}
 
-	counts, err := s.db.CountFlowLeads(ctx, database.CountFlowLeadsParams{
-		UserID: scope.UserID,
-		FlowID: scope.flowID(),
-	})
+	params := database.CountUserLeadsParams{UserID: scope.UserID}
+	if scope.TaskID != nil {
+		params.FlowID = scope.flowID()
+	}
+	if !since.IsZero() {
+		params.Since = sql.NullTime{Time: since, Valid: true}
+		p.Since = since.Format(time.RFC3339)
+	}
+	counts, err := s.db.CountUserLeads(ctx, params)
 	if err != nil {
-		return p, fmt.Errorf("failed to count leads of flow %d: %w", scope.FlowID, err)
+		return p, fmt.Errorf("failed to count leads: %w", err)
 	}
 	p.NewLeads = p.DeliveredThisRun + int(counts.Deliverable)
 	p.Watchlist = int(counts.Watchlist)
 	p.Remaining = max(p.Target-p.NewLeads, 0)
+	if scope.TaskID == nil {
+		p.Qualified, p.Delivered = int(counts.Deliverable+counts.Delivered), int(counts.Delivered)
+	}
 	if cfg, _ := s.ConfigFor(ctx, scope.UserID); cfg.TypeSafeAPIKey == "" {
 		p.Warning = ErrNoJudge.Error()
 	}
