@@ -232,6 +232,9 @@ func main() {
 		growth.SetDefault(growthService)
 		defer growthService.Close()
 		providerOpts = append(providerOpts, providers.WithUserConfig(growthService.ConfigFor))
+		if cfg.TypeSafeAPIKey == "" {
+			logrus.Warn("TYPESAFE_API_KEY is not set: messages cannot be judged until a customer saves a Jev key")
+		}
 	}
 
 	providers, err := providers.NewProviderController(cfg, queries, client, providerOpts...)

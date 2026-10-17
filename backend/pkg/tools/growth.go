@@ -19,7 +19,7 @@ type GrowthBackend interface {
 	RecommendSources(ctx context.Context, scope growth.Scope, sourceID int64, limit int) ([]growth.SourceView, error)
 	AddSources(ctx context.Context, scope growth.Scope, links []string, origin string, discoveredFrom *int64) ([]growth.AddSourceResult, error)
 	JoinSources(ctx context.Context, scope growth.Scope, sourceIDs []int64) ([]growth.JoinOutcome, error)
-	SyncSource(ctx context.Context, scope growth.Scope, sourceID int64, direction string, limit int) (growth.SyncResult, error)
+	SyncSources(ctx context.Context, scope growth.Scope, sourceIDs []int64, opt growth.SyncOptions) ([]growth.SyncResult, error)
 	GetUser(ctx context.Context, scope growth.Scope, platform connectors.Platform, userID string) (connectors.UserProfile, error)
 	UpsertLeads(ctx context.Context, scope growth.Scope, leads []growth.LeadInput) ([]growth.LeadResult, error)
 	Progress(ctx context.Context, scope growth.Scope) (growth.Progress, error)
@@ -159,16 +159,41 @@ func (g *growthTools) syncSource(ctx context.Context, args json.RawMessage) (str
 
 	switch action.Action {
 	case "", "history":
-		if action.SourceID.Int64() <= 0 {
-			return "", errors.New("source_id is required for action=history")
+		ids := make([]int64, 0, len(action.SourceIDs)+1)
+		for _, id := range action.SourceIDs {
+			ids = append(ids, int64(id))
 		}
-		res, err := g.backend.SyncSource(ctx, g.scope, action.SourceID.Int64(), action.Direction.String(), action.Limit.Int())
-		if err != nil {
+		if len(ids) == 0 && action.SourceID.Int64() > 0 {
+			ids = append(ids, action.SourceID.Int64())
+		}
+		if len(ids) == 0 {
+			return "", errors.New("source_id or source_ids is required for action=history")
+		}
+		opt := growth.SyncOptions{Direction: action.Direction.String(), Limit: action.Limit.Int(), All: action.AllMessages.Bool()}
+		results, err := g.backend.SyncSources(ctx, g.scope, ids, opt)
+		if len(ids) == 1 {
+			if len(results) == 1 && results[0].Err != nil {
+				err = results[0].Err
+			}
+			if err != nil || len(results) != 1 {
+				return g.failure(ctx, err)
+			}
+			return g.respond(ctx, syncPayload(results[0]))
+		}
+		if err != nil && len(results) == 0 {
 			return g.failure(ctx, err)
 		}
-		payload := map[string]any{"source": res.Source, "messages": res.Messages, "count": len(res.Messages)}
-		if len(res.Messages) == 0 {
-			payload["note"] = "no messages on this page: the source is read to the end in this direction; move on"
+		items := make([]map[string]any, 0, len(results))
+		for _, res := range results {
+			if res.Err != nil {
+				items = append(items, map[string]any{"source_id": res.Source.ID, "error": growthFailureText(res.Err)})
+				continue
+			}
+			items = append(items, syncPayload(res))
+		}
+		payload := map[string]any{"results": items}
+		if err != nil {
+			payload["stopped"] = growthFailureText(err)
 		}
 		return g.respond(ctx, payload)
 	case "user":
@@ -183,6 +208,29 @@ func (g *growthTools) syncSource(ctx context.Context, args json.RawMessage) (str
 	default:
 		return "", fmt.Errorf("unknown action %q: use history or user", action.Action)
 	}
+}
+
+func syncPayload(res growth.SyncResult) map[string]any {
+	payload := map[string]any{
+		"source": res.Source, "messages": res.Messages, "count": len(res.Messages),
+		"read": res.Read, "skipped_count": res.Skipped,
+	}
+	if res.CaughtUp != nil {
+		payload["caught_up"] = *res.CaughtUp
+	}
+
+	switch {
+	case res.Read == 0 && res.CaughtUp != nil:
+		payload["note"] = "no new messages since the last read; come back later"
+	case res.Read == 0:
+		payload["note"] = "the back-read of this source is done; read it with direction=newer from now on"
+	case len(res.Messages) == 0:
+		payload["note"] = "the pre-screen found none of the messages read worth a look; keep reading"
+	}
+	if res.CaughtUp != nil && !*res.CaughtUp {
+		payload["note"] = "more new messages are waiting: call again with direction=newer"
+	}
+	return payload
 }
 
 func (g *growthTools) upsertLeads(ctx context.Context, args json.RawMessage) (string, error) {
@@ -352,6 +400,8 @@ func growthFailureText(err error) string {
 		return fmt.Sprintf("%v. Use another mode or tool for this source.", err)
 	case errors.Is(err, growth.ErrSourceNotFound):
 		return fmt.Sprintf("%v. Use a source_id returned by %s or %s.", err, GrowthSearchSourcesToolName, GrowthAddSourcesToolName)
+	case errors.Is(err, growth.ErrNoJudge):
+		return fmt.Sprintf("%v. Retrying will not help: report exactly this to the user and end this subtask.", err)
 	case errors.Is(err, growth.ErrNoTask):
 		return fmt.Sprintf("%v.", err)
 	default:

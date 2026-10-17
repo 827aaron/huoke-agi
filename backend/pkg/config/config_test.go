@@ -83,6 +83,7 @@ func TestConfig_GetSecretPatterns_FindsEachSecretVerbatim(t *testing.T) {
 		TavilyAPIKey:            "tvly-1234567890abcdefghijklmnopqrstuvwxyz",
 		FirecrawlAPIKey:         "fc-123",
 		PerplexityAPIKey:        "perplexity-123",
+		TypeSafeAPIKey:          "ts-1234567890abcdef",
 		ProxyURL:                "http://user:password@proxy.example.com:8080",
 		LangfusePublicKey:       "pk-lf-1234567890abcdefghijklmnopqrstuvwxyz",
 		LangfuseSecretKey:       "sk-lf-1234567890abcdefghijklmnopqrstuvwxyz",
@@ -121,7 +122,7 @@ func clearConfigEnv(t *testing.T) {
 
 	envVars := []string{
 		"GROWTH_ENABLED", "TG_API_ID", "TG_API_HASH", "TG_SESSION_DIR", "YOUTUBE_API_KEY", "GROWTH_PROXY_URL", "BROWSER_SERVICE_URL", "BROWSER_TOKEN",
-		"GROWTH_SECRET_KEY",
+		"GROWTH_SECRET_KEY", "TYPESAFE_API_KEY", "TYPESAFE_API_URL",
 		"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_TLS",
 		"DATABASE_URL", "DEBUG", "DATA_DIR", "ASK_USER", "TENANT_ID", "INSTALLATION_ID", "LICENSE_KEY",
 		"DOCKER_INSIDE", "DOCKER_NET_ADMIN", "DOCKER_SOCKET", "DOCKER_NETWORK",

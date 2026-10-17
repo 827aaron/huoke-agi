@@ -244,14 +244,14 @@ func TestAccounts_PickAccount_AddsTheKeyedAccountOnFirstUseAndHidesIt(t *testing
 	w := newWorld(t)
 	ctx := context.Background()
 
-	_, err := w.svc.pickAccount(ctx, w.user, "youtube", 0, map[int64]bool{})
+	_, err := w.svc.pickAccount(ctx, w.user, "youtube", 0, map[int64]bool{}, nil)
 	assert.ErrorIs(t, err, ErrNoAccount, "no keys, no account")
 
 	w.svc.cfg.YouTubeAPIKey = "yt-1,yt-2"
-	acc, err := w.svc.pickAccount(ctx, w.user, "youtube", 0, map[int64]bool{})
+	acc, err := w.svc.pickAccount(ctx, w.user, "youtube", 0, map[int64]bool{}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "youtube", acc.Platform)
-	again, err := w.svc.pickAccount(ctx, w.user, "youtube", 0, map[int64]bool{})
+	again, err := w.svc.pickAccount(ctx, w.user, "youtube", 0, map[int64]bool{}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, acc.ID, again.ID)
 

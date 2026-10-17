@@ -235,9 +235,7 @@ func nextLabel(existing []database.ChannelAccount, platform connectors.Platform)
 }
 
 func (s *Service) signedIn(ctx context.Context, userID, accountID int64) (*AccountView, error) {
-	acc, err := s.db.UpdateChannelAccountStatus(ctx, database.UpdateChannelAccountStatusParams{
-		ID: accountID, Status: AccountStatusActive,
-	})
+	acc, err := s.db.MarkChannelAccountSignedIn(ctx, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to activate account %d: %w", accountID, err)
 	}

@@ -762,7 +762,8 @@ func TestTelegramConfig_TelegramConfigFor(t *testing.T) {
 	assert.Equal(t, 2*time.Minute, cfg.MaxInlineFloodWait)
 	assert.Equal(t, 3, cfg.JoinWarmupCount)
 	assert.Equal(t, 30*time.Second, cfg.CallTimeout)
-	assert.Equal(t, 90*time.Second, cfg.JoinInterval)
+	assert.Zero(t, cfg.JoinInterval, "the connector refuses no join unless the deployer asks it to")
+	assert.Zero(t, cfg.JoinWarmupInterval)
 	assert.False(t, cfg.TestServer)
 	require.NoError(t, cfg.Validate())
 

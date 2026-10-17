@@ -88,6 +88,7 @@ func TestGrowth_Handle_TurnsDomainErrorsIntoInstructions(t *testing.T) {
 		{connectors.ErrUnauthorized, "an operator has to log the account in"},
 		{connectors.ErrNoConnector, "not available in this deployment"},
 		{growth.ErrSourceNotFound, "Use a source_id returned by"},
+		{growth.ErrNoJudge, "fill in its key on the settings page. Retrying will not help"},
 		{errors.New("disk on fire"), "the growth tool failed: disk on fire"},
 	}
 	for _, tt := range tests {

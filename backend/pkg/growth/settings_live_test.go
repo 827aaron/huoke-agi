@@ -366,3 +366,29 @@ func TestSettings_TestSetting_EmbedsOnceToTestTheEmbeddingModel(t *testing.T) {
 	assert.Equal(t, SettingStatusConnected, v.Status, v.StatusReason)
 	assert.Equal(t, "openai returned a 3-dimension vector", v.StatusReason)
 }
+
+func TestSettings_ListSettings_SaysWhetherTheJudgeKeyIsConfigured(t *testing.T) {
+	w := newWorld(t)
+	w.svc.cfg.TypeSafeAPIKey = ""
+	ctx := context.Background()
+	scope := w.seedTask(t)
+
+	v := settingOf(t, w, SettingScreening)
+	assert.False(t, v.Configured)
+	assert.False(t, settingOf(t, w, SettingTelegram).Configured)
+	assert.Equal(t, "0.6", v.Fields["threshold"])
+	p, err := w.svc.Progress(ctx, scope)
+	require.NoError(t, err)
+	assert.ErrorContains(t, ErrNoJudge, p.Warning)
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, "", map[string]string{"threshold": "0.5"})
+	assert.ErrorIs(t, err, ErrInvalidSetting, "the key is required")
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, "", map[string]string{"api_key": "ts-secret-5678"})
+	require.NoError(t, err)
+	v = settingOf(t, w, SettingScreening)
+	assert.True(t, v.Configured)
+	assert.Equal(t, "••••5678", v.Fields["api_key"])
+	p, err = w.svc.Progress(ctx, scope)
+	require.NoError(t, err)
+	assert.Empty(t, p.Warning)
+}

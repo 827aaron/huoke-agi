@@ -38,6 +38,7 @@ const (
 	SettingEmail     = "email"
 	SettingProxy     = "proxy"
 	SettingEmbedding = "embedding"
+	SettingScreening = "screening"
 
 	SettingStatusUntested  = "untested"
 	SettingStatusConnected = "connected"
@@ -62,6 +63,8 @@ type settingField struct {
 	list bool
 	// mask replaces maskSecret for a secret whose shape the page needs to show.
 	mask func(string) string
+	// def is what an empty field means; the page is shown it so it can be edited.
+	def string
 }
 
 type settingSpec struct {
@@ -154,10 +157,10 @@ var settingSpecs = map[string]settingSpec{
 		},
 	},
 	SettingTelegram: {
-		fields: []settingField{
+		fields: append([]settingField{
 			{name: "api_id", required: true},
 			{name: "api_hash", secret: true, required: true},
-		},
+		}, paceFields...),
 		apply: func(c *config.Config, _ string, v map[string]string) {
 			c.TGAPIID, _ = strconv.Atoi(v["api_id"])
 			c.TGAPIHash = v["api_hash"]
@@ -206,6 +209,19 @@ var settingSpecs = map[string]settingSpec{
 			}
 		},
 	},
+	// The Jev pre-screen of synced messages; threshold is the yes probability a message
+	// needs to reach scoring.
+	SettingScreening: {
+		fields: []settingField{
+			{name: "api_key", secret: true, required: true},
+			{name: "threshold", def: "0.6"},
+		},
+		apply: func(c *config.Config, _ string, v map[string]string) {
+			if v["api_key"] != "" {
+				c.TypeSafeAPIKey = v["api_key"]
+			}
+		},
+	},
 	// The default proxy of the customer's platform accounts; an account's own proxy wins.
 	SettingProxy: {
 		fields: []settingField{{name: "url", secret: true, required: true, mask: maskEndpoint}},
@@ -218,6 +234,7 @@ var settingSpecs = map[string]settingSpec{
 // settingKinds is also the order ConfigFor applies saved settings in.
 var settingKinds = []string{
 	SettingLLM, SettingEmbedding, SettingTelegram, SettingYouTube, SettingWebSearch, SettingEmail, SettingProxy,
+	SettingScreening,
 }
 
 // embeddingProviders are the EMBEDDING_PROVIDER values PentAGI's embedder implements.
@@ -251,8 +268,10 @@ type SettingView struct {
 	Source       string            `json:"source"`
 	Status       string            `json:"status"`
 	StatusReason string            `json:"status_reason,omitempty"`
-	TestedAt     *time.Time        `json:"tested_at,omitempty"`
-	UpdatedAt    *time.Time        `json:"updated_at,omitempty"`
+	// Configured is false while nothing, saved or in .env, sets this kind.
+	Configured bool       `json:"configured"`
+	TestedAt   *time.Time `json:"tested_at,omitempty"`
+	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
 }
 
 type storedSetting struct {
@@ -358,6 +377,7 @@ func (s *Service) SaveSetting(
 		return SettingView{}, fmt.Errorf("failed to load %s setting: %w", kind, err)
 	}
 
+	prevCredential := merged["api_id"] + "\x00" + merged["api_hash"]
 	for name, value := range values {
 		if !slices.ContainsFunc(spec.fields, func(f settingField) bool { return f.name == name }) {
 			return SettingView{}, fmt.Errorf("%w: %s has no field %q", ErrInvalidSetting, kind, name)
@@ -389,7 +409,8 @@ func (s *Service) SaveSetting(
 	if err != nil {
 		return SettingView{}, fmt.Errorf("failed to store %s setting: %w", kind, err)
 	}
-	if kind == SettingTelegram || kind == SettingProxy {
+	// A pace change alone leaves the signed-in Telegram clients running.
+	if kind == SettingProxy || (kind == SettingTelegram && merged["api_id"]+"\x00"+merged["api_hash"] != prevCredential) {
 		s.dropUserConnectors(ctx, userID)
 	}
 	return settingView(row, spec, provider, merged), nil
@@ -403,6 +424,9 @@ func validateSetting(kind, provider string, v map[string]string) error {
 		}
 		if !telegramHash.MatchString(v["api_hash"]) {
 			return fmt.Errorf("%w: api_hash must be the 32-character hex string from my.telegram.org", ErrInvalidSetting)
+		}
+		if _, err := parseTelegramPace(v); err != nil {
+			return err
 		}
 	case SettingWebSearch:
 		if provider == "google" && v["cx"] == "" {
@@ -425,6 +449,10 @@ func validateSetting(kind, provider string, v map[string]string) error {
 		}
 	case SettingProxy:
 		if _, err := parseProxyURL(v["url"]); err != nil {
+			return err
+		}
+	case SettingScreening:
+		if _, err := parseScreening(v); err != nil {
 			return err
 		}
 	case SettingLLM:
@@ -499,6 +527,9 @@ func (s *Service) ListSettings(ctx context.Context, userID int64) ([]SettingView
 		}
 		views = append(views, settingView(row, spec, stored.Provider, stored.Values))
 	}
+	for i := range views {
+		views[i].Configured = views[i].Source != SettingSourceNone
+	}
 	return views, nil
 }
 
@@ -522,7 +553,9 @@ func maskFields(spec settingSpec, values map[string]string) map[string]string {
 	for _, f := range spec.fields {
 		v := values[f.name]
 		switch {
-		case !f.secret || v == "":
+		case v == "":
+			v = f.def
+		case !f.secret:
 		case f.mask != nil:
 			v = f.mask(v)
 		case f.list:
@@ -582,6 +615,8 @@ func envValues(cfg *config.Config, kind string) (string, map[string]string) {
 		return "", map[string]string{"api_keys": strings.Join(cfg.YouTubeAPIKeys(), ",")}
 	case SettingProxy:
 		return "", map[string]string{"url": cfg.GrowthProxyURL}
+	case SettingScreening:
+		return "", map[string]string{"api_key": cfg.TypeSafeAPIKey}
 	case SettingEmbedding:
 		return cfg.EmbeddingProvider, map[string]string{
 			"api_key": cfg.EmbeddingKey, "model": cfg.EmbeddingModel, "server_url": cfg.EmbeddingURL,
@@ -740,6 +775,9 @@ func (s *Service) probe(ctx context.Context, cfg *config.Config, kind, provider 
 	}
 	if kind == SettingEmbedding {
 		return probeEmbedding(ctx, cfg)
+	}
+	if kind == SettingScreening {
+		return probeScreening(ctx, cfg)
 	}
 	if kind == SettingProxy {
 		latency, err := checkProxy(ctx, cfg, cfg.GrowthProxyURL)

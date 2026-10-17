@@ -920,6 +920,7 @@ type fakeGrowthBackend struct {
 	lastFrom         *int64
 	lastAllowPartial bool
 	lastFilter       growth.LeadFilter
+	lastSync         growth.SyncOptions
 }
 
 func (f *fakeGrowthBackend) SearchSources(_ context.Context, scope growth.Scope, _ connectors.Platform, _ string, _ int) ([]growth.SourceView, error) {
@@ -945,9 +946,17 @@ func (f *fakeGrowthBackend) JoinSources(_ context.Context, scope growth.Scope, i
 	return []growth.JoinOutcome{}, nil
 }
 
-func (f *fakeGrowthBackend) SyncSource(_ context.Context, scope growth.Scope, _ int64, _ string, _ int) (growth.SyncResult, error) {
-	f.lastScope = scope
-	return growth.SyncResult{}, f.err
+func (f *fakeGrowthBackend) SyncSources(_ context.Context, scope growth.Scope, ids []int64, opt growth.SyncOptions) ([]growth.SyncResult, error) {
+	f.lastScope, f.lastSync = scope, opt
+	results := make([]growth.SyncResult, 0, len(ids))
+	for _, id := range ids {
+		if f.err != nil {
+			results = append(results, growth.SyncResult{Source: growth.SourceView{ID: id}, Err: f.err, Messages: []growth.MessageView{}})
+			return results, f.err
+		}
+		results = append(results, growth.SyncResult{Source: growth.SourceView{ID: id}, Messages: []growth.MessageView{}, Read: 3, Skipped: 3})
+	}
+	return results, nil
 }
 
 func (f *fakeGrowthBackend) GetUser(_ context.Context, scope growth.Scope, _ connectors.Platform, _ string) (connectors.UserProfile, error) {
