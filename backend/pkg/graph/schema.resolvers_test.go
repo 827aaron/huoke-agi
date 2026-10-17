@@ -76,7 +76,7 @@ func (graphProvidersCtrl) DefaultProvidersConfig() provider.ProvidersConfig {
 	return provider.ProvidersConfig{provider.ProviderGLM: &pconfig.ProviderConfig{}}
 }
 
-func (graphProvidersCtrl) DefaultProviders() provider.Providers { return provider.Providers{} }
+func (graphProvidersCtrl) DefaultProviders(context.Context, int64) provider.Providers { return provider.Providers{} }
 
 type graphKnowledgeStore struct {
 	knowledge.KnowledgeStore

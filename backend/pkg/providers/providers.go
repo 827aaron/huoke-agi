@@ -93,7 +93,7 @@ type ProviderController interface {
 	Embedder() embeddings.Embedder
 	EmbedderFor(ctx context.Context, userID int64) embeddings.Embedder
 	GraphitiClient() *graphiti.Client
-	DefaultProviders() provider.Providers
+	DefaultProviders(ctx context.Context, userID int64) provider.Providers
 	DefaultProvidersConfig() provider.ProvidersConfig
 	GetProvider(
 		ctx context.Context,
@@ -130,6 +130,7 @@ type ProviderController interface {
 
 	TestAgent(
 		ctx context.Context,
+		userID int64,
 		prvtype provider.ProviderType,
 		agentType pconfig.ProviderOptionsType,
 		config *pconfig.AgentConfig,
@@ -137,6 +138,7 @@ type ProviderController interface {
 	) (tester.AgentTestResults, error)
 	TestProvider(
 		ctx context.Context,
+		userID int64,
 		prvtype provider.ProviderType,
 		config *pconfig.ProviderConfig,
 	) (tester.ProviderTestResults, error)
@@ -709,8 +711,27 @@ func (pc *providerController) LoadAssistantProvider(
 	return ap, nil
 }
 
-func (pc *providerController) DefaultProviders() provider.Providers {
-	return pc.Providers
+// DefaultProviders is the built-in providers of .env plus those the user's own saved
+// credentials enable.
+func (pc *providerController) DefaultProviders(ctx context.Context, userID int64) provider.Providers {
+	built := make(provider.Providers, len(pc.Providers))
+	for prvname, prv := range pc.Providers {
+		built[prvname] = prv
+	}
+	for prvname, prv := range pc.userDefaults(pc.userConfig(ctx, userID)) {
+		built[prvname] = prv
+	}
+	return built
+}
+
+// typeAvailable reports whether providers of prvtype can be built with cfg: the process
+// enables the type, or cfg, the user's own configuration, does.
+func (pc *providerController) typeAvailable(cfg *config.Config, prvtype provider.ProviderType) bool {
+	if pc.ListTypes().Contains(prvtype) {
+		return true
+	}
+	e, ok := entryForType(prvtype)
+	return ok && cfg != pc.cfg && e.Enabled(cfg)
 }
 
 func (pc *providerController) DefaultProvidersConfig() provider.ProvidersConfig {
@@ -802,16 +823,8 @@ func (pc *providerController) GetProviders(
 	ctx context.Context,
 	userID int64,
 ) (provider.Providers, error) {
-	providersMap := make(provider.Providers, len(pc.Providers))
-
-	// Copy default providers
-	for prvname, prv := range pc.Providers {
-		providersMap[prvname] = prv
-	}
+	providersMap := pc.DefaultProviders(ctx, userID)
 	ucfg := pc.userConfig(ctx, userID)
-	for prvname, prv := range pc.userDefaults(ucfg) {
-		providersMap[prvname] = prv
-	}
 
 	// Copy user providers
 	providers, err := pc.db.GetUserProviders(ctx, userID)
@@ -855,7 +868,7 @@ func (pc *providerController) newProvider(cfg *config.Config, prv database.Provi
 	if !ok {
 		return nil, fmt.Errorf("unknown provider type: %s", prv.Type)
 	}
-	if !pc.ListTypes().Contains(providerType) && (cfg == pc.cfg || !e.Enabled(cfg)) {
+	if !pc.typeAvailable(cfg, providerType) {
 		return nil, fmt.Errorf("provider type '%s' is not available", prv.Type)
 	}
 
@@ -949,7 +962,7 @@ func (pc *providerController) CreateProvider(
 		return result, err
 	}
 
-	if !pc.ListTypes().Contains(prvtype) {
+	if !pc.typeAvailable(pc.userConfig(ctx, userID), prvtype) {
 		return result, fmt.Errorf("provider type '%s' is not available", prvtype)
 	}
 
@@ -1086,6 +1099,7 @@ func (pc *providerController) DeleteProvider(
 
 func (pc *providerController) TestAgent(
 	ctx context.Context,
+	userID int64,
 	prvtype provider.ProviderType,
 	agentType pconfig.ProviderOptionsType,
 	config *pconfig.AgentConfig,
@@ -1143,7 +1157,7 @@ func (pc *providerController) TestAgent(
 
 	// Create temporary provider for testing using existing provider logic
 	providerName := provider.ProviderName("test-provider")
-	tempProvider, err := pc.buildProviderFromConfig(prvtype, providerName, patchedConfig)
+	tempProvider, err := pc.buildProviderFromConfig(pc.userConfig(ctx, userID), prvtype, providerName, patchedConfig)
 	if err != nil {
 		return result, fmt.Errorf("failed to create provider for testing: %w", err)
 	}
@@ -1197,6 +1211,7 @@ func (pc *providerController) TestAgent(
 
 func (pc *providerController) TestProvider(
 	ctx context.Context,
+	userID int64,
 	prvtype provider.ProviderType,
 	config *pconfig.ProviderConfig,
 ) (tester.ProviderTestResults, error) {
@@ -1213,7 +1228,7 @@ func (pc *providerController) TestProvider(
 
 	// Create provider for testing
 	providerName := provider.ProviderName("test-provider")
-	testProvider, err := pc.buildProviderFromConfig(prvtype, providerName, patchedConfig)
+	testProvider, err := pc.buildProviderFromConfig(pc.userConfig(ctx, userID), prvtype, providerName, patchedConfig)
 	if err != nil {
 		return results, fmt.Errorf("failed to create provider for testing: %w", err)
 	}
@@ -1301,6 +1316,7 @@ func (pc *providerController) patchProviderConfig(
 }
 
 func (pc *providerController) buildProviderFromConfig(
+	cfg *config.Config,
 	prvtype provider.ProviderType,
 	prvname provider.ProviderName,
 	config *pconfig.ProviderConfig,
@@ -1310,7 +1326,7 @@ func (pc *providerController) buildProviderFromConfig(
 		return nil, fmt.Errorf("unknown provider type: %s", prvtype)
 	}
 
-	return e.New(pc.cfg, prvname, config)
+	return e.New(cfg, prvname, config)
 }
 
 func newAtomicInt64(seed int64) *atomic.Int64 {
