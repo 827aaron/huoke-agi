@@ -497,10 +497,27 @@ const storedValues = new Map<GrowthSettingKind, Record<string, string>>();
 
 const findSetting = (kind: GrowthSettingKind) => settings.find((item) => item.kind === kind) ?? emptySetting(kind);
 
+// The server drops these fields when they are empty, so the mock does too.
+const onWire = ({
+    provider,
+    providers,
+    status_reason,
+    tested_at,
+    updated_at,
+    ...rest
+}: GrowthSetting): GrowthSetting => ({
+    ...rest,
+    ...(provider && { provider }),
+    ...(providers?.length && { providers }),
+    ...(status_reason && { status_reason }),
+    ...(tested_at && { tested_at }),
+    ...(updated_at && { updated_at }),
+});
+
 const replaceSetting = (next: GrowthSetting) => {
     settings = settings.map((item) => (item.kind === next.kind ? next : item));
 
-    return next;
+    return onWire(next);
 };
 
 const sendMail = (): Promise<GrowthEmailResult> => {
@@ -685,7 +702,7 @@ export const growthMock = {
     listRuns: (flowId: number | string) => delay(runs.map((run) => ({ ...run, flow_id: Number(flowId) }))),
     listSchedules: (flowId: number | string) =>
         delay(schedules.map((schedule) => ({ ...schedule, flow_id: Number(flowId) }))),
-    listSettings: () => delay(settings),
+    listSettings: () => delay(settings.map(onWire)),
     listSources: () => delay({ sources, total: sources.length, warnings: [] }),
     saveSetting: (kind: GrowthSettingKind, input: GrowthSettingInput): Promise<GrowthSetting> => {
         const current = findSetting(kind);

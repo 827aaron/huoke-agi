@@ -18,11 +18,8 @@ vi.mock('../growth-api', () => ({
 const savedProxy: GrowthSetting = {
     fields: { url: 'http://••••@203.0.113.24:8080' },
     kind: 'proxy',
-    provider: null,
-    providers: [],
     source: 'database',
     status: 'connected',
-    status_reason: null,
     tested_at: '2026-10-16T00:00:00Z',
     updated_at: '2026-10-16T00:00:00Z',
 };
@@ -52,7 +49,7 @@ const renderCard = (value: GrowthSetting) =>
 describe('GrowthCredentialCard', () => {
     beforeEach(() => vi.clearAllMocks());
 
-    it('starts a masked proxy empty and keeps it by not resending the mask', async () => {
+    it('starts a masked proxy the server sent without providers empty and keeps it by not resending the mask', async () => {
         render(
             <MemoryRouter>
                 <GrowthCredentialCard
@@ -66,6 +63,7 @@ describe('GrowthCredentialCard', () => {
         fireEvent.click(screen.getByRole('button', { name: '更换密钥' }));
 
         expect(screen.getByLabelText(/代理地址/)).toHaveValue('');
+        expect(screen.getByLabelText(/代理地址/)).toHaveAttribute('placeholder', '留空则保留已保存的值');
 
         fireEvent.click(screen.getByRole('button', { name: /保存/ }));
 

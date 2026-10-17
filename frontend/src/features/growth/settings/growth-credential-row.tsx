@@ -270,7 +270,7 @@ export function GrowthCredentialCard({
     onChange,
     setting,
 }: GrowthCredentialCardProps) {
-    const providers = setting?.providers.length ? setting.providers : fallbackProviders(kind);
+    const providers = setting?.providers?.length ? setting.providers : fallbackProviders(kind);
     const card = text.card[kind] ?? { purpose: '', title: kind };
     const isSaved = settingState(setting) !== 'unset';
 
@@ -296,7 +296,7 @@ export function GrowthCredentialCard({
         : text.guide[kind];
     const isRequiredUnset = REQUIRED_KINDS.includes(kind) && state === 'unset';
     // Saving with the same provider may leave any field empty to keep what is stored.
-    const canKeepSaved = isSaved && setting?.provider === (providers.length ? provider : null);
+    const canKeepSaved = isSaved && (setting?.provider ?? null) === (providers.length ? provider : null);
 
     const startEditing = () => {
         setValues(
