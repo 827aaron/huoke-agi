@@ -1709,7 +1709,8 @@ const zh = {
             ai: 'AI 发现',
             manual: '手工添加',
         },
-        placeholder: '粘贴 Telegram 群或频道链接，一行一个，例如 https://t.me/xxxx 或 https://t.me/+邀请码',
+        placeholder:
+            '粘贴 Telegram 群/频道或论坛、网页链接，一行一个，例如 https://t.me/xxxx 或 https://forum.example.com/board',
         searchPlaceholder: '搜索群名或链接…',
         tooMany: '一次最多添加 100 个链接，请分批添加。',
         unresolved: (link: string) => `${link} 暂时无法解析，请稍后重试`,
@@ -3765,7 +3766,7 @@ const en: Copy = {
             manual: 'Added by hand',
         },
         placeholder:
-            'Paste Telegram group or channel links, one per line, e.g. https://t.me/xxxx or https://t.me/+invite',
+            'Paste Telegram group or channel links, or forum and web page links, one per line, e.g. https://t.me/xxxx or https://forum.example.com/board',
         searchPlaceholder: 'Search name or link...',
         tooMany: 'At most 100 links at a time; please add them in batches.',
         unresolved: (link) => `${link} could not be resolved right now, try again later`,

@@ -44,7 +44,9 @@ test.describe('growth prospect and source panels', { tag: '@flows' }, () => {
         await page.goto('/flows/5');
         await page.getByRole('tab', { name: '来源池' }).click();
 
-        await page.getByPlaceholder(/粘贴 Telegram 群或频道链接/).fill('https://t.me/e2e_new_group\nnot-a-link');
+        await page
+            .getByPlaceholder(/粘贴 Telegram 群\/频道或论坛、网页链接/)
+            .fill('https://t.me/e2e_new_group\nnot-a-link');
         await page.getByRole('button', { name: '添加到来源池' }).click();
 
         await expect(page.getByText('已添加 1 个，将在下一轮加入并读取')).toBeVisible();
