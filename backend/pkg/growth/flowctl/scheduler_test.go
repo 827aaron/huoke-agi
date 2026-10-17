@@ -125,11 +125,23 @@ func (s *schedulingController) StopFlow(ctx context.Context, flowID int64) error
 	return ctx.Err()
 }
 
-func knownProviders(_ context.Context, name provider.ProviderName, _ int64) (provider.ProviderType, error) {
-	if name == "openai-main" {
-		return provider.ProviderOpenAI, nil
+type namedProvider struct {
+	provider.Provider
+	name    provider.ProviderName
+	prvtype provider.ProviderType
+}
+
+func (p namedProvider) Name() provider.ProviderName { return p.name }
+func (p namedProvider) Type() provider.ProviderType { return p.prvtype }
+
+func knownProviders(_ context.Context, name provider.ProviderName, _ int64) (provider.Provider, error) {
+	switch name {
+	case "openai-main":
+		return namedProvider{name: name, prvtype: provider.ProviderOpenAI}, nil
+	case "deepseek":
+		return namedProvider{name: "custom", prvtype: provider.ProviderCustom}, nil
 	}
-	return "", errors.New("provider not found")
+	return nil, errors.New("provider not found")
 }
 
 func TestScheduler_Tick_StartsDueTasksAndRecordsWhyOneDidNot(t *testing.T) {
@@ -138,6 +150,7 @@ func TestScheduler_Tick_StartsDueTasksAndRecordsWhyOneDidNot(t *testing.T) {
 		starts: []growth.ScheduledStart{
 			{ScheduleID: 1, UserID: 7, ProviderName: "openai-main", Input: "<scheduled_round>\n</scheduled_round>\n\nfind 50"},
 			{ScheduleID: 2, UserID: 7, ProviderName: "gone", Input: "find 10"},
+			{ScheduleID: 3, UserID: 7, ProviderName: "deepseek", Input: "find 20"},
 		},
 		calls: &calls, started: map[int64]int64{}, failed: map[int64]string{},
 	}
@@ -145,8 +158,11 @@ func TestScheduler_Tick_StartsDueTasksAndRecordsWhyOneDidNot(t *testing.T) {
 
 	NewScheduler(fc, svc, knownProviders).Tick(context.Background())
 
-	assert.Equal(t, []createdFlow{{7, "<scheduled_round>\n</scheduled_round>\n\nfind 50", "openai-main", provider.ProviderOpenAI}}, fc.created)
-	assert.Equal(t, map[int64]int64{1: 41}, svc.started)
+	assert.Equal(t, []createdFlow{
+		{7, "<scheduled_round>\n</scheduled_round>\n\nfind 50", "openai-main", provider.ProviderOpenAI},
+		{7, "find 20", "custom", provider.ProviderCustom},
+	}, fc.created, "a schedule whose provider is gone runs on the one it resolves to")
+	assert.Equal(t, map[int64]int64{1: 41, 3: 41}, svc.started)
 	assert.Equal(t, map[int64]string{2: `provider "gone" of the task is unavailable: provider not found`}, svc.failed)
 }
 
