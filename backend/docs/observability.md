@@ -609,7 +609,7 @@ messages := []*llms.MessageContent{
     {
         Role: llms.ChatMessageTypeHuman,
         Parts: []llms.ContentPart{
-            llms.TextContent{Text: "Analyze this vulnerability"},
+            llms.TextContent{Text: "Analyze this forum thread"},
         },
     },
 }

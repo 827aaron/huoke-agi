@@ -40,7 +40,7 @@
 
 # GPT-5.6 series - Latest frontier models (Feb 16, 2026 knowledge cutoff, 1M context)
 - name: gpt-5.6-sol
-  description: Frontier model for complex professional work. Roughly corresponds to the unsuffixed model tier used in earlier GPT-5 families (successor to gpt-5.4). 1.05M context window, 128K max output tokens, configurable reasoning effort. Best for the most demanding autonomous penetration testing, sophisticated exploit chain development, and deep multi-stage attack simulation. Prices below apply to prompts up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
+  description: Frontier model for complex professional work. Roughly corresponds to the unsuffixed model tier used in earlier GPT-5 families (successor to gpt-5.4). 1.05M context window, 128K max output tokens, configurable reasoning effort. Best for the most demanding multi-step research, planning across many sources, and orchestrating the whole lead-finding flow. Prices below apply to prompts up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
   thinking: true
   reasoning:
     efforts: [none, low, medium, high, xhigh, max]
@@ -53,7 +53,7 @@
     cache_read: 0.4
 
 - name: gpt-5.6-terra
-  description: GPT-5.6 model balancing intelligence and cost. Roughly corresponds to the mini model tier used in earlier GPT-5 families. 1.05M context window, 128K max output tokens, configurable reasoning effort. Strong fit for multi-phase security assessments and coordinated multi-tool penetration testing at a lower cost than gpt-5.6-sol. Prices below are for a prompt of up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
+  description: GPT-5.6 model balancing intelligence and cost. Roughly corresponds to the mini model tier used in earlier GPT-5 families. 1.05M context window, 128K max output tokens, configurable reasoning effort. Strong fit for multi-phase research and coordinated multi-tool agent work at a lower cost than gpt-5.6-sol. Prices below are for a prompt of up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
   thinking: true
   reasoning:
     efforts: [none, low, medium, high, xhigh, max]
@@ -66,7 +66,7 @@
     cache_read: 0.2
 
 - name: gpt-5.6-luna
-  description: GPT-5.6 model optimized for cost-sensitive, high-volume workloads. Roughly corresponds to the nano model tier used in earlier GPT-5 families. 1.05M context window, 128K max output tokens, configurable reasoning effort. Ideal for rapid reconnaissance, bulk vulnerability scanning, and real-time security monitoring. Prices below are for a prompt of up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
+  description: GPT-5.6 model optimized for cost-sensitive, high-volume workloads. Roughly corresponds to the nano model tier used in earlier GPT-5 families. 1.05M context window, 128K max output tokens, configurable reasoning effort. Ideal for high-volume cheap screening, bulk message classification, and fast extraction. Prices below are for a prompt of up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
   thinking: true
   reasoning:
     efforts: [none, low, medium, high, xhigh, max]
@@ -79,7 +79,7 @@
     cache_read: 0.02
 
 - name: gpt-5.6-cyber
-  description: GPT-5.6 Cyber - purpose-trained cybersecurity model for approved defenders conducting advanced authorized vulnerability research, exploit validation and security testing. Separate Daybreak program approval and provisioning are required. 400K context window, 128K max output tokens and a Feb 16, 2026 knowledge cutoff.
+  description: GPT-5.6 Cyber - purpose-trained model for vendor-approved specialised work. Separate Daybreak program approval and provisioning are required. 400K context window, 128K max output tokens and a Feb 16, 2026 knowledge cutoff.
   thinking: true
   release_date: 2026-08-07
   context_window: 400000
@@ -90,7 +90,7 @@
     cache_read: 1.25
 
 - name: daybreak-red
-  description: Daybreak Red - alias for advanced purpose-trained cybersecurity models available to approved defenders for authorized vulnerability research and security testing. Separate Daybreak program approval and provisioning are required. 400K context window, 128K max output tokens and a Feb 16, 2026 knowledge cutoff.
+  description: Daybreak Red - alias for advanced purpose-trained models available for vendor-approved specialised work. Separate Daybreak program approval and provisioning are required. 400K context window, 128K max output tokens and a Feb 16, 2026 knowledge cutoff.
   thinking: true
   release_date: 2026-08-07
   context_window: 400000
@@ -101,7 +101,7 @@
     cache_read: 1.25
 
 - name: daybreak-blue
-  description: Daybreak Blue - alias for flagship general-purpose models with safeguards calibrated for defensive cybersecurity work. Separate Daybreak program approval and provisioning are required. 1.05M context window, 128K max output tokens and a Feb 16, 2026 knowledge cutoff.
+  description: Daybreak Blue - alias for flagship general-purpose models with vendor-calibrated safeguards for specialised work. Separate Daybreak program approval and provisioning are required. 1.05M context window, 128K max output tokens and a Feb 16, 2026 knowledge cutoff.
   thinking: true
   release_date: 2026-08-07
   context_window: 1050000
@@ -113,7 +113,7 @@
 
 # GPT-5.5 series - Frontier models for complex professional work (Dec 01, 2025 knowledge cutoff, 1M context)
 - name: gpt-5.5
-  description: New class of intelligence for coding and professional work. 1.05M context window, 128K max output tokens, reasoning effort supports none/low/medium(default)/high/xhigh. Excels at complex professional work, sophisticated security research, and advanced autonomous penetration testing. Prices below are for a prompt of up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
+  description: New class of intelligence for coding and professional work. 1.05M context window, 128K max output tokens, reasoning effort supports none/low/medium(default)/high/xhigh. Excels at complex professional work, deep multi-source research, and long autonomous agent runs. Prices below are for a prompt of up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
   thinking: true
   reasoning:
     efforts: [none, low, medium, high, xhigh]
@@ -127,7 +127,7 @@
 
 # Latest GPT-5.4 series - Frontier models with advanced reasoning and professional workflows
 - name: gpt-5.4
-  description: Best intelligence at scale for agentic, coding, and professional workflows. Flagship model with 1M context window and configurable reasoning effort (none/low/medium/high/xhigh). Excels at complex professional work, sophisticated security research, and advanced autonomous penetration testing requiring maximum cognitive depth and accuracy. Prices below are for a prompt of up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
+  description: Best intelligence at scale for agentic, coding, and professional workflows. Flagship model with 1M context window and configurable reasoning effort (none/low/medium/high/xhigh). Excels at complex professional work, deep multi-source research, and long autonomous agent runs requiring maximum cognitive depth and accuracy. Prices below are for a prompt of up to 272K input tokens; above that the whole request bills 2x input and 1.5x output.
   thinking: true
   reasoning:
     efforts: [none, low, medium, high, xhigh]
@@ -140,7 +140,7 @@
     cache_read: 0.25
 
 - name: gpt-5.4-mini
-  description: Strongest mini model yet for coding, computer use, and subagents. Enhanced agentic capabilities with 400K context window and configurable reasoning levels. Ideal for high-volume security workloads, systematic vulnerability analysis, and coordinated multi-tool penetration testing with optimal cost-to-intelligence ratio.
+  description: Strongest mini model yet for coding, computer use, and subagents. Enhanced agentic capabilities with 400K context window and configurable reasoning levels. Ideal for high-volume message analysis, systematic lead qualification, and coordinated multi-tool agent work with optimal cost-to-intelligence ratio.
   thinking: true
   reasoning:
     efforts: [none, low, medium, high, xhigh]
@@ -153,7 +153,7 @@
     cache_read: 0.075
 
 - name: gpt-5.4-nano
-  description: Cheapest GPT-5.4-class model for simple high-volume tasks like classification, data extraction, ranking, and sub-agents. Optimized for speed and cost with 400K context window. Perfect for rapid reconnaissance, bulk vulnerability scanning, and real-time security monitoring with minimal latency.
+  description: Cheapest GPT-5.4-class model for simple high-volume tasks like classification, data extraction, ranking, and sub-agents. Optimized for speed and cost with 400K context window. Perfect for high-volume cheap screening, bulk message classification, and fast extraction with minimal latency.
   thinking: true
   reasoning:
     efforts: [none, low, medium, high, xhigh]
@@ -167,7 +167,7 @@
 
 # Latest GPT-5.2 series - Enhanced agentic models with improved reasoning and tool integration
 - name: gpt-5.2
-  description: Previous frontier model for professional work with configurable reasoning effort. Excels at autonomous security research, complex exploit chain development, and coordinating multi-tool penetration testing workflows. Optimal for sophisticated threat modeling and adaptive attack strategies.
+  description: Previous frontier model for professional work with configurable reasoning effort. Excels at autonomous multi-source research, multi-step planning, and coordinating multi-tool agent workflows. Optimal for evidence synthesis and adaptive re-planning.
   thinking: true
   reasoning:
     efforts: [none, low, medium, high, xhigh]
@@ -181,7 +181,7 @@
 
 # Latest GPT-5 series - Advanced agentic models with native function calling and reasoning
 - name: gpt-5
-  description: Previous intelligent reasoning model for coding and agentic tasks with configurable reasoning effort. Excels at autonomous security research, complex exploit chain development, and coordinating multi-tool penetration testing workflows. Optimal for sophisticated threat modeling and adaptive attack strategies. Retired by the vendor on 11.12.2026; recommended replacement gpt-5.6-sol
+  description: Previous intelligent reasoning model for coding and agentic tasks with configurable reasoning effort. Excels at autonomous multi-source research, multi-step planning, and coordinating multi-tool agent workflows. Optimal for evidence synthesis and adaptive re-planning. Retired by the vendor on 11.12.2026; recommended replacement gpt-5.6-sol
   thinking: true
   reasoning:
     efforts: [minimal, low, medium, high]
@@ -194,7 +194,7 @@
     cache_read: 0.125
 
 - name: gpt-5.1
-  description: The best model for coding and agentic tasks with configurable reasoning effort. Bridges the gap between GPT-5 and GPT-5.2 with faster responses, better personality presets, and refined security analysis. Excellent for balanced penetration testing requiring strong tool coordination with enhanced contextual understanding.
+  description: The best model for coding and agentic tasks with configurable reasoning effort. Bridges the gap between GPT-5 and GPT-5.2 with faster responses, better personality presets, and refined analysis. Excellent for balanced agent work requiring strong tool coordination with enhanced contextual understanding.
   thinking: true
   reasoning:
     efforts: [none, low, medium, high]
@@ -207,7 +207,7 @@
     cache_read: 0.125
 
 - name: gpt-5-mini
-  description: Near-frontier intelligence for cost sensitive, low latency, high volume workloads. Ideal for automated vulnerability analysis, exploit generation, and systematic penetration testing with strong function calling capabilities for security tool orchestration. Retired by the vendor on 11.12.2026; recommended replacement gpt-5.6-terra
+  description: Near-frontier intelligence for cost sensitive, low latency, high volume workloads. Ideal for automated message analysis, lead qualification, and systematic research with strong function calling capabilities for multi-agent orchestration. Retired by the vendor on 11.12.2026; recommended replacement gpt-5.6-terra
   thinking: true
   reasoning:
     efforts: [low, medium, high]
@@ -220,7 +220,7 @@
     cache_read: 0.025
 
 - name: gpt-5-nano
-  description: Fastest, most cost-efficient version of GPT-5, optimized for high-throughput security scanning and rapid tool execution. Perfect for reconnaissance phases, bulk vulnerability detection, and real-time security monitoring with minimal latency in autonomous agent workflows. Retired by the vendor on 11.12.2026; recommended replacement gpt-5.6-luna
+  description: Fastest, most cost-efficient version of GPT-5, optimized for high-throughput screening and rapid tool execution. Perfect for discovery phases, bulk message classification, and fast extraction with minimal latency in autonomous agent workflows. Retired by the vendor on 11.12.2026; recommended replacement gpt-5.6-luna
   thinking: true
   reasoning:
     efforts: [low, medium, high]
@@ -236,7 +236,7 @@
 # DEPRECATED by OpenAI (superseded by GPT-5.x/5.6 series). Kept only for backward
 # compatibility with existing agent configs pinned to this model; avoid for new assignments.
 - name: gpt-4o
-  description: "[DEPRECATED by OpenAI] Multimodal flagship model with vision capabilities and robust function calling. Excellent for comprehensive penetration testing requiring image analysis, web UI assessment, and complex multi-tool orchestration. Strong balance of speed and intelligence for real-time security operations."
+  description: "[DEPRECATED by OpenAI] Multimodal flagship model with vision capabilities and robust function calling. Excellent for research requiring image analysis, web page reading, and complex multi-tool orchestration. Strong balance of speed and intelligence for real-time agent work."
   thinking: false
   release_date: 2024-05-13
   context_window: 128000
@@ -247,7 +247,7 @@
     cache_read: 1.25
 
 - name: gpt-4o-mini
-  description: Fast, affordable small multimodal model with strong function calling and fast inference. Optimal for high-frequency security scanning, automated vulnerability checks, and routine penetration testing tasks. Cost-effective choice for bulk operations and continuous security monitoring.
+  description: Fast, affordable small multimodal model with strong function calling and fast inference. Optimal for high-frequency screening, automated message classification, and routine agent tasks. Cost-effective choice for bulk operations and continuous monitoring of groups.
   thinking: false
   release_date: 2024-07-18
   context_window: 128000
@@ -259,7 +259,7 @@
 
 # Latest GPT-4.1 series - Enhanced intelligence models with improved function calling
 - name: gpt-4.1
-  description: Smartest non-reasoning model, with superior function calling accuracy and deeper security domain knowledge. Excels at complex threat analysis, sophisticated exploit development, and comprehensive penetration testing requiring extensive tool coordination and adaptive attack planning.
+  description: Smartest non-reasoning model, with superior function calling accuracy and deeper domain knowledge. Excels at complex analysis, evidence summarisation, and comprehensive research requiring extensive tool coordination and adaptive planning.
   thinking: false
   release_date: 2025-04-14
   context_window: 1047576
@@ -270,7 +270,7 @@
     cache_read: 0.5
 
 - name: gpt-4.1-mini
-  description: Smaller, faster version of GPT-4.1 with improved efficiency and strong function calling. Excellent for routine security assessments, automated code analysis, and systematic vulnerability testing with optimal cost-to-intelligence ratio for production workloads.
+  description: Smaller, faster version of GPT-4.1 with improved efficiency and strong function calling. Excellent for routine research tasks, message classification, and systematic lead qualification with optimal cost-to-intelligence ratio for production workloads.
   thinking: false
   release_date: 2025-04-14
   context_window: 1047576
@@ -283,7 +283,7 @@
 # DEPRECATED by OpenAI. Kept only for backward compatibility with existing agent configs
 # pinned to this model; avoid for new assignments.
 - name: gpt-4.1-nano
-  description: "[DEPRECATED by OpenAI] Fastest, most cost-efficient version of GPT-4.1. Optimized for high-throughput operations, bulk security scanning, rapid reconnaissance, continuous monitoring, and basic vulnerability detection where speed and cost efficiency are critical. Retired by the vendor on 23.10.2026; recommended replacement gpt-5.6-luna"
+  description: "[DEPRECATED by OpenAI] Fastest, most cost-efficient version of GPT-4.1. Optimized for high-throughput operations, bulk screening, fast discovery, continuous monitoring, and basic classification where speed and cost efficiency are critical. Retired by the vendor on 23.10.2026; recommended replacement gpt-5.6-luna"
   thinking: false
   release_date: 2025-04-14
   context_window: 1047576
@@ -293,11 +293,11 @@
     output: 0.4
     cache_read: 0.025
 
-# Reasoning models - o-series with extended chain-of-thought for complex security tasks
+# Reasoning models - o-series with extended chain-of-thought for complex multi-step tasks
 # o3-mini, o4-mini and o1 are DEPRECATED by OpenAI. Kept only for backward
 # compatibility with existing agent configs pinned to these models; avoid for new assignments.
 - name: o3-mini
-  description: "[DEPRECATED by OpenAI] Compact reasoning model with extended thinking capabilities for methodical security analysis. Excellent at step-by-step attack planning, logical vulnerability chaining, and systematic penetration testing. Strong deliberative reasoning for complex security scenarios at an efficient cost point. Retired by the vendor on 23.10.2026; recommended replacement gpt-5.6-sol"
+  description: "[DEPRECATED by OpenAI] Compact reasoning model with extended thinking capabilities for methodical analysis. Excellent at step-by-step research planning, logical evidence chaining, and systematic lead qualification. Strong deliberative reasoning for complex scenarios at an efficient cost point. Retired by the vendor on 23.10.2026; recommended replacement gpt-5.6-sol"
   thinking: true
   reasoning:
     efforts: [low, medium, high]
@@ -310,7 +310,7 @@
     cache_read: 0.55
 
 - name: o4-mini
-  description: "[DEPRECATED by OpenAI, succeeded by GPT-5 mini] Next-generation reasoning model with enhanced speed and accuracy. Ideal for methodical security assessments, systematic exploit development, and structured vulnerability analysis. Balances deep reasoning with faster inference for production penetration testing workflows. Retired by the vendor on 23.10.2026; recommended replacement gpt-5.6-terra"
+  description: "[DEPRECATED by OpenAI, succeeded by GPT-5 mini] Next-generation reasoning model with enhanced speed and accuracy. Ideal for methodical research, systematic planning, and structured evidence analysis. Balances deep reasoning with faster inference for production agent workflows. Retired by the vendor on 23.10.2026; recommended replacement gpt-5.6-terra"
   thinking: true
   reasoning:
     efforts: [low, medium, high]
@@ -323,7 +323,7 @@
     cache_read: 0.275
 
 - name: o3
-  description: Reasoning model for complex tasks, succeeded by GPT-5. Excels at multi-stage attack chain development, deep vulnerability analysis, and intricate exploit construction requiring extensive deliberative thinking and strategic planning. Retired by the vendor on 11.12.2026; recommended replacement gpt-5.6-sol
+  description: Reasoning model for complex tasks, succeeded by GPT-5. Excels at multi-stage research planning, deep evidence analysis, and intricate report construction requiring extensive deliberative thinking and strategic planning. Retired by the vendor on 11.12.2026; recommended replacement gpt-5.6-sol
   thinking: true
   reasoning:
     efforts: [low, medium, high]
@@ -336,7 +336,7 @@
     cache_read: 0.5
 
 - name: o1
-  description: "[DEPRECATED by OpenAI] Premier reasoning model with maximum thinking depth for highly complex security challenges. Specialized in advanced penetration testing methodologies, novel exploit research, and sophisticated attack vector discovery. Best for critical security research requiring exhaustive analysis. Retired by the vendor on 23.10.2026; recommended replacement gpt-5.6-sol"
+  description: "[DEPRECATED by OpenAI] Premier reasoning model with maximum thinking depth for highly complex challenges. Specialized in advanced research methodologies, novel source discovery, and sophisticated multi-step planning. Best for critical research requiring exhaustive analysis. Retired by the vendor on 23.10.2026; recommended replacement gpt-5.6-sol"
   thinking: true
   reasoning:
     efforts: [low, medium, high]

@@ -434,7 +434,7 @@ These settings control how PentAGI interacts with Docker, which is used for term
 | DockerPublicIP               | `DOCKER_PUBLIC_IP`                 | `0.0.0.0`              | Public IP address for Docker containers' port bindings (bridge mode only) |
 | DockerWorkDir                | `DOCKER_WORK_DIR`                  | *(none)*               | Custom working directory inside Docker containers |
 | DockerDefaultImage           | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for containers when specific images fail |
-| DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
+| DockerDefaultImageForPentest | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for tasks that need the full command-line toolset |
 | TerminalToolTimeout          | `TERMINAL_TOOL_TIMEOUT`            | `1200`                 | Default execution timeout in seconds applied when an agent requests `timeout=0` or a negative value. Accepted range: `1`–`10800` (3 hours). Values `<= 0` or above `10800` are clamped to the 3-hour maximum. Negative values are treated identically to `0`. |
 
 ### Worker Docker Access (`DOCKER_INSIDE_*`)
@@ -1604,57 +1604,57 @@ These settings are used in `pkg/tools/tools.go` to configure available tools for
   ],
   "functions": [
     {
-      "name": "custom_vulnerability_scan",
-      "url": "https://scanner.example.com/api/v1/scan",
+      "name": "fetch_forum_page",
+      "url": "https://fetcher.example.com/api/v1/fetch",
       "timeout": 120,
       "context": ["pentester", "coder"],
       "schema": {
         "type": "function",
         "function": {
-          "name": "custom_vulnerability_scan",
-          "description": "Perform a custom vulnerability scan on the target",
+          "name": "fetch_forum_page",
+          "description": "Fetch and parse a public forum or group page",
           "parameters": {
             "type": "object",
             "properties": {
-              "target": {
+              "source_url": {
                 "type": "string",
-                "description": "Target IP address or domain to scan"
+                "description": "URL of the public page to fetch"
               },
-              "scan_type": {
+              "fetch_type": {
                 "type": "string",
-                "enum": ["quick", "full", "stealth"],
-                "description": "Type of scan to perform"
+                "enum": ["single", "thread", "paginated"],
+                "description": "How much of the page to retrieve"
               }
             },
-            "required": ["target"]
+            "required": ["source_url"]
           }
         }
       }
     },
     {
-      "name": "query_threat_intelligence",
-      "url": "https://threatintel.example.com/api/query",
+      "name": "lookup_directory",
+      "url": "https://directory.example.com/api/query",
       "timeout": 30,
       "context": ["searcher", "adviser"],
       "schema": {
         "type": "function",
         "function": {
-          "name": "query_threat_intelligence",
-          "description": "Query threat intelligence database for IoCs and TTPs",
+          "name": "lookup_directory",
+          "description": "Look up a public business directory for matching organizations",
           "parameters": {
             "type": "object",
             "properties": {
-              "indicator": {
+              "query": {
                 "type": "string",
-                "description": "IP, domain, hash, or other indicator to search"
+                "description": "Name, domain, or keyword to search"
               },
-              "indicator_type": {
+              "query_type": {
                 "type": "string",
-                "enum": ["ip", "domain", "hash", "url"],
-                "description": "Type of indicator"
+                "enum": ["name", "domain", "keyword"],
+                "description": "Type of query"
               }
             },
-            "required": ["indicator", "indicator_type"]
+            "required": ["query", "query_type"]
           }
         }
       }
@@ -1692,7 +1692,7 @@ Common built-in functions that can be disabled:
 - `traversaal` - Traversaal Search
 - `perplexity` - Perplexity Search
 - `searxng` - SearXNG Search
-- `sploitus` - Sploitus Exploit Search
+- `sploitus` - Sploitus Technical Index Search
 - `graphiti_search` - Graphiti Knowledge Graph Search
 
 The specific functions available depend on the agent type and system configuration.
@@ -1714,7 +1714,7 @@ These settings control the integration with various search engines used for web 
 
 | Option          | Environment Variable | Default Value | Description                                                 |
 | --------------- | -------------------- | ------------- | ----------------------------------------------------------- |
-| SploitusEnabled | `SPLOITUS_ENABLED`   | `true`        | Enable or disable Sploitus exploit and vulnerability search |
+| SploitusEnabled | `SPLOITUS_ENABLED`   | `true`        | Enable or disable Sploitus technical index search |
 
 ### Google Search
 
@@ -1849,10 +1849,10 @@ These settings enable:
 - Configuration of search parameters like language, context size, and time range
 - Integration of search capabilities into the AI agent's toolset
 - Web information gathering with different search strategies
-- Security research through Sploitus, providing access to exploit databases and CVE information
+- Specialized technical lookups through Sploitus
 - Meta-search capabilities through Searxng, aggregating results from multiple search engines
 
-Having multiple search engine options ensures redundancy and provides different search algorithms for varied information needs. Sploitus is specifically designed for security research, providing comprehensive exploit and vulnerability information essential for penetration testing. Searxng is particularly useful as it provides aggregated results from multiple search engines while offering enhanced privacy and customization options.
+Having multiple search engine options ensures redundancy and provides different search algorithms for varied information needs. Sploitus is a specialized technical index useful for narrow technical lookups. Searxng is particularly useful as it provides aggregated results from multiple search engines while offering enhanced privacy and customization options.
 
 ## Network and Proxy Settings
 
@@ -2011,7 +2011,7 @@ These settings control the agent supervision system, including execution monitor
 | ExecutionMonitorEnabled        | `EXECUTION_MONITOR_ENABLED`         | `false`       | Enable automatic execution monitoring (mentor/adviser supervision)     |
 | ExecutionMonitorSameToolLimit  | `EXECUTION_MONITOR_SAME_TOOL_LIMIT` | `5`           | Threshold for consecutive identical tool calls before mentor review    |
 | ExecutionMonitorTotalToolLimit | `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT`| `10`          | Threshold for total tool calls before mentor review                    |
-| MaxGeneralAgentToolCalls       | `MAX_GENERAL_AGENT_TOOL_CALLS`      | `100`         | Maximum tool calls for general agents (Assistant, Primary, Pentester, Coder, Installer) |
+| MaxGeneralAgentToolCalls       | `MAX_GENERAL_AGENT_TOOL_CALLS`      | `100`         | Maximum tool calls for general agents (Assistant, Primary, Researcher, Coder, Installer) |
 | MaxLimitedAgentToolCalls       | `MAX_LIMITED_AGENT_TOOL_CALLS`      | `20`          | Maximum tool calls for limited agents (Searcher, Enricher, etc.)       |
 | AgentPlanningStepEnabled       | `AGENT_PLANNING_STEP_ENABLED`       | `false`       | Enable automatic task planning for specialist agents                   |
 
@@ -2061,7 +2061,7 @@ The agent supervision settings are used in `pkg/providers/providers.go` and `pkg
       }
   }
   ```
-  General agents (Assistant, Primary Agent, Pentester, Coder, Installer) are designed for complex, multi-step workflows and have a higher tool call limit to complete sophisticated tasks.
+  General agents (Assistant, Primary Agent, Researcher, Coder, Installer) are designed for complex, multi-step workflows and have a higher tool call limit to complete sophisticated tasks.
 
 - **MaxLimitedAgentToolCalls**: Maximum iterations for specialized, limited-scope agents:
   ```go
@@ -2086,7 +2086,7 @@ The agent supervision settings are used in `pkg/providers/providers.go` and `pkg
       // Generate execution plan via planner before specialist execution
   }
   ```
-  When enabled, the planner (adviser in planning mode) generates a structured 3-7 step execution plan before specialist agents (Pentester, Coder, Installer) begin their work, improving task completion rates and preventing scope creep.
+  When enabled, the planner (adviser in planning mode) generates a structured 3-7 step execution plan before specialist agents (Researcher, Coder, Installer) begin their work, improving task completion rates and preventing scope creep.
 
 These settings enable:
 - **Automatic supervision**: Mentor reviews execution patterns to detect loops and inefficiencies

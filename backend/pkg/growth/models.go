@@ -101,7 +101,11 @@ func (s *Service) ListModels(ctx context.Context, userID int64, kind, provider s
 			if endpoint == "" {
 				endpoint = screening.OpenRouterURL
 			}
-			keep = func(id string) bool { return strings.HasPrefix(id, screening.OpenRouterModelPrefix) }
+			// OpenRouter lists typesafe/jev-router, which its own chat endpoint
+			// answers with "model not found".
+			keep = func(id string) bool {
+				return screening.IsOpenRouterModel(id) && !strings.HasSuffix(id, "/jev-router")
+			}
 		case screeningTypeSafe:
 			if endpoint == "" {
 				endpoint = screening.DefaultURL
@@ -139,6 +143,10 @@ func (s *Service) ListModels(ctx context.Context, userID int64, kind, provider s
 		}
 	}
 	slices.SortFunc(out, func(a, b ModelOption) int { return strings.Compare(a.ID, b.ID) })
+	if kind == SettingScreening && provider == screeningOpenRouter &&
+		!slices.ContainsFunc(out, func(m ModelOption) bool { return m.ID == screening.OpenRouterDefaultModel }) {
+		out = append([]ModelOption{{ID: screening.OpenRouterDefaultModel, Name: "Jev (latest)"}}, out...)
+	}
 	return out, nil
 }
 

@@ -415,6 +415,28 @@ func TestSettings_TestSetting_EmbedsOnceToTestTheEmbeddingModel(t *testing.T) {
 	assert.Equal(t, "openai returned a 3-dimension vector", v.StatusReason)
 }
 
+func TestSettings_ListSettings_CountsAnEmbedderConfiguredOnlyWithWhatItNeeds(t *testing.T) {
+	w := newWorld(t)
+	for _, tc := range []struct {
+		name string
+		cfg  func(*config.Config)
+		want bool
+	}{
+		{"the default provider without a key", func(c *config.Config) { c.EmbeddingProvider = "openai" }, false},
+		{"openai with the chat key", func(c *config.Config) { c.EmbeddingProvider, c.OpenAIKey = "openai", "sk-1" }, true},
+		{"ollama without a server", func(c *config.Config) { c.EmbeddingProvider = "ollama" }, false},
+		{"ollama with a server", func(c *config.Config) { c.EmbeddingProvider, c.OllamaServerURL = "ollama", "http://ollama:11434" }, true},
+		{"jina with its key", func(c *config.Config) { c.EmbeddingProvider, c.EmbeddingKey = "jina", "jina-1" }, true},
+		{"none", func(c *config.Config) { c.EmbeddingProvider, c.EmbeddingKey = "none", "k" }, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w.svc.cfg.EmbeddingProvider, w.svc.cfg.EmbeddingKey, w.svc.cfg.OpenAIKey, w.svc.cfg.OllamaServerURL = "", "", "", ""
+			tc.cfg(w.svc.cfg)
+			assert.Equal(t, tc.want, settingOf(t, w, SettingEmbedding).Configured)
+		})
+	}
+}
+
 func TestSettings_ListSettings_SaysWhetherTheJudgeKeyIsConfigured(t *testing.T) {
 	w := newWorld(t)
 	w.svc.cfg.TypeSafeAPIKey = ""
@@ -467,7 +489,7 @@ func TestSettings_ConfigFor_PointsJevAtTheChosenProvider(t *testing.T) {
 	cfg, err = w.svc.ConfigFor(ctx, w.user)
 	require.NoError(t, err)
 	assert.Equal(t, "https://openrouter.ai/api", newJevClient(cfg).ResolvedURL())
-	assert.Equal(t, "typesafe/jev-latest", newJevClient(cfg).ResolvedModel())
+	assert.Equal(t, "~typesafe/jev-latest", newJevClient(cfg).ResolvedModel())
 
 	_, err = w.svc.SaveSetting(ctx, w.user, SettingScreening, screeningOpenRouter, map[string]string{"model": "typesafe/jev-1.13"})
 	require.NoError(t, err)

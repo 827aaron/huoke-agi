@@ -406,7 +406,7 @@ agent := observation.Agent(
     langfuse.WithAgentInput(analysisRequest),
     langfuse.WithAgentMetadata(langfuse.Metadata{
         "agent_role": "security_researcher",
-        "capabilities": []string{"vulnerability_analysis", "exploit_detection"},
+        "capabilities": []string{"lead_analysis", "intent_detection"},
     }),
 )
 
@@ -631,7 +631,7 @@ messages := []*llms.MessageContent{
     {
         Role: llms.ChatMessageTypeHuman,
         Parts: []llms.ContentPart{
-            llms.TextContent{Text: "Analyze this vulnerability"},
+            llms.TextContent{Text: "Analyze this forum thread"},
         },
     },
 }

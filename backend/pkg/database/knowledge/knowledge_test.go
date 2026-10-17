@@ -536,6 +536,36 @@ func TestKnowledge_DoSearch_FailsWhenAnyStepFails(t *testing.T) {
 	}
 }
 
+func TestKnowledge_DoSearch_EmbedsWithTheActingUsersEmbedder(t *testing.T) {
+	server, own := &mockEmbedder{unavailable: true}, &mockEmbedder{}
+	var asked []int64
+	db := &mockDB{
+		searchKnowledge: func(database.SearchKnowledgeDocumentsParams) ([]database.SearchKnowledgeDocumentsRow, error) {
+			return nil, nil
+		},
+		searchUserKnowledge: func(database.SearchUserKnowledgeDocumentsParams) ([]database.SearchUserKnowledgeDocumentsRow, error) {
+			return nil, nil
+		},
+	}
+	ks := NewKnowledgeStore(db, nil, server, nil, 0, WithUserEmbedders(func(_ context.Context, userID int64) embeddings.Embedder {
+		asked = append(asked, userID)
+		if userID == 7 {
+			return own
+		}
+		return nil
+	}))
+
+	_, err := ks.SearchUserDocuments(t.Context(), 7, "user query", nil, 5)
+	require.NoError(t, err)
+	_, err = ks.SearchDocuments(WithActor(t.Context(), 7), "admin query", nil, 5)
+	require.NoError(t, err)
+	_, err = ks.SearchUserDocuments(t.Context(), 8, "q", nil, 5)
+	assert.ErrorContains(t, err, "embedding provider is not available", "a user without one falls back to the server's")
+
+	assert.Equal(t, []string{"user query", "admin query"}, own.embedded)
+	assert.Equal(t, []int64{7, 7, 8}, asked)
+}
+
 func TestKnowledge_ListDocuments_ReadsEveryDocumentOrOneFlowThenFilters(t *testing.T) {
 	errList := errors.New("list failed")
 
