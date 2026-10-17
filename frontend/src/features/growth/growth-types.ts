@@ -180,6 +180,13 @@ export interface GrowthProfile {
 
 export type GrowthProfileInput = Omit<GrowthProfile, 'id' | 'updated_at'>;
 
+// A starting profile in English, the language the agents read; the page names it by its id. A list
+// the preset leaves to the owner, such as the regions, comes back null.
+export interface GrowthProfilePreset {
+    id: string;
+    profile: { [K in keyof GrowthProfileInput]: GrowthProfileInput[K] | null };
+}
+
 export type GrowthProxySource = 'account' | 'direct' | 'global';
 
 // Tests the route the account's traffic takes now, by fetching api.telegram.org through it.

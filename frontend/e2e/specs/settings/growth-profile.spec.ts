@@ -14,14 +14,14 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
         await page.goto('/settings/business-profile');
 
         await expect(page.getByText('还没有业务档案')).toBeVisible();
-        await expect(page.getByLabel('排除规则')).toHaveValue('卖号\n代练\n竞品官方\n机器人');
+        await expect(page.getByLabel('排除规则')).toHaveValue('竞品官方\n机器人\n广告和推销');
 
         await page.getByRole('button', { name: '保存' }).click();
 
         await expect(page.getByText('请填写业务名称')).toBeVisible();
-        await expect(page.getByText('请填写游戏 / 产品名称')).toBeVisible();
-        await expect(page.getByText('请选择游戏类型')).toBeVisible();
-        await expect(page.getByText('请填写你想让玩家知道什么')).toBeVisible();
+        await expect(page.getByText('请填写产品名称')).toBeVisible();
+        await expect(page.getByText('请填写产品类型')).toBeVisible();
+        await expect(page.getByText('请填写你想让目标人群知道什么')).toBeVisible();
         await expect(page.getByText('请填写目标地区')).toBeVisible();
         await expect(page.getByText('请至少选择一种目标语言')).toBeVisible();
         await expect(page.getByText('业务档案已保存')).toHaveCount(0);
@@ -52,10 +52,9 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
         await page.goto('/settings/business-profile');
 
         await page.getByLabel('业务名称').fill('星穹纪元');
-        await page.getByLabel('游戏 / 产品名称').fill('星穹纪元, Star Era');
-        await page.getByRole('combobox').click();
-        await page.getByRole('option', { name: 'MMORPG' }).click();
-        await page.getByLabel('你想让玩家知道什么').fill('新服开启，老玩家回归送礼包');
+        await page.getByLabel('产品名称').fill('星穹纪元, Star Era');
+        await page.getByLabel('产品类型').fill('MMORPG');
+        await page.getByLabel('你想让目标人群知道什么').fill('新服开启，老玩家回归送礼包');
         await page.getByLabel('目标地区').fill('东南亚、台湾');
         await page.getByRole('button', { name: '中文' }).click();
         await page.getByRole('button', { name: '英语' }).click();
@@ -66,6 +65,20 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
         await expect(page.getByText('请填写业务名称')).toHaveCount(0);
         await expect(page.getByLabel('业务名称')).toHaveValue('星穹纪元');
         await expect(page.getByLabel('默认每轮目标数')).toHaveValue('30');
+
+        expectCleanPage(pageErrorLog);
+    });
+
+    test('fills the profile from a template and keeps the name typed before', async ({ page, pageErrorLog }) => {
+        await page.goto('/settings/business-profile');
+
+        await page.getByLabel('业务名称').fill('Lucky Star');
+        await page.getByRole('combobox', { name: '从模板开始（可选）' }).click();
+        await page.getByRole('option', { name: '持牌线上娱乐城找玩家' }).click();
+
+        await expect(page.getByLabel('业务名称')).toHaveValue('Lucky Star');
+        await expect(page.getByLabel('产品类型')).toHaveValue('Licensed online casino and sportsbook');
+        await expect(page.getByLabel('产品名称')).toHaveValue('online slots\nlive casino\nsports betting');
 
         expectCleanPage(pageErrorLog);
     });
