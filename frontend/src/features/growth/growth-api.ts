@@ -52,12 +52,13 @@ const live = {
         unwrapApiResponse(await api.post<GrowthAccount>(`/growth/accounts/remote-login/${sessionId}/finish`)),
     listAccounts: async () => unwrapApiResponse(await api.get<GrowthAccountsResponse>('/growth/accounts/')).accounts,
     listLeads: async (flowId: number | string) =>
-        unwrapApiResponse(await api.get<GrowthLead[]>('/growth/leads/', { params: { flow_id: flowId } })),
+        unwrapApiResponse(await api.get<{ leads: GrowthLead[] }>('/growth/leads/', { params: { flow_id: flowId } }))
+            .leads,
     listProfiles: async () => unwrapApiResponse(await api.get<GrowthProfile[]>('/growth/profiles')),
     listRuns: async (flowId: number | string) =>
-        unwrapApiResponse(await api.get<GrowthRun[]>('/growth/runs/', { params: { flow_id: flowId } })),
+        unwrapApiResponse(await api.get<{ runs: GrowthRun[] }>('/growth/runs/', { params: { flow_id: flowId } })).runs,
     listSettings: async () => unwrapApiResponse(await api.get<GrowthSettingsResponse>('/growth/settings/')).settings,
-    listSources: async () => unwrapApiResponse(await api.get<GrowthSource[]>('/growth/sources/')),
+    listSources: async () => unwrapApiResponse(await api.get<{ sources: GrowthSource[] }>('/growth/sources/')).sources,
     // Answers 503 Growth.NoSecretKey while the server has no key to encrypt secrets with.
     saveSetting: async (kind: GrowthSettingKind, input: GrowthSettingInput) =>
         unwrapApiResponse(await api.put<GrowthSetting>(`/growth/settings/${kind}`, input)),
