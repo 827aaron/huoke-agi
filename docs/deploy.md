@@ -9,7 +9,7 @@ This guide is written for the person who deploys KeLai AGI and for an AI assista
 | `pentagi` | The KeLai AGI application: web interface, API and the agents | `8443` (HTTPS) |
 | `pgvector` | PostgreSQL database with vector search: leads, sources, settings, memory, knowledge base | internal only |
 | `scraper` | Built-in headless browser the agents use to read public web pages | internal only |
-| `browser` | Keeps one logged-in browser per Facebook, Instagram and TikTok account; serves the login window | `7070` |
+| `browser` | Keeps one logged-in browser per Facebook, Instagram and TikTok account; its login window is served by `pentagi` under `/browser` | internal only |
 | `growth-worker` | Not a service: the image each task's sandbox container is started from. It exits right after `up`, which is expected | — |
 | `pgexporter` | Optional database metrics, started only with `--profile monitoring` | — |
 
@@ -105,11 +105,9 @@ Set these when people will open the interface from other computers:
 ```ini
 PENTAGI_LISTEN_IP=0.0.0.0
 PUBLIC_URL=https://SERVER_ADDRESS:8443
-BROWSER_LISTEN_IP=0.0.0.0
-BROWSER_PUBLIC_URL=http://SERVER_ADDRESS:7070
 ```
 
-Open ports 8443 and 7070 in the firewall. Port 7070 serves the window an operator uses to log in to Facebook, Instagram or TikTok. Each login link carries a one-time ticket.
+Open port 8443 in the firewall. The window an operator uses to log in to Facebook, Instagram or TikTok is served through it too, under `/browser`, and each login link carries a one-time ticket.
 
 ### Optional
 
@@ -277,7 +275,7 @@ Back up first. Database changes apply by themselves when the application starts,
 | The assistant does the work itself and no leads appear | The switch that lets specialists collaborate is off for that assistant. Turn it on in the assistant input, or set `ASSISTANT_USE_AGENTS=true` in `.env` and restart |
 | A task reports "no judgement model (Jev) is configured" | Enter the Jev key on the settings page or set `TYPESAFE_API_KEY` |
 | Telegram login says it cannot reach Telegram, or times out | The server cannot reach Telegram directly. Give the account a proxy on the Accounts page, or set `GROWTH_PROXY_URL`, and use the proxy test button |
-| Facebook, Instagram or TikTok login link does not open | Run `docker compose ps browser`. On a server, `BROWSER_PUBLIC_URL` must be the server address, not `localhost`, and port 7070 must be open |
+| Facebook, Instagram or TikTok login window stays blank | Run `docker compose ps browser` and check that `BROWSER_SERVICE_URL` is empty or points at the `browser` service |
 | `browser` stays in a waiting state | It waits until `pentagi` has written the token on its first start. Check that `pentagi` is running |
 | Saving a key on the settings page fails | The data volume is not writable, so the encryption key could not be stored. See `docker compose logs pentagi` |
 | Memory and knowledge base never show up | No embedding model. Fill in the embedding model under the language model card on the settings page, set `EMBEDDING_KEY`, or choose OpenAI or OpenRouter as the language model |

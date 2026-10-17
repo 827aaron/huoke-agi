@@ -82,6 +82,14 @@ SET model_provider_name = sqlc.arg(new_name)
 WHERE user_id = sqlc.arg(user_id) AND model_provider_name = sqlc.arg(old_name) AND deleted_at IS NULL
 RETURNING *;
 
+-- name: GetUserProviderReferences :many
+SELECT DISTINCT model_provider_name FROM flows
+WHERE user_id = sqlc.arg(user_id)::bigint AND deleted_at IS NULL
+UNION
+SELECT DISTINCT a.model_provider_name FROM assistants a
+JOIN flows f ON f.id = a.flow_id
+WHERE f.user_id = sqlc.arg(user_id)::bigint AND a.deleted_at IS NULL AND f.deleted_at IS NULL;
+
 -- name: DeleteFlow :one
 UPDATE flows
 SET deleted_at = CURRENT_TIMESTAMP

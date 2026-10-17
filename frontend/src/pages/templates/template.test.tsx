@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formSchema } from './template';
+import { formSchema, PRESET_TEMPLATES } from './template';
 
 const TITLE_LIMIT = 255;
 const TEXT_LIMIT = 65536;
@@ -52,4 +52,19 @@ describe('the flow template form schema', () => {
         expect(parse({ text: '\u{1f512}'.repeat(TEXT_LIMIT) }).success).toBe(true);
         expect(parse({ text: '\u{1f512}'.repeat(TEXT_LIMIT + 1) }).success).toBe(false);
     });
+});
+
+describe('the preset templates', () => {
+    it('have distinct titles', () => {
+        const titles = PRESET_TEMPLATES.map((preset) => preset.title);
+
+        expect(new Set(titles).size).toBe(titles.length);
+    });
+
+    it.each(PRESET_TEMPLATES.map((preset) => [preset.title, preset]))(
+        '"%s" passes the form schema',
+        (_title, preset) => {
+            expect(formSchema.safeParse(preset).success).toBe(true);
+        },
+    );
 });

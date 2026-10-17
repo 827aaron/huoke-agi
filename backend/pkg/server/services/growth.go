@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"pentagi/pkg/server/response"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type growthSources struct {
@@ -64,10 +66,35 @@ type growthRuns struct {
 // owned by the authenticated user; flows and tasks are filters only.
 type GrowthService struct {
 	svc *growth.Service
+	// repoint moves the user's flows and assistants off a provider the new LLM key no
+	// longer builds; nil leaves them to repoint on their next input.
+	repoint func(ctx context.Context, userID int64) error
+}
+
+// invalidRequest answers 400 with the reason in msg, which the page shows as it is: the
+// shared error leaves the reason only in development builds and a debug log line.
+func invalidRequest(c *gin.Context, err error) {
+	response.ErrorWithLevel(c, response.NewHttpError(
+		http.StatusBadRequest, response.ErrGrowthInvalidRequest.Code(),
+		response.ErrGrowthInvalidRequest.Msg()+": "+err.Error(),
+	), err, logrus.WarnLevel)
 }
 
 func NewGrowthService(svc *growth.Service) *GrowthService {
 	return &GrowthService{svc: svc}
+}
+
+func (s *GrowthService) RepointProvidersWith(fn func(ctx context.Context, userID int64) error) {
+	s.repoint = fn
+}
+
+func (s *GrowthService) llmChanged(c *gin.Context, uid int64) {
+	if c.Param("kind") != growth.SettingLLM || s.repoint == nil {
+		return
+	}
+	if err := s.repoint(c, uid); err != nil {
+		logger.FromContext(c).WithError(err).Warn("failed to repoint flows after the LLM key changed")
+	}
 }
 
 // ListSources is a function to return the source pool
@@ -117,7 +144,7 @@ func (s *GrowthService) AddSources(c *gin.Context) {
 	var req growthAddSourcesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		logger.FromContext(c).WithError(err).Errorf("error binding JSON")
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -148,7 +175,7 @@ func (s *GrowthService) DeleteSource(c *gin.Context) {
 
 	sourceID, err := strconv.ParseInt(c.Param("sourceID"), 10, 64)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -187,7 +214,7 @@ func (s *GrowthService) ListLeads(c *gin.Context) {
 
 	filter, err := leadFilter(c)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -218,7 +245,7 @@ func (s *GrowthService) GetLead(c *gin.Context) {
 
 	leadID, err := strconv.ParseInt(c.Param("leadID"), 10, 64)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -252,7 +279,7 @@ func (s *GrowthService) ListRuns(c *gin.Context) {
 
 	flowID, err := optionalInt64(c, "flow_id")
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -376,7 +403,7 @@ func (s *GrowthService) ExportLeads(c *gin.Context) {
 
 	filter, err := leadFilter(c)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -443,7 +470,7 @@ func accountError(c *gin.Context, err error) {
 	case errors.Is(err, growth.ErrAccountNotFound):
 		response.Error(c, response.ErrGrowthAccountNotFound, err)
 	case errors.Is(err, growth.ErrInvalidSetting):
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 	case errors.Is(err, growth.ErrNoSecretKey):
 		response.Error(c, response.ErrGrowthNoSecretKey, err)
 	case errors.Is(err, growth.ErrLoginNotFound):
@@ -482,7 +509,7 @@ func (s *GrowthService) CreateAccount(c *gin.Context) {
 
 	var req growthCreateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -520,12 +547,12 @@ func (s *GrowthService) UpdateAccount(c *gin.Context) {
 
 	accountID, err := strconv.ParseInt(c.Param("accountID"), 10, 64)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 	var req growth.AccountUpdate
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -557,14 +584,14 @@ func (s *GrowthService) TestAccountProxy(c *gin.Context) {
 
 	accountID, err := strconv.ParseInt(c.Param("accountID"), 10, 64)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
 	var req growthProxyRequest
 	if c.Request.ContentLength != 0 {
 		if err := c.ShouldBindJSON(&req); err != nil {
-			response.Error(c, response.ErrGrowthInvalidRequest, err)
+			invalidRequest(c, err)
 			return
 		}
 	}
@@ -589,7 +616,7 @@ type growthProxyRequest struct {
 func accountIDParam(c *gin.Context) (int64, bool) {
 	id, err := strconv.ParseInt(c.Param("accountID"), 10, 64)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return 0, false
 	}
 	return id, true
@@ -663,7 +690,7 @@ func (s *GrowthService) SetAccountProxy(c *gin.Context) {
 	}
 	var req growthProxyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 	proxy := ""
@@ -714,7 +741,7 @@ func (s *GrowthService) StartTelegramLogin(c *gin.Context) {
 
 	var req growthTelegramLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -747,7 +774,7 @@ func (s *GrowthService) SubmitTelegramCode(c *gin.Context) {
 
 	var req growthCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -778,7 +805,7 @@ func (s *GrowthService) SubmitTelegramPassword(c *gin.Context) {
 
 	var req growthPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -810,7 +837,7 @@ func (s *GrowthService) StartRemoteLogin(c *gin.Context) {
 
 	var req growth.LoginStart
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 	req.Phone = ""
@@ -889,14 +916,14 @@ func (s *GrowthService) EmailLeads(c *gin.Context) {
 
 	var req growthLeadsEmailRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
 	to, err := s.svc.EmailLeads(c, uid, req.FlowID, req.TaskID)
 	switch {
 	case errors.Is(err, growth.ErrNoSMTP), errors.Is(err, growth.ErrNoLeadsToSend):
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	case err != nil:
 		response.Error(c, response.ErrGrowthEmailFailed, err)
@@ -959,7 +986,7 @@ func (s *GrowthService) CreateProfile(c *gin.Context) {
 
 	var req growth.Profile
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -991,12 +1018,12 @@ func (s *GrowthService) UpdateProfile(c *gin.Context) {
 
 	id, err := strconv.ParseInt(c.Param("profileID"), 10, 64)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 	var req growth.Profile
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -1012,7 +1039,7 @@ func (s *GrowthService) UpdateProfile(c *gin.Context) {
 func profileError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, growth.ErrInvalidProfile):
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 	case errors.Is(err, growth.ErrNoProfile):
 		response.Error(c, response.ErrGrowthProfileNotFound, err)
 	default:
@@ -1059,7 +1086,7 @@ type growthTestEmailResult struct {
 func settingError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, growth.ErrInvalidSetting):
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 	case errors.Is(err, growth.ErrNoSecretKey):
 		response.Error(c, response.ErrGrowthNoSecretKey, err)
 	case errors.Is(err, growth.ErrSettingNotStored):
@@ -1111,7 +1138,7 @@ func (s *GrowthService) SaveSetting(c *gin.Context) {
 
 	var req growthSaveSettingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -1120,6 +1147,7 @@ func (s *GrowthService) SaveSetting(c *gin.Context) {
 		settingError(c, err)
 		return
 	}
+	s.llmChanged(c, uid)
 
 	response.Success(c, http.StatusOK, view)
 }
@@ -1142,6 +1170,7 @@ func (s *GrowthService) DeleteSetting(c *gin.Context) {
 		settingError(c, err)
 		return
 	}
+	s.llmChanged(c, uid)
 
 	response.Success(c, http.StatusOK, struct{}{})
 }
@@ -1189,7 +1218,7 @@ func (s *GrowthService) ListModels(c *gin.Context) {
 
 	var req growthListModelsRequest
 	if err := c.ShouldBindJSON(&req); err != nil && !errors.Is(err, io.EOF) {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 	values := map[string]string{"api_key": req.APIKey, "api_url": req.APIURL, "server_url": req.ServerURL, "protocol": req.Protocol}
@@ -1229,7 +1258,7 @@ func (s *GrowthService) SendTestEmail(c *gin.Context) {
 	var req growthTestEmailRequest
 	if c.Request.ContentLength != 0 {
 		if err := c.ShouldBindJSON(&req); err != nil {
-			response.Error(c, response.ErrGrowthInvalidRequest, err)
+			invalidRequest(c, err)
 			return
 		}
 	}
@@ -1237,7 +1266,7 @@ func (s *GrowthService) SendTestEmail(c *gin.Context) {
 	to, err := s.svc.SendTestEmail(c, uid, req.To, req.Language)
 	if err != nil {
 		if errors.Is(err, growth.ErrInvalidSetting) {
-			response.Error(c, response.ErrGrowthInvalidRequest, err)
+			invalidRequest(c, err)
 			return
 		}
 		response.Error(c, response.ErrGrowthEmailFailed, err)
@@ -1263,7 +1292,7 @@ func (s *GrowthService) ListSchedules(c *gin.Context) {
 
 	flowID, err := optionalInt64(c, "flow_id")
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -1295,7 +1324,7 @@ func (s *GrowthService) CreateSchedule(c *gin.Context) {
 
 	var req growth.ScheduleInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -1327,12 +1356,12 @@ func (s *GrowthService) UpdateSchedule(c *gin.Context) {
 
 	id, err := strconv.ParseInt(c.Param("scheduleID"), 10, 64)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 	var req growth.ScheduleInput
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -1362,7 +1391,7 @@ func (s *GrowthService) DeleteSchedule(c *gin.Context) {
 
 	id, err := strconv.ParseInt(c.Param("scheduleID"), 10, 64)
 	if err != nil {
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 		return
 	}
 
@@ -1377,7 +1406,7 @@ func (s *GrowthService) DeleteSchedule(c *gin.Context) {
 func scheduleError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, growth.ErrInvalidSchedule):
-		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		invalidRequest(c, err)
 	case errors.Is(err, growth.ErrScheduleNotFound):
 		response.Error(c, response.ErrGrowthScheduleNotFound, err)
 	case errors.Is(err, growth.ErrFlowNotFound):

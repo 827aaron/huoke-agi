@@ -132,7 +132,7 @@ func (r *mutationResolver) PutUserInput(ctx context.Context, flowID int64, input
 	var prv provider.Provider
 	if modelProvider != nil && *modelProvider != "" {
 		name := provider.ProviderName(*modelProvider)
-		prv, err = r.ProvidersCtrl.GetProvider(ctx, name, uid)
+		prv, err = r.Controller.ProviderFor(ctx, uid, name)
 		if err != nil {
 			return model.ResultTypeError, fmt.Errorf("failed to get provider '%s': %w", *modelProvider, err)
 		}
@@ -395,6 +395,18 @@ func (r *mutationResolver) CallAssistant(ctx context.Context, flowID int64, assi
 
 	aw, err := fw.GetAssistant(ctx, assistantID)
 	if err != nil {
+		return model.ResultTypeError, err
+	}
+
+	assistant, err := r.DB.GetFlowAssistant(ctx, database.GetFlowAssistantParams{ID: assistantID, FlowID: flowID})
+	if err != nil {
+		return model.ResultTypeError, err
+	}
+	prv, err := r.Controller.ProviderFor(ctx, uid, provider.ProviderName(assistant.ModelProviderName))
+	if err != nil {
+		return model.ResultTypeError, fmt.Errorf("failed to get provider '%s': %w", assistant.ModelProviderName, err)
+	}
+	if err := aw.SwitchProvider(ctx, prv); err != nil {
 		return model.ResultTypeError, err
 	}
 

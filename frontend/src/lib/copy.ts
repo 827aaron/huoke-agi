@@ -309,7 +309,7 @@ const zh = {
             },
             'embedding.openrouter.model': { label: '模型', placeholder: '默认 openai/text-embedding-3-small' },
             'screening.api_key': { label: 'TypeSafe 密钥', placeholder: '粘贴 TypeSafe 给你的密钥' },
-            'screening.model': { label: '模型', placeholder: '默认最新版，可填具体版本号' },
+            'screening.model': { label: '模型', placeholder: '' },
             'screening.openrouter.api_key': { label: 'OpenRouter 密钥', placeholder: '粘贴 OpenRouter 的密钥' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
@@ -406,6 +406,7 @@ const zh = {
         llmTopUpNote: '新注册的账号请先在服务商后台充值，否则测试会提示额度不足。',
         loadFailed: '密钥状态加载失败，请刷新重试。',
         mailLanguage: 'Chinese',
+        modelDefault: (model: string) => `${model}（默认）`,
         modelsEmpty: '没有拿到模型列表，请手动填写模型名称',
         modelsFailed: '获取模型失败，请检查密钥和地址，或手动填写模型名称',
         modelsFetch: '获取模型',
@@ -1622,6 +1623,7 @@ const zh = {
     routeError: {
         chunk: '系统刚刚更新了版本，重新加载即可使用最新版。',
         desync: '页面显示出了点小问题，重新加载通常就能恢复。',
+        details: '错误详情（截图发给我们便于定位）',
         offline: '网络已断开，页面没能加载。网络恢复后会自动重新加载。',
         title: '出了点问题',
         unexpected: '页面遇到了意外错误，重新加载通常就能恢复。',
@@ -2339,7 +2341,7 @@ const en: Copy = {
             },
             'embedding.openrouter.model': { label: 'Model', placeholder: 'Defaults to openai/text-embedding-3-small' },
             'screening.api_key': { label: 'TypeSafe key', placeholder: 'Paste the key TypeSafe gave you' },
-            'screening.model': { label: 'Model', placeholder: 'Latest by default; enter a version to pin one' },
+            'screening.model': { label: 'Model', placeholder: '' },
             'screening.openrouter.api_key': { label: 'OpenRouter key', placeholder: 'Paste your OpenRouter key' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
@@ -2441,6 +2443,7 @@ const en: Copy = {
         llmTopUpNote: 'New accounts need a top-up first, or the test reports no quota.',
         loadFailed: 'Failed to load the key status. Please refresh.',
         mailLanguage: 'English',
+        modelDefault: (model: string) => `${model} (default)`,
         modelsEmpty: 'No models came back; enter the model name by hand',
         modelsFailed: 'Could not fetch the models; check the key and URL, or enter the model name by hand',
         modelsFetch: 'Fetch models',
@@ -3702,6 +3705,7 @@ const en: Copy = {
     routeError: {
         chunk: 'A new version was likely just deployed. Reloading will load the latest one.',
         desync: 'The page hit a display glitch. Reloading usually clears it.',
+        details: 'Error details (include them in a screenshot to help us find the cause)',
         offline: 'You are offline, so this page could not load. It will reload once the connection is back.',
         title: 'Something went wrong',
         unexpected: 'The page ran into an unexpected error. Reloading usually clears it.',

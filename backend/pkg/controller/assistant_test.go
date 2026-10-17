@@ -14,9 +14,12 @@ import (
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/pconfig"
+	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/providers/tester/mock"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,6 +39,16 @@ type lifecycleChain struct {
 	delay     time.Duration
 	err       error
 	lang      string
+	// current is the provider name SetProvider treats as already in use.
+	current provider.ProviderName
+}
+
+func (c *lifecycleChain) SetProvider(_ context.Context, prv provider.Provider) (bool, string, error) {
+	if prv.Name() == c.current {
+		return false, "call_%s", nil
+	}
+	c.current = prv.Name()
+	return true, "tc_%s", nil
 }
 
 func (*lifecycleChain) Title() string { return "assistant" }
@@ -378,4 +391,24 @@ func TestAssistant_PutInput_RefusesAnInputWhoseAssistantIsFinishedMeanwhile(t *t
 	assert.ErrorIs(t, controllerReceive(t, answered, "the input to be answered"), context.Canceled,
 		"a caller whose assistant was finished is told it stopped instead of waiting for the chain")
 	require.NoError(t, controllerReceive(t, finished, "the assistant to finish"))
+}
+
+func TestAssistant_SwitchProvider_StoresAndPublishesOnlyARealChange(t *testing.T) {
+	q := &lifecycleQuerier{}
+	pub := &cascadeFakePublisher{}
+	aw := &assistantWorker{
+		id: 5, ap: &lifecycleChain{current: "deepseek"}, db: q, pub: pub,
+		logger: logrus.NewEntry(logrus.StandardLogger()),
+	}
+
+	require.NoError(t, aw.SwitchProvider(context.Background(), mock.NewProvider(provider.ProviderDeepSeek, "deepseek", "m")))
+	assert.Empty(t, q.providerCalls)
+
+	require.NoError(t, aw.SwitchProvider(context.Background(), mock.NewProvider(provider.ProviderCustom, "custom", "m")))
+	require.Len(t, q.providerCalls, 1)
+	assert.Equal(t, database.UpdateAssistantProviderParams{
+		ModelProviderName: "custom", ModelProviderType: "custom", ToolCallIDTemplate: "tc_%s", Model: "m", ID: 5,
+	}, q.providerCalls[0])
+	_, updated := pub.assistants()
+	assert.Len(t, updated, 1)
 }

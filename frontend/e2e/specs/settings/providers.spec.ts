@@ -68,6 +68,23 @@ test.describe('settings providers create form', { tag: '@coverage' }, () => {
 
         expectCleanPage(pageErrorLog);
     });
+
+    test('offers only the configured types and picks one without asking about unsaved changes', async ({
+        page,
+        pageErrorLog,
+    }) => {
+        await page.goto('/settings/providers/new');
+
+        await page.getByRole('button', { name: '选择服务商' }).click();
+        await expect(page.getByRole('option', { name: 'deepseek' })).toHaveCount(0);
+        await page.getByRole('option', { name: 'anthropic' }).click();
+
+        await expect(page).toHaveURL(/\/settings\/providers\/new\?type=anthropic$/);
+        await expect(page.getByRole('button', { name: /^顾问/ })).toBeVisible();
+        await expect(page.getByText('有未保存的修改')).toHaveCount(0);
+
+        expectCleanPage(pageErrorLog);
+    });
 });
 
 test.describe('settings providers write path', { tag: '@coverage' }, () => {

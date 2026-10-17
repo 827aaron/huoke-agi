@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -176,10 +177,14 @@ func (plt ProvidersListTypes) Contains(ptype ProviderType) bool {
 	return false
 }
 
+// ErrProviderNotFound means no provider answers to a name, as when the key behind it
+// was removed.
+var ErrProviderNotFound = errors.New("provider not found")
+
 func (p Providers) Get(pname ProviderName) (Provider, error) {
 	provider, ok := p[pname]
 	if !ok {
-		return nil, fmt.Errorf("provider not found by name '%s'", pname)
+		return nil, fmt.Errorf("%w by name '%s'", ErrProviderNotFound, pname)
 	}
 
 	return provider, nil

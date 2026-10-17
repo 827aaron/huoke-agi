@@ -1,6 +1,6 @@
 import { TriangleAlert } from 'lucide-react';
 import { useEffect, useSyncExternalStore } from 'react';
-import { useRouteError } from 'react-router-dom';
+import { isRouteErrorResponse, useRouteError } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -18,6 +18,18 @@ const subscribeToConnection = (onChange: () => void) => {
 };
 
 const isBrowserOnline = () => navigator.onLine;
+
+const errorDetails = (error: unknown) => {
+    if (isRouteErrorResponse(error)) {
+        return `${error.status} ${error.statusText}`;
+    }
+
+    if (error instanceof Error) {
+        return [`${error.name}: ${error.message}`, error.stack].filter(Boolean).join('\n');
+    }
+
+    return String(error);
+};
 
 const describeFailure = ({
     isChunk,
@@ -77,6 +89,14 @@ function RouteErrorBoundary() {
                     <EmptyDescription>{describeFailure({ isChunk, isDesync, isOnline })}</EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
+                    <details className="w-full max-w-xl text-left">
+                        <summary className="text-muted-foreground cursor-pointer text-sm">
+                            {copy.routeError.details}
+                        </summary>
+                        <pre className="bg-muted mt-2 max-h-64 overflow-auto rounded-md p-3 text-xs whitespace-pre-wrap">
+                            {errorDetails(error)}
+                        </pre>
+                    </details>
                     <Button
                         disabled={isWaitingForConnection}
                         onClick={() => window.location.reload()}
