@@ -4,7 +4,14 @@ import { createContext, useContext, useMemo } from 'react';
 
 import { useFlow } from '@/providers/flow-provider';
 
-import type { GrowthAccount, GrowthLead, GrowthProfile, GrowthRun, GrowthSource } from './growth-types';
+import type {
+    GrowthAccount,
+    GrowthJoinWarning,
+    GrowthLead,
+    GrowthProfile,
+    GrowthRun,
+    GrowthSource,
+} from './growth-types';
 
 import {
     ACCOUNTS_POLL_INTERVAL_MS,
@@ -20,6 +27,7 @@ interface GrowthFlowContextValue {
     accounts: GrowthAccount[] | undefined;
     isLeadsLoading: boolean;
     isSourcesLoading: boolean;
+    joinWarnings: GrowthJoinWarning[];
     leads: GrowthLead[];
     leadsError: unknown;
     profile: GrowthProfile | null;
@@ -33,6 +41,7 @@ const EMPTY: GrowthFlowContextValue = {
     accounts: undefined,
     isLeadsLoading: false,
     isSourcesLoading: false,
+    joinWarnings: [],
     leads: [],
     leadsError: null,
     profile: null,
@@ -61,12 +70,13 @@ export function GrowthFlowProvider({ children }: { children: ReactNode }) {
             accounts,
             isLeadsLoading: leadsState.isLoading,
             isSourcesLoading: sourcesState.isLoading,
+            joinWarnings: sourcesState.data?.warnings ?? [],
             leads: leadsState.data ?? [],
             leadsError: leadsState.error,
             profile: profilesState.data?.[0] ?? null,
             refetchSources: sourcesState.refetch,
             run,
-            sources: sourcesState.data ?? [],
+            sources: sourcesState.data?.sources ?? [],
             sourcesError: sourcesState.error,
         }),
         [accounts, leadsState, sourcesState, profilesState.data, run],

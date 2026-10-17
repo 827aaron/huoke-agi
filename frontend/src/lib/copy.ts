@@ -219,6 +219,16 @@ const zh = {
     },
     connection: { reconnecting: '暂时收不到实时更新，正在重新连接' },
     credentials: {
+        advanced: {
+            email: {
+                hint: '留空则由平台代发。填了发信服务器，就改用你自己的邮箱发。',
+                title: '高级：自定义发信服务器（可选）',
+            },
+            telegram: {
+                hint: '这些是建议节奏，超出时只在页面上提醒，不会阻止加群。留空则用默认值。',
+                title: '高级：加群节奏（建议值）',
+            },
+        } as Record<string, { hint: string; title: string }>,
         cancel: '取消',
         card: {
             email: {
@@ -235,6 +245,11 @@ const zh = {
             proxy: {
                 purpose: '所有账号默认走这个代理出网。不填也能用，直接连接。单个账号可以在账号连接页另设代理。',
                 title: '默认代理',
+            },
+            screening: {
+                purpose:
+                    '先由它快速判断每条消息有没有购买意向，过线的再打分。没有它任务无法筛选和打分。用量很小，一天通常不到几毛钱。',
+                title: '判断模型 Jev（初筛打分）',
             },
             telegram: {
                 purpose:
@@ -256,7 +271,7 @@ const zh = {
         description:
             '智能体工作需要几项外部服务的密钥。在这里填写就行，不用改任何配置文件。密钥只保存在你自己的服务器上，保存后只显示一部分。',
         embeddingAdvanced: '高级：向量模型（记忆和知识库用）',
-        emptyHint: '还没有填写任何密钥。先填写“大模型”和“Telegram 接口凭据”，智能体就能开始工作。',
+        emptyHint: '还没有填写任何密钥。先填写“大模型”和“判断模型 Jev”，智能体就能开始工作。',
         envSource: '服务器预设',
         envSourceNote: '这一项由服务器预设，在这里保存会覆盖它。',
         field: {
@@ -264,20 +279,40 @@ const zh = {
             api_id: { label: 'api_id', placeholder: '纯数字，例如 1234567' },
             api_key: { label: 'API 密钥', placeholder: '粘贴服务商给你的密钥' },
             api_keys: { label: 'API 密钥', placeholder: '每行一个密钥' },
+            api_url: { label: '接口地址', placeholder: 'https://api.example.com' },
             cx: { label: '搜索引擎 ID', placeholder: '' },
+            first_sync_days: { label: '新群回溯天数', placeholder: '7' },
+            first_sync_messages: { label: '新群回溯消息数', placeholder: '300' },
             from: { label: '发件人地址', placeholder: '例如 leads@example.com' },
             host: { label: '发信服务器（SMTP）', placeholder: '例如 smtp.qq.com' },
+            join_interval_minutes: { label: '加群间隔（分钟）', placeholder: '3-10' },
+            join_ramp: { label: '新号每日加群上限', placeholder: '0,0,0,1,1,2,2,3' },
+            joined_groups_warning: { label: '已加群数提醒线', placeholder: '450' },
+            joins_per_day: { label: '每天加群上限', placeholder: '5' },
             model: { label: '模型名称', placeholder: '例如 gpt-4o' },
             notify_emails: { label: '接收名单的邮箱', placeholder: '多个邮箱用逗号分隔，留空则发到登录邮箱' },
             password: { label: '密码或授权码', placeholder: '邮箱的 SMTP 授权码' },
             port: { label: '端口', placeholder: '通常是 465 或 587' },
+            private_joins_per_day: { label: '私密群每天上限', placeholder: '2' },
             protocol: { label: 'API 协议', placeholder: '' },
+            read_interval_seconds: { label: '读群间隔（秒）', placeholder: '5-15' },
+            risk_reminders: { label: '风控提醒', placeholder: '' },
             server_url: { label: '接口地址', placeholder: 'https://api.example.com/v1' },
+            threshold: { label: '意向判断线', placeholder: '0.6' },
             tls: { label: '加密方式', placeholder: '' },
             url: { label: '代理地址', placeholder: 'http://user:pass@host:port 或 socks5://host:port' },
             username: { label: '登录用户名', placeholder: '一般就是邮箱地址' },
         } as Record<string, { label: string; placeholder: string }>,
+        fieldByKind: {
+            'screening.api_key': { label: 'TypeSafe 密钥', placeholder: '粘贴 TypeSafe 给你的密钥' },
+            'screening.model': { label: '模型', placeholder: '默认最新版，可填具体版本号' },
+            'screening.openrouter.api_key': { label: 'OpenRouter 密钥', placeholder: '粘贴 OpenRouter 的密钥' },
+        } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
+            'screening.threshold':
+                '消息有购买意向的把握达到这个值才进入打分，0 到 1 之间，默认 0.6。调高更严、漏掉的多；调低更宽、要看的多。',
+            'telegram.join_ramp': '从账号首次登录那天算起，每天最多加几个群，逗号分隔；排完后按“每天加群上限”。',
+            'telegram.risk_reminders': '关闭后不再显示加群节奏的黄色提醒。',
             'web_search.api_keys': '可填多个，用完一个自动换下一个。',
             'youtube.api_keys':
                 '可填多个，用完一个自动换下一个。注意：同一个 Google 项目里的多个 key 共用额度，多 key 不增加额度；建议向 Google 免费申请提额。',
@@ -285,9 +320,19 @@ const zh = {
         fieldInvalid: {
             api_hash: 'api_hash 应为 32 位字母和数字',
             api_id: 'api_id 是一串纯数字',
+            api_url: '接口地址应以 http:// 或 https:// 开头',
+            first_sync_days: '请填写 0 或正整数',
+            first_sync_messages: '请填写 0 或正整数',
             from: '请填写正确的邮箱地址',
+            join_interval_minutes: '请填写一个数字或范围，例如 3-10',
+            join_ramp: '请填写用逗号分隔的数字，例如 0,0,0,1,1,2',
+            joined_groups_warning: '请填写 0 或正整数',
+            joins_per_day: '请填写 0 或正整数',
             notify_emails: '请填写正确的邮箱，多个用逗号分隔',
             port: '端口是 1 到 65535 之间的数字',
+            private_joins_per_day: '请填写 0 或正整数',
+            read_interval_seconds: '请填写一个数字或范围，例如 5-15',
+            threshold: '请填写 0 到 1 之间的小数，例如 0.6',
             url: '代理地址格式应为 http://host:port 或 socks5://host:port',
         } as Record<string, string>,
         fieldRequired: (field: string) => `请填写 ${field}`,
@@ -309,6 +354,11 @@ const zh = {
             perplexity: '登录 Perplexity 设置页的 API 板块（perplexity.ai/settings/api）生成密钥。',
             proxy: '向你的代理服务商要一个 HTTP 或 SOCKS5 地址填在这里。不填则直连。',
             qwen: '登录阿里云百炼（bailian.console.aliyun.com），进入“API-KEY”页面。',
+            screening:
+                '登录 TypeSafe 官网注册账号，在控制台创建 API 密钥。也可以用 OpenRouter 的密钥，在接入方式里选 OpenRouter。',
+            'screening.custom': '向你的接口提供方索取接口地址和密钥，接口需提供 Jev 模型。',
+            'screening.openrouter': '登录 OpenRouter（openrouter.ai），进入 Keys 页面创建密钥并充值少量余额。',
+            'screening.typesafe': '登录 TypeSafe 官网注册账号，在控制台创建 API 密钥。',
             tavily: '登录 Tavily（tavily.com），在控制台首页复制 API Key，新账号有免费额度。',
             telegram:
                 '用你的 Telegram 手机号登录 Telegram 官方网站 my.telegram.org，进入“API development tools”，填写应用名称（随意，例如 KeLai）后提交，页面会显示 api_id 和 api_hash。',
@@ -331,16 +381,20 @@ const zh = {
         },
         llmTopUpNote: '新注册的账号请先在服务商后台充值，否则测试会提示额度不足。',
         loadFailed: '密钥状态加载失败，请刷新重试。',
+        modelsEmpty: '没有拿到模型列表，请手动填写模型名称',
+        modelsFailed: '获取模型失败，请检查密钥和地址，或手动填写模型名称',
+        modelsFetch: '获取模型',
+        modelsManual: '手动填写',
+        modelsPick: '选择模型',
         noSecretKey:
             '服务器还没有设置加密密钥，密钥暂时无法保存。请让部署这套系统的管理员在服务器上设置 GROWTH_SECRET_KEY 后重试。',
         optional: '可选',
-        protocol: {
-            anthropic_messages: 'Anthropic Messages',
-            openai_chat: 'OpenAI Chat Completions',
-        } as Record<string, string>,
+        platformSmtpOff: '服务器没有设置平台发信，请填写发信服务器；也可以让部署的管理员在 .env 里设置 SMTP_*。',
+        platformSmtpOn: '由平台代发，无需配置发信服务器，填好接收邮箱即可。',
         provider: {
             embedding: '向量服务',
             llm: '服务商',
+            screening: '接入方式',
             web_search: '搜索服务',
         } as Record<string, string>,
         providerLabel: {
@@ -359,8 +413,11 @@ const zh = {
             mistral: 'Mistral',
             ollama: 'Ollama',
             openai: 'OpenAI',
+            openrouter: 'OpenRouter',
             perplexity: 'Perplexity',
             qwen: '通义千问',
+            'screening.custom': '自定义地址',
+            'screening.typesafe': 'TypeSafe 官方',
             tavily: 'Tavily',
             traversaal: 'Traversaal',
             voyageai: 'Voyage AI',
@@ -381,6 +438,18 @@ const zh = {
         saveAndTest: '保存并测试',
         saved: (card: string) => `${card}已保存并通过测试`,
         savedButFailed: (card: string, reason: string) => `${card}已保存，但测试未通过：${reason}`,
+        selectOption: {
+            protocol: {
+                anthropic_messages: 'Anthropic Messages',
+                openai_chat: 'OpenAI Chat Completions',
+            },
+            risk_reminders: { off: '关', on: '开' },
+            tls: {
+                none: '不加密',
+                starttls: 'STARTTLS（常用于 587 端口）',
+                tls: 'SSL/TLS（常用于 465 端口）',
+            },
+        } as Record<string, Record<string, string>>,
         status: {
             connected: '已连接',
             invalid: '无效',
@@ -392,6 +461,7 @@ const zh = {
             invalid: (reason: string) => `无效：${reason}。请检查后重新填写。`,
             unsetOptional: '还没有填写。不填也能用，填了效果更好。',
             unsetRequired: '还没有填写。没有它智能体无法工作。',
+            unsetScreening: '未配置判断模型 Jev，任务无法筛选和打分。',
             unsetSearch: '未填写，正在用免费的 DuckDuckGo 和网页抓取。',
             untested: '已保存，还没有测试。',
         },
@@ -403,11 +473,6 @@ const zh = {
         testEmailSent: (to: string) => `测试邮件已发送到 ${to}`,
         testing: '测试中…',
         title: '密钥与连接',
-        tlsOption: {
-            none: '不加密',
-            starttls: 'STARTTLS（常用于 587 端口）',
-            tls: 'SSL/TLS（常用于 465 端口）',
-        } as Record<string, string>,
         unknownReason: '测试未通过',
     },
     dashboard: {
@@ -565,6 +630,7 @@ const zh = {
         filtered: '当前筛选结果',
         header: {
             bio: '画像简介',
+            contacts: '联系方式',
             deliveredAt: '交付时间',
             evidenceText: (n: number) => `证据 ${n} 原话`,
             evidenceTime: (n: number) => `证据 ${n} 时间`,
@@ -901,7 +967,7 @@ const zh = {
             guide: '指南',
             other: '其他',
             tool: '工具',
-            vulnerability: '漏洞',
+            vulnerability: '问题',
         } as Record<string, string>,
         answerTypeRequired: '请选择回答类型',
         codeLang: '代码语言',
@@ -961,6 +1027,7 @@ const zh = {
     },
     leads: {
         column: {
+            contacts: '联系方式',
             evidence: '证据',
             foundIn: '发现于',
             lastActive: '最近活跃',
@@ -970,8 +1037,11 @@ const zh = {
             source: '来源群',
             status: '状态',
         },
+        contactOnlyHandle: '仅平台账号',
+        contactText: (type: string, value: string) => `${type}：${value}`,
         detail: {
             breakdown: '打分明细',
+            contacts: '联系方式',
             evidence: '证据',
             openInTelegram: '在 Telegram 打开',
             profile: '画像补全',
@@ -991,12 +1061,15 @@ const zh = {
         evidenceCount: (n: number) => `${n} 条`,
         filter: {
             all: '全部',
+            allContacts: '全部联系方式',
             allSources: '全部来源',
             delivered: '已交付',
             flags: '标记',
             notDelivered: '未交付',
             qualified: '合格',
             watch: '待观察',
+            withContact: '有联系方式',
+            withoutContact: '仅平台账号',
         },
         flag: {
             competitor: '提到竞品',
@@ -1077,6 +1150,13 @@ const zh = {
     },
     profile: {
         aiHint: '这些内容会自动带给 AI，不用改任何模板。',
+        contactType: {
+            email: '邮箱',
+            messenger: '即时通讯（WhatsApp、Line、Telegram 等）',
+            other: '其他',
+            phone: '手机号',
+            platform_handle: '平台账号',
+        } as Record<string, string>,
         defaultExcludes: ['卖号', '代练', '竞品官方', '机器人'],
         description: '告诉智能体你在做什么、想找谁。填一次，之后每次只要说一句“找 50 个客户”。',
         emptyHint: '还没有业务档案。填写后，智能体才知道该找什么样的玩家。',
@@ -1085,6 +1165,11 @@ const zh = {
                 help: '可选。提到竞品、想从竞品离开的玩家会被标记',
                 label: '竞品名称',
                 placeholder: '例如：某某传奇、某某世界',
+            },
+            contactTypes: {
+                help: '智能体会在公开发言和资料里留意这些联系方式；每个潜客都有平台账号',
+                label: '希望的联系方式',
+                placeholder: '',
             },
             defaultTarget: {
                 help: '说“再找一些”时使用；一句话里说了具体数字则以那句为准',
@@ -1149,6 +1234,22 @@ const zh = {
         },
         save: '保存',
         saved: '业务档案已保存，下一轮起生效。',
+        scoring: {
+            hint: '每条消息命中一项就加对应分数（近期活跃：7 天内加满分，30 天内加一半）。总分到合格线算合格潜客，到待观察线先留着，低于它不保留。默认权重 3/3/2/2/3，合格 7，待观察 4。',
+            invalidLines: '待观察线至少为 1，且要低于合格线',
+            invalidWeight: '权重是 0 到 10 的整数',
+            qualified: '合格线',
+            title: '高级：打分规则',
+            unreachable: '各项权重加起来低于合格线，没有潜客能合格',
+            watchlist: '待观察线',
+            weight: {
+                active: '近期活跃',
+                match: '匹配度（地区、语言、游戏）',
+                pain: '痛点或需求',
+                paying: '付费意愿',
+                player: '玩家身份',
+            } as Record<string, string>,
+        },
         targetRange: '目标数请输入 1–1000 之间的整数',
         title: '业务档案',
     },
@@ -1483,6 +1584,49 @@ const zh = {
         title: '出了点问题',
         unexpected: '页面遇到了意外错误，重新加载通常就能恢复。',
     },
+    schedules: {
+        add: '添加定时',
+        button: '定时运行',
+        cancel: '取消',
+        date: '日期',
+        dateRequired: '请选择日期',
+        days: {
+            daily: '每天',
+            once: '只跑一次',
+            weekdays: '工作日（周一到周五）',
+            weekly: '每周指定几天',
+        } as Record<string, string>,
+        daysLabel: '哪天跑',
+        delete: '删除',
+        deleted: '定时已删除',
+        description:
+            '到开始时间会按同一说明新开一轮任务找人；到结束时间自动交付已经找到的潜客（没找满也交付）并停止这一轮。服务器停机时错过的开始时间会跳过。',
+        edit: '修改',
+        empty: '还没有定时安排。',
+        enabled: '启用',
+        end: '结束时间',
+        input: '任务说明（可选）',
+        inputPlaceholder: '留空则沿用这个项目第一次的说明',
+        lastError: (error: string) => `上次出错：${error}`,
+        lastRun: (delivered: number, target: null | number) =>
+            target === null ? `上次交付 ${delivered} 人` : `上次交付 ${delivered} 人（目标 ${target}）`,
+        loadFailed: '定时安排加载失败，请重试。',
+        locale: 'zh-CN',
+        nextStart: (time: string) => `下次开始：${time}`,
+        onceOn: (date: string) => `${date} 一次`,
+        overnight: '结束时间早于开始时间，会在第二天结束',
+        paused: '已暂停',
+        sameTime: '开始和结束时间不能相同',
+        save: '保存',
+        saved: '定时已保存',
+        start: '开始时间',
+        timeRequired: '请填写开始和结束时间',
+        timezone: (zone: string) => `按 ${zone} 时间`,
+        title: '定时运行',
+        weekday: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
+        weekdayList: (days: string[]) => `每${days.join('、')}`,
+        weekdaysRequired: '请至少选一天',
+    },
     settingsNav: {
         account: '账号',
         accounts: '账号连接',
@@ -1536,6 +1680,8 @@ const zh = {
             pending_approval: '已发出入群申请，等待群管理员通过，系统会定期复查',
             unjoinable: '群已关闭、被封或需要邀请，系统不会再尝试',
         } as Record<string, string>,
+        joinWarning: (label: string, joined: number, warnAt: number) =>
+            `账号 ${label} 已加入 ${joined} 个群（提醒线 ${warnAt}），接近 Telegram 约 500 个的上限，建议退出不活跃的群或换号加群。`,
         loadFailed: '来源池加载失败，请刷新重试。',
         origin: {
             ai: 'AI 发现',
@@ -1592,6 +1738,14 @@ const zh = {
                 needs_login: '登录已失效（密码修改、在别处退出或会话过期），需要重新登录',
                 rate_limited: (time: string) => `Telegram 要求等待，到 ${time} 自动恢复，期间智能体改用其他账号`,
             },
+            joinAdvice: {
+                daily_joins_reached: '今天加群已到建议上限，建议明天再加',
+                join_interval: '距上次加群还不到建议间隔，建议稍后再加',
+                joined_groups_high: '已加入的群接近 Telegram 约 500 个的上限，建议退出不活跃的群',
+                private_joins_reached: '今天加私密群已到建议上限',
+                warming_up: '新号预热期，建议先暂缓加群',
+            } as Record<string, string>,
+            joinCounts: (today: number, total: number) => `今天加了 ${today} 个群，共加入 ${total} 个`,
             limitedNoBackup: (a: string, time: string) => `账号 ${a} 被限流，暂无其他可用账号，将在 ${time} 自动继续。`,
             limitedSwitched: (a: string, b: string) => `账号 ${a} 被限流，已自动切换到账号 ${b}，工作不受影响。`,
             limitedUntil: (time: string, minutes: number) => `限流至 ${time}（还剩 ${minutes} 分钟）`,
@@ -2009,6 +2163,16 @@ const en: Copy = {
     },
     connection: { reconnecting: 'Not receiving updates — reconnecting' },
     credentials: {
+        advanced: {
+            email: {
+                hint: 'Leave empty to send through the platform. Fill in a server to send from your own mailbox.',
+                title: 'Advanced: your own SMTP server (optional)',
+            },
+            telegram: {
+                hint: 'Suggested pace: going past it only shows a reminder and never stops a join. Leave empty for the defaults.',
+                title: 'Advanced: join pace (suggested)',
+            },
+        } as Record<string, { hint: string; title: string }>,
         cancel: 'Cancel',
         card: {
             email: {
@@ -2026,6 +2190,11 @@ const en: Copy = {
                 purpose:
                     'Every account goes online through this proxy by default. Leave empty to connect directly. An account can override it on the Accounts page.',
                 title: 'Default proxy',
+            },
+            screening: {
+                purpose:
+                    'Quickly judges whether each message shows buying intent; only those that pass are scored. Tasks cannot screen or score without it. It costs very little, usually cents a day.',
+                title: 'Jev judgement model (screening)',
             },
             telegram: {
                 purpose:
@@ -2048,7 +2217,7 @@ const en: Copy = {
         description:
             'The agent needs keys for a few outside services. Enter them here, no config files needed. Keys stay on your own server and are shown masked after saving.',
         embeddingAdvanced: 'Advanced: embedding model (memory and knowledge base)',
-        emptyHint: 'No keys yet. Fill in “Language model” and “Telegram API credentials” to get started.',
+        emptyHint: 'No keys yet. Fill in “Language model” and “Jev judgement model” to get started.',
         envSource: 'Preset on server',
         envSourceNote: 'This item is preset on the server; saving here overrides it.',
         field: {
@@ -2056,9 +2225,16 @@ const en: Copy = {
             api_id: { label: 'api_id', placeholder: 'Digits only, e.g. 1234567' },
             api_key: { label: 'API key', placeholder: 'Paste the key from the provider' },
             api_keys: { label: 'API keys', placeholder: 'One key per line' },
+            api_url: { label: 'Endpoint URL', placeholder: 'https://api.example.com' },
             cx: { label: 'Search engine ID', placeholder: '' },
+            first_sync_days: { label: 'Days to read back in a new group', placeholder: '7' },
+            first_sync_messages: { label: 'Messages to read back in a new group', placeholder: '300' },
             from: { label: 'From address', placeholder: 'e.g. leads@example.com' },
             host: { label: 'SMTP server', placeholder: 'e.g. smtp.gmail.com' },
+            join_interval_minutes: { label: 'Minutes between joins', placeholder: '3-10' },
+            join_ramp: { label: 'Joins per day for a new account', placeholder: '0,0,0,1,1,2,2,3' },
+            joined_groups_warning: { label: 'Remind at joined groups', placeholder: '450' },
+            joins_per_day: { label: 'Joins per day', placeholder: '5' },
             model: { label: 'Model name', placeholder: 'e.g. gpt-4o' },
             notify_emails: {
                 label: 'Send lists to',
@@ -2066,13 +2242,27 @@ const en: Copy = {
             },
             password: { label: 'Password or app password', placeholder: 'The SMTP password of the mailbox' },
             port: { label: 'Port', placeholder: 'Usually 465 or 587' },
+            private_joins_per_day: { label: 'Private-group joins per day', placeholder: '2' },
             protocol: { label: 'API protocol', placeholder: '' },
+            read_interval_seconds: { label: 'Seconds between group reads', placeholder: '5-15' },
+            risk_reminders: { label: 'Pace reminders', placeholder: '' },
             server_url: { label: 'Endpoint', placeholder: 'https://api.example.com/v1' },
+            threshold: { label: 'Intent threshold', placeholder: '0.6' },
             tls: { label: 'Encryption', placeholder: '' },
             url: { label: 'Proxy URL', placeholder: 'http://user:pass@host:port or socks5://host:port' },
             username: { label: 'Username', placeholder: 'Usually the email address' },
         },
+        fieldByKind: {
+            'screening.api_key': { label: 'TypeSafe key', placeholder: 'Paste the key TypeSafe gave you' },
+            'screening.model': { label: 'Model', placeholder: 'Latest by default; enter a version to pin one' },
+            'screening.openrouter.api_key': { label: 'OpenRouter key', placeholder: 'Paste your OpenRouter key' },
+        } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
+            'screening.threshold':
+                'How sure the model must be that a message shows buying intent before it is scored, between 0 and 1; 0.6 by default. Higher misses more, lower shows more.',
+            'telegram.join_ramp':
+                'Most joins on each day from the account’s first sign-in, comma separated; after that, Joins per day applies.',
+            'telegram.risk_reminders': 'Off hides the yellow join-pace reminders.',
             'web_search.api_keys': 'Several keys are fine; when one runs out the next is used.',
             'youtube.api_keys':
                 'Several keys are fine; when one runs out the next is used. Keys from the same Google project share one quota, so more keys add no quota; ask Google for a free quota increase instead.',
@@ -2080,9 +2270,19 @@ const en: Copy = {
         fieldInvalid: {
             api_hash: 'api_hash is 32 letters and digits',
             api_id: 'api_id is digits only',
+            api_url: 'The endpoint starts with http:// or https://',
+            first_sync_days: 'Enter 0 or a whole number',
+            first_sync_messages: 'Enter 0 or a whole number',
             from: 'Enter a valid email address',
+            join_interval_minutes: 'Enter a number or a range such as 3-10',
+            join_ramp: 'Enter comma-separated numbers such as 0,0,0,1,1,2',
+            joined_groups_warning: 'Enter 0 or a whole number',
+            joins_per_day: 'Enter 0 or a whole number',
             notify_emails: 'Enter valid addresses separated by commas',
             port: 'The port is a number from 1 to 65535',
+            private_joins_per_day: 'Enter 0 or a whole number',
+            read_interval_seconds: 'Enter a number or a range such as 5-15',
+            threshold: 'Enter a decimal between 0 and 1, such as 0.6',
             url: 'Use http://host:port or socks5://host:port',
         },
         fieldRequired: (field) => `Please enter ${field}`,
@@ -2104,6 +2304,12 @@ const en: Copy = {
             perplexity: 'Generate a key in the API section of Perplexity settings (perplexity.ai/settings/api).',
             proxy: 'Ask your proxy provider for an HTTP or SOCKS5 address. Leave empty to connect directly.',
             qwen: 'Sign in to Alibaba Cloud Bailian (bailian.console.aliyun.com) and open API-KEY.',
+            screening:
+                'Sign up on the TypeSafe website and create an API key in its console. An OpenRouter key works too: pick OpenRouter as the access route.',
+            'screening.custom': 'Ask your gateway’s operator for its URL and a key; it must serve the Jev model.',
+            'screening.openrouter':
+                'Sign in to OpenRouter (openrouter.ai), create a key on the Keys page and add a little credit.',
+            'screening.typesafe': 'Sign up on the TypeSafe website and create an API key in its console.',
             tavily: 'Sign in to Tavily (tavily.com) and copy the API key from the dashboard; new accounts get free credits.',
             telegram:
                 'Sign in at my.telegram.org with your Telegram phone number, open “API development tools”, enter any app name (e.g. KeLai) and submit; the page shows api_id and api_hash.',
@@ -2126,13 +2332,21 @@ const en: Copy = {
         },
         llmTopUpNote: 'New accounts need a top-up first, or the test reports no quota.',
         loadFailed: 'Failed to load the key status. Please refresh.',
+        modelsEmpty: 'No models came back; enter the model name by hand',
+        modelsFailed: 'Could not fetch the models; check the key and URL, or enter the model name by hand',
+        modelsFetch: 'Fetch models',
+        modelsManual: 'Enter by hand',
+        modelsPick: 'Pick a model',
         noSecretKey:
             'The server has no encryption key yet, so keys cannot be saved. Ask whoever deployed the system to set GROWTH_SECRET_KEY on the server and try again.',
         optional: 'Optional',
-        protocol: { anthropic_messages: 'Anthropic Messages', openai_chat: 'OpenAI Chat Completions' },
+        platformSmtpOff:
+            'This server has no platform email set up: fill in a sending server, or ask whoever deployed it to set SMTP_* in .env.',
+        platformSmtpOn: 'The platform sends the email; just name the addresses that receive it.',
         provider: {
             embedding: 'Embedding service',
             llm: 'Provider',
+            screening: 'Access route',
             web_search: 'Search service',
         },
         providerLabel: {
@@ -2151,8 +2365,11 @@ const en: Copy = {
             mistral: 'Mistral',
             ollama: 'Ollama',
             openai: 'OpenAI',
+            openrouter: 'OpenRouter',
             perplexity: 'Perplexity',
             qwen: 'Qwen',
+            'screening.custom': 'Custom endpoint',
+            'screening.typesafe': 'TypeSafe',
             tavily: 'Tavily',
             traversaal: 'Traversaal',
             voyageai: 'Voyage AI',
@@ -2173,6 +2390,18 @@ const en: Copy = {
         saveAndTest: 'Save & test',
         saved: (card) => `${card} saved and tested`,
         savedButFailed: (card, reason) => `${card} saved, but the test failed: ${reason}`,
+        selectOption: {
+            protocol: {
+                anthropic_messages: 'Anthropic Messages',
+                openai_chat: 'OpenAI Chat Completions',
+            },
+            risk_reminders: { off: 'Off', on: 'On' },
+            tls: {
+                none: 'None',
+                starttls: 'STARTTLS (usually port 587)',
+                tls: 'SSL/TLS (usually port 465)',
+            },
+        } as Record<string, Record<string, string>>,
         status: {
             connected: 'Connected',
             invalid: 'Invalid',
@@ -2184,6 +2413,7 @@ const en: Copy = {
             invalid: (reason) => `Invalid: ${reason}. Please check and re-enter.`,
             unsetOptional: 'Not set. Works without it, better with it.',
             unsetRequired: 'Not set. The agent cannot work without it.',
+            unsetScreening: 'Jev is not set up, so tasks cannot screen or score messages.',
             unsetSearch: 'Not set; using free DuckDuckGo and page fetching.',
             untested: 'Saved, not tested yet.',
         },
@@ -2195,7 +2425,6 @@ const en: Copy = {
         testEmailSent: (to) => `Test email sent to ${to}`,
         testing: 'Testing…',
         title: 'Keys & connections',
-        tlsOption: { none: 'None', starttls: 'STARTTLS (usually port 587)', tls: 'SSL/TLS (usually port 465)' },
         unknownReason: 'Test failed',
     },
     dashboard: {
@@ -2354,6 +2583,7 @@ const en: Copy = {
         filtered: 'Current filter results',
         header: {
             bio: 'Bio',
+            contacts: 'Contact methods',
             deliveredAt: 'Delivered at',
             evidenceText: (n) => `Evidence ${n} quote`,
             evidenceTime: (n) => `Evidence ${n} time`,
@@ -2706,7 +2936,7 @@ const en: Copy = {
             guide: 'guide',
             other: 'other',
             tool: 'tool',
-            vulnerability: 'vulnerability',
+            vulnerability: 'issue',
         },
         answerTypeRequired: 'Answer type is required',
         codeLang: 'Code language',
@@ -2735,7 +2965,7 @@ const en: Copy = {
             development: 'development',
             install: 'install',
             other: 'other',
-            pentest: 'pentest',
+            pentest: 'research',
             use: 'use',
         },
         guideTypeRequired: 'Guide type is required',
@@ -2766,6 +2996,7 @@ const en: Copy = {
     },
     leads: {
         column: {
+            contacts: 'Contact',
             evidence: 'Evidence',
             foundIn: 'Found in',
             lastActive: 'Last active',
@@ -2775,8 +3006,11 @@ const en: Copy = {
             source: 'Source',
             status: 'Status',
         },
+        contactOnlyHandle: 'Platform account only',
+        contactText: (type: string, value: string) => `${type}: ${value}`,
         detail: {
             breakdown: 'Score breakdown',
+            contacts: 'Contact methods',
             evidence: 'Evidence',
             openInTelegram: 'Open in Telegram',
             profile: 'Profile',
@@ -2796,12 +3030,15 @@ const en: Copy = {
         evidenceCount: (n) => `${n}`,
         filter: {
             all: 'All',
+            allContacts: 'Any contact',
             allSources: 'All sources',
             delivered: 'Delivered',
             flags: 'Flags',
             notDelivered: 'Not delivered',
             qualified: 'Qualified',
             watch: 'Watch list',
+            withContact: 'Has a contact',
+            withoutContact: 'Platform account only',
         },
         flag: {
             competitor: 'Mentions a competitor',
@@ -2887,6 +3124,13 @@ const en: Copy = {
     },
     profile: {
         aiHint: 'All of this is passed to the AI automatically; no template needs editing.',
+        contactType: {
+            email: 'Email',
+            messenger: 'Messenger (WhatsApp, Line, Telegram…)',
+            other: 'Other',
+            phone: 'Phone',
+            platform_handle: 'Platform account',
+        } as Record<string, string>,
         defaultExcludes: ['Account sellers', 'Boosters', 'Official competitor accounts', 'Bots'],
         description:
             'Tell the agent what you offer and who to find. Fill it once, then just say “find me 50 customers”.',
@@ -2896,6 +3140,11 @@ const en: Copy = {
                 help: 'Optional. Players who mention or leave a competitor are flagged',
                 label: 'Competitors',
                 placeholder: 'e.g. Legend X, World Y',
+            },
+            contactTypes: {
+                help: 'The agents look out for these in public posts and profiles; every lead has its platform account',
+                label: 'Preferred contact methods',
+                placeholder: '',
             },
             defaultTarget: {
                 help: 'Used for “find some more”; a number in the sentence wins',
@@ -2965,6 +3214,22 @@ const en: Copy = {
         },
         save: 'Save',
         saved: 'Business profile saved; it applies from the next round.',
+        scoring: {
+            hint: 'Each signal a message shows adds its weight (recent activity: full weight within 7 days, half within 30). A total at the qualified line makes a qualified lead; from the watchlist line it is kept for review; below that it is dropped. Defaults: weights 3/3/2/2/3, qualified 7, watchlist 4.',
+            invalidLines: 'The watchlist line is at least 1 and below the qualified line',
+            invalidWeight: 'A weight is a whole number from 0 to 10',
+            qualified: 'Qualified line',
+            title: 'Advanced: scoring',
+            unreachable: 'The weights add up to less than the qualified line, so no lead could qualify',
+            watchlist: 'Watchlist line',
+            weight: {
+                active: 'Recently active',
+                match: 'Match (region, language, game)',
+                pain: 'Pain point or need',
+                paying: 'Willing to pay',
+                player: 'Is a player',
+            } as Record<string, string>,
+        },
         targetRange: 'Enter a whole number from 1 to 1000',
         title: 'Business profile',
     },
@@ -3314,6 +3579,49 @@ const en: Copy = {
         title: 'Something went wrong',
         unexpected: 'The page ran into an unexpected error. Reloading usually clears it.',
     },
+    schedules: {
+        add: 'Add a schedule',
+        button: 'Schedule',
+        cancel: 'Cancel',
+        date: 'Date',
+        dateRequired: 'Pick a date',
+        days: {
+            daily: 'Every day',
+            once: 'Once',
+            weekdays: 'Weekdays (Monday to Friday)',
+            weekly: 'Chosen days of the week',
+        } as Record<string, string>,
+        daysLabel: 'Which days',
+        delete: 'Delete',
+        deleted: 'Schedule deleted',
+        description:
+            'At the start time a new round begins with the same instructions; at the end time the leads found so far are delivered, even short of the target, and the round stops. A start missed while the server was down is skipped.',
+        edit: 'Edit',
+        empty: 'No schedules yet.',
+        enabled: 'On',
+        end: 'End time',
+        input: 'Instructions (optional)',
+        inputPlaceholder: 'Leave empty to reuse this project’s first instructions',
+        lastError: (error: string) => `Last error: ${error}`,
+        lastRun: (delivered: number, target: null | number) =>
+            target === null ? `Last delivered ${delivered}` : `Last delivered ${delivered} of ${target}`,
+        loadFailed: 'Could not load the schedules; try again.',
+        locale: 'en-US',
+        nextStart: (time: string) => `Next start: ${time}`,
+        onceOn: (date: string) => `Once on ${date}`,
+        overnight: 'The end is before the start, so the round ends the next day',
+        paused: 'Paused',
+        sameTime: 'The start and end times must differ',
+        save: 'Save',
+        saved: 'Schedule saved',
+        start: 'Start time',
+        timeRequired: 'Fill in the start and end times',
+        timezone: (zone: string) => `In ${zone} time`,
+        title: 'Scheduled runs',
+        weekday: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+        weekdayList: (days: string[]) => `Every ${days.join(', ')}`,
+        weekdaysRequired: 'Pick at least one day',
+    },
     settingsNav: {
         account: 'Account',
         accounts: 'Accounts',
@@ -3367,6 +3675,8 @@ const en: Copy = {
             pending_approval: 'A join request was sent; the system re-checks it periodically',
             unjoinable: 'The group is closed, banned or invite-only; the system will not retry',
         },
+        joinWarning: (label: string, joined: number, warnAt: number) =>
+            `Account ${label} has joined ${joined} groups (reminder at ${warnAt}), close to Telegram’s limit of about 500. Consider leaving inactive groups or joining with another account.`,
         loadFailed: 'Failed to load sources.',
         origin: {
             ai: 'Found by AI',
@@ -3429,6 +3739,14 @@ const en: Copy = {
                 rate_limited: (time) =>
                     `Telegram asked us to wait; recovers at ${time}, other accounts are used meanwhile`,
             },
+            joinAdvice: {
+                daily_joins_reached: 'Reached today’s suggested joins; better to join more tomorrow',
+                join_interval: 'Less than the suggested gap since the last join; better to wait a little',
+                joined_groups_high: 'Close to Telegram’s limit of about 500 groups; consider leaving inactive ones',
+                private_joins_reached: 'Reached today’s suggested private-group joins',
+                warming_up: 'New account warming up; better to hold off joining for now',
+            } as Record<string, string>,
+            joinCounts: (today: number, total: number) => `Joined ${today} today, ${total} in all`,
             limitedNoBackup: (a, time) =>
                 `${a} is rate limited and no other account is available. Resuming at ${time}.`,
             limitedSwitched: (a, b) => `${a} is rate limited; switched to ${b}. Work continues.`,

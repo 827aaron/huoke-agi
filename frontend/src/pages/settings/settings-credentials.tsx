@@ -18,7 +18,7 @@ import { routes } from '@/lib/routes';
 
 const text = copy.credentials;
 
-const CARD_ORDER: GrowthSettingKind[] = ['llm', 'telegram', 'web_search', 'youtube', 'proxy', 'email'];
+const CARD_ORDER: GrowthSettingKind[] = ['llm', 'screening', 'telegram', 'web_search', 'youtube', 'proxy', 'email'];
 
 function SettingsCredentials() {
     const { data, error, isLoading } = useGrowthSettings();

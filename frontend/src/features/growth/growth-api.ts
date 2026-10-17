@@ -5,17 +5,22 @@ import type {
     GrowthAccountsResponse,
     GrowthEmailResult,
     GrowthLead,
+    GrowthModelsInput,
+    GrowthModelsResponse,
     GrowthProfile,
     GrowthProfileInput,
     GrowthProxyTestResult,
     GrowthRemoteLogin,
     GrowthRun,
+    GrowthSchedule,
+    GrowthScheduleInput,
+    GrowthSchedulesResponse,
     GrowthSetting,
     GrowthSettingInput,
     GrowthSettingKind,
     GrowthSettingsResponse,
-    GrowthSource,
     GrowthSourcesAddResponse,
+    GrowthSourcesResponse,
     GrowthTelegramLoginStep,
 } from './growth-types';
 
@@ -48,17 +53,28 @@ const live = {
     },
     createProfile: async (input: GrowthProfileInput) =>
         unwrapApiResponse(await api.post<GrowthProfile>('/growth/profiles', input)),
+    createSchedule: async (input: GrowthScheduleInput) =>
+        unwrapApiResponse(await api.post<GrowthSchedule>('/growth/schedules', input)),
+    deleteSchedule: async (id: number) => {
+        await api.delete(`/growth/schedules/${id}`);
+    },
     finishRemoteLogin: async (sessionId: string) =>
         unwrapApiResponse(await api.post<GrowthAccount>(`/growth/accounts/remote-login/${sessionId}/finish`)),
     listAccounts: async () => unwrapApiResponse(await api.get<GrowthAccountsResponse>('/growth/accounts/')).accounts,
     listLeads: async (flowId: number | string) =>
         unwrapApiResponse(await api.get<{ leads: GrowthLead[] }>('/growth/leads/', { params: { flow_id: flowId } }))
             .leads,
+    // Answers 502 Growth.ModelList when the relay does not list its models; the model is then typed by name.
+    listModels: async (kind: GrowthSettingKind, input: GrowthModelsInput) =>
+        unwrapApiResponse(await api.post<GrowthModelsResponse>(`/growth/settings/${kind}/models`, input)).models,
     listProfiles: async () => unwrapApiResponse(await api.get<GrowthProfile[]>('/growth/profiles')),
     listRuns: async (flowId: number | string) =>
         unwrapApiResponse(await api.get<{ runs: GrowthRun[] }>('/growth/runs/', { params: { flow_id: flowId } })).runs,
+    listSchedules: async (flowId: number | string) =>
+        unwrapApiResponse(await api.get<GrowthSchedulesResponse>('/growth/schedules', { params: { flow_id: flowId } }))
+            .schedules,
     listSettings: async () => unwrapApiResponse(await api.get<GrowthSettingsResponse>('/growth/settings/')).settings,
-    listSources: async () => unwrapApiResponse(await api.get<{ sources: GrowthSource[] }>('/growth/sources/')).sources,
+    listSources: async () => unwrapApiResponse(await api.get<GrowthSourcesResponse>('/growth/sources/')),
     // Answers 503 Growth.NoSecretKey while the server has no key to encrypt secrets with.
     saveSetting: async (kind: GrowthSettingKind, input: GrowthSettingInput) =>
         unwrapApiResponse(await api.put<GrowthSetting>(`/growth/settings/${kind}`, input)),
@@ -97,6 +113,8 @@ const live = {
         unwrapApiResponse(await api.post<GrowthSetting>(`/growth/settings/${kind}/test`)),
     updateProfile: async (id: number, input: GrowthProfileInput) =>
         unwrapApiResponse(await api.put<GrowthProfile>(`/growth/profiles/${id}`, input)),
+    updateSchedule: async (id: number, input: GrowthScheduleInput) =>
+        unwrapApiResponse(await api.put<GrowthSchedule>(`/growth/schedules/${id}`, input)),
 };
 
 export const growthApi: typeof live = isMock ? growthMock : live;

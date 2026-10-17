@@ -9,6 +9,7 @@ import type { GrowthLead } from '../growth-types';
 
 import { languageLabel } from '../languages';
 import LeadScoreBadge from './lead-score-badge';
+import { contactsText } from './leads-csv';
 
 interface LeadDetailSheetProps {
     lead: GrowthLead | null;
@@ -43,6 +44,12 @@ function LeadDetailSheet({ lead, onOpenChange }: LeadDetailSheetProps) {
                         </SheetHeader>
 
                         <div className="flex flex-col gap-6 px-4 pb-6">
+                            {!!lead.contacts?.length && (
+                                <section className="flex flex-col gap-2">
+                                    <h3 className="text-sm font-semibold">{copy.leads.detail.contacts}</h3>
+                                    <p className="text-sm break-all">{contactsText(lead)}</p>
+                                </section>
+                            )}
                             {hasProfile && (
                                 <section className="flex flex-col gap-2">
                                     <h3 className="text-sm font-semibold">{copy.leads.detail.profile}</h3>

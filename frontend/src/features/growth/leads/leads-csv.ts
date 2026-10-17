@@ -14,6 +14,11 @@ const escapeCell = (value: null | number | string | undefined): string => {
 
 const formatTime = (value: null | string): string => (value ? format(new Date(value), 'yyyy-MM-dd HH:mm') : '');
 
+export const contactsText = (lead: GrowthLead): string =>
+    (lead.contacts ?? [])
+        .map((contact) => copy.leads.contactText(copy.profile.contactType[contact.type] ?? contact.type, contact.value))
+        .join('; ');
+
 export function buildLeadsCsv(leads: GrowthLead[], sourceLinks: Map<number, string>): string {
     const header = copy.export.header;
     const columns = [
@@ -23,6 +28,7 @@ export function buildLeadsCsv(leads: GrowthLead[], sourceLinks: Map<number, stri
         header.score,
         header.status,
         header.signals,
+        header.contacts,
         header.source,
         header.sourceUrl,
         ...Array.from({ length: EVIDENCE_COLUMNS }, (_, index) => [
@@ -44,6 +50,7 @@ export function buildLeadsCsv(leads: GrowthLead[], sourceLinks: Map<number, stri
         lead.score,
         copy.leads.tier[lead.tier],
         lead.signals.map((signal) => copy.leads.signal[signal] ?? signal).join('、'),
+        contactsText(lead),
         lead.source_title,
         sourceLinks.get(lead.source_id) ?? '',
         ...Array.from({ length: EVIDENCE_COLUMNS }, (_, index) => {
