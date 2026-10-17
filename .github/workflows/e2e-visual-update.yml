@@ -1,0 +1,91 @@
+# Regenerates the visual baselines in the same pinned container e2e-visual compares them in,
+# because they are amd64 pixels: a baseline rendered on any other machine never matches.
+# The new PNGs come back as a pull request against the branch they were rendered from.
+# A pull request opened with GITHUB_TOKEN starts no workflows of its own; push to it or
+# close and reopen it to get the checks.
+name: E2E Visual Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch to render the baselines from and open the pull request against"
+        type: string
+        default: main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: e2e-visual-update-${{ inputs.ref }}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+    steps:
+      # checkout falls back to a tarball without .git when git is missing, and the pull request needs a repository.
+      - name: Install git
+        run: command -v git || (apt-get update && apt-get install -y --no-install-recommends git)
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Verify container image matches @playwright/test
+        run: |
+          pkg="$(node -p "require('./frontend/package.json').devDependencies['@playwright/test'].replace(/[^0-9.]/g, '')")"
+          container="$(node -p "JSON.parse(require('fs').readFileSync('/ms-playwright/.docker-info','utf8')).driverVersion")"
+          if [ "$pkg" != "$container" ]; then
+            echo "::error::container ships Playwright $container but @playwright/test is $pkg — bump the container tag to v$pkg-noble here and in e2e.yml"
+            exit 1
+          fi
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: frontend/.nvmrc
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        working-directory: frontend
+        run: VITE_GROWTH_API=mock pnpm run build
+
+      - name: Render baselines
+        working-directory: frontend
+        run: E2E_VISUAL=1 E2E_VISUAL_CONTAINER=1 npx playwright test -c e2e/playwright.config.ts --update-snapshots=all
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-visual-update-report
+          path: frontend/e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          base: ${{ inputs.ref }}
+          branch: e2e-visual-baselines/${{ inputs.ref }}
+          add-paths: frontend/e2e/specs/**/*-snapshots/*.png
+          commit-message: "Update visual baselines for ${{ inputs.ref }}"
+          title: "Update visual baselines for ${{ inputs.ref }}"
+          body: |
+            Baselines re-rendered by the E2E Visual Update workflow in the pinned Playwright container, from `${{ inputs.ref }}`.
+
+            Compare the images in the diff before merging: each one is what the page now looks like.
+          delete-branch: true
