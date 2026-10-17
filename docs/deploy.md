@@ -70,7 +70,7 @@ cd kelai-agi
 cp .env.example .env
 ```
 
-The repository is private: the GitHub account doing the clone needs access to it.
+If the repository is private, the GitHub account doing the clone needs access to it.
 
 ## 5. Fill in `.env`
 
