@@ -118,6 +118,10 @@ type LeadView struct {
 	Evidence       []EvidenceView `json:"evidence"`
 	Note           string         `json:"note"`
 	Origin         string         `json:"origin"`
+	// Signals and ScoreBreakdown come from the best judged message of the evidence; both
+	// are empty for a lead no judgement scored, such as one added by hand.
+	Signals        []string    `json:"signals"`
+	ScoreBreakdown []ScorePart `json:"score_breakdown"`
 }
 
 // LeadUpdate changes what is set; Contacts replaces the whole list. The score and the
@@ -553,6 +557,14 @@ func (s *Service) leadViews(ctx context.Context, leads []database.Lead) ([]LeadV
 		}
 		byLead[e.LeadID] = append(byLead[e.LeadID], ev)
 	}
+	scores, err := s.db.GetLeadsBestScores(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load the scores of the evidence: %w", err)
+	}
+	breakdown := make(map[int64][]ScorePart, len(scores))
+	for _, sc := range scores {
+		breakdown[sc.LeadID] = scoreParts(sc.Signals)
+	}
 
 	for _, l := range leads {
 		v := LeadView{
@@ -572,6 +584,14 @@ func (s *Service) leadViews(ctx context.Context, leads []database.Lead) ([]LeadV
 			Evidence:       byLead[l.ID],
 			Note:           l.Note,
 			Origin:         l.Origin,
+			Signals:        []string{},
+			ScoreBreakdown: breakdown[l.ID],
+		}
+		if v.ScoreBreakdown == nil {
+			v.ScoreBreakdown = []ScorePart{}
+		}
+		for _, part := range v.ScoreBreakdown {
+			v.Signals = append(v.Signals, part.Signal)
 		}
 		if v.Evidence == nil {
 			v.Evidence = []EvidenceView{}

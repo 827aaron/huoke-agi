@@ -44,12 +44,19 @@ type growthRun struct {
 	Target         int    `json:"target"`
 	Status         string `json:"status"`
 	DeliveredCount int    `json:"delivered_count"`
-	NotifyStatus   string `json:"notify_status,omitempty"`
-	NotifyError    string `json:"notify_error,omitempty"`
-	CreatedAt      string `json:"created_at,omitempty"`
-	FinishedAt     string `json:"finished_at,omitempty"`
-	DeadlineAt     string `json:"deadline_at,omitempty"`
-	ScheduleID     *int64 `json:"schedule_id,omitempty"`
+	// Round numbers the rounds of a flow from 1, oldest first.
+	Round int `json:"round"`
+	// Found and Watch count the qualified and watchlist leads its task found or it delivered.
+	Found int `json:"found"`
+	Watch int `json:"watch"`
+	// Sources is the owner's pool now; it is the same on every round.
+	Sources      growth.SourceStats `json:"sources"`
+	NotifyStatus string             `json:"notify_status,omitempty"`
+	NotifyError  string             `json:"notify_error,omitempty"`
+	CreatedAt    string             `json:"created_at,omitempty"`
+	FinishedAt   string             `json:"finished_at,omitempty"`
+	DeadlineAt   string             `json:"deadline_at,omitempty"`
+	ScheduleID   *int64             `json:"schedule_id,omitempty"`
 }
 
 type growthSchedules struct {
@@ -443,6 +450,24 @@ func (s *GrowthService) ListRuns(c *gin.Context) {
 		return
 	}
 
+	ids := make([]int64, 0, len(runs))
+	for _, r := range runs {
+		ids = append(ids, r.ID)
+	}
+	leads, err := s.svc.RunLeads(c, uid, ids)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error counting the leads of growth rounds")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+	sources, err := s.svc.SourceStats(c, uid)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error summarising the source pool")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+	rounds := growth.RoundNumbers(runs)
+
 	out := make([]growthRun, 0, len(runs))
 	for _, r := range runs {
 		run := growthRun{
@@ -450,6 +475,10 @@ func (s *GrowthService) ListRuns(c *gin.Context) {
 			Target:         int(r.Target),
 			Status:         r.Status,
 			DeliveredCount: int(r.DeliveredCount),
+			Round:          rounds[r.ID],
+			Found:          leads[r.ID].Found,
+			Watch:          leads[r.ID].Watch,
+			Sources:        sources,
 			NotifyStatus:   r.NotifyStatus,
 			NotifyError:    r.NotifyError,
 		}

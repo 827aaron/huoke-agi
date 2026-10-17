@@ -365,3 +365,38 @@ func TestLeads_DeleteLead_DropsItsEvidenceAndTheScoresOfItsMessages(t *testing.T
 	require.Len(t, left, 1)
 	assert.Equal(t, "62", left[0].PlatformUserID)
 }
+
+func TestLeads_ListLeads_BreaksTheScoreDownFromTheBestJudgedMessage(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	src := w.mustAddTelegramGroup(t, scope, tgGroup("907", "why_score", "Why"))
+	for id, s := range map[string]struct {
+		score   int32
+		signals string
+	}{
+		"m1": {5, "pain+3, 7d+2 = 5"},
+		"m2": {8, "player+3, paying+3, 30d+2 = 8"},
+	} {
+		require.NoError(t, w.svc.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
+			UserID: w.user, SourceID: src, MessageID: id, Score: s.score, Signals: s.signals,
+		}))
+	}
+	judged := qualified("71", src, "m1")
+	judged.Evidence = append(judged.Evidence, qualified("71", src, "m2").Evidence...)
+	_, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{judged})
+	require.NoError(t, err)
+	manual, err := w.svc.CreateLead(ctx, w.user, ManualLead{Platform: "telegram", Handle: "@by_hand"})
+	require.NoError(t, err)
+
+	leads, err := w.svc.ListLeads(ctx, w.user, LeadFilter{})
+	require.NoError(t, err)
+	byUser := map[string]LeadView{}
+	for _, l := range leads {
+		byUser[l.PlatformUserID] = l
+	}
+	assert.Equal(t, []ScorePart{{"player", 3}, {"paying", 3}, {"active", 2}}, byUser["71"].ScoreBreakdown)
+	assert.Equal(t, []string{"player", "paying", "active"}, byUser["71"].Signals)
+	assert.Equal(t, []ScorePart{}, byUser[manual.PlatformUserID].ScoreBreakdown, "a lead no judgement scored")
+	assert.Equal(t, []string{}, byUser[manual.PlatformUserID].Signals)
+}
