@@ -2,6 +2,7 @@ import { api, unwrapApiResponse } from '@/lib/axios';
 
 import type {
     GrowthAccount,
+    GrowthAccountDetail,
     GrowthAccountsResponse,
     GrowthEmailResult,
     GrowthJoinWarning,
@@ -107,6 +108,8 @@ const live = {
     },
     finishRemoteLogin: async (sessionId: string) =>
         unwrapApiResponse(await api.post<GrowthAccount>(`/growth/accounts/remote-login/${sessionId}/finish`)),
+    getAccountDetail: async (id: number) =>
+        unwrapApiResponse(await api.get<GrowthAccountDetail>(`/growth/accounts/${id}/detail`)),
     listAccounts: async () => unwrapApiResponse(await api.get<GrowthAccountsResponse>('/growth/accounts/')).accounts,
     listLeads: async (flowId: number | string): Promise<GrowthLead[]> => {
         const [leads, runs, sources] = await Promise.all([getWireLeads(flowId), getWireRuns(flowId), getWireSources()]);

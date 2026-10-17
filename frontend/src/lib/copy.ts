@@ -1808,6 +1808,15 @@ const zh = {
         credentialsMissing: '请先在密钥与连接里填写 Telegram 的 api_id 和 api_hash',
         credentialsMissingLink: '去填写',
         description: '系统用这个账号加入公开群、阅读群内公开发言。请使用你授权的账号，登录信息只保存在你的服务器上。',
+        detail: {
+            column: { joinedAt: '加入时间', lastRead: '上次读取', members: '成员数', title: '群' },
+            dialogs: (n: number) => `账号里共 ${n} 个聊天`,
+            dialogsUnknown: '聊天数未取到（账号不在线或读取超时）',
+            empty: '这个账号还没有通过本系统加入任何群。',
+            joinedGroups: (n: number) => `通过本系统加入了 ${n} 个群`,
+            loadFailed: '账号详情加载失败，请重试。',
+            open: '详情',
+        },
         fingerprint: {
             advanced: '指纹浏览器接入（高级）',
             auto: (os: string, language: string, timezone: string) => `自动指纹：${os} · ${language} · ${timezone}`,
@@ -3949,6 +3958,15 @@ const en: Copy = {
         credentialsMissingLink: 'Fill in',
         description:
             'The system uses this account to join public groups and read public messages. Credentials stay on your own server.',
+        detail: {
+            column: { joinedAt: 'Joined', lastRead: 'Last read', members: 'Members', title: 'Group' },
+            dialogs: (n) => `${n} chats in the account`,
+            dialogsUnknown: 'Chat count unavailable (the account is offline or did not answer in time)',
+            empty: 'This account has not joined any group through the system yet.',
+            joinedGroups: (n) => `Joined ${n} groups through the system`,
+            loadFailed: 'Failed to load the account details. Please try again.',
+            open: 'Details',
+        },
         fingerprint: {
             advanced: 'Fingerprint browser (advanced)',
             auto: (os, language, timezone) => `Generated fingerprint: ${os} · ${language} · ${timezone}`,

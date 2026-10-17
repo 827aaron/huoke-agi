@@ -1,6 +1,7 @@
 import type { RemoteLoginInput, StartLoginInput } from './growth-api';
 import type {
     GrowthAccount,
+    GrowthAccountDetail,
     GrowthEmailResult,
     GrowthLead,
     GrowthLeadInput,
@@ -820,6 +821,26 @@ export const growthMock = {
                 pending.input.external_browser_ws,
             ),
         );
+    },
+    // Every account shows the joined sample groups; only an active Telegram account reports its chats.
+    getAccountDetail: (id: number): Promise<GrowthAccountDetail> => {
+        const account = accounts.find((item) => item.id === id);
+        const groups = sources
+            .filter((source) => source.platform === account?.platform && source.join_status === 'joined')
+            .map((source) => ({
+                joined_at: source.created_at,
+                last_synced_at: source.last_read_at ?? undefined,
+                link: source.link,
+                member_count: source.members_count ?? 0,
+                source_id: source.id,
+                title: source.title,
+            }));
+
+        return delay({
+            dialogs_count: account?.status === 'active' && account.platform === 'telegram' ? 64 : undefined,
+            groups,
+            joined_groups_count: groups.length,
+        });
     },
     listAccounts: () => delay(accounts),
     // Every flow sees the same sample leads so any flow opened in development has something to show.

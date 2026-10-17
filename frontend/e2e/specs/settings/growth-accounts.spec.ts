@@ -27,6 +27,22 @@ test.describe('growth account connections', { tag: '@settings' }, () => {
         expectCleanPage(pageErrorLog);
     });
 
+    test('opens the groups an account has joined and its chat count', async ({ page, pageErrorLog }) => {
+        await page.goto('/settings/accounts');
+        await accountRow(page, '8842').getByRole('button', { name: /^详情/ }).click();
+
+        const sheet = page.getByRole('dialog');
+
+        await expect(sheet.getByText('通过本系统加入了 2 个群')).toBeVisible();
+        await expect(sheet.getByText('账号里共 64 个聊天')).toBeVisible();
+        await expect(sheet.getByRole('link', { name: 'SLG Players SEA' })).toHaveAttribute(
+            'href',
+            'https://t.me/slg_players_sea',
+        );
+
+        expectCleanPage(pageErrorLog);
+    });
+
     test('disables and re-enables an account immediately, without a confirmation', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/accounts');
 

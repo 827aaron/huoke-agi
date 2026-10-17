@@ -1,8 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GrowthAccount } from '@/features/growth/growth-types';
+
+import { growthApi } from '@/features/growth/growth-api';
 
 import SettingsAccounts from './settings-accounts';
 
@@ -49,7 +51,56 @@ vi.mock('@/features/growth/use-growth-data', () => ({
     useGrowthSettings: () => settingsState,
 }));
 
+vi.mock('@/features/growth/growth-api', () => ({ growthApi: { getAccountDetail: vi.fn() } }));
+
+const renderAccounts = () =>
+    render(
+        <MemoryRouter>
+            <SettingsAccounts />
+        </MemoryRouter>,
+    );
+
 describe('SettingsAccounts', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('opens what an account has joined and how many chats it is in', async () => {
+        // The JSON of GET /growth/accounts/7/detail: a group the account never read omits last_synced_at.
+        vi.mocked(growthApi.getAccountDetail).mockResolvedValue(
+            JSON.parse(`{
+                "joined_groups_count": 2, "dialogs_count": 64,
+                "groups": [
+                    {"source_id": 3, "title": "MY slots", "link": "https://t.me/myslots", "member_count": 1200,
+                        "joined_at": "2026-10-16T08:00:00Z", "last_synced_at": "2026-10-17T08:00:00Z"},
+                    {"source_id": 4, "title": "", "link": "https://t.me/thaislots", "member_count": 0,
+                        "joined_at": "2026-10-17T07:00:00Z"}
+                ]
+            }`),
+        );
+        renderAccounts();
+
+        fireEvent.click(screen.getByRole('button', { name: '详情 Bangkok' }));
+        const sheet = await screen.findByRole('dialog');
+
+        expect(await within(sheet).findByText('通过本系统加入了 2 个群')).toBeInTheDocument();
+        expect(within(sheet).getByText('账号里共 64 个聊天')).toBeInTheDocument();
+        expect(within(sheet).getByRole('link', { name: 'MY slots' })).toHaveAttribute('href', 'https://t.me/myslots');
+        expect(within(sheet).getByRole('link', { name: 'https://t.me/thaislots' })).toBeInTheDocument();
+        expect(within(sheet).getByText('1200')).toBeInTheDocument();
+        expect(growthApi.getAccountDetail).toHaveBeenCalledWith(7);
+    });
+
+    it('says when the chat count could not be read and the account joined nothing', async () => {
+        vi.mocked(growthApi.getAccountDetail).mockResolvedValue({ groups: [], joined_groups_count: 0 });
+        renderAccounts();
+
+        fireEvent.click(screen.getByRole('button', { name: '详情 Bangkok' }));
+        const sheet = await screen.findByRole('dialog');
+
+        expect(await within(sheet).findByText('聊天数未取到（账号不在线或读取超时）')).toBeInTheDocument();
+        expect(within(sheet).getByText('这个账号还没有通过本系统加入任何群。')).toBeInTheDocument();
+        expect(within(sheet).queryByRole('table')).not.toBeInTheDocument();
+    });
+
     it('shows a Telegram account’s join counts and its pace reminder', () => {
         render(
             <MemoryRouter>

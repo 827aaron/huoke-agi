@@ -35,6 +35,23 @@ export interface GrowthAccount {
     status: GrowthAccountStatus;
 }
 
+// The groups come from the source pool's join records; dialogs_count is counted live and absent when the
+// account is offline or does not answer in time.
+export interface GrowthAccountDetail {
+    dialogs_count?: number;
+    groups: GrowthAccountGroup[];
+    joined_groups_count: number;
+}
+
+export interface GrowthAccountGroup {
+    joined_at?: string;
+    last_synced_at?: string;
+    link: string;
+    member_count: number;
+    source_id: number;
+    title: string;
+}
+
 // Facebook, Instagram and TikTok accounts sign in through a remote browser rather than a code sent by Telegram.
 export type GrowthAccountPlatform = 'facebook' | 'instagram' | 'telegram' | 'tiktok';
 
