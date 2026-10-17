@@ -1,7 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { formatDistance } from 'date-fns';
 import { ChevronsUpDown, CircleArrowDown, CircleCheck, CircleQuestionMark, ExternalLink } from 'lucide-react';
 
 import type { VersionInfoFragmentFragment } from '@/graphql/types';
@@ -25,8 +24,7 @@ import { useVersionInfo } from '@/providers/version-info-provider';
 
 export const PENTAGI_RELEASES_URL = 'https://github.com/vxcontrol/pentagi/releases';
 
-export const UPDATE_INSTRUCTION =
-    'Run the installer tool on the host where KeLai AGI is deployed and choose Maintenance → Update.';
+export const UPDATE_INSTRUCTION = copy.version.instruction;
 
 export interface VersionFact {
     isAccented?: boolean;
@@ -66,13 +64,13 @@ export function describeTiming(info: VersionInfoFragmentFragment, now: Date = ne
     const facts: VersionFact[] = [];
 
     if (info.checkedAt) {
-        facts.push({ label: 'Checked', value: formatDistance(new Date(info.checkedAt), now, { addSuffix: true }) });
+        facts.push({ label: copy.version.checked, value: copy.version.distance(new Date(info.checkedAt), now) });
     }
 
     if (info.failedAt) {
         facts.push({
-            label: 'Last check failed',
-            value: formatDistance(new Date(info.failedAt), now, { addSuffix: true }),
+            label: copy.version.lastCheckFailed,
+            value: copy.version.distance(new Date(info.failedAt), now),
         });
     }
 
@@ -89,36 +87,36 @@ export function describeVersion(info: VersionInfoFragmentFragment): VersionPrese
         case UpdateState.Disabled:
             return {
                 ...base,
-                detail: 'Automatic update checks are switched off in the server configuration.',
-                headline: 'Update checks are disabled',
+                detail: copy.version.disabledDetail,
+                headline: copy.version.disabled,
                 indicator: 'question',
-                tooltip: 'Update checks are disabled in the server configuration.',
+                tooltip: copy.version.disabledTooltip,
             };
         case UpdateState.Pending:
             return {
                 ...base,
-                detail: 'The first update check has not completed yet. It runs shortly after the server starts.',
-                headline: 'Checking for updates',
+                detail: copy.version.checkingDetail,
+                headline: copy.version.checking,
                 indicator: 'question',
-                tooltip: 'Checking for updates…',
+                tooltip: copy.version.checkingTooltip,
             };
         case UpdateState.Unreachable:
             return {
                 ...base,
-                detail: 'The update service could not be reached, so it is unknown whether a newer version exists.',
-                headline: 'Update status unknown',
+                detail: copy.version.unreachableDetail,
+                headline: copy.version.unknown,
                 indicator: 'question',
-                tooltip: 'Update status unknown: the update service could not be reached.',
+                tooltip: copy.version.unreachableTooltip,
             };
         case UpdateState.UpdateAvailable:
             if (latest) {
                 return {
                     ...base,
                     action: UPDATE_INSTRUCTION,
-                    detail: 'Update to get the latest fixes and features.',
-                    headline: `New version ${latest} is available`,
+                    detail: copy.version.newVersionDetail,
+                    headline: copy.version.newVersion(latest),
                     indicator: 'update',
-                    tooltip: `New version ${latest} is available. Run the installer tool to update.`,
+                    tooltip: copy.version.newVersionTooltip(latest),
                 };
             }
 
@@ -126,7 +124,7 @@ export function describeVersion(info: VersionInfoFragmentFragment): VersionPrese
         case UpdateState.UpToDate:
             return {
                 ...base,
-                detail: `${label} is the newest version on the ${info.strategy} channel.`,
+                detail: copy.version.newestOnChannel(label, info.strategy),
                 headline: copy.app.upToDate,
                 indicator: 'none',
                 tooltip: copy.app.upToDateTooltip(label),
@@ -166,14 +164,14 @@ export function splitVersion(current: string): { revision: null | string; versio
 }
 
 function describeUnknown(base: Pick<VersionPresentation, 'action' | 'label' | 'latest'>) {
-    const newest = base.latest ? ` The newest published version is ${base.latest}.` : '';
+    const newest = base.latest ? copy.version.newestPublished(base.latest) : '';
 
     return {
         ...base,
-        detail: `The update service could not tell whether a newer version exists for this build.${newest}`,
-        headline: 'Update status unknown',
+        detail: copy.version.unknownDetail(newest),
+        headline: copy.version.unknown,
         indicator: 'question' as const,
-        tooltip: 'Update status unknown: the update service could not tell whether a newer version exists.',
+        tooltip: copy.version.unknownTooltip,
     };
 }
 
@@ -292,9 +290,9 @@ function VersionDetails({
 }) {
     const { className: statusClass, icon: StatusIcon } = indicatorIcons[presentation.indicator];
     const facts: VersionFact[] = [
-        { isMono: true, label: 'Installed', value: presentation.label },
+        { isMono: true, label: copy.version.installed, value: presentation.label },
         ...(presentation.indicator === 'update' && presentation.latest
-            ? [{ isAccented: true, isMono: true, label: 'Available', value: presentation.latest }]
+            ? [{ isAccented: true, isMono: true, label: copy.version.available, value: presentation.latest }]
             : []),
         ...describeTiming(versionInfo),
     ];
@@ -310,14 +308,14 @@ function VersionDetails({
                             {copy.app.name} {presentation.label}
                         </div>
                         <div className="text-muted-foreground truncate font-mono text-xs">
-                            build {versionInfo.build}
+                            {copy.version.build(versionInfo.build)}
                         </div>
                     </div>
                     {versionInfo.strategy && (
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Badge
-                                    aria-label={`Update channel: ${versionInfo.strategy}`}
+                                    aria-label={copy.version.channel(versionInfo.strategy)}
                                     className="shrink-0 cursor-help capitalize"
                                     variant="secondary"
                                 >
@@ -325,8 +323,7 @@ function VersionDetails({
                                 </Badge>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-64">
-                                Updates are offered from the {versionInfo.strategy} channel, and the installer pulls its
-                                images from the same one. UPDATE_STRATEGY on the host sets which channel that is.
+                                {copy.version.channelHint(versionInfo.strategy)}
                             </TooltipContent>
                         </Tooltip>
                     )}
@@ -368,9 +365,11 @@ function VersionDetails({
             <DropdownMenuSeparator />
 
             {releaseNotes && (
-                <ExternalLinkRow href={releaseNotes}>Release notes for {presentation.latest}</ExternalLinkRow>
+                <ExternalLinkRow href={releaseNotes}>
+                    {copy.version.releaseNotes(presentation.latest ?? '')}
+                </ExternalLinkRow>
             )}
-            <ExternalLinkRow href={PENTAGI_RELEASES_URL}>All releases</ExternalLinkRow>
+            <ExternalLinkRow href={PENTAGI_RELEASES_URL}>{copy.version.allReleases}</ExternalLinkRow>
         </>
     );
 }

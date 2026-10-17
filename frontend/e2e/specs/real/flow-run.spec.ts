@@ -18,7 +18,7 @@ test.describe('real backend flow run', { tag: '@real' }, () => {
 
         // The form is invalid until the providers query lands, so a cold stack keeps Submit
         // disabled for a while — clicking straight away spends the whole test timeout on it.
-        const submit = page.getByRole('button', { name: 'Submit' });
+        const submit = page.getByRole('button', { exact: true, name: '发送' });
 
         await expect(submit).toBeEnabled({ timeout: 60_000 });
         await submit.click();

@@ -33,7 +33,7 @@ import { routes } from '@/lib/routes';
 const health = copy.telegram.health;
 const text = copy.telegram;
 
-const ACCOUNT_PLATFORMS: GrowthAccountPlatform[] = ['telegram', 'facebook', 'instagram'];
+const ACCOUNT_PLATFORMS: GrowthAccountPlatform[] = ['telegram', 'facebook', 'instagram', 'tiktok'];
 
 const statusVariant: Record<GrowthAccountStatus, BadgeVariant> = {
     active: 'green',
@@ -312,7 +312,7 @@ function SettingsAccounts() {
                     open
                 />
             )}
-            {(login?.platform === 'facebook' || login?.platform === 'instagram') && (
+            {login && login.platform !== 'telegram' && (
                 <RemoteLoginDialog
                     account={login.account}
                     onClose={() => setLogin(null)}

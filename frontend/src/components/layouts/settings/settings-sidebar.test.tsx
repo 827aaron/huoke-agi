@@ -42,7 +42,7 @@ function renderSidebar(entry: { pathname: string; state?: unknown }) {
     );
 }
 
-const backToApp = () => screen.getByRole('link', { name: /Back to App/ });
+const backToApp = () => screen.getByRole('link', { name: /返回应用/ });
 
 describe('SettingsSidebar version', () => {
     it('names the section and the running version in the header', () => {

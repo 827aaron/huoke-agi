@@ -52,7 +52,7 @@ import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { FLOW_TAB_VALUES, useFlowSideTab, useFlowTabDetection } from '@/hooks/use-flow-tab-detection';
 import { useIsOwnFlow } from '@/hooks/use-is-own-flow';
 import { copyToClipboard } from '@/lib/clipboard';
-import { statusLabel } from '@/lib/copy';
+import { copy, statusLabel } from '@/lib/copy';
 import { Log } from '@/lib/log';
 import { downloadTextFile, generateFileName, generateReport } from '@/lib/report';
 import { routes } from '@/lib/routes';
@@ -71,7 +71,7 @@ const renderFlowItem = (item: FlowItem, isCurrent: boolean): ReactNode => (
             status={item.status}
         />
         <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>
-            {item.title || `Flow #${item.id}`}
+            {item.title || copy.flows.flowNumber(item.id)}
         </span>
         <Badge
             className="ml-auto shrink-0 font-mono text-[10px]"
@@ -143,11 +143,11 @@ function Flow() {
                 });
 
                 if (data?.renameFlow === ResultType.Success) {
-                    toast.success('Flow renamed successfully');
+                    toast.success(copy.flows.renamed);
                     handleFlowRenameCancel();
                 }
             } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Failed to rename flow';
+                const errorMessage = error instanceof Error ? error.message : copy.flows.renameFailed;
                 toast.error(errorMessage);
             }
         });
@@ -199,7 +199,7 @@ function Flow() {
                         <Breadcrumb className="min-w-0 flex-1">
                             <BreadcrumbList className="min-w-0 flex-nowrap">
                                 <BreadcrumbItem className="min-w-0">
-                                    <BreadcrumbPage>Flow</BreadcrumbPage>
+                                    <BreadcrumbPage>{copy.flows.flow}</BreadcrumbPage>
                                 </BreadcrumbItem>
                             </BreadcrumbList>
                         </Breadcrumb>
@@ -209,7 +209,7 @@ function Flow() {
                     <ErrorState
                         message={flowLoadError.message}
                         onRetry={refetchFlow}
-                        title="Error loading flow"
+                        title={copy.flows.loadOneFailed}
                     />
                 </div>
             </>
@@ -260,7 +260,7 @@ function Flow() {
                                         inputRef={editingInputRef}
                                         onCancel={handleFlowRenameCancel}
                                         onSave={handleFlowRenameSave}
-                                        placeholder="Flow title"
+                                        placeholder={copy.flows.titlePlaceholder}
                                     />
                                 ) : flow ? (
                                     <Tooltip>
@@ -269,14 +269,14 @@ function Flow() {
                                                 className="max-w-64 min-w-0 cursor-text truncate select-none"
                                                 onDoubleClick={handleFlowRenameStart}
                                             >
-                                                {flowTitle || 'Select a flow'}
+                                                {flowTitle || copy.flows.selectFlow}
                                             </BreadcrumbPage>
                                         </TooltipTrigger>
-                                        <TooltipContent>Double-click to rename</TooltipContent>
+                                        <TooltipContent>{copy.flows.doubleClickRename}</TooltipContent>
                                     </Tooltip>
                                 ) : (
                                     <BreadcrumbPage className="min-w-0 truncate">
-                                        {flowTitle || 'Select a flow'}
+                                        {flowTitle || copy.flows.selectFlow}
                                     </BreadcrumbPage>
                                 )}
                             </BreadcrumbItem>
@@ -290,12 +290,12 @@ function Flow() {
                             controller={flowNav}
                             renderItem={renderFlowItem}
                             sheetIcon={<GitFork className="size-4" />}
-                            sheetTitle="Flows"
+                            sheetTitle={copy.flows.title}
                         />
                     )}
                     {flowId && !isMobile && isFavoriteSlotShown && (
                         <Button
-                            aria-label="Toggle favorite"
+                            aria-label={copy.sidebar.toggleFavorite}
                             aria-pressed={isFavoriteFlow(flowId)}
                             className="shrink-0"
                             disabled={!isFavoriteToggleable}
@@ -309,7 +309,7 @@ function Flow() {
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
-                                aria-label="Flow actions"
+                                aria-label={copy.flows.actions}
                                 className="size-8 p-0"
                                 variant="ghost"
                             >
@@ -330,11 +330,11 @@ function Flow() {
                                         onSelect={(event) => event.preventDefault()}
                                     >
                                         <GitFork />
-                                        Flows
+                                        {copy.flows.title}
                                         <div className="-my-1.5 -mr-2 ml-auto flex items-center">
                                             <DetailNavigationButtons<FlowItem>
                                                 controller={flowNav}
-                                                sheetTitle="Flows"
+                                                sheetTitle={copy.flows.title}
                                                 size="sm"
                                             />
                                         </div>
@@ -351,7 +351,9 @@ function Flow() {
                                                         : 'size-4'
                                                 }
                                             />
-                                            {isFavoriteFlow(flowId) ? 'Remove from favorites' : 'Add to favorites'}
+                                            {isFavoriteFlow(flowId)
+                                                ? copy.flows.removeFavorite
+                                                : copy.flows.addFavorite}
                                         </DropdownMenuItem>
                                     )}
                                     <DropdownMenuSeparator />
@@ -362,7 +364,7 @@ function Flow() {
                                 onClick={handleFlowRenameStart}
                             >
                                 <PencilLine className="size-3" />
-                                Rename
+                                {copy.action.rename}
                             </DropdownMenuItem>
                             {isFlowRunning && (
                                 <DropdownMenuItem
@@ -372,12 +374,12 @@ function Flow() {
                                     {isFinishing ? (
                                         <>
                                             <Spinner variant="circle" />
-                                            Finishing...
+                                            {copy.flows.finishing}
                                         </>
                                     ) : (
                                         <>
                                             <Pause />
-                                            Finish
+                                            {copy.flows.finish}
                                         </>
                                     )}
                                 </DropdownMenuItem>
@@ -390,12 +392,12 @@ function Flow() {
                                 {isDeleting ? (
                                     <>
                                         <Spinner variant="circle" />
-                                        Deleting...
+                                        {copy.action.deleting}
                                     </>
                                 ) : (
                                     <>
                                         <Trash />
-                                        Delete
+                                        {copy.action.delete}
                                     </>
                                 )}
                             </DropdownMenuItem>
@@ -408,7 +410,7 @@ function Flow() {
                     controller={flowNav}
                     renderItem={renderFlowItem}
                     sheetIcon={<GitFork className="size-4" />}
-                    sheetTitle="Flows"
+                    sheetTitle={copy.flows.title}
                 />
             )}
             <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1 flex-col">
@@ -453,13 +455,13 @@ function Flow() {
                 </div>
             </div>
             <ConfirmationDialog
-                cancelText="Cancel"
-                confirmText="Delete"
+                cancelText={copy.action.cancel}
+                confirmText={copy.action.delete}
                 handleConfirm={handleFlowDelete}
                 handleOpenChange={setIsDeleteDialogOpen}
                 isOpen={isDeleteDialogOpen}
                 itemName={flow?.title}
-                itemType="flow"
+                itemType={copy.itemType.flow}
             />
         </>
     );
@@ -481,10 +483,10 @@ function FlowReportDropdown() {
         const success = await copyToClipboard(reportContent);
 
         if (success) {
-            toast.success('Report copied to clipboard');
+            toast.success(copy.flows.reportCopied);
         } else {
             Log.error('Failed to copy report to clipboard');
-            toast.error('Failed to copy report to clipboard');
+            toast.error(copy.flows.reportCopyFailed);
         }
     };
 
@@ -531,7 +533,7 @@ function FlowReportDropdown() {
                     disabled={isReportDisabled}
                     endIcon={<ChevronDown className="opacity-50" />}
                     icon={<NotepadText />}
-                    label="Report"
+                    label={copy.flows.report}
                     variant="ghost"
                 />
             </DropdownMenuTrigger>
@@ -542,7 +544,7 @@ function FlowReportDropdown() {
                     onClick={handleOpenWebView}
                 >
                     <ExternalLink />
-                    Open web view
+                    {copy.flows.openWebView}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     className="flex items-center gap-2"
@@ -550,7 +552,7 @@ function FlowReportDropdown() {
                     onClick={handleCopyToClipboard}
                 >
                     <Copy />
-                    Copy to clipboard
+                    {copy.flows.copyReport}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     className="flex items-center gap-2"
@@ -558,7 +560,7 @@ function FlowReportDropdown() {
                     onClick={handleDownloadMD}
                 >
                     <Download />
-                    Download MD
+                    {copy.flows.downloadMd}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     className="flex items-center gap-2"
@@ -566,7 +568,7 @@ function FlowReportDropdown() {
                     onClick={handleDownloadPDF}
                 >
                     <Download />
-                    Download PDF
+                    {copy.flows.downloadPdf}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

@@ -121,6 +121,25 @@ let accounts: GrowthAccount[] = [
         rate_limit_until: null,
         status: 'needs_login',
     },
+    {
+        available: true,
+        consecutive_errors: 0,
+        external_browser_ws: null,
+        external_id: 'tt_starera_play',
+        fingerprint: { language: 'en-US', os: 'macOS 15', timezone: 'Asia/Singapore' },
+        id: 6,
+        kind: 'browser_session',
+        label: 'starera.play',
+        last_error: null,
+        last_rate_limited_at: null,
+        last_success_at: ago(90),
+        last_used_at: ago(90),
+        platform: 'tiktok',
+        proxy_source: 'direct',
+        proxy_url: null,
+        rate_limit_until: null,
+        status: 'active',
+    },
 ];
 
 const sources: GrowthSource[] = [
@@ -558,7 +577,7 @@ export const growthMock = {
                 {
                     external_id: `${pending.input.platform}_user_${sessionId.slice(-4)}`,
                     kind: 'browser_session',
-                    label: `${pending.input.platform === 'facebook' ? 'Facebook' : 'Instagram'} 账号`,
+                    label: `${{ facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' }[pending.input.platform]} 账号`,
                     platform: pending.input.platform,
                     ...proxyFields(pending.input.proxy_url),
                 },

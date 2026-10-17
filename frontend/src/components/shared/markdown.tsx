@@ -25,6 +25,7 @@ import rehypeSlug from 'rehype-slug';
 import remarkGfm from 'remark-gfm';
 
 import { ScrollableRegion } from '@/components/ui/scrollable-region';
+import { copy } from '@/lib/copy';
 import { escapeRegExp } from '@/lib/utils/regex';
 
 const lowlight = createLowlight();
@@ -231,7 +232,7 @@ function Markdown({ children, className, searchValue }: MarkdownProps) {
         components.table = ({ children: nodeChildren, ...props }) => (
             <ScrollableRegion
                 className="overflow-x-auto"
-                label="Table"
+                label={copy.editor.table}
             >
                 <table {...props}>{processedSearch ? processTextNode(nodeChildren) : nodeChildren}</table>
             </ScrollableRegion>

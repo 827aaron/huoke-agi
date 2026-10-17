@@ -10,6 +10,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
+import { copy } from '@/lib/copy';
 import { useFlow } from '@/providers/flow-provider';
 
 import FlowTasksDropdown from '../flow-tasks-dropdown';
@@ -151,13 +152,13 @@ function FlowAgents() {
                                         <InputGroupInput
                                             {...field}
                                             autoComplete="off"
-                                            placeholder="Search agent logs..."
+                                            placeholder={copy.flowLogs.searchAgents}
                                             type="text"
                                         />
                                         {field.value && (
                                             <InputGroupAddon align="inline-end">
                                                 <InputGroupButton
-                                                    aria-label="Clear agent search"
+                                                    aria-label={copy.flowLogs.clearAgentSearch}
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');
@@ -207,7 +208,7 @@ function FlowAgents() {
 
                     {!isScrolledToBottom && (
                         <Button
-                            aria-label="Scroll to latest agent log"
+                            aria-label={copy.flowLogs.scrollToLatestAgent}
                             className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
                             onClick={() => scrollToEnd()}
                             size="icon-sm"
@@ -227,8 +228,8 @@ function FlowAgents() {
                         <EmptyMedia variant="icon">
                             <ListFilter />
                         </EmptyMedia>
-                        <EmptyTitle>No agent logs found</EmptyTitle>
-                        <EmptyDescription>Try adjusting your search or filter parameters</EmptyDescription>
+                        <EmptyTitle>{copy.flowLogs.agentNotFound}</EmptyTitle>
+                        <EmptyDescription>{copy.flowLogs.noFilterResults}</EmptyDescription>
                     </EmptyHeader>
                     <EmptyContent>
                         <Button
@@ -236,7 +237,7 @@ function FlowAgents() {
                             variant="outline"
                         >
                             <X />
-                            Reset filters
+                            {copy.flowLogs.resetFilters}
                         </Button>
                     </EmptyContent>
                 </Empty>
@@ -246,8 +247,8 @@ function FlowAgents() {
                         <EmptyMedia variant="icon">
                             <Bot />
                         </EmptyMedia>
-                        <EmptyTitle>No agent logs available</EmptyTitle>
-                        <EmptyDescription>Agent logs will appear here when agents are working</EmptyDescription>
+                        <EmptyTitle>{copy.flowLogs.agentEmpty}</EmptyTitle>
+                        <EmptyDescription>{copy.flowLogs.agentEmptyHint}</EmptyDescription>
                     </EmptyHeader>
                 </Empty>
             )}

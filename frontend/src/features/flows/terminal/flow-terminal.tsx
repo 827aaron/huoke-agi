@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { useFlow } from '@/providers/flow-provider';
 
@@ -166,7 +167,7 @@ function FlowTerminal() {
                                         <InputGroupInput
                                             {...field}
                                             autoComplete="off"
-                                            placeholder="Search terminal logs..."
+                                            placeholder={copy.flowLogs.searchTerminal}
                                             type="text"
                                         />
                                         <InputGroupAddon align="inline-end">
@@ -175,7 +176,7 @@ function FlowTerminal() {
                                                     <InputGroupButton
                                                         onClick={handleFindPrevious}
                                                         size="icon-xs"
-                                                        title="Previous match"
+                                                        title={copy.flowLogs.previousMatch}
                                                         type="button"
                                                     >
                                                         <ChevronUp />
@@ -183,7 +184,7 @@ function FlowTerminal() {
                                                     <InputGroupButton
                                                         onClick={handleFindNext}
                                                         size="icon-xs"
-                                                        title="Next match"
+                                                        title={copy.flowLogs.nextMatch}
                                                         type="button"
                                                     >
                                                         <ChevronDown />
@@ -192,10 +193,10 @@ function FlowTerminal() {
                                             )}
                                             {field.value && (
                                                 <InputGroupButton
-                                                    aria-label="Clear terminal search"
+                                                    aria-label={copy.flowLogs.clearTerminalSearch}
                                                     onClick={handleClearSearch}
                                                     size="icon-xs"
-                                                    title="Clear search"
+                                                    title={copy.flowLogs.clearSearch}
                                                     type="button"
                                                 >
                                                     <X />
@@ -233,8 +234,8 @@ function FlowTerminal() {
                         <EmptyMedia variant="icon">
                             <ListFilter />
                         </EmptyMedia>
-                        <EmptyTitle>No terminal logs found</EmptyTitle>
-                        <EmptyDescription>Try adjusting your search or filter parameters</EmptyDescription>
+                        <EmptyTitle>{copy.flowLogs.terminalNotFound}</EmptyTitle>
+                        <EmptyDescription>{copy.flowLogs.noFilterResults}</EmptyDescription>
                     </EmptyHeader>
                     <EmptyContent>
                         <Button
@@ -242,7 +243,7 @@ function FlowTerminal() {
                             variant="outline"
                         >
                             <X />
-                            Reset filters
+                            {copy.flowLogs.resetFilters}
                         </Button>
                     </EmptyContent>
                 </Empty>

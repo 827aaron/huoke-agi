@@ -23,7 +23,7 @@ describe('DashboardAnalytics', () => {
     it('keeps saying a quiet period has no data while it refetches', () => {
         render(<DashboardAnalytics period={UsageStatsPeriod.Week} />);
 
-        expect(screen.getAllByText('No data for this period')).toHaveLength(4);
+        expect(screen.getAllByText('这段时间没有数据')).toHaveLength(4);
         expect(document.querySelectorAll('.animate-spin')).toHaveLength(0);
     });
 });

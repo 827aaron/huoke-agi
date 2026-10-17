@@ -101,7 +101,7 @@ describe('KnowledgeForm — Save and leave (data router)', () => {
         await user.click(screen.getByRole('link', { name: 'go elsewhere' }));
 
         const dialog = await screen.findByRole('dialog');
-        await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+        await user.click(within(dialog).getByRole('button', { name: '保存' }));
 
         await waitFor(() => expect(screen.getByText('elsewhere page')).toBeInTheDocument());
         expect(screen.queryByText('new doc page')).not.toBeInTheDocument();

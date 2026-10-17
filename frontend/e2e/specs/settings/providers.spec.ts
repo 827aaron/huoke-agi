@@ -27,21 +27,21 @@ test.describe('settings providers', { tag: '@coverage' }, () => {
     test('shows the empty state when no providers are configured', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/providers');
 
-        await expect(page.getByText('No providers configured')).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Add Provider' })).toBeVisible();
+        await expect(page.getByText('还没有配置模型服务')).toBeVisible();
+        await expect(page.getByRole('button', { name: '添加模型服务' })).toBeVisible();
 
         expectCleanPage(pageErrorLog);
     });
 
     test('opens the create form from the empty state', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/providers');
-        await page.getByRole('button', { name: 'Add Provider' }).click();
+        await page.getByRole('button', { name: '添加模型服务' }).click();
 
         await expect(page).toHaveURL(/\/settings\/providers\/new$/);
-        await expect(page.getByRole('heading', { name: 'Create a new provider' })).toBeVisible();
-        await expect(page.getByText('Type', { exact: true })).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Select provider' })).toBeVisible();
-        await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
+        await expect(page.getByRole('heading', { name: '新建模型服务' })).toBeVisible();
+        await expect(page.getByText('类型', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: '选择服务商' })).toBeVisible();
+        await expect(page.getByLabel('名称', { exact: true })).toBeVisible();
 
         expectCleanPage(pageErrorLog);
     });
@@ -60,7 +60,7 @@ test.describe('settings providers create form', { tag: '@coverage' }, () => {
         await page.goto('/settings/providers/new?type=anthropic');
 
         await page.getByRole('button', { name: /^顾问/ }).click();
-        await page.getByRole('button', { name: 'Open model list' }).first().click();
+        await page.getByRole('button', { name: '打开模型列表' }).first().click();
 
         // A catalog-only model (not the seeded agent default), so it can only appear if the type's
         // model list reached the dropdown — the path an empty catalog leaves unreachable.
@@ -95,15 +95,15 @@ test.describe('settings providers write path', { tag: '@coverage' }, () => {
     }) => {
         await page.goto('/settings/providers/new?type=anthropic');
 
-        await expect(page.getByLabel('Name', { exact: true })).toBeVisible();
-        await page.getByLabel('Name', { exact: true }).fill(CREATED_NAME);
+        await expect(page.getByLabel('名称', { exact: true })).toBeVisible();
+        await page.getByLabel('名称', { exact: true }).fill(CREATED_NAME);
 
         const request = page.waitForRequest(
             (candidate) =>
                 candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'createProvider',
         );
 
-        await page.getByRole('button', { exact: true, name: 'Create' }).click();
+        await page.getByRole('button', { exact: true, name: '创建' }).click();
 
         const { variables } = (await request).postDataJSON();
 
@@ -128,7 +128,7 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
     const openProvider = async (page: Page) => {
         await page.goto(`/settings/providers/${SEEDED_PROVIDER.id}`);
-        await expect(page.getByLabel('Name', { exact: true })).toHaveValue(SEEDED_PROVIDER.name);
+        await expect(page.getByLabel('名称', { exact: true })).toHaveValue(SEEDED_PROVIDER.name);
     };
 
     const mutationRequest = (page: Page, operationName: string) =>
@@ -163,11 +163,11 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
         test('Save carries the id of the provider being edited', async ({ page, pageErrorLog }) => {
             await openProvider(page);
-            await page.getByLabel('Name', { exact: true }).fill(RENAMED);
+            await page.getByLabel('名称', { exact: true }).fill(RENAMED);
 
             const request = mutationRequest(page, 'updateProvider');
 
-            await page.getByRole('button', { exact: true, name: 'Save' }).click();
+            await page.getByRole('button', { exact: true, name: '保存' }).click();
 
             const { variables } = (await request).postDataJSON();
 
@@ -195,8 +195,8 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
         test('Delete confirms by name, sends the id, and returns to the list', async ({ page, pageErrorLog }) => {
             await openProvider(page);
-            await page.getByRole('button', { name: 'Provider actions' }).click();
-            await page.getByRole('menuitem', { name: 'Delete' }).click();
+            await page.getByRole('button', { name: '模型服务操作' }).click();
+            await page.getByRole('menuitem', { name: '删除' }).click();
 
             const dialog = page.getByRole('dialog');
 
@@ -205,7 +205,7 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             const request = mutationRequest(page, 'deleteProvider');
 
-            await dialog.getByRole('button', { name: 'Delete' }).click();
+            await dialog.getByRole('button', { name: '删除' }).click();
 
             expect((await request).postDataJSON().variables).toEqual({ providerId: SEEDED_PROVIDER.id });
             await expect(page).toHaveURL(/\/settings\/providers$/);
@@ -243,12 +243,12 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             await expect(row).toBeVisible();
             await row.hover();
-            await row.getByRole('button', { name: 'Open menu' }).click();
-            await page.getByRole('menuitem', { name: 'Delete' }).click();
+            await row.getByRole('button', { name: '打开菜单' }).click();
+            await page.getByRole('menuitem', { name: '删除' }).click();
 
             const request = mutationRequest(page, 'deleteProvider');
 
-            await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+            await page.getByRole('dialog').getByRole('button', { name: '删除' }).click();
 
             expect((await request).postDataJSON().variables).toEqual({ providerId: OTHER_PROVIDER.id });
             // The row goes only because the refetch answers without it, and the sibling proves the
@@ -281,7 +281,7 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             const request = mutationRequest(page, 'testAgent');
 
-            await agentRow(page, '顾问').getByRole('button', { exact: true, name: 'Test' }).click();
+            await agentRow(page, '顾问').getByRole('button', { exact: true, name: '测试' }).click();
 
             const { variables } = (await request).postDataJSON();
 
@@ -298,8 +298,8 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             // Only the agent that was tested appears — the dialog is keyed by the clicked agent, so a
             // handler that tested the wrong one would name it here.
-            await expect(dialog.getByRole('heading', { name: '顾问 1/1 passed' })).toBeVisible();
-            await expect(dialog.getByRole('heading', { name: /passed/ })).toHaveCount(1);
+            await expect(dialog.getByRole('heading', { name: '顾问 通过 1/1' })).toBeVisible();
+            await expect(dialog.getByRole('heading', { name: /通过/ })).toHaveCount(1);
             expectCleanPage(pageErrorLog);
         });
     });
@@ -323,7 +323,7 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             const request = mutationRequest(page, 'testProvider');
 
-            await page.locator('header').getByRole('button', { exact: true, name: 'Test' }).click();
+            await page.locator('header').getByRole('button', { exact: true, name: '测试' }).click();
 
             const { variables } = (await request).postDataJSON();
 
@@ -332,10 +332,10 @@ test.describe('settings provider edit paths', { tag: '@coverage' }, () => {
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByRole('heading', { name: /passed/ }), 'one row per agent').toHaveCount(13);
-            await expect(dialog.getByRole('heading', { name: '潜客研究员 0/1 passed' })).toBeVisible();
+            await expect(dialog.getByRole('heading', { name: /通过/ }), 'one row per agent').toHaveCount(13);
+            await expect(dialog.getByRole('heading', { name: '潜客研究员 通过 0/1' })).toBeVisible();
 
-            await dialog.getByRole('button', { name: '潜客研究员 0/1 passed' }).click();
+            await dialog.getByRole('button', { name: '潜客研究员 通过 0/1' }).click();
 
             // The failing agent's own error must reach the operator; a dialog that renders only the
             // verdict leaves them with nothing to act on.
@@ -386,11 +386,11 @@ test.describe('settings providers, cloning', { tag: '@coverage' }, () => {
 
         const row = page.getByRole('row', { name: new RegExp(SEEDED_PROVIDER.name) });
 
-        await row.getByRole('button', { name: 'Open menu' }).click();
-        await page.getByRole('menuitem', { name: 'Clone' }).click();
+        await row.getByRole('button', { name: '打开菜单' }).click();
+        await page.getByRole('menuitem', { name: '复制' }).click();
 
         await expect(page).toHaveURL(new RegExp(`/settings/providers/new\\?.*id=${SEEDED_PROVIDER.id}`));
-        await expect(page.getByLabel('Name', { exact: true })).toHaveValue(`${SEEDED_PROVIDER.name} (Copy)`);
+        await expect(page.getByLabel('名称', { exact: true })).toHaveValue(`${SEEDED_PROVIDER.name}（副本）`);
         expectCleanPage(pageErrorLog);
     });
 });
@@ -406,10 +406,10 @@ test.describe('settings providers, cloning a type the server cannot serve', { ta
 
         const row = page.getByRole('row', { name: new RegExp(SEEDED_PROVIDER.name) });
 
-        await row.getByRole('button', { name: 'Open menu' }).click();
-        await page.getByRole('menuitem', { name: 'Clone' }).click();
+        await row.getByRole('button', { name: '打开菜单' }).click();
+        await page.getByRole('menuitem', { name: '复制' }).click();
 
-        await expect(page.getByText(`Provider type "${SEEDED_PROVIDER.type}" is not available`)).toBeVisible();
+        await expect(page.getByText(`服务商类型“${SEEDED_PROVIDER.type}”不可用`)).toBeVisible();
         await expect(page).toHaveURL(/\/settings\/providers$/);
         await expect(row).toBeVisible();
         expectCleanPage(pageErrorLog);

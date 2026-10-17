@@ -25,12 +25,12 @@ test.describe('responsive', { tag: '@cross' }, () => {
 
             await page.getByRole('row', { name: /E2E Alpha/ }).click();
             await expect(page.locator('header').getByText('E2E Alpha')).toBeVisible();
-            await expect(page.getByRole('button', { name: 'Flow actions' })).toBeVisible();
+            await expect(page.getByRole('button', { name: '项目操作' })).toBeVisible();
             expect(await page.evaluate(hasHorizontalOverflow)).toBe(false);
 
-            await page.getByRole('button', { name: 'Flow actions' }).click();
-            await expect(page.getByRole('menuitem', { name: /Flows/ })).toBeVisible();
-            await expect(page.getByRole('menuitem', { name: /favorites/ })).toBeVisible();
+            await page.getByRole('button', { name: '项目操作' }).click();
+            await expect(page.getByRole('menuitem', { name: /项目/ })).toBeVisible();
+            await expect(page.getByRole('menuitem', { name: /收藏/ })).toBeVisible();
             await page.keyboard.press('Escape');
 
             expectCleanPage(pageErrorLog);

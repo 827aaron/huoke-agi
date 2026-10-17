@@ -2,6 +2,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { copy } from '@/lib/copy';
 
 interface ErrorStateProps {
     message?: null | string;
@@ -26,7 +27,7 @@ export function ErrorState({ message, onRetry, title }: ErrorStateProps) {
                         variant="secondary"
                     >
                         <RefreshCw />
-                        Try again
+                        {copy.action.retry}
                     </Button>
                 </EmptyContent>
             ) : null}

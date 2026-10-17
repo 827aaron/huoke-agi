@@ -64,7 +64,7 @@ describe('RouteErrorBoundary', () => {
     it('shows the redeploy message and auto-reloads once for a chunk-load error', async () => {
         renderWithRouteError(chunkError());
 
-        expect(await screen.findByText(/a new version was likely just deployed/i)).toBeInTheDocument();
+        expect(await screen.findByText('系统刚刚更新了版本，重新加载即可使用最新版。')).toBeInTheDocument();
         expect(screen.getByRole('alert')).toBeInTheDocument();
         await waitFor(() => expect(reloadSpy).toHaveBeenCalledTimes(1));
     });
@@ -72,14 +72,14 @@ describe('RouteErrorBoundary', () => {
     it('shows the glitch message and auto-reloads once for a DOM-desync (removeChild) error', async () => {
         renderWithRouteError(domDesyncError());
 
-        expect(await screen.findByText(/display glitch/i)).toBeInTheDocument();
+        expect(await screen.findByText('页面显示出了点小问题，重新加载通常就能恢复。')).toBeInTheDocument();
         await waitFor(() => expect(reloadSpy).toHaveBeenCalledTimes(1));
     });
 
     it('shows the generic message and does not auto-reload for a non-chunk error', async () => {
         renderWithRouteError(renderError());
 
-        expect(await screen.findByText(/ran into an unexpected error/i)).toBeInTheDocument();
+        expect(await screen.findByText('页面遇到了意外错误，重新加载通常就能恢复。')).toBeInTheDocument();
         expect(reloadSpy).not.toHaveBeenCalled();
     });
 
@@ -89,7 +89,7 @@ describe('RouteErrorBoundary', () => {
 
         renderWithRouteError(chunkError());
 
-        expect(await screen.findByText(/you are offline/i)).toBeInTheDocument();
+        expect(await screen.findByText(/网络已断开/)).toBeInTheDocument();
         expect(reloadSpy).not.toHaveBeenCalled();
 
         isOnline = true;
@@ -106,7 +106,7 @@ describe('RouteErrorBoundary', () => {
 
         renderWithRouteError(chunkError());
 
-        const reload = await screen.findByRole('button', { name: /reload/i });
+        const reload = await screen.findByRole('button', { name: /重新加载/ });
         expect(reload).toBeDisabled();
         await userEvent.click(reload);
         expect(reloadSpy).not.toHaveBeenCalled();
@@ -122,7 +122,7 @@ describe('RouteErrorBoundary', () => {
     it('reloads when the user clicks Reload', async () => {
         renderWithRouteError(renderError());
 
-        await userEvent.click(await screen.findByRole('button', { name: /reload/i }));
+        await userEvent.click(await screen.findByRole('button', { name: /重新加载/ }));
 
         expect(reloadSpy).toHaveBeenCalledTimes(1);
     });

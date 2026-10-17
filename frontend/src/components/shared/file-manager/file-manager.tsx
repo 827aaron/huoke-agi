@@ -19,6 +19,7 @@ import {
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { useLatestRef } from '@/hooks/use-latest-ref';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 import type { FileManagerRowDisplay, FileManagerRowHandlers } from './file-manager-row';
@@ -56,11 +57,7 @@ const EMPTY_ACTIONS: readonly FileManagerAction[] = Object.freeze([]);
 const EMPTY_BULK_ACTIONS: readonly FileManagerBulkAction[] = Object.freeze([]);
 const EMPTY_AREA_ACTIONS: readonly FileManagerEmptyAreaAction[] = Object.freeze([]);
 
-const COLUMN_LABEL_FOR_ARIA: Record<FileManagerSortColumn, string> = {
-    modified: 'modified date',
-    name: 'name',
-    size: 'size',
-};
+const COLUMN_LABEL_FOR_ARIA: Record<FileManagerSortColumn, string> = copy.fileManager.sort;
 
 const defaultSortHeaderAriaLabel = (
     column: FileManagerSortColumn,
@@ -69,14 +66,14 @@ const defaultSortHeaderAriaLabel = (
     const label = COLUMN_LABEL_FOR_ARIA[column];
 
     if (direction === 'asc') {
-        return `Sort by ${label} (descending)`;
+        return copy.fileManager.sort.descending(label);
     }
 
     if (direction === 'desc') {
-        return `Clear sorting on ${label}`;
+        return copy.fileManager.sort.clear(label);
     }
 
-    return `Sort by ${label} (ascending)`;
+    return copy.fileManager.sort.ascending(label);
 };
 
 const renderEmptyAreaItems = (items: readonly FileManagerEmptyAreaAction[]): ReactNode[] => {
@@ -412,7 +409,7 @@ export function FileManager({
     // clicks outside any row, which is the entire point.
     const treeBody = (
         <div
-            aria-label="File tree"
+            aria-label={copy.fileManager.tree}
             aria-multiselectable={isCheckboxVisible || undefined}
             className={cn(
                 'flex flex-1 flex-col overflow-y-auto py-1 transition-colors',
@@ -472,7 +469,7 @@ export function FileManager({
             >
                 {isCheckboxVisible ? (
                     <Checkbox
-                        aria-label={effectiveLabels.selectAllAriaLabel ?? 'Select all'}
+                        aria-label={effectiveLabels.selectAllAriaLabel ?? copy.fileManager.selectAll}
                         checked={getCheckboxState(isAllSelected, isSomeSelected)}
                         onCheckedChange={toggleSelectAll}
                     />
@@ -488,8 +485,8 @@ export function FileManager({
                             aria-expanded={isAllExpanded}
                             aria-label={
                                 isAllExpanded
-                                    ? (effectiveLabels.collapseAllAriaLabel ?? 'Collapse all')
-                                    : (effectiveLabels.expandAllAriaLabel ?? 'Expand all')
+                                    ? (effectiveLabels.collapseAllAriaLabel ?? copy.fileManager.collapseAll)
+                                    : (effectiveLabels.expandAllAriaLabel ?? copy.fileManager.expandAll)
                             }
                             className="text-muted-foreground hover:bg-muted -mx-0.5 size-4 shrink-0 rounded hover:text-blue-400"
                             onClick={toggleExpandAll}
@@ -504,11 +501,24 @@ export function FileManager({
                             className="-mx-0.5 size-4 shrink-0"
                         />
                     )}
-                    {renderSortableHeader('name', effectiveLabels.columnName ?? 'Name', isNameSortable)}
+                    {renderSortableHeader(
+                        'name',
+                        effectiveLabels.columnName ?? copy.fileManager.columnName,
+                        isNameSortable,
+                    )}
                 </div>
-                {isSizeVisible && renderSortableHeader('size', effectiveLabels.columnSize ?? 'Size', isSizeSortable)}
+                {isSizeVisible &&
+                    renderSortableHeader(
+                        'size',
+                        effectiveLabels.columnSize ?? copy.fileManager.columnSize,
+                        isSizeSortable,
+                    )}
                 {isModifiedVisible &&
-                    renderSortableHeader('modified', effectiveLabels.columnModified ?? 'Modified', isModifiedSortable)}
+                    renderSortableHeader(
+                        'modified',
+                        effectiveLabels.columnModified ?? copy.fileManager.columnModified,
+                        isModifiedSortable,
+                    )}
                 {hasActions && (
                     <span
                         aria-hidden="true"

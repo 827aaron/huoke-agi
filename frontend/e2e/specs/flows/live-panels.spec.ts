@@ -26,7 +26,7 @@ test.describe('live panels', { tag: '@flows' }, () => {
     // none of these strings, so a frame wired to the wrong cache field leaves its panel stale.
     test('every streamed panel picks up its own frame', async ({ page, pageErrorLog }) => {
         await page.goto('/flows/5');
-        await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
+        await expect(page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' })).toBeEnabled();
 
         await page.getByRole('tab', { name: '任务' }).click();
         await expect(page.getByText(STREAMED.task)).toBeVisible();

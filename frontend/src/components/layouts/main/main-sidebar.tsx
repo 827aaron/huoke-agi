@@ -177,7 +177,7 @@ export function MainSidebar() {
                                     showOnHover
                                 >
                                     <Link
-                                        aria-label="New template"
+                                        aria-label={copy.sidebar.newTemplate}
                                         to={routes.newTemplate}
                                     >
                                         <Plus />
@@ -198,7 +198,7 @@ export function MainSidebar() {
                                     className="data-[state=open]:bg-accent rounded-sm"
                                     onClick={resourcesUpload.openFilePicker}
                                     showOnHover
-                                    title="Upload file"
+                                    title={copy.sidebar.uploadFile}
                                     type="button"
                                 >
                                     <Plus />
@@ -220,7 +220,7 @@ export function MainSidebar() {
                                     showOnHover
                                 >
                                     <Link
-                                        aria-label="New knowledge"
+                                        aria-label={copy.sidebar.newKnowledge}
                                         to={routes.newKnowledge}
                                     >
                                         <Plus />
@@ -334,7 +334,7 @@ export function MainSidebar() {
                                             variant="secondary"
                                         >
                                             {user?.type === 'local'
-                                                ? 'Local'
+                                                ? copy.sidebar.local
                                                 : (formatAccountProvider(user?.provider) ?? 'OAuth')}
                                         </Badge>
                                     </div>
@@ -345,7 +345,7 @@ export function MainSidebar() {
                                     onSelect={(event) => event.preventDefault()}
                                 >
                                     <Settings2 />
-                                    Theme
+                                    {copy.sidebar.theme}
                                     <Tabs
                                         className="-my-1.5 -mr-2 ml-auto"
                                         onValueChange={(value) => setTheme(value as Theme)}
@@ -353,21 +353,21 @@ export function MainSidebar() {
                                     >
                                         <TabsList className="dark:bg-background h-7 p-0.5">
                                             <TabsTrigger
-                                                aria-label="System theme"
+                                                aria-label={copy.sidebar.systemTheme}
                                                 className="dark:data-[state=active]:bg-card h-6 px-2"
                                                 value="system"
                                             >
                                                 <Monitor className="size-4" />
                                             </TabsTrigger>
                                             <TabsTrigger
-                                                aria-label="Light theme"
+                                                aria-label={copy.sidebar.lightTheme}
                                                 className="dark:data-[state=active]:bg-card h-6 px-2"
                                                 value="light"
                                             >
                                                 <Sun className="size-4" />
                                             </TabsTrigger>
                                             <TabsTrigger
-                                                aria-label="Dark theme"
+                                                aria-label={copy.sidebar.darkTheme}
                                                 className="dark:data-[state=active]:bg-card h-6 px-2"
                                                 value="dark"
                                             >
@@ -383,13 +383,13 @@ export function MainSidebar() {
                                         to={routes.settings.account}
                                     >
                                         <UserIcon className="mr-2 size-4" />
-                                        Profile
+                                        {copy.sidebar.profile}
                                     </Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => logout()}>
                                     <LogOut className="mr-2 size-4" />
-                                    Log out
+                                    {copy.sidebar.logOut}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -431,7 +431,7 @@ function FlowMenuItem({ activeFlowId, flow, isFavorite, isToggleShown, onToggleF
             </SidebarMenuButton>
             {isToggleShown && (
                 <SidebarMenuAction
-                    aria-label="Toggle favorite"
+                    aria-label={copy.sidebar.toggleFavorite}
                     aria-pressed={isFavorite}
                     className="data-[state=open]:bg-accent rounded-sm"
                     onClick={() => onToggleFavorite(flow.id)}

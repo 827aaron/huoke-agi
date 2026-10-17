@@ -52,10 +52,10 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
 
             const panel = page.getByRole('menu');
 
-            await expect(panel).toContainText('Update checks are disabled');
+            await expect(panel).toContainText('已关闭更新检查');
             await expect(page.locator('[data-slot^="version-indicator"]')).toHaveCount(0);
             await expect(page.getByRole('menuitem', { name: /Release notes/ })).toHaveCount(0);
-            await expect(page.getByRole('menuitem', { name: 'All releases' })).toBeVisible();
+            await expect(page.getByRole('menuitem', { name: '所有版本' })).toBeVisible();
         });
 
         test('closes the panel on Escape', async ({ page }) => {
@@ -72,9 +72,9 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
             await page.goto('/flows');
             await header(page).click();
 
-            await page.getByLabel('Update channel: preview').hover();
+            await page.getByLabel('更新渠道：preview').hover();
 
-            await expect(page.getByRole('tooltip')).toContainText('preview channel');
+            await expect(page.getByRole('tooltip')).toContainText('preview 渠道');
         });
     });
 
@@ -92,8 +92,8 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
 
             await header(page).click();
 
-            await expect(page.getByRole('menu')).toContainText('New version v2.4.0 is available');
-            await expect(page.getByRole('menuitem', { name: /Release notes for v2\.4\.0/ })).toHaveAttribute(
+            await expect(page.getByRole('menu')).toContainText('新版本 v2.4.0 可用');
+            await expect(page.getByRole('menuitem', { name: /v2\.4\.0 更新说明/ })).toHaveAttribute(
                 'href',
                 'https://github.com/vxcontrol/pentagi/releases/tag/v2.4.0',
             );
@@ -111,7 +111,7 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
 
             await page.keyboard.press('Enter');
 
-            await expect(page.getByRole('menu')).toContainText('New version v2.4.0 is available');
+            await expect(page.getByRole('menu')).toContainText('新版本 v2.4.0 可用');
         });
     });
 });
@@ -173,7 +173,7 @@ test.describe('sidebar account badge', { tag: '@cross' }, () => {
         test('is named local', async ({ page, pageErrorLog }) => {
             await openMenu(page, 'admin@pentagi.com');
 
-            await expect(page.getByRole('menu').getByText('Local')).toBeVisible();
+            await expect(page.getByRole('menu').getByText('本地账号')).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });

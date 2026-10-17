@@ -28,6 +28,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Spinner } from '@/components/ui/spinner';
 import { DeleteProviderDocument, ProviderType, SettingsProvidersDocument } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
+import { agentLabel, copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { formatTableDate } from '@/lib/utils/format';
 type Provider = ProviderConfigFragmentFragment;
@@ -37,7 +38,7 @@ type Provider = ProviderConfigFragmentFragment;
 const providerLabels: Record<ProviderType, string> = {
     [ProviderType.Anthropic]: 'Anthropic',
     [ProviderType.Bedrock]: 'Bedrock',
-    [ProviderType.Custom]: 'Custom',
+    [ProviderType.Custom]: copy.providers.custom,
     [ProviderType.Deepseek]: 'DeepSeek',
     [ProviderType.Gemini]: 'Gemini',
     [ProviderType.Glm]: 'GLM',
@@ -73,19 +74,19 @@ export function SettingsProvidersHeader() {
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <Button
-                    aria-label="Create provider — choose type"
+                    aria-label={copy.providers.createChooseType}
                     className="w-8 shrink-0 px-0 md:w-auto md:px-3"
                     size="sm"
                     variant="secondary"
                 >
                     <Plus />
-                    <span className="hidden md:inline">Create Provider</span>
+                    <span className="hidden md:inline">{copy.provider.create}</span>
                     <ChevronDown className="hidden size-4 md:inline-flex" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
                 {availableTypes.length === 0 ? (
-                    <DropdownMenuItem disabled>No available provider types</DropdownMenuItem>
+                    <DropdownMenuItem disabled>{copy.providers.noTypes}</DropdownMenuItem>
                 ) : (
                     availableTypes.map(({ label, type }) => {
                         const Icon = providerIcons[type]?.icon;
@@ -129,7 +130,7 @@ function SettingsProviders() {
 
                 setDeletingProvider(null);
             } catch (error) {
-                toast.error('Failed to delete provider', {
+                toast.error(copy.providers.deleteFailed, {
                     description: error instanceof Error ? error.message : undefined,
                 });
             }
@@ -165,7 +166,7 @@ function SettingsProviders() {
                 header: ({ column }) => (
                     <DataTableColumnHeader
                         column={column}
-                        title="Name"
+                        title={copy.provider.name}
                     />
                 ),
                 // Name flexes to fill remaining width — fixed `size` would push
@@ -192,7 +193,7 @@ function SettingsProviders() {
                 header: ({ column }) => (
                     <DataTableColumnHeader
                         column={column}
-                        title="Type"
+                        title={copy.provider.type}
                     />
                 ),
                 meta: { searchable: true },
@@ -209,10 +210,10 @@ function SettingsProviders() {
                 header: ({ column }) => (
                     <DataTableColumnHeader
                         column={column}
-                        title="Created"
+                        title={copy.providers.created}
                     />
                 ),
-                meta: { columnMenuLabel: 'Created' },
+                meta: { columnMenuLabel: copy.providers.created },
                 size: 120,
                 sortingFn: (rowA, rowB) => {
                     const dateA = new Date(rowA.getValue('createdAt') as string);
@@ -231,7 +232,7 @@ function SettingsProviders() {
                 header: ({ column }) => (
                     <DataTableColumnHeader
                         column={column}
-                        title="Updated"
+                        title={copy.providers.updated}
                     />
                 ),
                 size: 120,
@@ -251,7 +252,7 @@ function SettingsProviders() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
-                                        aria-label="Open menu"
+                                        aria-label={copy.providers.openMenu}
                                         className="size-8 p-0"
                                         variant="ghost"
                                     >
@@ -264,11 +265,11 @@ function SettingsProviders() {
                                 >
                                     <DropdownMenuItem onClick={() => handleProviderEdit(provider.id)}>
                                         <Pencil className="size-3" />
-                                        Edit
+                                        {copy.action.edit}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleProviderClone(provider.id)}>
                                         <Copy />
-                                        Clone
+                                        {copy.providers.clone}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
@@ -278,12 +279,12 @@ function SettingsProviders() {
                                         {isDeleteLoading && deletingProvider?.id === provider.id ? (
                                             <>
                                                 <Spinner variant="circle" />
-                                                Deleting...
+                                                {copy.action.deleting}
                                             </>
                                         ) : (
                                             <>
                                                 <Trash />
-                                                Delete
+                                                {copy.action.delete}
                                             </>
                                         )}
                                     </DropdownMenuItem>
@@ -307,14 +308,14 @@ function SettingsProviders() {
         const { agents } = provider;
 
         if (!agents) {
-            return <div className="text-muted-foreground p-4 text-sm">No agent configuration available</div>;
+            return <div className="text-muted-foreground p-4 text-sm">{copy.providers.noAgentConfig}</div>;
         }
 
         const getName = (key: string): string =>
             key.replaceAll(/([A-Z])/g, ' $1').replace(/^./, (item) => item.toUpperCase());
 
         const formatValue = (value: boolean | number | string): string =>
-            typeof value === 'boolean' ? (value ? 'yes' : 'no') : String(value);
+            typeof value === 'boolean' ? (value ? copy.action.yes : copy.action.no) : String(value);
 
         const getFields = (obj: unknown, prefix = '', isPrice = false): { label: string; value: string }[] => {
             if (!obj || typeof obj !== 'object') {
@@ -340,13 +341,13 @@ function SettingsProviders() {
             .map(([key, data]) => ({
                 data,
                 key,
-                name: getName(key),
+                name: agentLabel(key, getName(key)),
             }))
             .sort((a, b) => a.name.localeCompare(b.name));
 
         return (
             <div className="bg-muted/20 border-t p-4">
-                <h4 className="font-medium">Agent Configurations</h4>
+                <h4 className="font-medium">{copy.providers.agentConfigs}</h4>
                 <hr className="border-muted-foreground/20 my-4" />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
                     {agentTypes.map(({ data, key, name }) => {
@@ -367,7 +368,7 @@ function SettingsProviders() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="text-muted-foreground text-sm">No configuration available</div>
+                                    <div className="text-muted-foreground text-sm">{copy.providers.noConfig}</div>
                                 )}
                             </div>
                         );
@@ -382,11 +383,11 @@ function SettingsProviders() {
             <>
                 <ContextMenuItem onClick={() => handleProviderEdit(provider.id)}>
                     <Pencil />
-                    Edit
+                    {copy.action.edit}
                 </ContextMenuItem>
                 <ContextMenuItem onClick={() => handleProviderClone(provider.id)}>
                     <Copy />
-                    Clone
+                    {copy.providers.clone}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem
@@ -394,7 +395,9 @@ function SettingsProviders() {
                     onClick={() => handleProviderDeleteDialogOpen(provider)}
                 >
                     <Trash />
-                    {isDeleteLoading && deletingProvider?.id === provider.id ? 'Deleting...' : 'Delete'}
+                    {isDeleteLoading && deletingProvider?.id === provider.id
+                        ? copy.action.deleting
+                        : copy.action.delete}
                 </ContextMenuItem>
             </>
         ),
@@ -404,7 +407,7 @@ function SettingsProviders() {
     const pageHeader = (
         <AppHeader>
             <AppHeaderContent>
-                <AppHeaderTitle icon={<Plug className="size-4 shrink-0" />}>Providers</AppHeaderTitle>
+                <AppHeaderTitle icon={<Plug className="size-4 shrink-0" />}>{copy.providers.title}</AppHeaderTitle>
             </AppHeaderContent>
             <AppHeaderActions>
                 <SettingsProvidersHeader />
@@ -418,8 +421,8 @@ function SettingsProviders() {
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
                     <LoadingState
-                        description="Please wait while we fetch your provider configurations"
-                        title="Loading providers..."
+                        description={copy.providers.loadingHint}
+                        title={copy.providers.loading}
                     />
                 </div>
             </>
@@ -435,7 +438,7 @@ function SettingsProviders() {
                     <ErrorState
                         message={error.message}
                         onRetry={refetch}
-                        title="Error loading providers"
+                        title={copy.providers.loadFailed}
                     />
                 </div>
             </>
@@ -454,10 +457,8 @@ function SettingsProviders() {
                             <EmptyMedia variant="icon">
                                 <Settings />
                             </EmptyMedia>
-                            <EmptyTitle>No providers configured</EmptyTitle>
-                            <EmptyDescription>
-                                Get started by adding your first language model provider
-                            </EmptyDescription>
+                            <EmptyTitle>{copy.providers.empty}</EmptyTitle>
+                            <EmptyDescription>{copy.providers.emptyHint}</EmptyDescription>
                         </EmptyHeader>
                         <EmptyContent>
                             <Button
@@ -465,7 +466,7 @@ function SettingsProviders() {
                                 variant="secondary"
                             >
                                 <Plus />
-                                Add Provider
+                                {copy.providers.addProvider}
                             </Button>
                         </EmptyContent>
                     </Empty>
@@ -482,9 +483,9 @@ function SettingsProviders() {
                     columns={columns}
                     data={providers}
                     empty={{ entityName: 'providers' }}
-                    filterPlaceholder="Filter providers..."
+                    filterPlaceholder={copy.providers.filter}
                     filterValue={filter}
-                    label="Providers"
+                    label={copy.providers.title}
                     onFilterChange={setFilter}
                     onPageChange={handlePageChange}
                     pageIndex={currentPage}
@@ -493,13 +494,13 @@ function SettingsProviders() {
                 />
 
                 <ConfirmationDialog
-                    cancelText="Cancel"
-                    confirmText="Delete"
+                    cancelText={copy.action.cancel}
+                    confirmText={copy.action.delete}
                     handleConfirm={() => handleProviderDelete(deletingProvider?.id)}
                     handleOpenChange={setIsDeleteDialogOpen}
                     isOpen={isDeleteDialogOpen}
                     itemName={deletingProvider?.name}
-                    itemType="provider"
+                    itemType={copy.itemType.provider}
                 />
             </div>
         </>

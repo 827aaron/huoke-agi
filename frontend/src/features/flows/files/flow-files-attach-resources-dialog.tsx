@@ -15,6 +15,7 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { toFileNode } from '@/features/resources/resources-utils';
+import { copy } from '@/lib/copy';
 import { useResources } from '@/providers/resources-provider';
 
 import { findAttachConflicts } from './flow-files-conflicts';
@@ -175,8 +176,9 @@ function FlowFilesAttachResourcesDialogBody({
     const selectedCount = selectedPaths.size;
     const hasResources = resources.length > 0;
     const isAttachDisabled = selectedCount === 0;
-    const primaryLabel = selectedCount > 0 ? `Attach ${selectedCount}` : 'Attach';
-    const overwriteLabel = selectedCount > 0 ? `Attach ${selectedCount} with overwrite` : 'Attach with overwrite';
+    const primaryLabel = selectedCount > 0 ? copy.flowFiles.attachCount(selectedCount) : copy.flowFiles.attach;
+    const overwriteLabel =
+        selectedCount > 0 ? copy.flowFiles.attachOverwriteCount(selectedCount) : copy.flowFiles.attachOverwrite;
 
     const emptyState = (
         <Empty className="border-0">
@@ -184,8 +186,8 @@ function FlowFilesAttachResourcesDialogBody({
                 <EmptyMedia variant="icon">
                     <FolderInput />
                 </EmptyMedia>
-                <EmptyTitle>Resource library is empty</EmptyTitle>
-                <EmptyDescription>Upload resources first to attach them to a flow.</EmptyDescription>
+                <EmptyTitle>{copy.flowFiles.resourceLibraryEmpty}</EmptyTitle>
+                <EmptyDescription>{copy.flowFiles.resourceLibraryEmptyHint}</EmptyDescription>
             </EmptyHeader>
         </Empty>
     );
@@ -196,9 +198,11 @@ function FlowFilesAttachResourcesDialogBody({
                 <EmptyMedia variant="icon">
                     <Search />
                 </EmptyMedia>
-                <EmptyTitle>No matches</EmptyTitle>
+                <EmptyTitle>{copy.resources.noMatches}</EmptyTitle>
                 <EmptyDescription>
-                    No resources match <code>{searchQuery.trim()}</code>.
+                    {copy.flowFiles.resourcesNoMatch.before}
+                    <code>{searchQuery.trim()}</code>
+                    {copy.flowFiles.resourcesNoMatch.after}
                 </EmptyDescription>
             </EmptyHeader>
         </Empty>
@@ -210,12 +214,14 @@ function FlowFilesAttachResourcesDialogBody({
                 <DialogHeader className="text-left">
                     <DialogTitle className="flex items-center gap-2">
                         <FolderInput className="size-4" />
-                        Attach resources
+                        {copy.flowFiles.attachResources}
                     </DialogTitle>
                     <DialogDescription>
-                        Pick files and/or folders from your global library — they will be copied into{' '}
-                        <code>resources/</code> of this flow and made available at <code>/work/resources</code> inside
-                        the container.
+                        {copy.flowFiles.attachResourcesDescription.before}
+                        <code>resources/</code>
+                        {copy.flowFiles.attachResourcesDescription.after}
+                        <code>/work/resources</code>
+                        {copy.flowFiles.attachResourcesDescription.end}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -228,14 +234,14 @@ function FlowFilesAttachResourcesDialogBody({
                             autoComplete="off"
                             disabled={isAttaching || isResourcesLoading}
                             onChange={(event) => setSearchQuery(event.target.value)}
-                            placeholder="Search resources..."
+                            placeholder={copy.resources.searchPlaceholder}
                             type="text"
                             value={searchQuery}
                         />
                         {searchQuery && (
                             <InputGroupAddon align="inline-end">
                                 <InputGroupButton
-                                    aria-label="Clear resource search"
+                                    aria-label={copy.resources.clearSearch}
                                     onClick={() => setSearchQuery('')}
                                     type="button"
                                 >
@@ -265,9 +271,9 @@ function FlowFilesAttachResourcesDialogBody({
                 <DialogFooter className="flex-wrap gap-4 sm:items-center">
                     <span className="text-muted-foreground order-last mr-auto text-xs sm:order-first">
                         {selectedCount > 0
-                            ? `${selectedCount} selected`
+                            ? copy.flowFiles.selected(selectedCount)
                             : hasResources
-                              ? 'Select one or more items'
+                              ? copy.flowFiles.selectItems
                               : ''}
                     </span>
                     <div className="flex flex-col-reverse gap-2 sm:ml-auto sm:flex-row sm:justify-end">
@@ -277,7 +283,7 @@ function FlowFilesAttachResourcesDialogBody({
                             type="button"
                             variant="outline"
                         >
-                            Cancel
+                            {copy.action.cancel}
                         </Button>
                         <OverwriteButtons
                             isDisabled={isAttachDisabled}

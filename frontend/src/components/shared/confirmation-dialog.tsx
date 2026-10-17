@@ -13,6 +13,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 type ConfirmationDialogIconProps = ReactElement<React.SVGProps<SVGSVGElement>>;
@@ -36,30 +37,33 @@ interface ConfirmationDialogProps {
 
 function ConfirmationDialog({
     cancelIcon,
-    cancelText = 'Cancel',
+    cancelText = copy.action.cancel,
     cancelVariant = 'outline',
     confirmIcon = <Trash2 />,
-    confirmText = 'Confirm',
+    confirmText = copy.action.confirm,
     confirmVariant = 'destructive',
     description,
     handleConfirm,
     handleOpenChange,
     isOpen,
-    itemName = 'this',
-    itemType = 'item',
+    itemName = copy.confirm.thisItem,
+    itemType = copy.itemType.item,
     title,
 }: ConfirmationDialogProps) {
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // `verb !== 'Confirm'` treats the default confirmText as "no custom verb": a bare
-    // Confirm gets the generic "Confirm Action" title instead of "Confirm <itemType>".
+    // The default confirmText means "no custom verb": a bare confirm gets the generic title
+    // instead of "<verb> <itemType>".
     const verb = confirmText.trim();
-    const resolvedTitle = title ?? (verb && verb !== 'Confirm' ? `${verb} ${itemType}` : 'Confirm Action');
+    const isCustomVerb = verb && verb !== copy.action.confirm;
+    const resolvedTitle = title ?? (isCustomVerb ? copy.confirm.title(verb, itemType) : copy.confirm.generic);
+    const question = copy.confirm.question(verb || copy.action.confirm, itemType);
 
     const defaultDescription = description || (
         <>
-            Are you sure you want to {verb.toLowerCase() || 'perform this action on'}{' '}
-            <strong className="text-foreground font-semibold">{itemName}</strong> {itemType}?
+            {question.before}
+            <strong className="text-foreground font-semibold">{itemName}</strong>
+            {question.after}
         </>
     );
 

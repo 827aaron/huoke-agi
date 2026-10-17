@@ -28,8 +28,8 @@ export interface GrowthAccount {
     status: GrowthAccountStatus;
 }
 
-// Facebook and Instagram accounts sign in through a remote browser rather than a code sent by Telegram.
-export type GrowthAccountPlatform = 'facebook' | 'instagram' | 'telegram';
+// Facebook, Instagram and TikTok accounts sign in through a remote browser rather than a code sent by Telegram.
+export type GrowthAccountPlatform = 'facebook' | 'instagram' | 'telegram' | 'tiktok';
 
 // `rate_limited` is not an error: the connector sleeps for as long as the platform asked and resumes on its
 // own. `disabled` is the customer's choice; the account is kept but never used.
@@ -95,9 +95,9 @@ export type GrowthLeadSignal = 'competitor' | 'genre_match' | 'paying' | 'player
 
 export type GrowthLeadTier = 'qualified' | 'watch';
 
-export type GrowthPlatform = 'facebook' | 'instagram' | 'telegram' | 'web' | 'youtube';
+export type GrowthPlatform = 'facebook' | 'instagram' | 'telegram' | 'tiktok' | 'web' | 'youtube';
 
-export const GROWTH_PLATFORMS: GrowthPlatform[] = ['telegram', 'facebook', 'instagram', 'youtube', 'web'];
+export const GROWTH_PLATFORMS: GrowthPlatform[] = ['telegram', 'facebook', 'instagram', 'tiktok', 'youtube', 'web'];
 
 // Stored as the server generated it; only these keys are shown.
 export interface GrowthFingerprint {
@@ -136,7 +136,7 @@ export interface GrowthProxyTestResult {
     source: GrowthProxySource;
 }
 
-// A browser opened on the server for Facebook or Instagram; `view_url` is the live view to embed.
+// A browser opened on the server for Facebook, Instagram or TikTok; `view_url` is the live view to embed.
 export interface GrowthRemoteLogin {
     fingerprint: GrowthFingerprint | null;
     session_id: string;

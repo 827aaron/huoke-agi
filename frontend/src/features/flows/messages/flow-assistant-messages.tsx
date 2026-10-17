@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Spinner } from '@/components/ui/spinner';
 import { StatusType } from '@/graphql/types';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
-import { statusLabel } from '@/lib/copy';
+import { copy, statusLabel } from '@/lib/copy';
 import { Log } from '@/lib/log';
 import { cn } from '@/lib/utils';
 import { groupAssistantsByState } from '@/models/assistant';
@@ -134,7 +134,7 @@ function AssistantsDropdown({
 
                 {!isDisabled && (
                     <Button
-                        aria-label={`Delete ${assistant.title}`}
+                        aria-label={copy.assistant.delete(assistant.title)}
                         className="text-muted-foreground hover:text-destructive absolute top-1/2 right-0.5 shrink-0 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100"
                         onClick={(event) => {
                             event.stopPropagation();
@@ -158,7 +158,7 @@ function AssistantsDropdown({
             >
                 <PopoverTrigger asChild>
                     <Button
-                        aria-label="Select assistant"
+                        aria-label={copy.assistant.select}
                         className="px-2"
                         disabled={isAssistantCreating}
                         variant="outline"
@@ -176,7 +176,7 @@ function AssistantsDropdown({
                             </>
                         ) : (
                             <span className="bg-muted text-muted-foreground flex h-5 shrink-0 items-center justify-center rounded px-1 text-xs font-medium">
-                                New
+                                {copy.assistant.new}
                             </span>
                         )}
                         <ChevronDown className="opacity-50" />
@@ -187,9 +187,9 @@ function AssistantsDropdown({
                     className="w-[400px] p-0"
                 >
                     <Command>
-                        <CommandInput placeholder="Search assistants..." />
+                        <CommandInput placeholder={copy.assistant.search} />
                         <CommandList>
-                            <CommandEmpty>No assistants found.</CommandEmpty>
+                            <CommandEmpty>{copy.assistant.notFound}</CommandEmpty>
 
                             {!isDisabled && (
                                 <CommandGroup>
@@ -202,13 +202,13 @@ function AssistantsDropdown({
                                         value="create-new-assistant"
                                     >
                                         <Plus />
-                                        Create new assistant
+                                        {copy.assistant.create}
                                     </CommandItem>
                                 </CommandGroup>
                             )}
 
                             {assistantsGroup.active.length > 0 && (
-                                <CommandGroup heading={`Active (${assistantsGroup.active.length})`}>
+                                <CommandGroup heading={copy.assistant.active(assistantsGroup.active.length)}>
                                     {assistantsGroup.active.map(({ assistant, index }) =>
                                         renderAssistantItem(assistant, index),
                                     )}
@@ -216,7 +216,7 @@ function AssistantsDropdown({
                             )}
 
                             {assistantsGroup.finished.length > 0 && (
-                                <CommandGroup heading={`Finished (${assistantsGroup.finished.length})`}>
+                                <CommandGroup heading={copy.assistant.finished(assistantsGroup.finished.length)}>
                                     {assistantsGroup.finished.map(({ assistant, index }) =>
                                         renderAssistantItem(assistant, index),
                                     )}
@@ -224,7 +224,7 @@ function AssistantsDropdown({
                             )}
 
                             {assistantsGroup.failed.length > 0 && (
-                                <CommandGroup heading={`Failed (${assistantsGroup.failed.length})`}>
+                                <CommandGroup heading={copy.assistant.failed(assistantsGroup.failed.length)}>
                                     {assistantsGroup.failed.map(({ assistant, index }) =>
                                         renderAssistantItem(assistant, index),
                                     )}
@@ -236,14 +236,14 @@ function AssistantsDropdown({
             </Popover>
 
             <ConfirmationDialog
-                cancelText="Cancel"
-                confirmText="Delete"
+                cancelText={copy.action.cancel}
+                confirmText={copy.action.delete}
                 handleConfirm={handleConfirmDelete}
                 handleOpenChange={setDeleteDialogOpen}
                 isOpen={deleteDialogOpen}
                 itemName={currentAssistant?.title}
-                itemType="assistant"
-                title="Delete Assistant"
+                itemType={copy.itemType.assistant}
+                title={copy.assistant.deleteTitle}
             />
         </>
     );
@@ -420,37 +420,37 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
 
     const placeholder = useMemo(() => {
         if (!flowId) {
-            return 'Select a flow...';
+            return copy.flowLogs.selectFlow;
         }
 
         if (isAssistantCreating) {
-            return 'Creating assistant...';
+            return copy.assistant.creating;
         }
 
         if (!selectedAssistant?.status) {
-            return 'Type a message to create a new assistant...';
+            return copy.assistant.typeToCreate;
         }
 
         switch (selectedAssistant.status) {
             case StatusType.Created: {
-                return 'Assistant is starting...';
+                return copy.assistant.starting;
             }
 
             case StatusType.Failed:
             case StatusType.Finished: {
-                return 'This assistant session has ended. Create a new one to continue.';
+                return copy.assistant.ended;
             }
 
             case StatusType.Running: {
-                return 'Assistant is running... Click Stop to interrupt';
+                return copy.assistant.running;
             }
 
             case StatusType.Waiting: {
-                return 'Continue the conversation...';
+                return copy.assistant.continue;
             }
 
             default: {
-                return 'Type your message...';
+                return copy.flowLogs.typeMessage;
             }
         }
     }, [flowId, isAssistantCreating, selectedAssistant?.status]);
@@ -494,13 +494,13 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                                                 {...field}
                                                 autoComplete="off"
                                                 disabled={isAssistantCreating}
-                                                placeholder="Search messages..."
+                                                placeholder={copy.flowLogs.searchMessages}
                                                 type="text"
                                             />
                                             {field.value && (
                                                 <InputGroupAddon align="inline-end">
                                                     <InputGroupButton
-                                                        aria-label="Clear message search"
+                                                        aria-label={copy.flowLogs.clearMessageSearch}
                                                         disabled={isAssistantCreating}
                                                         onClick={() => {
                                                             form.reset({ search: '' });
@@ -528,8 +528,8 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                         <EmptyMedia variant="icon">
                             <Spinner variant="circle" />
                         </EmptyMedia>
-                        <EmptyTitle>Creating assistant...</EmptyTitle>
-                        <EmptyDescription>Please wait while we set up your new assistant</EmptyDescription>
+                        <EmptyTitle>{copy.assistant.creating}</EmptyTitle>
+                        <EmptyDescription>{copy.assistant.creatingHint}</EmptyDescription>
                     </EmptyHeader>
                 </Empty>
             ) : selectedAssistantId ? (
@@ -551,7 +551,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
 
                         {!isScrolledToBottom && (
                             <Button
-                                aria-label="Scroll to latest message"
+                                aria-label={copy.flowLogs.scrollToLatestMessage}
                                 className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
                                 onClick={() => scrollToEnd()}
                                 size="icon-sm"
@@ -571,8 +571,8 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                             <EmptyMedia variant="icon">
                                 <ListFilter />
                             </EmptyMedia>
-                            <EmptyTitle>No messages found</EmptyTitle>
-                            <EmptyDescription>Try adjusting your search or filter parameters</EmptyDescription>
+                            <EmptyTitle>{copy.flowLogs.messageNotFound}</EmptyTitle>
+                            <EmptyDescription>{copy.flowLogs.noFilterResults}</EmptyDescription>
                         </EmptyHeader>
                         <EmptyContent>
                             <Button
@@ -580,7 +580,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                                 variant="outline"
                             >
                                 <X />
-                                Reset filters
+                                {copy.flowLogs.resetFilters}
                             </Button>
                         </EmptyContent>
                     </Empty>
@@ -590,8 +590,8 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                             <EmptyMedia variant="icon">
                                 <Plus />
                             </EmptyMedia>
-                            <EmptyTitle>No messages</EmptyTitle>
-                            <EmptyDescription>No messages found for this assistant</EmptyDescription>
+                            <EmptyTitle>{copy.assistant.noMessages}</EmptyTitle>
+                            <EmptyDescription>{copy.assistant.noMessagesHint}</EmptyDescription>
                         </EmptyHeader>
                     </Empty>
                 )
@@ -601,8 +601,8 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
                         <EmptyMedia variant="icon">
                             <Plus />
                         </EmptyMedia>
-                        <EmptyTitle>New assistant</EmptyTitle>
-                        <EmptyDescription>Type a message below to create a new assistant...</EmptyDescription>
+                        <EmptyTitle>{copy.assistant.newTitle}</EmptyTitle>
+                        <EmptyDescription>{copy.assistant.newTitleHint}</EmptyDescription>
                     </EmptyHeader>
                 </Empty>
             )}

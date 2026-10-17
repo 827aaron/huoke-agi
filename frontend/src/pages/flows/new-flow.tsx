@@ -101,8 +101,8 @@ function NewFlow() {
                                 !isLoading
                                     ? flowType === 'automation'
                                         ? copy.newFlow.placeholder
-                                        : 'What would you like me to help you with?'
-                                    : 'Creating a new flow...'
+                                        : copy.newFlow.assistantPlaceholder
+                                    : copy.newFlow.creating
                             }
                             type={flowType}
                         />

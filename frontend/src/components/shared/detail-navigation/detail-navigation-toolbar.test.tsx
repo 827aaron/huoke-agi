@@ -83,8 +83,8 @@ const renderToolbar = (props: HarnessProps = {}) => {
 describe('DetailNavigationToolbar', () => {
     it('renders a disabled cluster when raw items is empty', () => {
         renderToolbar({ items: [] });
-        expect(screen.getByRole('button', { name: /Previous/i })).toBeDisabled();
-        expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /上一个/ })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /下一个/ })).toBeDisabled();
         expect(screen.getByRole('button', { name: /–\/0/ })).toBeDisabled();
     });
 
@@ -126,8 +126,8 @@ describe('DetailNavigationToolbar', () => {
         renderToolbar({ currentId: 'c' });
 
         // Buttons present (smoke).
-        expect(screen.getByRole('button', { name: /Previous/i })).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Next/i })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /上一个/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /下一个/ })).toBeInTheDocument();
 
         // Position trigger opens the sheet.
         await user.click(screen.getByRole('button', { name: /3\/4/ }));
@@ -142,19 +142,19 @@ describe('DetailNavigationToolbar', () => {
 
     it('disables Prev for the first item', () => {
         renderToolbar({ currentId: 'a' });
-        expect(screen.getByRole('button', { name: /Previous/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /上一个/ })).toBeDisabled();
     });
 
     it('disables Next for the last item', () => {
         renderToolbar({ currentId: 'd' });
-        expect(screen.getByRole('button', { name: /Next/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /下一个/ })).toBeDisabled();
     });
 
     it('Next navigates to the next sibling preserving `?q=`', async () => {
         const user = userEvent.setup();
         renderToolbar({ currentId: 'a', filter: 'a' });
 
-        await user.click(screen.getByRole('button', { name: /Next/i }));
+        await user.click(screen.getByRole('button', { name: /下一个/ }));
 
         await waitFor(() => {
             expect(screen.getByTestId('probe-location').textContent).toContain('/items/b');

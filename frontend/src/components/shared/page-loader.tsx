@@ -1,7 +1,9 @@
+import { copy } from '@/lib/copy';
+
 function PageLoader() {
     return (
         <div className="grid h-screen w-full place-items-center">
-            <p>Loading...</p>
+            <p>{copy.action.loading}</p>
         </div>
     );
 }

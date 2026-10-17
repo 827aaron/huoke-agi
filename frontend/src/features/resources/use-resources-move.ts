@@ -4,8 +4,8 @@ import { z } from 'zod';
 
 import type { OverwriteOutcome } from '@/components/shared/overwrite';
 
-import { pluralizeItems } from '@/components/shared/file-manager';
 import { api, getApiErrorMessage, getApiErrorStatusCode } from '@/lib/axios';
+import { copy } from '@/lib/copy';
 
 import { RESOURCES_MOVE_API_PATH } from './resources-constants';
 
@@ -13,9 +13,9 @@ export const resourcesMoveFormSchema = z.object({
     destination: z
         .string()
         .trim()
-        .min(1, { message: 'Destination cannot be empty' })
-        .refine((value) => !value.startsWith('/'), { message: 'Destination must be a relative path' })
-        .refine((value) => !value.split('/').includes('..'), { message: 'Destination must not contain ".."' }),
+        .min(1, { message: copy.resources.destinationEmpty })
+        .refine((value) => !value.startsWith('/'), { message: copy.resources.destinationAbsolute })
+        .refine((value) => !value.split('/').includes('..'), { message: copy.resources.destinationDotDot }),
 });
 
 export type ResourcesMoveFormValues = z.infer<typeof resourcesMoveFormSchema>;
@@ -64,10 +64,10 @@ export function useResourcesMove(): UseResourcesMoveResult {
 
                 const description =
                     sources.length === 1
-                        ? `Moved to /${destination}`
-                        : `Moved ${sources.length} ${pluralizeItems(sources.length)} into /${destination}`;
+                        ? copy.resources.movedTo(destination)
+                        : copy.resources.movedInto(sources.length, destination);
 
-                toast.success('Resource moved', { description });
+                toast.success(copy.resources.moved, { description });
 
                 return { kind: 'ok' };
             } catch (error) {
@@ -79,9 +79,9 @@ export function useResourcesMove(): UseResourcesMoveResult {
                     return { kind: 'conflict' };
                 }
 
-                const description = getApiErrorMessage(error, 'Failed to move resource');
+                const description = getApiErrorMessage(error, copy.resources.moveFailedHint);
 
-                toast.error('Move failed', { description });
+                toast.error(copy.resources.moveFailed, { description });
 
                 return { kind: 'error' };
             } finally {

@@ -38,12 +38,12 @@ test.describe('settings prompt detail', { tag: '@coverage' }, () => {
         }),
     });
 
-    const EDITOR = 'System prompt template';
+    const EDITOR = '系统提示词模板';
 
     // The raw/rich switch lives inside the actions menu, which stays open on select.
     const switchToRaw = async (page: Page) => {
-        await page.getByRole('button', { name: 'Prompt actions' }).click();
-        await page.getByLabel('Raw source').click();
+        await page.getByRole('button', { name: '提示词操作' }).click();
+        await page.getByLabel('源码').click();
         await page.keyboard.press('Escape');
     };
 
@@ -65,8 +65,8 @@ test.describe('settings prompt detail', { tag: '@coverage' }, () => {
     test('an unknown prompt shows the not-found state', async ({ page }) => {
         await page.goto('/settings/prompts/e2e-no-such-prompt');
 
-        await expect(page.getByText('Prompt not found')).toBeVisible();
-        await expect(page.getByText('The prompt "e2e-no-such-prompt" could not be found')).toBeVisible();
+        await expect(page.getByText('找不到提示词')).toBeVisible();
+        await expect(page.getByText('提示词“e2e-no-such-prompt”不存在')).toBeVisible();
         await expect(page.getByRole('textbox', { name: EDITOR })).toBeHidden();
     });
 
@@ -111,7 +111,7 @@ test.describe('settings prompt detail', { tag: '@coverage' }, () => {
             (candidate) => candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'createPrompt',
         );
 
-        await page.getByRole('button', { exact: true, name: 'Save' }).click();
+        await page.getByRole('button', { exact: true, name: '保存' }).click();
 
         const { variables } = (await request).postDataJSON();
 
@@ -126,7 +126,7 @@ test.describe('settings prompt detail', { tag: '@coverage' }, () => {
 });
 
 test.describe('settings prompt validation', { tag: '@coverage' }, () => {
-    const EDITOR = 'System prompt template';
+    const EDITOR = '系统提示词模板';
 
     test.describe('a template the server accepts', () => {
         const accepted: ResultOf<typeof ValidatePromptDocument> = {
@@ -145,10 +145,10 @@ test.describe('settings prompt validation', { tag: '@coverage' }, () => {
                     candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'validatePrompt',
             );
 
-            await page.getByRole('button', { name: 'Validate' }).click();
+            await page.getByRole('button', { name: '校验' }).click();
 
             expect((await request).postDataJSON().variables.template).toContain('# Pentester');
-            await expect(page.getByRole('dialog')).toContainText('Valid Template');
+            await expect(page.getByRole('dialog')).toContainText('模板有效');
             expectCleanPage(pageErrorLog);
         });
     });
@@ -171,20 +171,20 @@ test.describe('settings prompt validation', { tag: '@coverage' }, () => {
             await page.goto(`/settings/prompts/${PROMPT_DETAIL_AGENT}`);
 
             await expect(page.getByRole('textbox', { name: EDITOR })).toBeVisible();
-            await page.getByRole('button', { name: 'Validate' }).click();
+            await page.getByRole('button', { name: '校验' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog).toContainText('Validation Error');
+            await expect(dialog).toContainText('校验未通过');
             await expect(dialog).toContainText('unclosed action started at validation:3');
             await expect(dialog).toContainText('Template appears to be incomplete - missing closing braces');
-            await expect(dialog).toContainText('Line: 4');
+            await expect(dialog).toContainText('行： 4');
         });
     });
 });
 
 test.describe('settings prompt detail, already overridden', { tag: '@coverage' }, () => {
-    const EDITOR = 'System prompt template';
+    const EDITOR = '系统提示词模板';
 
     test.describe('save', () => {
         test.use({
@@ -225,7 +225,7 @@ test.describe('settings prompt detail, already overridden', { tag: '@coverage' }
                     candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'updatePrompt',
             );
 
-            await page.getByRole('button', { exact: true, name: 'Save' }).click();
+            await page.getByRole('button', { exact: true, name: '保存' }).click();
 
             const { variables } = (await request).postDataJSON();
 
@@ -246,8 +246,8 @@ test.describe('settings prompt detail, already overridden', { tag: '@coverage' }
 
             await expect(editor.getByRole('heading', { name: 'Operator override' })).toBeVisible();
 
-            await page.getByRole('button', { name: 'Prompt actions' }).click();
-            await page.getByRole('menuitem', { name: 'Diff' }).click();
+            await page.getByRole('button', { name: '提示词操作' }).click();
+            await page.getByRole('menuitem', { name: '对比' }).click();
 
             const dialog = page.getByRole('dialog');
 
@@ -282,15 +282,15 @@ test.describe('settings prompt detail, already overridden', { tag: '@coverage' }
 
             await expect(editor.getByRole('heading', { name: 'Operator override' })).toBeVisible();
 
-            await page.getByRole('button', { name: 'Prompt actions' }).click();
-            await page.getByRole('menuitem', { name: 'Reset' }).click();
+            await page.getByRole('button', { name: '提示词操作' }).click();
+            await page.getByRole('menuitem', { name: '恢复默认' }).click();
 
             const request = page.waitForRequest(
                 (candidate) =>
                     candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'deletePrompt',
             );
 
-            await page.getByRole('dialog').getByRole('button', { exact: true, name: 'Reset' }).click();
+            await page.getByRole('dialog').getByRole('button', { exact: true, name: '恢复默认' }).click();
 
             expect((await request).postDataJSON().variables).toEqual({ promptId: PROMPT_OVERRIDE.id });
 

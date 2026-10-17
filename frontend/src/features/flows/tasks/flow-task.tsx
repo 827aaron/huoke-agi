@@ -6,6 +6,7 @@ import Markdown from '@/components/shared/markdown';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { StatusType } from '@/graphql/types';
+import { copy } from '@/lib/copy';
 import { matchesSearchTerm } from '@/lib/text-filter';
 
 import FlowSubtask from './flow-subtask';
@@ -19,15 +20,15 @@ interface FlowTaskProps {
 const describeMissingSubtasks = (status: StatusType) => {
     switch (status) {
         case StatusType.Failed: {
-            return 'The task failed before any subtasks were created.';
+            return copy.flowLogs.taskFailed;
         }
 
         case StatusType.Finished: {
-            return 'The task ended before any subtasks were created.';
+            return copy.flowLogs.taskEnded;
         }
 
         default: {
-            return 'Waiting for subtasks to be created...';
+            return copy.flowLogs.subtasksPending;
         }
     }
 };
@@ -91,7 +92,7 @@ function FlowTask({ searchValue = '', task }: FlowTaskProps) {
                 <FlowTaskStatusIcon
                     className="bg-background ring-border ring-background relative z-1 -mt-px size-5 rounded-full ring-3"
                     status={status}
-                    tooltip={`Task ID: ${id}`}
+                    tooltip={copy.flowLogs.taskId(id)}
                 />
                 <div className="flex flex-1 flex-col gap-2">
                     <div className="font-semibold">
@@ -121,7 +122,7 @@ function FlowTask({ searchValue = '', task }: FlowTaskProps) {
                                 className="cursor-pointer"
                                 onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                             >
-                                {isDetailsVisible ? 'Hide details' : 'Show details'}
+                                {isDetailsVisible ? copy.message.hideDetails : copy.message.showDetails}
                             </div>
                             {isDetailsVisible && (
                                 <Card className="mt-4">

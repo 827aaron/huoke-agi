@@ -75,10 +75,10 @@ describe('SettingsProvidersHeader create menu', () => {
         const user = userEvent.setup();
         render(<SettingsProvidersHeader />);
 
-        await user.click(screen.getByRole('button', { name: /create provider/i }));
+        await user.click(screen.getByRole('button', { name: /新建模型服务/ }));
 
         expect(screen.queryByRole('menuitem', { name: /MiniMax/ })).not.toBeInTheDocument();
-        expect(screen.queryByRole('menuitem', { name: /Custom/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('menuitem', { name: /自定义/ })).not.toBeInTheDocument();
         expect(screen.getByRole('menuitem', { name: /Anthropic/ })).toBeInTheDocument();
         expect(screen.getByRole('menuitem', { name: /OpenAI/ })).toBeInTheDocument();
     });
@@ -98,9 +98,9 @@ describe('SettingsProvidersHeader create menu', () => {
         const user = userEvent.setup();
         render(<SettingsProvidersHeader />);
 
-        await user.click(screen.getByRole('button', { name: /create provider/i }));
+        await user.click(screen.getByRole('button', { name: /新建模型服务/ }));
 
-        expect(screen.getByRole('menuitem', { name: /no available provider types/i })).toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: /没有可用的服务商类型/ })).toBeInTheDocument();
         expect(screen.queryByRole('menuitem', { name: /OpenAI/ })).not.toBeInTheDocument();
     });
 });
@@ -129,7 +129,7 @@ describe('SettingsProviders list load states', () => {
         );
 
         expect(screen.getByText('Seeded Provider')).toBeInTheDocument();
-        expect(screen.queryByText('Loading providers...')).not.toBeInTheDocument();
+        expect(screen.queryByText('正在加载模型服务…')).not.toBeInTheDocument();
     });
 
     it('dates a provider from an earlier year without the time', () => {
@@ -183,7 +183,7 @@ describe('SettingsProviders agent configuration panel', () => {
 
         await expand();
 
-        expect(screen.getByText('Json:').parentElement).toHaveTextContent('Json: yes');
+        expect(screen.getByText('Json:').parentElement).toHaveTextContent('Json: 是');
     });
 
     it('keeps a zero-valued field visible so it reads as zero, not as unset', async () => {

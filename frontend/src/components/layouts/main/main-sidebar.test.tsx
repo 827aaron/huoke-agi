@@ -83,7 +83,7 @@ describe('MainSidebar account badge', () => {
     it('calls a local account local', async () => {
         await openMenu(/Test User/);
 
-        expect(screen.getByText('Local')).toBeInTheDocument();
+        expect(screen.getByText('本地账号')).toBeInTheDocument();
     });
 
     it('names the provider a federated account came from', async () => {
@@ -126,7 +126,7 @@ describe('MainSidebar settings entry points', () => {
         renderSidebar();
 
         await user.click(screen.getByRole('button', { name: /Test User/ }));
-        await user.click(screen.getByRole('menuitem', { name: 'Profile' }));
+        await user.click(screen.getByRole('menuitem', { name: '个人资料' }));
 
         expect(screen.getByTestId('probe-origin')).toHaveTextContent('/dashboard');
     });

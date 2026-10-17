@@ -8,6 +8,7 @@ import Terminal from '@/components/shared/terminal';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MessageLogType, ResultFormat } from '@/graphql/types';
 import { copyMessageToClipboard } from '@/lib/clipboard';
+import { agentLabel, copy } from '@/lib/copy';
 import { matchesSearchTerm } from '@/lib/text-filter';
 import { cn } from '@/lib/utils';
 import { formatDate } from '@/lib/utils/format';
@@ -22,6 +23,7 @@ interface FlowMessageProps {
 function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
     const { createdAt, message, result, resultFormat = ResultFormat.Plain, thinking, type } = log;
     const isReportMessage = type === MessageLogType.Report;
+    const agent = 'agent' in log ? log.agent : null;
 
     const searchChecks = useMemo(() => {
         const trimmedSearch = searchValue.trim();
@@ -157,7 +159,7 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
                             className="cursor-pointer"
                             onClick={toggleThinking}
                         >
-                            {isThinkingVisible ? 'Hide thinking' : 'Show thinking'}
+                            {isThinkingVisible ? copy.message.hideThinking : copy.message.showThinking}
                         </div>
                     </div>
                 )}
@@ -179,7 +181,7 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
                             className="cursor-pointer"
                             onClick={toggleDetails}
                         >
-                            {isDetailsVisible ? 'Hide details' : 'Show details'}
+                            {isDetailsVisible ? copy.message.hideDetails : copy.message.showDetails}
                         </div>
                         {renderDetailsContent()}
                     </div>
@@ -198,8 +200,16 @@ function FlowMessage({ log, searchValue = '' }: FlowMessageProps) {
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>
-                    <TooltipContent>Copy</TooltipContent>
+                    <TooltipContent>{copy.action.copy}</TooltipContent>
                 </Tooltip>
+                {agent && (
+                    <span
+                        className="text-muted-foreground"
+                        data-slot="flow-message-agent"
+                    >
+                        {agentLabel(agent)}
+                    </span>
+                )}
                 <span className="text-muted-foreground/50">{formatDate(new Date(createdAt))}</span>
                 <span
                     className="text-muted-foreground/50"

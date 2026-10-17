@@ -18,7 +18,7 @@ import { FLOW_A, flowsCassette, makeFlow } from '../../mocks/cassettes/flows.ts'
 const openFlowA = async (page: import('@playwright/test').Page) => {
     await page.goto('/flows');
     await page.getByRole('row', { name: /E2E Alpha/ }).click();
-    await expect(page.locator('header').getByRole('button', { name: 'Toggle favorite' })).toBeEnabled();
+    await expect(page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' })).toBeEnabled();
 };
 
 test.describe('flow lifecycle', { tag: '@flows' }, () => {
@@ -53,12 +53,12 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
 
         test('renames from the actions menu and the title persists', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
-            await page.getByRole('button', { name: 'Flow actions' }).click();
-            await page.getByRole('menuitem', { name: 'Rename' }).click();
-            await page.getByPlaceholder('Flow title').fill('E2E Alpha Renamed');
-            await page.getByPlaceholder('Flow title').press('Enter');
+            await page.getByRole('button', { name: '项目操作' }).click();
+            await page.getByRole('menuitem', { name: '重命名' }).click();
+            await page.getByPlaceholder('项目标题').fill('E2E Alpha Renamed');
+            await page.getByPlaceholder('项目标题').press('Enter');
 
-            await expect(page.getByText('Flow renamed successfully')).toBeVisible();
+            await expect(page.getByText('项目已重命名')).toBeVisible();
             await expect(page.locator('header').getByText('E2E Alpha Renamed', { exact: true })).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
@@ -89,17 +89,17 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
 
         test('finishes a running flow from the actions menu', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
-            await page.getByRole('button', { name: 'Flow actions' }).click();
-            await page.getByRole('menuitem', { name: 'Finish' }).click();
+            await page.getByRole('button', { name: '项目操作' }).click();
+            await page.getByRole('menuitem', { name: '结束' }).click();
 
             await expect(page.getByText('Flow finished successfully')).toBeVisible();
 
-            await page.getByRole('button', { name: 'Flow actions' }).click();
+            await page.getByRole('button', { name: '项目操作' }).click();
 
             // Anchor on an item that stays: absence alone also holds while the
             // reopened menu is still rendering.
-            await expect(page.getByRole('menuitem', { name: 'Rename' })).toBeVisible();
-            await expect(page.getByRole('menuitem', { name: 'Finish' })).toBeHidden();
+            await expect(page.getByRole('menuitem', { name: '重命名' })).toBeVisible();
+            await expect(page.getByRole('menuitem', { name: '结束' })).toBeHidden();
             expectCleanPage(pageErrorLog);
         });
     });
@@ -142,7 +142,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
         test('toggles the favorite star and the state persists', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
 
-            const star = page.locator('header').getByRole('button', { name: 'Toggle favorite' });
+            const star = page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' });
 
             await expect(star).toHaveAttribute('aria-pressed', 'false');
             await star.click();
@@ -198,7 +198,7 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
         test('clears the star, and the group it was listed under goes with it', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
 
-            const star = page.locator('header').getByRole('button', { name: 'Toggle favorite' });
+            const star = page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' });
 
             await expect(star).toHaveAttribute('aria-pressed', 'true');
             await expect(page.getByText('收藏的项目')).toBeVisible();
@@ -226,14 +226,14 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
 
             await expect(theirs).toBeVisible();
             await mine.hover();
-            await expect(mine.getByRole('button', { name: 'Toggle favorite' })).toBeVisible();
+            await expect(mine.getByRole('button', { name: '收藏 / 取消收藏' })).toBeVisible();
 
             await theirs.hover();
-            await expect(theirs.getByRole('button', { name: 'Toggle favorite' })).toHaveCount(0);
+            await expect(theirs.getByRole('button', { name: '收藏 / 取消收藏' })).toHaveCount(0);
 
             await theirs.click({ button: 'right' });
-            await expect(page.getByRole('menuitem', { name: 'View' })).toBeVisible();
-            await expect(page.getByRole('menuitem', { name: /favorites/ })).toHaveCount(0);
+            await expect(page.getByRole('menuitem', { name: '查看' })).toBeVisible();
+            await expect(page.getByRole('menuitem', { name: /收藏/ })).toHaveCount(0);
             expectCleanPage(pageErrorLog);
         });
     });
@@ -256,17 +256,17 @@ test.describe('flow lifecycle', { tag: '@flows' }, () => {
 
         test('deletes via the destructive confirm and drops off the list', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
-            await page.getByRole('button', { name: 'Flow actions' }).click();
-            await page.getByRole('menuitem', { name: 'Delete' }).click();
+            await page.getByRole('button', { name: '项目操作' }).click();
+            await page.getByRole('menuitem', { name: '删除' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByText('Delete flow')).toBeVisible();
+            await expect(dialog.getByRole('heading', { name: '删除项目' })).toBeVisible();
             // Anchored on the variant's own fill: every shadcn Button carries
             // `border-destructive`/`ring-destructive` in its base for the invalid
             // state, so a bare /destructive/ matches whatever variant is set.
-            await expect(dialog.getByRole('button', { name: 'Delete' })).toHaveClass(/(^|\s)bg-destructive(\s|$)/);
-            await dialog.getByRole('button', { name: 'Delete' }).click();
+            await expect(dialog.getByRole('button', { name: '删除' })).toHaveClass(/(^|\s)bg-destructive(\s|$)/);
+            await dialog.getByRole('button', { name: '删除' }).click();
 
             await expect(page.getByText('Flow deleted successfully')).toBeVisible();
             await expect(page).toHaveURL(/\/flows$/);

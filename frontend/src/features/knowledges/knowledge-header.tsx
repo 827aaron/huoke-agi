@@ -29,6 +29,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
@@ -128,7 +129,7 @@ export function KnowledgeHeader({
             // The sibling edit form picks up the new `question` via
             // `useForm({ values })` once the cache updates — no manual sync here.
             await renameKnowledge(knowledge.id, newQuestion);
-            toast.success('Knowledge renamed successfully');
+            toast.success(copy.knowledge.renamed);
             handleRenameCancel();
         } catch {
             // Error already handled in provider with toast
@@ -171,7 +172,7 @@ export function KnowledgeHeader({
                                         inputRef={editingInputRef}
                                         onCancel={handleRenameCancel}
                                         onSave={handleRenameSave}
-                                        placeholder="Knowledge question"
+                                        placeholder={copy.knowledge.renamePlaceholder}
                                     />
                                 ) : hasKnowledge ? (
                                     <Tooltip>
@@ -180,14 +181,16 @@ export function KnowledgeHeader({
                                                 className="max-w-64 min-w-0 cursor-text truncate select-none"
                                                 onDoubleClick={handleRenameStart}
                                             >
-                                                {knowledgeName ?? 'Knowledge'}
+                                                {knowledgeName ?? copy.knowledge.knowledge}
                                             </BreadcrumbPage>
                                         </TooltipTrigger>
-                                        <TooltipContent>Double-click to rename</TooltipContent>
+                                        <TooltipContent>{copy.flows.doubleClickRename}</TooltipContent>
                                     </Tooltip>
                                 ) : (
                                     <BreadcrumbPage className="min-w-0 truncate">
-                                        {isNew ? 'New knowledge' : (knowledgeName ?? 'Knowledge')}
+                                        {isNew
+                                            ? copy.sidebar.newKnowledge
+                                            : (knowledgeName ?? copy.knowledge.knowledge)}
                                     </BreadcrumbPage>
                                 )}
                             </BreadcrumbItem>
@@ -200,14 +203,14 @@ export function KnowledgeHeader({
                             controller={knowledgeNav}
                             renderItem={renderKnowledgeItem}
                             sheetIcon={<LibraryBig className="size-4" />}
-                            sheetTitle="Knowledges"
+                            sheetTitle={copy.knowledge.knowledges}
                         />
                     )}
                     {canAnonymize && !isMobile && (
                         <AppHeaderAction
                             disabled={isAnonymizeDisabled}
                             icon={isAnonymizing ? <Spinner variant="circle" /> : <HatGlasses aria-hidden="true" />}
-                            label="Anonymize"
+                            label={copy.knowledge.anonymize}
                             onClick={onAnonymize}
                             type="button"
                             variant="outline"
@@ -217,14 +220,14 @@ export function KnowledgeHeader({
                         <AppHeaderAction
                             disabled
                             icon={<Save />}
-                            label={isNew ? 'Create' : 'Save'}
+                            label={isNew ? copy.action.create : copy.action.save}
                             type="button"
                         />
                     )}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
-                                aria-label="Knowledge actions"
+                                aria-label={copy.knowledge.actions}
                                 className="size-8 p-0"
                                 type="button"
                                 variant="ghost"
@@ -250,7 +253,7 @@ export function KnowledgeHeader({
                                     ) : (
                                         <>
                                             <HatGlasses />
-                                            Anonymize
+                                            {copy.knowledge.anonymize}
                                         </>
                                     )}
                                 </DropdownMenuItem>
@@ -263,11 +266,11 @@ export function KnowledgeHeader({
                                         onSelect={(event) => event.preventDefault()}
                                     >
                                         <LibraryBig />
-                                        Knowledges
+                                        {copy.knowledge.knowledges}
                                         <div className="-my-1.5 -mr-2 ml-auto flex items-center">
                                             <DetailNavigationButtons<Knowledge>
                                                 controller={knowledgeNav}
-                                                sheetTitle="Knowledges"
+                                                sheetTitle={copy.knowledge.knowledges}
                                                 size="sm"
                                             />
                                         </div>
@@ -282,7 +285,7 @@ export function KnowledgeHeader({
                                         onClick={handleRenameStart}
                                     >
                                         <Pencil className="size-3" />
-                                        Rename
+                                        {copy.action.rename}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                 </>
@@ -294,12 +297,12 @@ export function KnowledgeHeader({
                                         className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
                                         onSelect={(event) => event.preventDefault()}
                                     >
-                                        View
+                                        {copy.prompt.view}
                                         <EditorViewModeToggle
                                             className="-my-1.5 -mr-2 ml-auto"
                                             mode={viewMode}
                                             onModeChange={onModeChange}
-                                            rawTooltip="Edit the raw markdown"
+                                            rawTooltip={copy.knowledge.editRaw}
                                         />
                                     </DropdownMenuItem>
                                 </>
@@ -314,12 +317,12 @@ export function KnowledgeHeader({
                                         {isDeleting ? (
                                             <>
                                                 <Spinner variant="circle" />
-                                                Deleting...
+                                                {copy.action.deleting}
                                             </>
                                         ) : (
                                             <>
                                                 <Trash />
-                                                Delete
+                                                {copy.action.delete}
                                             </>
                                         )}
                                     </DropdownMenuItem>
@@ -334,17 +337,17 @@ export function KnowledgeHeader({
                     controller={knowledgeNav}
                     renderItem={renderKnowledgeItem}
                     sheetIcon={<LibraryBig className="size-4" />}
-                    sheetTitle="Knowledges"
+                    sheetTitle={copy.knowledge.knowledges}
                 />
             )}
             <ConfirmationDialog
-                cancelText="Cancel"
-                confirmText="Delete"
+                cancelText={copy.action.cancel}
+                confirmText={copy.action.delete}
                 handleConfirm={handleDelete}
                 handleOpenChange={setIsDeleteDialogOpen}
                 isOpen={isDeleteDialogOpen}
                 itemName={knowledgeName ?? undefined}
-                itemType="knowledge document"
+                itemType={copy.itemType.knowledgeDocument}
             />
         </>
     );

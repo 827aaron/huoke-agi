@@ -24,7 +24,7 @@ const TITLES = [
 
 const manyFlows = TITLES.map((title, index) => makeFlow(String(100 + index), title));
 
-const titleColumn = () => /flow|title|name/i;
+const titleColumn = () => /标题/;
 
 test.describe('flows table', { tag: '@flows' }, () => {
     test.use({ cassette: flowsCassette({ queries: { flows: [{ data: { flows: manyFlows } }] } }) });
@@ -117,7 +117,7 @@ test.describe('a flow from last year on a provider since removed', { tag: '@flow
 
         const row = page.getByRole('row', { name: /Last year recon/ });
         const name = row.locator('[data-slot="flow-provider-label"] span', { hasText: 'retired' });
-        const mark = row.getByRole('img', { name: 'Unavailable' });
+        const mark = row.getByRole('img', { name: '不可用' });
 
         await expect(row.getByRole('cell', { exact: true, name: '15 Jun 2025' })).toBeVisible();
         await expect(row.getByRole('cell', { exact: true, name: '16 Jun 2025' })).toBeVisible();
@@ -129,7 +129,7 @@ test.describe('a flow from last year on a provider since removed', { tag: '@flow
 
         await mark.hover();
 
-        await expect(page.getByRole('tooltip')).toHaveText('Unavailable');
+        await expect(page.getByRole('tooltip')).toHaveText('不可用');
         expectCleanPage(pageErrorLog);
     });
 });

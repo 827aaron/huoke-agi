@@ -38,7 +38,7 @@ describe('FlowReport load states', () => {
         render(<FlowReport />);
 
         expect(screen.getByTestId('probe-markdown')).toHaveTextContent('Recon: 0 tasks');
-        expect(screen.queryByText('Failed to load flow data')).not.toBeInTheDocument();
+        expect(screen.queryByText('项目数据加载失败')).not.toBeInTheDocument();
     });
 
     it('reports a failure when the flow itself is missing', () => {
@@ -46,6 +46,6 @@ describe('FlowReport load states', () => {
 
         render(<FlowReport />);
 
-        expect(screen.getByText('Failed to load flow data')).toBeInTheDocument();
+        expect(screen.getByText('项目数据加载失败')).toBeInTheDocument();
     });
 });

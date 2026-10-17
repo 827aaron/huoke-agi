@@ -3,12 +3,14 @@ import type { LucideIcon } from 'lucide-react';
 
 import { AlignCenter, AlignLeft, AlignRight } from 'lucide-react';
 
+import { copy } from '@/lib/copy';
+
 export type ColumnAlign = 'center' | 'left' | 'right';
 
 export const ALIGN_OPTIONS: { icon: LucideIcon; label: string; value: ColumnAlign }[] = [
-    { icon: AlignLeft, label: 'Left', value: 'left' },
-    { icon: AlignCenter, label: 'Center', value: 'center' },
-    { icon: AlignRight, label: 'Right', value: 'right' },
+    { icon: AlignLeft, label: copy.editor.alignLeft, value: 'left' },
+    { icon: AlignCenter, label: copy.editor.alignCenter, value: 'center' },
+    { icon: AlignRight, label: copy.editor.alignRight, value: 'right' },
 ];
 
 export function clearLineContents(editor: Editor, axis: 'column' | 'row'): void {

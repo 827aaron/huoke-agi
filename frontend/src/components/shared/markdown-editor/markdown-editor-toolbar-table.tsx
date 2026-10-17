@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 import { ALIGN_OPTIONS, type ColumnAlign, setColumnAlign } from './markdown-editor-table-commands';
@@ -51,7 +52,7 @@ export function TableMenu({ columnAlign, disabled, editor, isActive, isHeaderRow
                 <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
                         <Button
-                            aria-label="Table"
+                            aria-label={copy.editor.table}
                             className={cn('gap-0.5 px-1.5', isActive && 'bg-accent text-accent-foreground')}
                             data-toolbar-item=""
                             disabled={disabled}
@@ -64,7 +65,7 @@ export function TableMenu({ columnAlign, disabled, editor, isActive, isHeaderRow
                         </Button>
                     </DropdownMenuTrigger>
                 </TooltipTrigger>
-                <TooltipContent>Table</TooltipContent>
+                <TooltipContent>{copy.editor.table}</TooltipContent>
             </Tooltip>
             <DropdownMenuContent
                 align="start"
@@ -86,7 +87,7 @@ export function TableMenu({ columnAlign, disabled, editor, isActive, isHeaderRow
                             role="menuitemcheckbox"
                         >
                             <PanelTop className="text-muted-foreground size-4 shrink-0" />
-                            <span>Header row</span>
+                            <span>{copy.editor.headerRow}</span>
                             <Switch
                                 checked={isHeaderRow}
                                 className="pointer-events-none ml-auto"
@@ -96,24 +97,24 @@ export function TableMenu({ columnAlign, disabled, editor, isActive, isHeaderRow
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={() => run((chain) => chain.addRowBefore())}>
                             <ArrowUp className="text-muted-foreground size-4 shrink-0" />
-                            Insert row above
+                            {copy.editor.insertRowAbove}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => run((chain) => chain.addRowAfter())}>
                             <ArrowDown className="text-muted-foreground size-4 shrink-0" />
-                            Insert row below
+                            {copy.editor.insertRowBelow}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => run((chain) => chain.addColumnBefore())}>
                             <ArrowLeft className="text-muted-foreground size-4 shrink-0" />
-                            Insert column left
+                            {copy.editor.insertColumnLeft}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => run((chain) => chain.addColumnAfter())}>
                             <ArrowRight className="text-muted-foreground size-4 shrink-0" />
-                            Insert column right
+                            {copy.editor.insertColumnRight}
                         </DropdownMenuItem>
                         <DropdownMenuSub>
                             <DropdownMenuSubTrigger>
                                 <AlignLeft className="text-muted-foreground size-4 shrink-0" />
-                                Align column
+                                {copy.editor.alignColumn}
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent>
                                 {ALIGN_OPTIONS.map((option) => (
@@ -135,16 +136,16 @@ export function TableMenu({ columnAlign, disabled, editor, isActive, isHeaderRow
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={() => run((chain) => chain.deleteRow())}>
                             <Delete className="text-muted-foreground size-4 shrink-0 -rotate-90" />
-                            Delete row
+                            {copy.editor.deleteRow}
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => run((chain) => chain.deleteColumn())}>
                             <Delete className="text-muted-foreground size-4 shrink-0" />
-                            Delete column
+                            {copy.editor.deleteColumn}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onSelect={() => run((chain) => chain.deleteTable())}>
                             <Trash2 className="text-muted-foreground size-4 shrink-0" />
-                            Delete table
+                            {copy.editor.deleteTable}
                         </DropdownMenuItem>
                     </>
                 ) : (
@@ -152,7 +153,7 @@ export function TableMenu({ columnAlign, disabled, editor, isActive, isHeaderRow
                         onSelect={() => run((chain) => chain.insertTable({ cols: 3, rows: 3, withHeaderRow: true }))}
                     >
                         <TableIcon className="text-muted-foreground size-4 shrink-0" />
-                        Insert table
+                        {copy.editor.insertTable}
                     </DropdownMenuItem>
                 )}
             </DropdownMenuContent>

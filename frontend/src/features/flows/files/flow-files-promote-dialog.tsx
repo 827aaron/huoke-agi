@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAppForm } from '@/hooks/use-app-form';
+import { copy } from '@/lib/copy';
 import { useResources } from '@/providers/resources-provider';
 
 import { stripFlowRootPrefix } from './flow-files-utils';
@@ -182,8 +183,10 @@ function FlowFilesPromoteDialogForm({ files, flowId, onClose }: FlowFilesPromote
     // Convention: stay enabled until the first submit, then reflect validity (so an invalid submit surfaces
     // errors instead of a silently-dead button). Mirrors FormSubmitButton's requireValid gate.
     const isSubmitDisabled = form.formState.isSubmitted && !form.formState.isValid;
-    const titleText = isMulti ? `Save ${files.length} items as resources` : 'Save as resource';
-    const overwriteCtaLabel = isMulti ? `Save ${files.length} with overwrite` : 'Save with overwrite';
+    const titleText = isMulti ? copy.flowFiles.promoteCount(files.length) : copy.flowFiles.promoteOne;
+    const overwriteCtaLabel = isMulti
+        ? copy.flowFiles.promoteOverwriteCount(files.length)
+        : copy.flowFiles.promoteOverwrite;
 
     return (
         <>
@@ -195,14 +198,12 @@ function FlowFilesPromoteDialogForm({ files, flowId, onClose }: FlowFilesPromote
                     </DialogTitle>
                     <DialogDescription>
                         {isMulti ? (
-                            <>
-                                Promote every selected entry from this flow into your global resource library so you can
-                                reuse them in other flows.
-                            </>
+                            <>{copy.flowFiles.promoteMultiDescription}</>
                         ) : (
                             <>
-                                Promote <code>{files[0].path}</code> from this flow into your global resource library so
-                                you can reuse it in other flows.
+                                {copy.flowFiles.promoteOneDescription.before}
+                                <code>{files[0].path}</code>
+                                {copy.flowFiles.promoteOneDescription.after}
                             </>
                         )}
                     </DialogDescription>
@@ -219,7 +220,9 @@ function FlowFilesPromoteDialogForm({ files, flowId, onClose }: FlowFilesPromote
                             name="destination"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>{isMulti ? 'Destination directory' : 'Destination path'}</FormLabel>
+                                    <FormLabel>
+                                        {isMulti ? copy.resources.destinationDirectory : copy.resources.destinationPath}
+                                    </FormLabel>
                                     <FormControl>
                                         <Input
                                             {...field}
@@ -227,22 +230,18 @@ function FlowFilesPromoteDialogForm({ files, flowId, onClose }: FlowFilesPromote
                                             autoFocus
                                             disabled={isPromoting}
                                             placeholder={
-                                                isMulti
-                                                    ? 'Leave empty to save into the library root'
-                                                    : 'results/scan.txt'
+                                                isMulti ? copy.flowFiles.promoteRootPlaceholder : 'results/scan.txt'
                                             }
                                         />
                                     </FormControl>
                                     <FormDescription>
                                         {isMulti ? (
-                                            <>
-                                                Relative directory inside your resource library. Leave empty for the
-                                                root. Each item keeps its current filename.
-                                            </>
+                                            <>{copy.resources.multiDestinationHint}</>
                                         ) : (
                                             <>
-                                                Relative path inside your resource library. Use <code>/</code> to nest
-                                                into subdirectories.
+                                                {copy.flowFiles.promotePathHint.before}
+                                                <code>/</code>
+                                                {copy.flowFiles.promotePathHint.after}
                                             </>
                                         )}
                                     </FormDescription>
@@ -258,7 +257,7 @@ function FlowFilesPromoteDialogForm({ files, flowId, onClose }: FlowFilesPromote
                                 type="button"
                                 variant="outline"
                             >
-                                Cancel
+                                {copy.action.cancel}
                             </Button>
                             <OverwriteButtons
                                 isDisabled={isSubmitDisabled}
@@ -268,7 +267,7 @@ function FlowFilesPromoteDialogForm({ files, flowId, onClose }: FlowFilesPromote
                                 }}
                                 overwriteLabel={overwriteCtaLabel}
                                 primaryIcon={BookmarkPlus}
-                                primaryLabel="Save"
+                                primaryLabel={copy.flowFiles.promote}
                                 primaryType="submit"
                             />
                         </div>

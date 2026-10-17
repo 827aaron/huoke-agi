@@ -4,9 +4,8 @@ import { CheckCircle2, CircleDashed, CircleX, Clock, Loader2, PlayCircle } from 
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StatusType } from '@/graphql/types';
-import { statusLabel } from '@/lib/copy';
+import { copy, statusLabel } from '@/lib/copy';
 import { cn } from '@/lib/utils';
-import { formatName } from '@/lib/utils/format';
 
 interface FlowTaskStatusIconProps {
     className?: string;
@@ -27,7 +26,7 @@ function FlowTaskStatusIcon({ className, status, tooltip }: FlowTaskStatusIconPr
     const { className: defaultClassName, icon: Icon } = status ? statusIcons[status] || defaultIcon : defaultIcon;
     const iconElement = (
         <Icon
-            aria-label={status ? formatName(status) : 'Unknown'}
+            aria-label={status ? statusLabel(status) : copy.flowLogs.unknownStatus}
             className={cn('size-4 shrink-0', defaultClassName, tooltip && 'cursor-pointer', className)}
             role="img"
         />

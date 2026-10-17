@@ -27,7 +27,7 @@ const isMock = import.meta.env.VITE_GROWTH_API
 
 export interface RemoteLoginInput extends StartLoginInput {
     external_browser_ws: null | string;
-    platform: 'facebook' | 'instagram';
+    platform: 'facebook' | 'instagram' | 'tiktok';
 }
 
 // `account_id` signs an existing account in again; without it a new account is added.

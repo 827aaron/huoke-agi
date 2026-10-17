@@ -29,6 +29,7 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Spinner } from '@/components/ui/spinner';
 import { useTableState } from '@/hooks/use-table-state';
+import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { mergeHrefWithSearchParams } from '@/lib/url-params';
 import { type Template, useTemplates } from '@/providers/templates-provider';
@@ -89,7 +90,7 @@ function Templates() {
 
         try {
             await updateTemplate(editingTemplateId, { text: template.text, title: newTitle });
-            toast.success('Template renamed successfully');
+            toast.success(copy.templatePage.renamed);
             setEditingTemplateId(null);
         } catch {
             // Error already handled in provider with toast
@@ -138,7 +139,7 @@ function Templates() {
                                 inputRef={editingInputRef}
                                 onCancel={handleTemplateRenameCancel}
                                 onSave={handleTemplateRenameSave}
-                                placeholder="Template title"
+                                placeholder={copy.templatePage.renamePlaceholder}
                             />
                         </div>
                     );
@@ -149,7 +150,7 @@ function Templates() {
             header: ({ column }) => (
                 <DataTableColumnHeader
                     column={column}
-                    title="Title"
+                    title={copy.templatePage.title}
                 />
             ),
             meta: { searchable: true },
@@ -164,7 +165,7 @@ function Templates() {
             header: ({ column }) => (
                 <DataTableColumnHeader
                     column={column}
-                    title="Text"
+                    title={copy.templatePage.text}
                 />
             ),
             meta: { searchable: true },
@@ -178,7 +179,7 @@ function Templates() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    aria-label="Open menu"
+                                    aria-label={copy.providers.openMenu}
                                     className="size-8 p-0"
                                     onClick={(e) => e.stopPropagation()}
                                     variant="ghost"
@@ -193,11 +194,11 @@ function Templates() {
                             >
                                 <DropdownMenuItem onClick={() => handleTemplateOpen(template.id)}>
                                     <Pencil />
-                                    Edit
+                                    {copy.action.edit}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleTemplateRenameStart(template)}>
                                     <Pencil className="size-3" />
-                                    Rename
+                                    {copy.action.rename}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -207,12 +208,12 @@ function Templates() {
                                     {deletingIds.has(template.id) ? (
                                         <>
                                             <Spinner variant="circle" />
-                                            Deleting...
+                                            {copy.action.deleting}
                                         </>
                                     ) : (
                                         <>
                                             <Trash />
-                                            Delete
+                                            {copy.action.delete}
                                         </>
                                     )}
                                 </DropdownMenuItem>
@@ -233,11 +234,11 @@ function Templates() {
         <>
             <ContextMenuItem onClick={() => handleTemplateOpen(template.id)}>
                 <Pencil />
-                Edit
+                {copy.action.edit}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => handleTemplateRenameStart(template)}>
                 <PencilLine />
-                Rename
+                {copy.action.rename}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -245,7 +246,7 @@ function Templates() {
                 onClick={() => handleDeleteDialogOpen(template)}
             >
                 <Trash />
-                {deletingIds.has(template.id) ? 'Deleting...' : 'Delete'}
+                {deletingIds.has(template.id) ? copy.action.deleting : copy.action.delete}
             </ContextMenuItem>
         </>
     );
@@ -253,12 +254,14 @@ function Templates() {
     const pageHeader = (
         <AppHeader>
             <AppHeaderContent>
-                <AppHeaderTitle icon={<FileText className="size-4 shrink-0" />}>Templates</AppHeaderTitle>
+                <AppHeaderTitle icon={<FileText className="size-4 shrink-0" />}>
+                    {copy.templatePage.titles}
+                </AppHeaderTitle>
             </AppHeaderContent>
             <AppHeaderActions>
                 <AppHeaderAction
                     icon={<Plus />}
-                    label="New Template"
+                    label={copy.templatePage.newTemplate}
                     onClick={() => navigate(routes.newTemplate)}
                     variant="secondary"
                 />
@@ -272,8 +275,8 @@ function Templates() {
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
                     <LoadingState
-                        description="Please wait while we fetch your flow templates"
-                        title="Loading templates..."
+                        description={copy.templatePage.loadingHint}
+                        title={copy.templatePage.loading}
                     />
                 </div>
             </>
@@ -289,7 +292,7 @@ function Templates() {
                     <ErrorState
                         message={error.message}
                         onRetry={refetch}
-                        title="Error loading templates"
+                        title={copy.templatePage.loadListFailed}
                     />
                 </div>
             </>
@@ -306,8 +309,8 @@ function Templates() {
                             <EmptyMedia variant="icon">
                                 <FileText />
                             </EmptyMedia>
-                            <EmptyTitle>No templates yet</EmptyTitle>
-                            <EmptyDescription>Create your first template to get started</EmptyDescription>
+                            <EmptyTitle>{copy.templatePage.empty}</EmptyTitle>
+                            <EmptyDescription>{copy.templatePage.emptyHint}</EmptyDescription>
                         </EmptyHeader>
                         <EmptyContent>
                             <Button
@@ -315,7 +318,7 @@ function Templates() {
                                 variant="secondary"
                             >
                                 <Plus />
-                                New Template
+                                {copy.templatePage.newTemplate}
                             </Button>
                         </EmptyContent>
                     </Empty>
@@ -332,9 +335,9 @@ function Templates() {
                     columns={columns}
                     data={templates}
                     empty={{ entityName: 'templates' }}
-                    filterPlaceholder="Filter templates..."
+                    filterPlaceholder={copy.templatePage.filter}
                     filterValue={filter}
-                    label="Templates"
+                    label={copy.templatePage.titles}
                     onFilterChange={setFilter}
                     onRowClick={(template) => {
                         if (editingTemplateId !== template.id) {
@@ -345,13 +348,13 @@ function Templates() {
                 />
 
                 <ConfirmationDialog
-                    cancelText="Cancel"
-                    confirmText="Delete"
+                    cancelText={copy.action.cancel}
+                    confirmText={copy.action.delete}
                     handleConfirm={handleDelete}
                     handleOpenChange={setIsDeleteDialogOpen}
                     isOpen={isDeleteDialogOpen}
                     itemName={deletingTemplate?.title}
-                    itemType="template"
+                    itemType={copy.itemType.template}
                 />
             </div>
         </>

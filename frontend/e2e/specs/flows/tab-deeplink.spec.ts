@@ -25,7 +25,7 @@ test.describe('flow tab deep link', { tag: '@flows' }, () => {
         }) => {
             await page.goto('/flows/5?tab=assistant');
             await expectSelectedTab(page, '助手');
-            await expect(page.getByText('New assistant', { exact: true })).toBeVisible();
+            await expect(page.getByText('新的助手对话', { exact: true })).toBeVisible();
 
             expectCleanPage(pageErrorLog);
         });

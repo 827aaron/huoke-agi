@@ -140,9 +140,7 @@ describe('VersionPanel', () => {
         renderPanel({ isOpen: false });
         await user.hover(trigger());
 
-        expect(await screen.findByRole('tooltip')).toHaveTextContent(
-            'New version v2.4.0 is available. Run the installer tool to update.',
-        );
+        expect(await screen.findByRole('tooltip')).toHaveTextContent('新版本 v2.4.0 可用，运行安装工具即可更新。');
     });
 
     it('opens the details with the build, the channel, the instruction and the release links', async () => {
@@ -163,19 +161,19 @@ describe('VersionPanel', () => {
         const dialog = await screen.findByRole('menu');
 
         expect(dialog).toHaveTextContent('客来 AGI v2.1.0');
-        expect(dialog).toHaveTextContent('build b1d7c0de');
+        expect(dialog).toHaveTextContent('构建 b1d7c0de');
         expect(dialog).toHaveTextContent('stable');
-        expect(dialog).toHaveTextContent('New version v2.4.0 is available');
-        expect(dialog).toHaveTextContent('Run the installer tool on the host where KeLai AGI is deployed');
-        expect(dialog).toHaveTextContent('Installed');
-        expect(dialog).toHaveTextContent('Available');
-        expect(dialog).toHaveTextContent('Checked');
-        expect(dialog).toHaveTextContent('10 minutes ago');
-        expect(screen.getByRole('menuitem', { name: /Release notes for v2\.4\.0/ })).toHaveAttribute(
+        expect(dialog).toHaveTextContent('新版本 v2.4.0 可用');
+        expect(dialog).toHaveTextContent('在部署客来 AGI 的服务器上运行安装工具');
+        expect(dialog).toHaveTextContent('当前版本');
+        expect(dialog).toHaveTextContent('可更新到');
+        expect(dialog).toHaveTextContent('上次检查');
+        expect(dialog).toHaveTextContent('10 分钟前');
+        expect(screen.getByRole('menuitem', { name: /v2\.4\.0 更新说明/ })).toHaveAttribute(
             'href',
             'https://github.com/vxcontrol/pentagi/releases/tag/v2.4.0',
         );
-        expect(screen.getByRole('menuitem', { name: /All releases/ })).toHaveAttribute(
+        expect(screen.getByRole('menuitem', { name: /所有版本/ })).toHaveAttribute(
             'href',
             'https://github.com/vxcontrol/pentagi/releases',
         );
@@ -193,10 +191,10 @@ describe('VersionPanel', () => {
 
         const dialog = await screen.findByRole('menu');
 
-        expect(dialog).toHaveTextContent('Update status unknown');
-        expect(dialog).toHaveTextContent('The newest published version is v2.4.0.');
-        expect(dialog).not.toHaveTextContent('Available');
-        expect(screen.queryByRole('menuitem', { name: /Release notes/ })).not.toBeInTheDocument();
+        expect(dialog).toHaveTextContent('更新状态未知');
+        expect(dialog).toHaveTextContent('已发布的最新版本是 v2.4.0。');
+        expect(dialog).not.toHaveTextContent('可更新到');
+        expect(screen.queryByRole('menuitem', { name: /更新说明/ })).not.toBeInTheDocument();
     });
 
     it('says what the channel badge means, in its name and on hover', async () => {
@@ -206,11 +204,11 @@ describe('VersionPanel', () => {
 
         await user.click(trigger());
 
-        const badge = await screen.findByLabelText('Update channel: stable');
+        const badge = await screen.findByLabelText('更新渠道：stable');
 
         await user.hover(badge);
 
-        expect(await screen.findByRole('tooltip')).toHaveTextContent('Updates are offered from the stable channel');
+        expect(await screen.findByRole('tooltip')).toHaveTextContent('更新来自 stable 渠道');
     });
 
     it('names the base version of a build cut from a branch beside its build', async () => {
@@ -223,7 +221,7 @@ describe('VersionPanel', () => {
 
         await user.click(screen.getByRole('button', { name: /客来 AGI v2\.1\.0-ce/ }));
 
-        expect(await screen.findByRole('menu')).toHaveTextContent('build b1d7c0de');
+        expect(await screen.findByRole('menu')).toHaveTextContent('构建 b1d7c0de');
     });
 
     it('shows the build of an edition that carries no version number', async () => {
@@ -233,7 +231,7 @@ describe('VersionPanel', () => {
 
         await user.click(screen.getByRole('button', { name: /客来 AGI ce/ }));
 
-        expect(await screen.findByRole('menu')).toHaveTextContent('build b1d7c0de');
+        expect(await screen.findByRole('menu')).toHaveTextContent('构建 b1d7c0de');
     });
 
     it('offers no release notes link when there is no release to point at', async () => {
@@ -243,9 +241,9 @@ describe('VersionPanel', () => {
 
         await user.click(trigger());
 
-        expect(await screen.findByRole('menu')).toHaveTextContent('Update status unknown');
-        expect(screen.queryByRole('menuitem', { name: /Release notes/ })).not.toBeInTheDocument();
-        expect(screen.getByRole('menuitem', { name: /All releases/ })).toBeInTheDocument();
+        expect(await screen.findByRole('menu')).toHaveTextContent('更新状态未知');
+        expect(screen.queryByRole('menuitem', { name: /更新说明/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('menuitem', { name: /所有版本/ })).toBeInTheDocument();
     });
 });
 
@@ -320,8 +318,8 @@ describe('describeVersion', () => {
         expect(presentation.indicator).toBe('update');
         expect(presentation.label).toBe('v2.1.0');
         expect(presentation.latest).toBe('v2.4.0');
-        expect(presentation.headline).toBe('New version v2.4.0 is available');
-        expect(presentation.tooltip).toBe('New version v2.4.0 is available. Run the installer tool to update.');
+        expect(presentation.headline).toBe('新版本 v2.4.0 可用');
+        expect(presentation.tooltip).toBe('新版本 v2.4.0 可用，运行安装工具即可更新。');
         expect(presentation.action).toBe(UPDATE_INSTRUCTION);
     });
 
@@ -330,18 +328,15 @@ describe('describeVersion', () => {
 
         expect(presentation.indicator).toBe('none');
         expect(presentation.tooltip).toBe('客来 AGI v2.1.0 已是最新版本');
-        expect(presentation.detail).toContain('preview channel');
+        expect(presentation.detail).toContain('preview 渠道');
         expect(presentation.action).toBeNull();
     });
 
     it.each([
-        [UpdateState.Pending, 'Checking for updates…'],
-        [UpdateState.Unreachable, 'Update status unknown: the update service could not be reached.'],
-        [
-            UpdateState.Unknown,
-            'Update status unknown: the update service could not tell whether a newer version exists.',
-        ],
-        [UpdateState.Disabled, 'Update checks are disabled in the server configuration.'],
+        [UpdateState.Pending, '正在检查更新…'],
+        [UpdateState.Unreachable, '更新状态未知：无法连接更新服务。'],
+        [UpdateState.Unknown, '更新状态未知：更新服务无法判断是否有新版本。'],
+        [UpdateState.Disabled, '服务器配置里关闭了更新检查。'],
     ])('shows the yellow question mark for %s', (state, tooltip) => {
         const presentation = describeVersion(info({ state }));
 
@@ -353,7 +348,7 @@ describe('describeVersion', () => {
         const presentation = describeVersion(info({ latest: '2.4.0', state: UpdateState.Unknown }));
 
         expect(presentation.indicator).toBe('question');
-        expect(presentation.detail).toContain('The newest published version is v2.4.0.');
+        expect(presentation.detail).toContain('已发布的最新版本是 v2.4.0。');
     });
 
     it('treats an update that names no version as unknown rather than pointing an arrow at nothing', () => {
@@ -395,8 +390,8 @@ describe('describeTiming', () => {
         expect(
             describeTiming(info({ checkedAt: '2026-09-02T09:00:00Z', failedAt: '2026-09-02T11:55:00Z' }), now),
         ).toEqual([
-            { label: 'Checked', value: 'about 3 hours ago' },
-            { label: 'Last check failed', value: '5 minutes ago' },
+            { label: '上次检查', value: '大约 3 小时前' },
+            { label: '上次检查失败', value: '5 分钟前' },
         ]);
     });
 });

@@ -132,17 +132,17 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
 
     const placeholder = useMemo(() => {
         if (!flowId) {
-            return 'Select a flow...';
+            return copy.flowLogs.selectFlow;
         }
 
         switch (flowStatus) {
             case StatusType.Created: {
-                return 'The flow is starting...';
+                return copy.flowLogs.starting;
             }
 
             case StatusType.Failed:
             case StatusType.Finished: {
-                return 'This flow has ended. Create a new one to continue.';
+                return copy.flowLogs.ended;
             }
 
             case StatusType.Running: {
@@ -150,11 +150,11 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
             }
 
             case StatusType.Waiting: {
-                return 'Provide additional context or instructions...';
+                return copy.flowLogs.followUp;
             }
 
             default: {
-                return 'Type your message...';
+                return copy.flowLogs.typeMessage;
             }
         }
     }, [flowId, flowStatus]);
@@ -212,13 +212,13 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
                                         <InputGroupInput
                                             {...field}
                                             autoComplete="off"
-                                            placeholder="Search messages..."
+                                            placeholder={copy.flowLogs.searchMessages}
                                             type="text"
                                         />
                                         {field.value && (
                                             <InputGroupAddon align="inline-end">
                                                 <InputGroupButton
-                                                    aria-label="Clear message search"
+                                                    aria-label={copy.flowLogs.clearMessageSearch}
                                                     onClick={() => {
                                                         form.reset({ search: '' });
                                                         setDebouncedSearchValue('');
@@ -268,7 +268,7 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
 
                     {!isScrolledToBottom && (
                         <Button
-                            aria-label="Scroll to latest message"
+                            aria-label={copy.flowLogs.scrollToLatestMessage}
                             className="absolute right-4 bottom-4 z-10 shadow-md hover:shadow-lg"
                             onClick={() => scrollToEnd()}
                             size="icon-sm"
@@ -288,8 +288,8 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
                         <EmptyMedia variant="icon">
                             <ListFilter />
                         </EmptyMedia>
-                        <EmptyTitle>No messages found</EmptyTitle>
-                        <EmptyDescription>Try adjusting your search or filter parameters</EmptyDescription>
+                        <EmptyTitle>{copy.flowLogs.messageNotFound}</EmptyTitle>
+                        <EmptyDescription>{copy.flowLogs.noFilterResults}</EmptyDescription>
                     </EmptyHeader>
                     <EmptyContent>
                         <Button
@@ -297,7 +297,7 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
                             variant="outline"
                         >
                             <X />
-                            Reset filters
+                            {copy.flowLogs.resetFilters}
                         </Button>
                     </EmptyContent>
                 </Empty>
@@ -307,7 +307,7 @@ function FlowAutomationMessages({ className }: FlowAutomationMessagesProps) {
                         <EmptyMedia variant="icon">
                             <Inbox />
                         </EmptyMedia>
-                        <EmptyTitle>No active tasks</EmptyTitle>
+                        <EmptyTitle>{copy.flowLogs.noActiveTasks}</EmptyTitle>
                         <EmptyDescription>{copy.automation.firstStartHint}</EmptyDescription>
                     </EmptyHeader>
                 </Empty>

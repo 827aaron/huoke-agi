@@ -12,7 +12,7 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
 
         test('keeps the variable Report action left of the pager and fixed actions', async ({ page }) => {
             await page.goto('/flows/5');
-            await expect(page.locator('header').getByRole('button', { name: 'Report' })).toBeVisible();
+            await expect(page.locator('header').getByRole('button', { name: '汇报' })).toBeVisible();
 
             const labels = await page
                 .locator('header button')
@@ -21,14 +21,14 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
 
             // findIndex returns -1 for an absent label, and -1 < any real index, so the ordering below
             // passes vacuously when a button is missing. Require presence first.
-            for (const label of ['Report', 'Toggle favorite', 'Previous', 'Next', 'Flow actions']) {
+            for (const label of ['汇报', '收藏 / 取消收藏', '上一个', '下一个', '项目操作']) {
                 expect(positionOf(label), `header is missing the "${label}" button`).toBeGreaterThanOrEqual(0);
             }
 
-            expect(positionOf('Report')).toBeLessThan(positionOf('Previous'));
-            expect(positionOf('Previous')).toBeLessThan(positionOf('Next'));
-            expect(positionOf('Next')).toBeLessThan(positionOf('Toggle favorite'));
-            expect(positionOf('Toggle favorite')).toBeLessThan(positionOf('Flow actions'));
+            expect(positionOf('汇报')).toBeLessThan(positionOf('上一个'));
+            expect(positionOf('上一个')).toBeLessThan(positionOf('下一个'));
+            expect(positionOf('下一个')).toBeLessThan(positionOf('收藏 / 取消收藏'));
+            expect(positionOf('收藏 / 取消收藏')).toBeLessThan(positionOf('项目操作'));
         });
     });
 
@@ -58,13 +58,13 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
             (window as unknown as { __routeTrail: string[] }).__routeTrail.length = 0;
         });
 
-        await header.getByRole('button', { name: 'Next' }).click();
+        await header.getByRole('button', { name: '下一个' }).click();
 
         await expect(page).toHaveURL(/\/flows\/6$/);
         await expect(header.getByText('E2E Beta')).toBeVisible();
-        await expect(header.getByRole('button', { name: 'Next' })).toBeVisible();
+        await expect(header.getByRole('button', { name: '下一个' })).toBeVisible();
 
-        await header.getByRole('button', { name: 'Previous' }).click();
+        await header.getByRole('button', { name: '上一个' }).click();
 
         await expect(page).toHaveURL(/\/flows\/5$/);
         await expect(header.getByText('E2E Alpha')).toBeVisible();
@@ -90,10 +90,10 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
         });
 
         const header = page.locator('header');
-        const star = header.getByRole('button', { name: 'Toggle favorite' });
+        const star = header.getByRole('button', { name: '收藏 / 取消收藏' });
         const actionPositions = () =>
             Promise.all(
-                ['Previous', 'Next', 'Toggle favorite', 'Flow actions'].map(async (label) =>
+                ['上一个', '下一个', '收藏 / 取消收藏', '项目操作'].map(async (label) =>
                     header.getByRole('button', { name: label }).evaluate((button) => button.getBoundingClientRect().x),
                 ),
             );
@@ -127,10 +127,10 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
 
         test('shows no favorite toggle while that flow loads', async ({ page, pageErrorLog }) => {
             const header = page.locator('header');
-            const star = header.getByRole('button', { name: 'Toggle favorite' });
+            const star = header.getByRole('button', { name: '收藏 / 取消收藏' });
             const actionPositions = () =>
                 Promise.all(
-                    ['Previous', 'Next', 'Flow actions'].map(async (label) =>
+                    ['上一个', '下一个', '项目操作'].map(async (label) =>
                         header
                             .getByRole('button', { name: label })
                             .evaluate((button) => button.getBoundingClientRect().x),
@@ -155,7 +155,7 @@ test.describe('flow pager', { tag: ['@flows', '@smoke'] }, () => {
                 await route.fallback();
             });
 
-            await header.getByRole('button', { name: 'Next' }).click();
+            await header.getByRole('button', { name: '下一个' }).click();
             await expect(page).toHaveURL(/\/flows\/6$/);
             await expect(star).toHaveCount(0);
 

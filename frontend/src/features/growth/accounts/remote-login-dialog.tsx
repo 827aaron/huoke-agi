@@ -39,7 +39,7 @@ interface RemoteLoginDialogProps {
     onClose: () => void;
     onSignedIn: (account: GrowthAccount) => void;
     open: boolean;
-    platform: 'facebook' | 'instagram';
+    platform: 'facebook' | 'instagram' | 'tiktok';
 }
 
 // Signing in happens inside a browser running on the server, streamed into the frame; the session cookie

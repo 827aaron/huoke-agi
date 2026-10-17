@@ -12,9 +12,9 @@ import { DashboardAnalytics } from '@/pages/dashboard/dashboard-analytics';
 import { DashboardOverview } from '@/pages/dashboard/dashboard-overview';
 
 const periodOptions: { label: string; value: UsageStatsPeriod }[] = [
-    { label: 'Week', value: UsageStatsPeriod.Week },
-    { label: 'Month', value: UsageStatsPeriod.Month },
-    { label: 'Quarter', value: UsageStatsPeriod.Quarter },
+    { label: copy.dashboard.week, value: UsageStatsPeriod.Week },
+    { label: copy.dashboard.month, value: UsageStatsPeriod.Month },
+    { label: copy.dashboard.quarter, value: UsageStatsPeriod.Quarter },
 ];
 
 const VALID_PERIODS = new Set<string>(Object.values(UsageStatsPeriod));
@@ -91,8 +91,8 @@ function Dashboard() {
                 >
                     <div className="flex items-center justify-between">
                         <TabsList>
-                            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                            <TabsTrigger value="overview">Overview</TabsTrigger>
+                            <TabsTrigger value="analytics">{copy.dashboard.analytics}</TabsTrigger>
+                            <TabsTrigger value="overview">{copy.dashboard.overview}</TabsTrigger>
                         </TabsList>
 
                         {activeTab === 'analytics' && (

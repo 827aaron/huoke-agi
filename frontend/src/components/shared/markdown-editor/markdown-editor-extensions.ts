@@ -23,6 +23,8 @@ import { findWrapping, liftTarget } from '@tiptap/pm/transform';
 import StarterKit from '@tiptap/starter-kit';
 import { common, createLowlight } from 'lowlight';
 
+import { copy } from '@/lib/copy';
+
 import { HeadingAutoformat } from './markdown-editor-heading-autoformat';
 import {
     blankLineOf,
@@ -997,8 +999,7 @@ export const createMarkdownExtensions = (placeholder?: string) => [
     ),
     TaskItem.configure({
         a11y: {
-            checkboxLabel: (node) =>
-                `Task item checkbox for ${node.firstChild?.textContent.trim() || 'empty task item'}`,
+            checkboxLabel: (node) => copy.editor.taskCheckbox(node.firstChild?.textContent.trim() ?? ''),
         },
         nested: true,
     }),

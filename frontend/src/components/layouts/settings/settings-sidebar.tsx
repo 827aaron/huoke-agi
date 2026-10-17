@@ -127,7 +127,7 @@ export function SettingsSidebar() {
                 <SidebarMenuButton asChild>
                     <NavLink to={returnUrl}>
                         <ArrowLeft />
-                        Back to App
+                        {copy.sidebar.backToApp}
                     </NavLink>
                 </SidebarMenuButton>
             </SidebarFooter>

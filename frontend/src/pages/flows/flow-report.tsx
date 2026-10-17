@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import Logo from '@/components/icons/logo';
 import Markdown from '@/components/shared/markdown';
 import { FlowReportDocument } from '@/graphql/types';
+import { copy } from '@/lib/copy';
 import { Log } from '@/lib/log';
 import { generateFileName, generatePDFFromMarkdown, generateReport } from '@/lib/report';
 
@@ -66,7 +67,7 @@ function FlowReport() {
             })
             .catch((err) => {
                 Log.error('PDF generation failed:', err);
-                setPdfError('Failed to generate PDF');
+                setPdfError(copy.report.pdfFailed);
                 setPdfPhase('error');
             });
     }, [dataReady, download, silent, reportContent, data]);
@@ -78,7 +79,7 @@ function FlowReport() {
         state = 'loading';
     } else if (!data?.flow) {
         state = 'error';
-        errorMessage = 'Failed to load flow data';
+        errorMessage = copy.report.loadFlowFailed;
     } else if (pdfPhase === 'error') {
         state = 'error';
         errorMessage = pdfError;
@@ -97,13 +98,11 @@ function FlowReport() {
                     </div>
                     <div className="flex flex-col gap-4 text-center">
                         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-                            {state === 'loading' ? 'Loading Report...' : 'Generating PDF...'}
+                            {state === 'loading' ? copy.report.loading : copy.report.generating}
                         </h1>
                         <div className="mx-auto size-8 animate-spin rounded-full border-b-2 border-blue-600" />
                         <p className="max-w-md text-gray-600 dark:text-gray-400">
-                            {state === 'loading'
-                                ? 'Please wait while we prepare your lead acquisition report.'
-                                : 'Creating your PDF document. This may take a few moments.'}
+                            {state === 'loading' ? copy.report.loadingHint : copy.report.generatingHint}
                         </p>
                     </div>
                 </div>
@@ -119,15 +118,17 @@ function FlowReport() {
                         <Logo className="size-16" />
                     </div>
                     <div className="flex flex-col gap-4 text-center">
-                        <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400">Error Loading Report</h1>
+                        <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400">
+                            {copy.report.loadFailed}
+                        </h1>
                         <p className="max-w-md text-gray-600 dark:text-gray-400">
-                            {errorMessage || 'An unexpected error occurred while loading the report.'}
+                            {errorMessage || copy.report.unexpected}
                         </p>
                         <button
                             className="mt-4 rounded-md bg-red-600 px-4 py-2 text-white transition-colors hover:bg-red-700"
                             onClick={() => window.close()}
                         >
-                            Close
+                            {copy.report.close}
                         </button>
                     </div>
                 </div>

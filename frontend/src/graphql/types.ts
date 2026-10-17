@@ -399,6 +399,7 @@ export type MessageLogFragmentFragment = {
     flowId: string;
     taskId: string | null;
     subtaskId: string | null;
+    agent: AgentType | null;
     createdAt: string;
 };
 
@@ -1707,6 +1708,7 @@ export const MessageLogFragmentFragmentDoc = {
                     { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'agent' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
                 ],
             },
@@ -5460,6 +5462,7 @@ export const FlowDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'agent' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
                 ],
             },
@@ -10298,6 +10301,7 @@ export const MessageLogAddedDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'agent' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
                 ],
             },
@@ -10357,6 +10361,7 @@ export const MessageLogUpdatedDocument = {
                     { kind: 'Field', name: { kind: 'Name', value: 'flowId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'taskId' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'subtaskId' } },
+                    { kind: 'Field', name: { kind: 'Name', value: 'agent' } },
                     { kind: 'Field', name: { kind: 'Name', value: 'createdAt' } },
                 ],
             },
