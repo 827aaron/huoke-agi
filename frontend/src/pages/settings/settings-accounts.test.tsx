@@ -23,8 +23,8 @@ const account: GrowthAccount = {
     last_success_at: null,
     last_used_at: null,
     platform: 'telegram',
+    proxy: null,
     proxy_source: 'direct',
-    proxy_url: null,
     rate_limit_until: null,
     status: 'active',
 };
