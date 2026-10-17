@@ -811,9 +811,11 @@ func TestProviders_TestAgent_RunsTheSimpleAgentOnTheFormsModel(t *testing.T) {
 type stubTypedProvider struct {
 	provider.Provider
 	ptype provider.ProviderType
+	name  provider.ProviderName
 }
 
 func (s stubTypedProvider) Type() provider.ProviderType { return s.ptype }
+func (s stubTypedProvider) Name() provider.ProviderName { return s.name }
 
 type recordingProvidersQuerier struct {
 	database.Querier
@@ -920,6 +922,49 @@ func TestProviders_TestAgent_BuildsWithTheUsersOwnCredentials(t *testing.T) {
 	require.NoError(t, err, "a type only the user's own key enables")
 	_, err = pc.CreateProvider(context.Background(), 2, "my-deepseek", provider.ProviderDeepSeek, nil)
 	require.ErrorContains(t, err, "provider type 'deepseek' is not available")
+}
+
+func TestProviders_LoadFlowProvider_RunsOnTheCurrentProviderOnceTheStoredOneIsGone(t *testing.T) {
+	base := &config.Config{}
+	ownKey := config.Config{LLMServerURL: "http://127.0.0.1:1/v1", LLMServerKey: "k", LLMServerModel: "deepseek/deepseek-chat"}
+	defaultConfigs, _, err := buildDefaultConfigs(base)
+	require.NoError(t, err)
+	builtIn := provider.Providers{}
+	pc := &providerController{
+		cfg:             base,
+		defaultConfigs:  defaultConfigs,
+		db:              stubProvidersQuerier{},
+		startCallNumber: newAtomicInt64(0),
+		userConfigFn: func(_ context.Context, userID int64) (*config.Config, error) {
+			if userID == 1 {
+				return &ownKey, nil
+			}
+			return base, nil
+		},
+	}
+	load := func(userID int64, name provider.ProviderName) (FlowProvider, error) {
+		return pc.LoadFlowProvider(context.Background(), name, nil, nil, 9, userID, false, "", "en", "t", "")
+	}
+
+	_, err = load(2, "deepseek")
+	require.ErrorIs(t, err, provider.ErrProviderNotFound)
+	require.ErrorIs(t, err, ErrNoProvider)
+
+	builtIn["zeta"] = stubTypedProvider{ptype: provider.ProviderOpenAI, name: "zeta"}
+	builtIn["alpha"] = stubTypedProvider{ptype: provider.ProviderGemini, name: "alpha"}
+	pc.Providers = builtIn
+
+	fp, err := load(1, "deepseek")
+	require.NoError(t, err)
+	assert.Equal(t, provider.ProviderCustom, fp.Type(), "the user's own key comes before the built-ins")
+
+	fp, err = load(2, "deepseek")
+	require.NoError(t, err)
+	assert.Equal(t, provider.ProviderGemini, fp.Type(), "built-ins by name")
+
+	fp, err = load(2, "zeta")
+	require.NoError(t, err)
+	assert.Equal(t, provider.ProviderOpenAI, fp.Type(), "a name that resolves is kept")
 }
 
 func TestProviders_LoadFlowProvider_EmbedsWithTheUsersOwnEmbeddingSettings(t *testing.T) {

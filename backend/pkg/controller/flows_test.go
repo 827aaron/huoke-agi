@@ -33,6 +33,11 @@ type cascadeFakeQuerier struct {
 	assistantsErr    error
 	containersResult []database.Container
 	containersErr    error
+	references       []string
+}
+
+func (f *cascadeFakeQuerier) GetUserProviderReferences(ctx context.Context, _ int64) ([]string, error) {
+	return f.references, ctx.Err()
 }
 
 func (f *cascadeFakeQuerier) UpdateFlowsProviderNameByOldName(
@@ -79,6 +84,14 @@ type cascadeFakeProviders struct {
 	providers.ProviderController
 
 	resolvable map[provider.ProviderName]bool
+	current    provider.ProviderName
+}
+
+func (p *cascadeFakeProviders) CurrentProvider(context.Context, int64) (provider.Provider, error) {
+	if p.current == "" {
+		return nil, providers.ErrNoProvider
+	}
+	return mock.NewProvider(provider.ProviderCustom, p.current, "model"), nil
 }
 
 func (p *cascadeFakeProviders) GetProvider(
@@ -88,7 +101,7 @@ func (p *cascadeFakeProviders) GetProvider(
 		return mock.NewProvider(provider.ProviderQwen, prvname, "model"), nil
 	}
 
-	return nil, fmt.Errorf("provider not found by name '%s'", prvname)
+	return nil, fmt.Errorf("%w by name '%s'", provider.ErrProviderNotFound, prvname)
 }
 
 func newTestFlowController(
@@ -131,6 +144,46 @@ func TestFlows_ReassignFlowsProvider_RenameSweepsBothTablesPastACancelledCaller(
 	}, q.assistantsCalls)
 	assert.Len(t, pub.flowUpdated, 2, "every rewritten flow row is published")
 	assert.Len(t, pub.assistantUpdated, 1, "every rewritten assistant row is published")
+}
+
+func TestFlows_ProviderFor_RunsOnTheCurrentProviderAndRepointsAGoneName(t *testing.T) {
+	q := &cascadeFakeQuerier{}
+	fc, _ := newTestFlowController(q, "custom")
+	fc.provs.(*cascadeFakeProviders).current = "custom"
+
+	prv, err := fc.ProviderFor(context.Background(), 1, "deepseek")
+	require.NoError(t, err)
+	assert.Equal(t, provider.ProviderName("custom"), prv.Name())
+	assert.Equal(t, []database.UpdateFlowsProviderNameByOldNameParams{
+		{NewName: "custom", UserID: 1, OldName: "deepseek"},
+	}, q.flowsCalls)
+
+	prv, err = fc.ProviderFor(context.Background(), 1, "custom")
+	require.NoError(t, err)
+	assert.Equal(t, provider.ProviderName("custom"), prv.Name())
+	assert.Len(t, q.flowsCalls, 1, "a name that resolves is not repointed")
+
+	fc.provs.(*cascadeFakeProviders).current = ""
+	_, err = fc.ProviderFor(context.Background(), 1, "deepseek")
+	require.ErrorIs(t, err, providers.ErrNoProvider)
+}
+
+func TestFlows_RepointDanglingProviders_RepointsEveryGoneNameAtTheCurrentProvider(t *testing.T) {
+	q := &cascadeFakeQuerier{references: []string{"custom"}}
+	fc, _ := newTestFlowController(q, "custom")
+	require.NoError(t, fc.RepointDanglingProviders(context.Background(), 1), "nothing gone needs no current provider")
+
+	q.references = []string{"deepseek", "custom", "openai"}
+	fc.provs.(*cascadeFakeProviders).current = "custom"
+	require.NoError(t, fc.RepointDanglingProviders(context.Background(), 1))
+	assert.Equal(t, []database.UpdateFlowsProviderNameByOldNameParams{
+		{NewName: "custom", UserID: 1, OldName: "deepseek"},
+		{NewName: "custom", UserID: 1, OldName: "openai"},
+	}, q.flowsCalls)
+	assert.Equal(t, []database.UpdateAssistantsProviderNameByOldNameParams{
+		{NewName: "custom", UserID: 1, OldName: "deepseek"},
+		{NewName: "custom", UserID: 1, OldName: "openai"},
+	}, q.assistantsCalls)
 }
 
 func TestFlows_ReassignFlowsProvider_RewritesOnlyADanglingName(t *testing.T) {

@@ -235,6 +235,7 @@ func NewRouter(
 	}
 	growthCore.SetKnowledgeStore(knowledgeStore)
 	growthService := services.NewGrowthService(growthCore)
+	growthService.RepointProvidersWith(controller.RepointDanglingProviders)
 	anonymizerService := services.NewAnonymizerService(textReplacer)
 	graphqlService := services.NewGraphqlService(
 		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions, knowledgeStore, textReplacer,

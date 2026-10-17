@@ -574,8 +574,18 @@ type lifecycleQuerier struct {
 	updateErr error
 	statusErr error
 
-	mx          sync.Mutex
-	statusCalls []database.UpdateAssistantStatusParams
+	mx            sync.Mutex
+	statusCalls   []database.UpdateAssistantStatusParams
+	providerCalls []database.UpdateAssistantProviderParams
+}
+
+func (q *lifecycleQuerier) UpdateAssistantProvider(
+	ctx context.Context, arg database.UpdateAssistantProviderParams,
+) (database.Assistant, error) {
+	q.mx.Lock()
+	defer q.mx.Unlock()
+	q.providerCalls = append(q.providerCalls, arg)
+	return database.Assistant{ID: arg.ID, ModelProviderName: arg.ModelProviderName}, ctx.Err()
 }
 
 func (*lifecycleQuerier) GetUser(_ context.Context, id int64) (database.GetUserRow, error) {
