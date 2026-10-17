@@ -335,9 +335,9 @@ const zh = {
                 '同一个号读完一个群、换去读另一个群之前等多久，范围内随机取。默认 5-15 秒。这一项会真的等待：调小读得更快，但更容易被 Telegram 限流。',
             'telegram.risk_reminders':
                 '关掉后不再显示加群节奏的黄色提醒（预热、每日上限、间隔、私密群、已加群数），不影响实际加群。默认开。',
-            'web_search.api_keys': '可填多个，用完一个自动换下一个。',
+            'web_search.api_keys': '可填多个：每行一个，或用英文逗号隔开；用完一个自动换下一个。',
             'youtube.api_keys':
-                '可填多个，用完一个自动换下一个。注意：同一个 Google 项目里的多个 key 共用额度，多 key 不增加额度；建议向 Google 免费申请提额。',
+                '可填多个：每行一个，或用英文逗号隔开；用完一个自动换下一个。注意：同一个 Google 项目里的多个 key 共用额度，多 key 不增加额度；建议向 Google 免费申请提额。',
         } as Record<string, string>,
         fieldInvalid: {
             api_hash: 'api_hash 应为 32 位字母和数字',
@@ -2367,9 +2367,10 @@ const en: Copy = {
                 'How long an account waits before moving from one group to read another, a random value in the range. Default 5-15 seconds. This wait is real: lower reads faster but is more likely to be rate-limited by Telegram.',
             'telegram.risk_reminders':
                 'Off hides the yellow join-pace reminders (warm-up, daily joins, gap, private groups, joined groups); joins are not affected. Default on.',
-            'web_search.api_keys': 'Several keys are fine; when one runs out the next is used.',
+            'web_search.api_keys':
+                'Several keys are fine, one per line or comma separated; when one runs out the next is used.',
             'youtube.api_keys':
-                'Several keys are fine; when one runs out the next is used. Keys from the same Google project share one quota, so more keys add no quota; ask Google for a free quota increase instead.',
+                'Several keys are fine, one per line or comma separated; when one runs out the next is used. Keys from the same Google project share one quota, so more keys add no quota; ask Google for a free quota increase instead.',
         },
         fieldInvalid: {
             api_hash: 'api_hash is 32 letters and digits',
