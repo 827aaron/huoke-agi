@@ -137,6 +137,17 @@ describe('GrowthCredentialCard', () => {
         expect(screen.getByLabelText('OpenRouter 密钥')).toHaveValue('');
     });
 
+    it('recommends an OpenRouter embedding model and says when its key is needed', () => {
+        renderCard(
+            setting({ kind: 'embedding', provider: 'openrouter', providers: ['openai', 'openrouter', 'ollama'] }),
+        );
+
+        expect(screen.getByText('推荐 openai/text-embedding-3-small，便宜够用；留空就用它。')).toBeInTheDocument();
+        expect(
+            screen.getByText('留空则复用大模型的 OpenRouter 密钥；大模型用的不是 OpenRouter 时必须填。'),
+        ).toBeInTheDocument();
+    });
+
     it('lists OpenRouter embedding models with the key the LLM card lends', async () => {
         renderCard(
             setting({ kind: 'embedding', provider: 'openrouter', providers: ['openai', 'openrouter', 'ollama'] }),

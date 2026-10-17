@@ -231,6 +231,9 @@ const fieldPlaceholder = (kind: GrowthSettingKind, provider: null | string, fiel
     text.fieldByKind[`${kind}.${field}`]?.placeholder ??
     text.field[field]?.placeholder;
 
+const fieldHelp = (kind: GrowthSettingKind, provider: null | string, field: string): string | undefined =>
+    text.fieldHelp[`${kind}.${provider}.${field}`] ?? text.fieldHelp[`${kind}.${field}`];
+
 const statusLine = (kind: GrowthSettingKind, setting: GrowthSetting | undefined): string => {
     switch (settingState(setting)) {
         case 'connected':
@@ -607,8 +610,8 @@ export function GrowthCredentialCard({
                 </div>
             </div>
             {renderInput(field)}
-            {text.fieldHelp[`${kind}.${field}`] && (
-                <p className="text-muted-foreground text-xs">{text.fieldHelp[`${kind}.${field}`]}</p>
+            {fieldHelp(kind, provider, field) && (
+                <p className="text-muted-foreground text-xs">{fieldHelp(kind, provider, field)}</p>
             )}
             {errors[field] && <p className="text-destructive text-xs">{errors[field]}</p>}
         </div>

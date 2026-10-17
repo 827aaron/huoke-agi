@@ -313,6 +313,8 @@ const zh = {
             'screening.openrouter.api_key': { label: 'OpenRouter 密钥', placeholder: '粘贴 OpenRouter 的密钥' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
+            'embedding.openrouter.api_key': '留空则复用大模型的 OpenRouter 密钥；大模型用的不是 OpenRouter 时必须填。',
+            'embedding.openrouter.model': '推荐 openai/text-embedding-3-small，便宜够用；留空就用它。',
             'telegram.join_ramp': '从账号首次登录那天算起，每天最多加几个群，逗号分隔；排完后按“每天加群上限”。',
             'telegram.risk_reminders': '关闭后不再显示加群节奏的黄色提醒。',
             'web_search.api_keys': '可填多个，用完一个自动换下一个。',
@@ -2322,6 +2324,10 @@ const en: Copy = {
             'screening.openrouter.api_key': { label: 'OpenRouter key', placeholder: 'Paste your OpenRouter key' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
+            'embedding.openrouter.api_key':
+                'Empty reuses the OpenRouter key of the language model; required when the language model is not on OpenRouter.',
+            'embedding.openrouter.model':
+                'openai/text-embedding-3-small is recommended: cheap and good enough. Empty uses it.',
             'telegram.join_ramp':
                 'Most joins on each day from the account’s first sign-in, comma separated; after that, Joins per day applies.',
             'telegram.risk_reminders': 'Off hides the yellow join-pace reminders.',
