@@ -129,7 +129,7 @@ export interface GrowthLeadInput {
     tier?: GrowthLeadTier;
 }
 
-export type GrowthLeadOrigin = 'agent' | 'manual';
+export type GrowthLeadOrigin = 'ai' | 'manual';
 
 // Public-profile enrichment; every field is optional and an absent one is not rendered.
 export interface GrowthLeadProfile {

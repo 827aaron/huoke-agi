@@ -278,7 +278,7 @@ const lead = (
         id,
         last_active_at: ago(activeMinutesAgo),
         note: '',
-        origin: 'agent',
+        origin: 'ai',
         platform: 'telegram',
         platform_user_id: String(700000 + id),
         profile:

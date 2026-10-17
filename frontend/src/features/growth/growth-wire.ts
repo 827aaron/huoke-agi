@@ -62,6 +62,7 @@ export interface WireRun {
 
 export interface WireSource {
     join_status: string;
+    joinable?: boolean;
     kind: string;
     last_synced_at?: string;
     link?: string;
@@ -87,7 +88,7 @@ const JOIN_STATUS: Record<string, GrowthSourceJoinStatus> = {
     pending: 'pending_approval',
 };
 
-// Only these platforms have groups an account joins; the rest are public pages read as they are.
+// A server that does not say whether a source can be joined: only these platforms have groups to join.
 const JOINABLE_PLATFORMS = new Set(['facebook', 'telegram']);
 
 const RUN_STATUS: Record<string, GrowthRunStatus> = {
@@ -102,7 +103,7 @@ export const toWireTier = (tier: GrowthLeadTier): string => (tier === 'watch' ? 
 export const fromWireSource = (source: WireSource): GrowthSource => ({
     created_at: '',
     id: source.source_id,
-    join_status: !JOINABLE_PLATFORMS.has(source.platform)
+    join_status: !(source.joinable ?? JOINABLE_PLATFORMS.has(source.platform))
         ? 'direct'
         : (JOIN_STATUS[source.join_status] ?? (source.join_status as GrowthSourceJoinStatus)),
     kind: source.kind === 'channel' ? 'channel' : 'group',
@@ -197,7 +198,7 @@ export const fromWireLeads = (
             id: lead.lead_id,
             last_active_at: newest?.posted_at ?? null,
             note: lead.note ?? '',
-            origin: lead.origin === 'manual' ? 'manual' : 'agent',
+            origin: lead.origin === 'manual' ? 'manual' : 'ai',
             platform: lead.platform as GrowthPlatform,
             platform_user_id: lead.platform_user_id,
             profile: null,

@@ -259,7 +259,7 @@ describe('growth wire', () => {
             id: 21,
             last_active_at: '2026-10-17T08:00:00Z',
             note: '',
-            origin: 'agent',
+            origin: 'ai',
             platform: 'telegram',
             platform_user_id: '9001',
             profile: null,
@@ -323,6 +323,24 @@ describe('growth wire', () => {
             total: 0,
             warnings: null,
         });
+    });
+
+    it('takes which sources can be joined from the server when it says so', async () => {
+        serve({
+            leads: null,
+            runs: null,
+            sources: [
+                { ...sources[1], joinable: false, source_id: 5 },
+                { ...sources[0], join_status: 'not_joined', joinable: true, source_id: 6 },
+            ],
+        });
+
+        const { sources: pool } = await growthApi.listSources();
+
+        expect(pool.map(({ id, join_status }) => [id, join_status])).toEqual([
+            [5, 'direct'],
+            [6, 'not_joined'],
+        ]);
     });
 
     it('reads an empty pool the server sends as null', async () => {
