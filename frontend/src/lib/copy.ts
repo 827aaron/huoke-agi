@@ -50,8 +50,9 @@ const zh = {
                 title: '邮件通知',
             },
             embedding: {
-                purpose: '默认由系统统一提供，一般无需设置。留空即使用系统默认的。',
-                title: '向量模型（用于记忆和知识库）',
+                purpose:
+                    '用于让系统记住往次任务的经验和查知识库，不是聊天模型。向量模型用量极小，一个月通常不到几块钱。默认由系统统一提供，一般无需设置，留空即使用系统默认的。',
+                title: '向量模型（记忆和知识库用）',
             },
             llm: { purpose: '智能体的“大脑”，没有它无法工作。', title: '大模型' },
             proxy: {
@@ -77,7 +78,7 @@ const zh = {
         cleared: (card: string) => `${card}已清除`,
         description:
             '智能体工作需要几项外部服务的密钥。在这里填写就行，不用改任何配置文件。密钥只保存在你自己的服务器上，保存后只显示一部分。',
-        embeddingAdvanced: '高级：向量模型',
+        embeddingAdvanced: '高级：向量模型（记忆和知识库用）',
         emptyHint: '还没有填写任何密钥。先填写“大模型”和“Telegram 接口凭据”，智能体就能开始工作。',
         envSource: '服务器预设',
         envSourceNote: '这一项由服务器预设，在这里保存会覆盖它。',
@@ -784,7 +785,7 @@ const en: Copy = {
             },
             embedding: {
                 purpose:
-                    'Provided by the system by default; usually nothing to set here. Leave it empty to keep the default.',
+                    'Lets the system remember past tasks and search the knowledge base; it is not the chat model. It uses very little, usually a few cents a month. Provided by the system by default, so there is usually nothing to set; leave it empty to keep the default.',
                 title: 'Embedding model (memory and knowledge base)',
             },
             llm: { purpose: 'The agent’s brain; nothing works without it.', title: 'Language model' },
@@ -813,7 +814,7 @@ const en: Copy = {
         cleared: (card) => `${card} cleared`,
         description:
             'The agent needs keys for a few outside services. Enter them here, no config files needed. Keys stay on your own server and are shown masked after saving.',
-        embeddingAdvanced: 'Advanced: embedding model',
+        embeddingAdvanced: 'Advanced: embedding model (memory and knowledge base)',
         emptyHint: 'No keys yet. Fill in “Language model” and “Telegram API credentials” to get started.',
         envSource: 'Preset on server',
         envSourceNote: 'This item is preset on the server; saving here overrides it.',
