@@ -1,0 +1,33 @@
+{
+  "status_code": 0,
+  "data": [
+    {
+      "type": 1,
+      "item": {
+        "id": "7412345678901234567",
+        "desc": "Which mobile MMO has the fairest gacha? I'm done with pay-to-win",
+        "createTime": 1760500000,
+        "author": {"id": "6800000000000000001", "uniqueId": "pixel.ren", "nickname": "Ren"},
+        "stats": {"commentCount": 321, "diggCount": 5400, "playCount": 120000}
+      }
+    },
+    {
+      "type": 4,
+      "user_list": [
+        {"user_info": {"uid": "6800000000000000002", "unique_id": "gachaqueen", "nickname": "Mia plays", "signature": "daily gacha pulls", "follower_count": 88000}},
+        {"user_info": {"uid": "6800000000000000001", "unique_id": "pixel.ren", "nickname": "Ren", "signature": "", "follower_count": 1500}}
+      ]
+    },
+    {
+      "type": 1,
+      "item": {
+        "id": "7412345678901234999",
+        "desc": "",
+        "createTime": 1760400000,
+        "author": {"id": "6800000000000000003", "uniqueId": "tired.gamer", "nickname": ""},
+        "stats": {"commentCount": 4, "diggCount": 9}
+      }
+    }
+  ],
+  "has_more": 0
+}

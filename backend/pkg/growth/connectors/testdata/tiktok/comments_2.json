@@ -1,0 +1,25 @@
+{
+  "status_code": 0,
+  "comments": [
+    {
+      "cid": "7412000000000000104",
+      "text": "a comment on another video",
+      "create_time": 1760530000,
+      "aweme_id": "7499999999999999999",
+      "reply_id": "0",
+      "user": {"uid": "6900000000000000009", "unique_id": "elsewhere", "nickname": "E"}
+    },
+    {
+      "cid": "7412000000000000105",
+      "text": "refund please, the event was rigged",
+      "create_time": 1760501000,
+      "digg_count": 2,
+      "aweme_id": "7412345678901234567",
+      "reply_id": "0",
+      "user": {"uid": "6900000000000000003", "unique_id": "angry.dad", "nickname": "Dad"}
+    }
+  ],
+  "cursor": 40,
+  "has_more": 0,
+  "total": 3
+}
