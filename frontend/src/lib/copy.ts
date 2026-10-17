@@ -1770,7 +1770,6 @@ const zh = {
         title: '有未保存的修改',
     },
     version: {
-        allReleases: '所有版本',
         available: '可更新到',
         build: (build: string) => `构建 ${build}`,
         channel: (strategy: string) => `更新渠道：${strategy}`,
@@ -1792,7 +1791,6 @@ const zh = {
         newVersion: (latest: string) => `新版本 ${latest} 可用`,
         newVersionDetail: '更新后可获得最新的修复和功能。',
         newVersionTooltip: (latest: string) => `新版本 ${latest} 可用，运行安装工具即可更新。`,
-        releaseNotes: (latest: string) => `${latest} 更新说明`,
         unknown: '更新状态未知',
         unknownDetail: (newest: string) => `更新服务无法判断这个版本是否有更新。${newest}`,
         unknownTooltip: '更新状态未知：更新服务无法判断是否有新版本。',
@@ -3611,7 +3609,6 @@ const en: Copy = {
         title: 'Unsaved changes',
     },
     version: {
-        allReleases: 'All releases',
         available: 'Available',
         build: (build: string) => `build ${build}`,
         channel: (strategy: string) => `Update channel: ${strategy}`,
@@ -3634,7 +3631,6 @@ const en: Copy = {
         newVersion: (latest: string) => `New version ${latest} is available`,
         newVersionDetail: 'Update to get the latest fixes and features.',
         newVersionTooltip: (latest: string) => `New version ${latest} is available. Run the installer tool to update.`,
-        releaseNotes: (latest: string) => `Release notes for ${latest}`,
         unknown: 'Update status unknown',
         unknownDetail: (newest: string) =>
             `The update service could not tell whether a newer version exists for this build.${newest ? ` ${newest}` : ''}`,

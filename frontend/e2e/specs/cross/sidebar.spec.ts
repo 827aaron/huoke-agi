@@ -54,8 +54,6 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
 
             await expect(panel).toContainText('已关闭更新检查');
             await expect(page.locator('[data-slot^="version-indicator"]')).toHaveCount(0);
-            await expect(page.getByRole('menuitem', { name: /Release notes/ })).toHaveCount(0);
-            await expect(page.getByRole('menuitem', { name: '所有版本' })).toBeVisible();
         });
 
         test('closes the panel on Escape', async ({ page }) => {
@@ -85,7 +83,7 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
             }),
         });
 
-        test('raises the indicator and points at the release', async ({ page, pageErrorLog }) => {
+        test('raises the indicator and names the new version', async ({ page, pageErrorLog }) => {
             await page.goto('/flows');
 
             await expect(page.locator('[data-slot="version-indicator-update"]')).toBeVisible();
@@ -93,10 +91,7 @@ test.describe('sidebar header', { tag: '@cross' }, () => {
             await header(page).click();
 
             await expect(page.getByRole('menu')).toContainText('新版本 v2.4.0 可用');
-            await expect(page.getByRole('menuitem', { name: /v2\.4\.0 更新说明/ })).toHaveAttribute(
-                'href',
-                'https://github.com/vxcontrol/pentagi/releases/tag/v2.4.0',
-            );
+            await expect(page.getByRole('menuitem')).toHaveCount(0);
             expectCleanPage(pageErrorLog);
         });
 

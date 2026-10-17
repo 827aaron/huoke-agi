@@ -18,8 +18,6 @@ import {
     describeTiming,
     describeVersion,
     formatVersionLabel,
-    PENTAGI_RELEASES_URL,
-    releaseNotesUrl,
     splitVersion,
     UPDATE_INSTRUCTION,
     VersionPanel,
@@ -169,14 +167,7 @@ describe('VersionPanel', () => {
         expect(dialog).toHaveTextContent('可更新到');
         expect(dialog).toHaveTextContent('上次检查');
         expect(dialog).toHaveTextContent('10 分钟前');
-        expect(screen.getByRole('menuitem', { name: /v2\.4\.0 更新说明/ })).toHaveAttribute(
-            'href',
-            'https://github.com/vxcontrol/pentagi/releases/tag/v2.4.0',
-        );
-        expect(screen.getByRole('menuitem', { name: /所有版本/ })).toHaveAttribute(
-            'href',
-            'https://github.com/vxcontrol/pentagi/releases',
-        );
+        expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
     });
 
     it('names the newest published version in prose without offering it as an update', async () => {
@@ -194,7 +185,6 @@ describe('VersionPanel', () => {
         expect(dialog).toHaveTextContent('更新状态未知');
         expect(dialog).toHaveTextContent('已发布的最新版本是 v2.4.0。');
         expect(dialog).not.toHaveTextContent('可更新到');
-        expect(screen.queryByRole('menuitem', { name: /更新说明/ })).not.toBeInTheDocument();
     });
 
     it('says what the channel badge means, in its name and on hover', async () => {
@@ -242,8 +232,6 @@ describe('VersionPanel', () => {
         await user.click(trigger());
 
         expect(await screen.findByRole('menu')).toHaveTextContent('更新状态未知');
-        expect(screen.queryByRole('menuitem', { name: /更新说明/ })).not.toBeInTheDocument();
-        expect(screen.getByRole('menuitem', { name: /所有版本/ })).toBeInTheDocument();
     });
 });
 
@@ -289,25 +277,6 @@ describe('formatVersionLabel', () => {
         expect(formatVersionLabel('2.1.0')).toBe('v2.1.0');
         expect(formatVersionLabel('2.1.0-ce')).toBe('v2.1.0-ce');
         expect(formatVersionLabel('ce')).toBe('ce');
-    });
-});
-
-describe('releaseNotesUrl', () => {
-    it('points at the tagged release, whether or not the version already carries the v', () => {
-        expect(releaseNotesUrl('2.4.0')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
-        expect(releaseNotesUrl('v2.4.0')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
-    });
-
-    it('builds no link from a value that does not name a release', () => {
-        expect(releaseNotesUrl('latest')).toBeNull();
-        expect(releaseNotesUrl('ce')).toBeNull();
-        expect(releaseNotesUrl('ee')).toBeNull();
-    });
-
-    it('drops the edition, because the tag is the release and not the build', () => {
-        expect(releaseNotesUrl('2.4.0-ce')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
-        expect(releaseNotesUrl('2.4.0-ee')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
-        expect(releaseNotesUrl('v2.4.0-ce')).toBe(`${PENTAGI_RELEASES_URL}/tag/v2.4.0`);
     });
 });
 

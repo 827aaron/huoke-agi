@@ -147,9 +147,10 @@ jobs:
         working-directory: frontend
         run: pnpm install --frozen-lockfile
 
+      # The growth API has no cassettes; like the mock tier, the bundle answers it from its sample data.
       - name: Build
         working-directory: frontend
-        run: pnpm run build
+        run: VITE_GROWTH_API=mock pnpm run build
 
       - name: Run visual snapshots
         id: snapshots

@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { ChevronsUpDown, CircleArrowDown, CircleCheck, CircleQuestionMark, ExternalLink } from 'lucide-react';
+import { ChevronsUpDown, CircleArrowDown, CircleCheck, CircleQuestionMark } from 'lucide-react';
 
 import type { VersionInfoFragmentFragment } from '@/graphql/types';
 
@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import {
     DropdownMenu,
     DropdownMenuContent,
-    DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
@@ -21,8 +20,6 @@ import { UpdateState } from '@/graphql/types';
 import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { useVersionInfo } from '@/providers/version-info-provider';
-
-export const PENTAGI_RELEASES_URL = 'https://github.com/vxcontrol/pentagi/releases';
 
 export const UPDATE_INSTRUCTION = copy.version.instruction;
 
@@ -50,10 +47,6 @@ export interface VersionPresentation {
 // and the hyphen is kept, so a build stamped before either still splits, and the
 // captured group is the bare hash the panel shows.
 const REVISION_SUFFIX = /^(.+)[-.]h?([0-9a-f]{7,40})$/i;
-
-// The edition is a prerelease marker on the build, not part of the release it
-// names, so it is stripped before anything looks the release up.
-const EDITION_SUFFIX = /-(?:ce|ee)$/i;
 
 interface VersionPanelProps {
     icon: ReactNode;
@@ -137,18 +130,6 @@ export function describeVersion(info: VersionInfoFragmentFragment): VersionPrese
 
 export function formatVersionLabel(version: string): string {
     return /^\d/.test(version) ? `v${version}` : version;
-}
-
-export function releaseNotesUrl(version: string): null | string {
-    if (!isVersionNumber(version)) {
-        return null;
-    }
-
-    // The tag is the release, not the build: v2.1.0-ce is not a tag that exists.
-    const release = version.replace(EDITION_SUFFIX, '');
-    const tag = release.startsWith('v') ? release : `v${release}`;
-
-    return `${PENTAGI_RELEASES_URL}/tag/${encodeURIComponent(tag)}`;
 }
 
 export function splitVersion(current: string): { revision: null | string; version: string } {
@@ -263,24 +244,6 @@ export function VersionPanel({ icon, title }: VersionPanelProps) {
     );
 }
 
-function ExternalLinkRow({ children, href }: { children: React.ReactNode; href: string }) {
-    return (
-        <DropdownMenuItem asChild>
-            <a
-                href={href}
-                rel="noreferrer"
-                target="_blank"
-            >
-                <span className="truncate">{children}</span>
-                <ExternalLink
-                    aria-hidden
-                    className="text-muted-foreground ml-auto shrink-0"
-                />
-            </a>
-        </DropdownMenuItem>
-    );
-}
-
 function VersionDetails({
     presentation,
     versionInfo,
@@ -296,8 +259,6 @@ function VersionDetails({
             : []),
         ...describeTiming(versionInfo),
     ];
-    const releaseNotes =
-        presentation.indicator === 'update' && versionInfo.latest ? releaseNotesUrl(versionInfo.latest) : null;
 
     return (
         <>
@@ -361,15 +322,6 @@ function VersionDetails({
                     ))}
                 </dl>
             </div>
-
-            <DropdownMenuSeparator />
-
-            {releaseNotes && (
-                <ExternalLinkRow href={releaseNotes}>
-                    {copy.version.releaseNotes(presentation.latest ?? '')}
-                </ExternalLinkRow>
-            )}
-            <ExternalLinkRow href={PENTAGI_RELEASES_URL}>{copy.version.allReleases}</ExternalLinkRow>
         </>
     );
 }
