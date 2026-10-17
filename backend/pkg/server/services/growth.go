@@ -747,6 +747,37 @@ func (s *GrowthService) UpdateAccount(c *gin.Context) {
 	response.Success(c, http.StatusOK, view)
 }
 
+// GetAccountDetail is a function to return what an account has joined
+// @Summary Retrieve the groups an account has joined and, for Telegram, how many chats it is in
+// @Description dialogs_count is counted live and left out when the account cannot be asked.
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param accountID path int true "account id"
+// @Success 200 {object} response.successResp{data=growth.AccountDetail} "account detail received successful"
+// @Failure 400 {object} response.errorResp "invalid account id"
+// @Failure 403 {object} response.errorResp "getting accounts not permitted"
+// @Failure 404 {object} response.errorResp "account not found"
+// @Failure 500 {object} response.errorResp "internal error on getting the account"
+// @Router /growth/accounts/{accountID}/detail [get]
+func (s *GrowthService) GetAccountDetail(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	accountID, err := strconv.ParseInt(c.Param("accountID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	detail, err := s.svc.AccountDetail(c, uid, accountID)
+	if err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, detail)
+}
+
 // TestAccountProxy is a function to check the route of an account
 // @Summary Reach the internet the way the account's traffic goes and report the latency or the error
 // @Description source is account, global or direct; ok false carries the error.

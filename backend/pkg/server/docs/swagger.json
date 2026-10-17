@@ -4946,6 +4946,76 @@
                 }
             }
         },
+        "/growth/accounts/{accountID}/detail": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "dialogs_count is counted live and left out when the account cannot be asked.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Retrieve the groups an account has joined and, for Telegram, how many chats it is in",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "account id",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "account detail received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.AccountDetail"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid account id",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting accounts not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "account not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting the account",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/growth/accounts/{accountID}/disable": {
             "post": {
                 "security": [
@@ -10509,6 +10579,46 @@
                 "path": {
                     "type": "array",
                     "items": {}
+                }
+            }
+        },
+        "growth.AccountDetail": {
+            "type": "object",
+            "properties": {
+                "dialogs_count": {
+                    "type": "integer"
+                },
+                "groups": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.AccountJoinedGroup"
+                    }
+                },
+                "joined_groups_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "growth.AccountJoinedGroup": {
+            "type": "object",
+            "properties": {
+                "joined_at": {
+                    "type": "string"
+                },
+                "last_synced_at": {
+                    "type": "string"
+                },
+                "link": {
+                    "type": "string"
+                },
+                "member_count": {
+                    "type": "integer"
+                },
+                "source_id": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },

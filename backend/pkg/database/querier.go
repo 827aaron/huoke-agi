@@ -95,6 +95,7 @@ type Querier interface {
 	GetAPIToken(ctx context.Context, id int64) (ApiToken, error)
 	GetAPITokenByTokenID(ctx context.Context, tokenID string) (ApiToken, error)
 	GetAPITokens(ctx context.Context) ([]ApiToken, error)
+	GetAccountJoinedSources(ctx context.Context, arg GetAccountJoinedSourcesParams) ([]GetAccountJoinedSourcesRow, error)
 	GetAccountSource(ctx context.Context, arg GetAccountSourceParams) (AccountSource, error)
 	// Get toolcalls stats for all flows
 	GetAllFlowsToolcallsStats(ctx context.Context) ([]GetAllFlowsToolcallsStatsRow, error)

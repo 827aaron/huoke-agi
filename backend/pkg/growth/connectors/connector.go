@@ -165,6 +165,11 @@ type Connector interface {
 	Close() error
 }
 
+// DialogCounter is a connector that can tell how many chats its account is in.
+type DialogCounter interface {
+	CountDialogs(ctx context.Context) (int, error)
+}
+
 func Has(c Connector, capability Capability) bool {
 	return slices.Contains(c.Capabilities(), capability)
 }

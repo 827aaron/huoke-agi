@@ -261,3 +261,45 @@ func TestAccounts_PickAccount_AddsTheKeyedAccountOnFirstUseAndHidesIt(t *testing
 		assert.NotEqual(t, "youtube", v.Platform)
 	}
 }
+
+type countingConnector struct {
+	*MemoryConnector
+	dialogs int
+}
+
+func (c countingConnector) CountDialogs(ctx context.Context) (int, error) {
+	return c.dialogs, ctx.Err()
+}
+
+func TestAccounts_AccountDetail_ListsTheJoinedGroupsAndCountsTheChats(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	joined := w.mustAddTelegramGroup(t, scope, tgGroup("930", "joined_here", "Joined Here"))
+	w.mustAddTelegramGroup(t, scope, tgGroup("931", "only_known", "Only Known"))
+	_, err := w.svc.JoinSources(ctx, scope, []int64{joined})
+	require.NoError(t, err)
+	var accountID int64
+	require.NoError(t, w.db.QueryRow(`SELECT id FROM channel_accounts WHERE user_id = $1`, w.user).Scan(&accountID))
+	w.svc.SetConnector(accountID, countingConnector{MemoryConnector: w.tg, dialogs: 42})
+
+	d, err := w.svc.AccountDetail(ctx, w.user, accountID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, d.JoinedGroupsCount)
+	require.Len(t, d.Groups, 1)
+	assert.Equal(t, joined, d.Groups[0].SourceID)
+	assert.Equal(t, "Joined Here", d.Groups[0].Title)
+	assert.NotNil(t, d.Groups[0].JoinedAt)
+	require.NotNil(t, d.DialogsCount)
+	assert.Equal(t, 42, *d.DialogsCount)
+
+	_, err = w.svc.AccountDetail(ctx, seedUser(t, w.db, "b@example.test"), accountID)
+	assert.ErrorIs(t, err, ErrAccountNotFound)
+
+	_, err = w.db.Exec(`UPDATE channel_accounts SET status = 'needs_login' WHERE id = $1`, accountID)
+	require.NoError(t, err)
+	d, err = w.svc.AccountDetail(ctx, w.user, accountID)
+	require.NoError(t, err)
+	assert.Nil(t, d.DialogsCount, "an account that cannot be asked")
+	assert.Equal(t, 1, d.JoinedGroupsCount)
+}

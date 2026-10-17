@@ -17,6 +17,7 @@ import (
 	"pentagi/pkg/growth/connectors"
 	"pentagi/pkg/system"
 
+	"github.com/sirupsen/logrus"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -598,6 +599,64 @@ func (s *Service) recordOutcome(ctx context.Context, accountID int64, err error)
 			ID: accountID, LastError: truncateRunes(err.Error(), 500),
 		})
 	}
+}
+
+// dialogCountTimeout bounds the one Telegram call an account's detail makes; the
+// detail is shown without the count when it runs out.
+var dialogCountTimeout = 10 * time.Second
+
+// AccountDetail is what an account has joined, from our own join records. DialogsCount is
+// every chat the platform account is in, counted live; nil when the platform cannot
+// count or the account could not be asked.
+type AccountDetail struct {
+	JoinedGroupsCount int                  `json:"joined_groups_count"`
+	DialogsCount      *int                 `json:"dialogs_count,omitempty"`
+	Groups            []AccountJoinedGroup `json:"groups"`
+}
+
+type AccountJoinedGroup struct {
+	SourceID     int64      `json:"source_id"`
+	Title        string     `json:"title"`
+	Link         string     `json:"link"`
+	MemberCount  int64      `json:"member_count"`
+	JoinedAt     *time.Time `json:"joined_at,omitempty"`
+	LastSyncedAt *time.Time `json:"last_synced_at,omitempty"`
+}
+
+func (s *Service) AccountDetail(ctx context.Context, userID, accountID int64) (AccountDetail, error) {
+	acc, err := s.userAccount(ctx, userID, accountID)
+	if err != nil {
+		return AccountDetail{}, err
+	}
+	rows, err := s.db.GetAccountJoinedSources(ctx, database.GetAccountJoinedSourcesParams{UserID: userID, AccountID: acc.ID})
+	if err != nil {
+		return AccountDetail{}, fmt.Errorf("failed to list the groups of account %d: %w", acc.ID, err)
+	}
+	d := AccountDetail{JoinedGroupsCount: len(rows), Groups: make([]AccountJoinedGroup, 0, len(rows))}
+	for _, r := range rows {
+		d.Groups = append(d.Groups, AccountJoinedGroup{
+			SourceID: r.SourceID, Title: r.Title, Link: r.Link, MemberCount: r.MemberCount,
+			JoinedAt: nullTime(r.JoinedAt.Time, r.JoinedAt.Valid), LastSyncedAt: nullTime(r.SyncedAt.Time, r.SyncedAt.Valid),
+		})
+	}
+	if acc.Status != AccountStatusActive {
+		return d, nil
+	}
+	conn, err := s.connectorFor(ctx, acc)
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).WithField("account_id", acc.ID).Warn("account detail without its dialog count")
+		return d, nil
+	}
+	if counter, ok := conn.(connectors.DialogCounter); ok {
+		cctx, cancel := context.WithTimeout(ctx, dialogCountTimeout)
+		defer cancel()
+		if n, err := counter.CountDialogs(cctx); err == nil {
+			d.DialogsCount = &n
+		} else {
+			logrus.WithContext(ctx).WithError(err).WithField("account_id", acc.ID).Warn("account detail without its dialog count")
+		}
+	}
+	return d, nil
 }
 
 func (s *Service) connectorFor(ctx context.Context, acc database.ChannelAccount) (connectors.Connector, error) {
