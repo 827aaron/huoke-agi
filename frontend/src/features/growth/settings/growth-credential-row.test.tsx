@@ -120,6 +120,33 @@ describe('GrowthCredentialCard', () => {
         expect(screen.getByLabelText('OpenRouter 密钥')).toHaveValue('');
     });
 
+    it('saves the newest Jev alias in place of a pinned model', async () => {
+        renderCard(
+            setting({
+                fields: { api_key: '••••7c1e', api_url: '', model: 'typesafe/jev-1.13', threshold: '0.6' },
+                kind: 'screening',
+                provider: 'openrouter',
+                providers: ['typesafe', 'openrouter', 'custom'],
+                source: 'database',
+                status: 'connected',
+            }),
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: '更换密钥' }));
+        fireEvent.click(screen.getByRole('button', { name: '改回最新' }));
+
+        expect(screen.getByLabelText('模型')).toHaveValue('typesafe/jev-latest');
+
+        fireEvent.click(screen.getByRole('button', { name: /保存/ }));
+
+        await waitFor(() =>
+            expect(growthApi.saveSetting).toHaveBeenCalledWith('screening', {
+                fields: expect.objectContaining({ model: 'typesafe/jev-latest' }),
+                provider: 'openrouter',
+            }),
+        );
+    });
+
     it('sends no model to a server whose Jev setting has none', async () => {
         renderCard(setting({ fields: { api_key: '', threshold: '0.6' }, kind: 'screening' }));
 

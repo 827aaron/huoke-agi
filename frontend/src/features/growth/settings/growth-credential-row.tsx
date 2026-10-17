@@ -126,6 +126,11 @@ const selectLabel = (field: string, value: string): string | undefined => text.s
 const SELECT_DEFAULTS: Record<string, string> = { protocol: 'openai_chat', risk_reminders: 'on', tls: 'starttls' };
 
 // Relay providers serve many models under their own names, so the card can ask them for the list.
+// The backend keeps a saved field when it is sent empty, so going back to the newest Jev
+// means saving its alias explicitly.
+const latestScreeningModel = (provider: null | string) =>
+    provider === 'openrouter' ? 'typesafe/jev-latest' : 'jev-latest';
+
 const canListModels = (kind: GrowthSettingKind, provider: null | string) =>
     (kind === 'llm' && provider === 'custom') || (kind === 'screening' && !!provider && provider !== 'typesafe');
 
@@ -566,18 +571,38 @@ export function GrowthCredentialCard({
         >
             <div className="flex min-h-5 items-center justify-between gap-2">
                 <Label htmlFor={`credential-${kind}-${field}`}>{fieldLabel(kind, provider, field)}</Label>
-                {field === 'model' && isEditing && canListModels(kind, provider) && (
-                    <Button
-                        className="h-auto p-0 text-xs"
-                        disabled={isBusy}
-                        onClick={models ? () => setModels(null) : handleListModels}
-                        type="button"
-                        variant="link"
-                    >
-                        {isListingModels && <Spinner variant="circle" />}
-                        {models ? text.modelsManual : text.modelsFetch}
-                    </Button>
-                )}
+                <div className="flex items-center gap-3">
+                    {field === 'model' &&
+                        isEditing &&
+                        kind === 'screening' &&
+                        !!setting?.fields.model &&
+                        setting.fields.model !== latestScreeningModel(provider) && (
+                            <Button
+                                className="h-auto p-0 text-xs"
+                                disabled={isBusy}
+                                onClick={() => {
+                                    setModels(null);
+                                    setValues((previous) => ({ ...previous, model: latestScreeningModel(provider) }));
+                                }}
+                                type="button"
+                                variant="link"
+                            >
+                                {text.modelsLatest}
+                            </Button>
+                        )}
+                    {field === 'model' && isEditing && canListModels(kind, provider) && (
+                        <Button
+                            className="h-auto p-0 text-xs"
+                            disabled={isBusy}
+                            onClick={models ? () => setModels(null) : handleListModels}
+                            type="button"
+                            variant="link"
+                        >
+                            {isListingModels && <Spinner variant="circle" />}
+                            {models ? text.modelsManual : text.modelsFetch}
+                        </Button>
+                    )}
+                </div>
             </div>
             {renderInput(field)}
             {text.fieldHelp[`${kind}.${field}`] && (

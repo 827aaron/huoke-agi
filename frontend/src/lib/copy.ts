@@ -384,6 +384,7 @@ const zh = {
         modelsEmpty: '没有拿到模型列表，请手动填写模型名称',
         modelsFailed: '获取模型失败，请检查密钥和地址，或手动填写模型名称',
         modelsFetch: '获取模型',
+        modelsLatest: '改回最新',
         modelsManual: '手动填写',
         modelsPick: '选择模型',
         noSecretKey:
@@ -2371,6 +2372,7 @@ const en: Copy = {
         modelsEmpty: 'No models came back; enter the model name by hand',
         modelsFailed: 'Could not fetch the models; check the key and URL, or enter the model name by hand',
         modelsFetch: 'Fetch models',
+        modelsLatest: 'Back to newest',
         modelsManual: 'Enter by hand',
         modelsPick: 'Pick a model',
         noSecretKey:
