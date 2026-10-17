@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -162,7 +163,89 @@ type providerController struct {
 	// that reads the same as "this provider type does not exist at all".
 	defaultConfigErrors map[provider.ProviderType]error
 
+	userConfigFn UserConfigFunc
+	// userEmbedders caches the embedders built from users' own settings, keyed by embeddingKey.
+	userEmbedders sync.Map
+
 	provider.Providers
+}
+
+func (pc *providerController) userConfig(ctx context.Context, userID int64) *config.Config {
+	if pc.userConfigFn == nil {
+		return pc.cfg
+	}
+	cfg, err := pc.userConfigFn(ctx, userID)
+	if err != nil || cfg == nil {
+		logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).
+			Warn("building providers from .env credentials")
+		return pc.cfg
+	}
+	return cfg
+}
+
+// embeddingKey names the configuration an embedder is built from: every field
+// embeddings.New reads.
+func embeddingKey(c *config.Config) string {
+	return strings.Join([]string{
+		c.EmbeddingProvider, c.EmbeddingURL, c.EmbeddingKey, c.EmbeddingModel,
+		strconv.FormatBool(c.EmbeddingStripNewLines), strconv.Itoa(c.EmbeddingBatchSize),
+		c.OpenAIKey, c.OpenAIServerURL, c.OllamaServerURL, c.OllamaServerAPIKey,
+		c.MistralAPIKey, c.MistralServerURL, c.MistralProvider,
+	}, "\x00")
+}
+
+// embedderFor is the embedder of a user's flows and assistants: the server's, unless
+// the user's saved settings change what it is built from. One that fails to build
+// falls back to the server's, which behaves as PentAGI does without a key.
+func (pc *providerController) embedderFor(ctx context.Context, userID int64) embeddings.Embedder {
+	ucfg := pc.userConfig(ctx, userID)
+	if ucfg == pc.cfg {
+		return pc.embedder
+	}
+	key := embeddingKey(ucfg)
+	if key == embeddingKey(pc.cfg) {
+		return pc.embedder
+	}
+	if e, ok := pc.userEmbedders.Load(key); ok {
+		return e.(embeddings.Embedder)
+	}
+	e, err := embeddings.New(ucfg)
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).
+			Warnf("failed to create the user's embedder '%s', using the server's", ucfg.EmbeddingProvider)
+		return pc.embedder
+	}
+	actual, _ := pc.userEmbedders.LoadOrStore(key, e)
+	return actual.(embeddings.Embedder)
+}
+
+// userDefaults builds the built-in providers a user's own credentials enable, keyed by
+// their default names; nil when the user saved none.
+func (pc *providerController) userDefaults(ucfg *config.Config) provider.Providers {
+	if ucfg == pc.cfg {
+		return nil
+	}
+	built := make(provider.Providers)
+	for _, e := range providerRegistry {
+		if !e.Enabled(ucfg) {
+			continue
+		}
+		prvConfig, ok := pc.defaultConfigs[e.Type]
+		if !ok {
+			var err error
+			if prvConfig, err = e.NewConfig(ucfg); err != nil {
+				logrus.WithError(err).Warnf("skipping %s provider of saved credentials", e.Type)
+				continue
+			}
+		}
+		p, err := e.New(ucfg, e.Name, prvConfig)
+		if err != nil {
+			logrus.WithError(err).Warnf("skipping %s provider of saved credentials", e.Type)
+			continue
+		}
+		built[e.Name] = p
+	}
+	return built
 }
 
 func buildDefaultConfigs(
@@ -186,10 +269,22 @@ func buildDefaultConfigs(
 	return defaultConfigs, skipReasons, nil
 }
 
+// UserConfigFunc returns the configuration one user's providers are built with: the
+// process configuration with that user's own saved credentials applied. It returns the
+// process configuration itself when the user saved none.
+type UserConfigFunc func(ctx context.Context, userID int64) (*config.Config, error)
+
+type Option func(*providerController)
+
+func WithUserConfig(fn UserConfigFunc) Option {
+	return func(pc *providerController) { pc.userConfigFn = fn }
+}
+
 func NewProviderController(
 	cfg *config.Config,
 	db database.Querier,
 	docker docker.DockerClient,
+	opts ...Option,
 ) (ProviderController, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("config is required")
@@ -276,6 +371,9 @@ func NewProviderController(
 		defaultConfigErrors: defaultConfigErrors,
 
 		Providers: providers,
+	}
+	for _, opt := range opts {
+		opt(pc)
 	}
 
 	// Seed configured system providers into the DB for all existing users so
@@ -379,7 +477,7 @@ func (pc *providerController) NewFlowProvider(
 		db:              pc.db,
 		mx:              &sync.RWMutex{},
 		cfg:             pc.cfg,
-		embedder:        pc.embedder,
+		embedder:        pc.embedderFor(ctx, userID),
 		graphitiClient:  pc.graphitiClient,
 		flowID:          flowID,
 		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
@@ -429,7 +527,7 @@ func (pc *providerController) LoadFlowProvider(
 		db:              pc.db,
 		mx:              &sync.RWMutex{},
 		cfg:             pc.cfg,
-		embedder:        pc.embedder,
+		embedder:        pc.embedderFor(ctx, userID),
 		graphitiClient:  pc.graphitiClient,
 		flowID:          flowID,
 		callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
@@ -524,7 +622,7 @@ func (pc *providerController) NewAssistantProvider(
 			db:              pc.db,
 			mx:              &sync.RWMutex{},
 			cfg:             pc.cfg,
-			embedder:        pc.embedder,
+			embedder:        pc.embedderFor(ctx, userID),
 			graphitiClient:  pc.graphitiClient,
 			flowID:          flowID,
 			callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
@@ -577,7 +675,7 @@ func (pc *providerController) LoadAssistantProvider(
 			db:              pc.db,
 			mx:              &sync.RWMutex{},
 			cfg:             pc.cfg,
-			embedder:        pc.embedder,
+			embedder:        pc.embedderFor(ctx, userID),
 			graphitiClient:  pc.graphitiClient,
 			flowID:          flowID,
 			callCounter:     newAtomicInt64(pc.startCallNumber.Add(deltaCallCounter)),
@@ -683,8 +781,12 @@ func (pc *providerController) resolveProvider(
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("failed to get provider '%s' from database: %w", prvname, err)
 	}
+	ucfg := pc.userConfig(ctx, userID)
 	if err == nil {
-		return pc.NewProvider(prv)
+		return pc.newProvider(ucfg, prv)
+	}
+	if p, ok := pc.userDefaults(ucfg)[prvname]; ok {
+		return p, nil
 	}
 
 	// Fall back to built-in default providers
@@ -701,6 +803,10 @@ func (pc *providerController) GetProviders(
 	for prvname, prv := range pc.Providers {
 		providersMap[prvname] = prv
 	}
+	ucfg := pc.userConfig(ctx, userID)
+	for prvname, prv := range pc.userDefaults(ucfg) {
+		providersMap[prvname] = prv
+	}
 
 	// Copy user providers
 	providers, err := pc.db.GetUserProviders(ctx, userID)
@@ -709,7 +815,7 @@ func (pc *providerController) GetProviders(
 	}
 
 	for _, prv := range providers {
-		p, err := pc.NewProvider(prv)
+		p, err := pc.newProvider(ucfg, prv)
 		if err != nil {
 			// Any unbuildable saved provider (its type is disabled, or its stored
 			// config is stale/invalid) is skipped, not propagated — one bad row must
@@ -727,6 +833,12 @@ func (pc *providerController) GetProviders(
 }
 
 func (pc *providerController) NewProvider(prv database.Provider) (provider.Provider, error) {
+	return pc.newProvider(pc.cfg, prv)
+}
+
+// newProvider builds a saved provider with cfg's credentials; a type the process does
+// not enable is accepted when cfg, the user's own configuration, enables it.
+func (pc *providerController) newProvider(cfg *config.Config, prv database.Provider) (provider.Provider, error) {
 	if len(prv.Config) == 0 {
 		prv.Config = []byte(pconfig.EmptyProviderConfigRaw)
 	}
@@ -734,21 +846,20 @@ func (pc *providerController) NewProvider(prv database.Provider) (provider.Provi
 	// Check if the provider type is available via check default one
 	providerName := provider.ProviderName(prv.Name)
 	providerType := provider.ProviderType(prv.Type)
-	if !pc.ListTypes().Contains(providerType) {
-		return nil, fmt.Errorf("provider type '%s' is not available", prv.Type)
-	}
-
 	e, ok := entryForType(providerType)
 	if !ok {
 		return nil, fmt.Errorf("unknown provider type: %s", prv.Type)
 	}
+	if !pc.ListTypes().Contains(providerType) && (cfg == pc.cfg || !e.Enabled(cfg)) {
+		return nil, fmt.Errorf("provider type '%s' is not available", prv.Type)
+	}
 
-	config, err := e.BuildConfig(pc.cfg, prv.Config)
+	config, err := e.BuildConfig(cfg, prv.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build %s provider config: %w", providerType, err)
 	}
 
-	return e.New(pc.cfg, providerName, config)
+	return e.New(cfg, providerName, config)
 }
 
 func (pc *providerController) SeedDefaultProviders(ctx context.Context, userID int64) error {

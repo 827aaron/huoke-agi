@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -110,6 +111,10 @@ type KnowledgeService struct {
 // case embedding-dependent endpoints return 503.
 func NewKnowledgeService(db *gorm.DB, store knowledgepkg.KnowledgeStore) *KnowledgeService {
 	return &KnowledgeService{db: db, store: store}
+}
+
+type sharedDocumentCreator interface {
+	CreateSharedDocument(ctx context.Context, userID int64, input gqlmodel.CreateKnowledgeDocumentInput) (*gqlmodel.KnowledgeDocument, error)
 }
 
 func isKnowledgeAdmin(c *gin.Context) bool {
@@ -373,7 +378,21 @@ func (s *KnowledgeService) CreateDocument(c *gin.Context) {
 		return
 	}
 
-	doc, err := s.store.CreateDocument(c.Request.Context(), uid, req.ToGQL())
+	create := s.store.CreateDocument
+	if req.Shared {
+		if !isKnowledgeAdmin(c) {
+			response.Error(c, response.ErrNotPermitted, errors.New("a shared document needs knowledge.admin"))
+			return
+		}
+		shared, ok := s.store.(sharedDocumentCreator)
+		if !ok {
+			response.Error(c, response.ErrInternal, errors.New("this knowledge store cannot share documents"))
+			return
+		}
+		create = shared.CreateSharedDocument
+	}
+
+	doc, err := create(c.Request.Context(), uid, req.ToGQL())
 	if err != nil {
 		if isKnowledgeStoreUnavailable(err) {
 			response.Error(c, response.ErrKnowledgeStoreUnavail, err)

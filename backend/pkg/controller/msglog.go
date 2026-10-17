@@ -61,6 +61,14 @@ type FlowMsgLogWorker interface {
 		result string,
 		resultFormat database.MsglogResultFormat,
 	) error
+	PutAgentMsg(
+		ctx context.Context,
+		agent database.MsgchainType,
+		msgType database.MsglogType,
+		taskID, subtaskID *int64,
+		streamID int64,
+		thinking, msg string,
+	) (int64, error)
 }
 
 type flowMsgLogWorker struct {
@@ -89,7 +97,22 @@ func (mlw *flowMsgLogWorker) PutMsg(
 	mlw.mx.Lock()
 	defer mlw.mx.Unlock()
 
-	return mlw.putMsg(ctx, msgType, taskID, subtaskID, thinking, msg)
+	return mlw.putMsg(ctx, "", msgType, taskID, subtaskID, thinking, msg)
+}
+
+// PutAgentMsg is PutMsg with the agent that wrote the message.
+func (mlw *flowMsgLogWorker) PutAgentMsg(
+	ctx context.Context,
+	agent database.MsgchainType,
+	msgType database.MsglogType,
+	taskID, subtaskID *int64,
+	streamID int64, // unsupported for now
+	thinking, msg string,
+) (int64, error) {
+	mlw.mx.Lock()
+	defer mlw.mx.Unlock()
+
+	return mlw.putMsg(ctx, agent, msgType, taskID, subtaskID, thinking, msg)
 }
 
 func (mlw *flowMsgLogWorker) PutFlowMsg(
@@ -100,7 +123,7 @@ func (mlw *flowMsgLogWorker) PutFlowMsg(
 	mlw.mx.Lock()
 	defer mlw.mx.Unlock()
 
-	return mlw.putMsg(ctx, msgType, nil, nil, thinking, msg)
+	return mlw.putMsg(ctx, "", msgType, nil, nil, thinking, msg)
 }
 
 func (mlw *flowMsgLogWorker) PutFlowMsgResult(
@@ -124,7 +147,7 @@ func (mlw *flowMsgLogWorker) PutTaskMsg(
 	mlw.mx.Lock()
 	defer mlw.mx.Unlock()
 
-	return mlw.putMsg(ctx, msgType, &taskID, nil, thinking, msg)
+	return mlw.putMsg(ctx, "", msgType, &taskID, nil, thinking, msg)
 }
 
 func (mlw *flowMsgLogWorker) PutTaskMsgResult(
@@ -149,7 +172,7 @@ func (mlw *flowMsgLogWorker) PutSubtaskMsg(
 	mlw.mx.Lock()
 	defer mlw.mx.Unlock()
 
-	return mlw.putMsg(ctx, msgType, &taskID, &subtaskID, thinking, msg)
+	return mlw.putMsg(ctx, "", msgType, &taskID, &subtaskID, thinking, msg)
 }
 
 func (mlw *flowMsgLogWorker) PutSubtaskMsgResult(
@@ -191,6 +214,7 @@ func (mlw *flowMsgLogWorker) UpdateMsgResult(
 
 func (mlw *flowMsgLogWorker) putMsg(
 	ctx context.Context,
+	agent database.MsgchainType,
 	msgType database.MsglogType,
 	taskID, subtaskID *int64,
 	thinking, msg string,
@@ -202,6 +226,7 @@ func (mlw *flowMsgLogWorker) putMsg(
 		FlowID:    mlw.flowID,
 		TaskID:    database.Int64ToNullInt64(taskID),
 		SubtaskID: database.Int64ToNullInt64(subtaskID),
+		Agent:     database.NullMsgchainType{MsgchainType: agent, Valid: agent != ""},
 	})
 	if err != nil {
 		return 0, err
