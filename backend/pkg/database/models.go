@@ -1103,6 +1103,7 @@ type GrowthSource struct {
 	DiscoveredTaskID sql.NullInt64 `json:"discovered_task_id"`
 	CreatedAt        sql.NullTime  `json:"created_at"`
 	UpdatedAt        sql.NullTime  `json:"updated_at"`
+	Note             string        `json:"note"`
 }
 
 type LangchainPgCollection struct {
@@ -1139,6 +1140,8 @@ type Lead struct {
 	CreatedAt      sql.NullTime    `json:"created_at"`
 	UpdatedAt      sql.NullTime    `json:"updated_at"`
 	Contacts       json.RawMessage `json:"contacts"`
+	Note           string          `json:"note"`
+	Origin         string          `json:"origin"`
 }
 
 type LeadEvidence struct {

@@ -200,6 +200,17 @@ definitions:
       warn_at:
         type: integer
     type: object
+  growth.LeadUpdate:
+    properties:
+      contacts:
+        items:
+          $ref: '#/definitions/growth.Contact'
+        type: array
+      note:
+        type: string
+      tier:
+        type: string
+    type: object
   growth.LeadView:
     properties:
       contacts:
@@ -225,6 +236,10 @@ definitions:
       lead_id:
         type: integer
       match_reason:
+        type: string
+      note:
+        type: string
+      origin:
         type: string
       platform:
         type: string
@@ -259,6 +274,25 @@ definitions:
       login_id:
         type: string
       next:
+        type: string
+    type: object
+  growth.ManualLead:
+    properties:
+      contacts:
+        items:
+          $ref: '#/definitions/growth.Contact'
+        type: array
+      display_name:
+        type: string
+      flow_id:
+        type: integer
+      handle:
+        type: string
+      note:
+        type: string
+      platform:
+        type: string
+      tier:
         type: string
     type: object
   growth.ModelOption:
@@ -538,6 +572,13 @@ definitions:
       updated_at:
         type: string
     type: object
+  growth.SourceUpdate:
+    properties:
+      note:
+        type: string
+      title:
+        type: string
+    type: object
   growth.SourceView:
     properties:
       description:
@@ -552,6 +593,8 @@ definitions:
         type: boolean
       join_status:
         type: string
+      joinable:
+        type: boolean
       kind:
         type: string
       last_synced_at:
@@ -564,6 +607,8 @@ definitions:
         type: integer
       new:
         type: boolean
+      note:
+        type: string
       origin:
         type: string
       platform:
@@ -6320,7 +6365,87 @@ paths:
       summary: Retrieve leads of the current user with evidence
       tags:
       - Growth
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: the person
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.ManualLead'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: lead added successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.LeadView'
+              type: object
+        "400":
+          description: invalid lead data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: adding a lead not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: this person is already a lead
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on adding the lead
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add a person as a lead by hand, at the profile's qualified line and
+        without a judgement
+      tags:
+      - Growth
   /growth/leads/{leadID}:
+    delete:
+      parameters:
+      - description: lead id
+        in: path
+        minimum: 0
+        name: leadID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: lead deleted successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: invalid lead id
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: deleting the lead not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: lead not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting the lead
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a lead with its evidence and the scores of its messages
+      tags:
+      - Growth
     get:
       parameters:
       - description: lead id
@@ -6360,6 +6485,56 @@ paths:
       security:
       - BearerAuth: []
       summary: Retrieve one lead with its evidence
+      tags:
+      - Growth
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: lead id
+        in: path
+        minimum: 0
+        name: leadID
+        required: true
+        type: integer
+      - description: fields to change
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.LeadUpdate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: lead saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.LeadView'
+              type: object
+        "400":
+          description: invalid lead data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: changing the lead not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: lead not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on changing the lead
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change a lead's note, tier or contacts; contacts replace the saved
+        list
       tags:
       - Growth
   /growth/leads/email:
@@ -7142,6 +7317,55 @@ paths:
       security:
       - BearerAuth: []
       summary: Remove a source from the pool; leads and their evidence are kept
+      tags:
+      - Growth
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: source id
+        in: path
+        minimum: 0
+        name: sourceID
+        required: true
+        type: integer
+      - description: fields to change
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.SourceUpdate'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: source saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.SourceView'
+              type: object
+        "400":
+          description: invalid source data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: changing the source not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: source not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on changing the source
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change a source's title or note; the link stays
       tags:
       - Growth
   /info:

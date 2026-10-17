@@ -78,6 +78,9 @@ type Querier interface {
 	DeleteUserGrowthSource(ctx context.Context, arg DeleteUserGrowthSourceParams) (GrowthSource, error)
 	// Delete a knowledge document by UUID, only if it belongs to the given user.
 	DeleteUserKnowledgeDocument(ctx context.Context, arg DeleteUserKnowledgeDocumentParams) error
+	// A lead's evidence goes with it by cascade; the scores of its messages go in the same
+	// statement, so a later read of those messages is judged afresh.
+	DeleteUserLead(ctx context.Context, arg DeleteUserLeadParams) (Lead, error)
 	DeleteUserPreferences(ctx context.Context, userID int64) error
 	DeleteUserPrompt(ctx context.Context, arg DeleteUserPromptParams) error
 	// deleted_at IS NULL is load-bearing, not just hygiene: without it a replayed
@@ -302,6 +305,7 @@ type Querier interface {
 	// cmetadata must be valid JSON text.
 	InsertKnowledgeDocument(ctx context.Context, arg InsertKnowledgeDocumentParams) (string, error)
 	InsertLeadEvidence(ctx context.Context, arg InsertLeadEvidenceParams) (int64, error)
+	InsertManualLead(ctx context.Context, arg InsertManualLeadParams) (Lead, error)
 	// List all knowledge documents excluding the noisy memory type (admin view).
 	ListAllKnowledgeDocuments(ctx context.Context) ([]ListAllKnowledgeDocumentsRow, error)
 	// List non-memory knowledge documents belonging to a specific flow (admin scoped).
@@ -410,6 +414,8 @@ type Querier interface {
 	UpdateToolcallStatus(ctx context.Context, arg UpdateToolcallStatusParams) (Toolcall, error)
 	UpdateUserAPIToken(ctx context.Context, arg UpdateUserAPITokenParams) (ApiToken, error)
 	UpdateUserChannelAccount(ctx context.Context, arg UpdateUserChannelAccountParams) (ChannelAccount, error)
+	UpdateUserGrowthSource(ctx context.Context, arg UpdateUserGrowthSourceParams) (GrowthSource, error)
+	UpdateUserLead(ctx context.Context, arg UpdateUserLeadParams) (Lead, error)
 	UpdateUserName(ctx context.Context, arg UpdateUserNameParams) (User, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) (User, error)
 	UpdateUserPasswordChangeRequired(ctx context.Context, arg UpdateUserPasswordChangeRequiredParams) (User, error)

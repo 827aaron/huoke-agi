@@ -559,3 +559,26 @@ func TestSources_SyncSources_WaitsBetweenTwoSourcesOfOneAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, time.Since(start), 900*time.Millisecond, "another source waits the read interval")
 }
+
+func TestSources_UpdateSource_ChangesTheTitleAndNoteButNotTheLink(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	id := w.mustAddTelegramGroup(t, scope, tgGroup("910", "renamed", "Renamed"))
+
+	title, note := " VIP players ", "active after 8pm"
+	src, err := w.svc.UpdateSource(ctx, w.user, id, SourceUpdate{Title: &title, Note: &note})
+	require.NoError(t, err)
+	assert.Equal(t, "VIP players", src.Title)
+	assert.Equal(t, "active after 8pm", src.Note)
+	assert.Equal(t, "https://t.me/renamed", src.Link)
+
+	empty := ""
+	src, err = w.svc.UpdateSource(ctx, w.user, id, SourceUpdate{Note: &empty})
+	require.NoError(t, err)
+	assert.Equal(t, "VIP players", src.Title)
+	assert.Empty(t, src.Note)
+
+	_, err = w.svc.UpdateSource(ctx, seedUser(t, w.db, "b@example.test"), id, SourceUpdate{Note: &note})
+	assert.ErrorIs(t, err, ErrSourceNotFound)
+}

@@ -1,6 +1,7 @@
 package growth
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,6 +15,8 @@ import (
 
 	"pentagi/pkg/database"
 	"pentagi/pkg/growth/connectors"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 const (
@@ -29,6 +32,16 @@ const (
 	maxExcerptRunes = 2000
 	maxListLimit    = 500
 )
+
+var (
+	ErrInvalidLead = errors.New("invalid lead")
+	ErrLeadExists  = errors.New("this person is already a lead")
+)
+
+var manualLeadPlatforms = []connectors.Platform{
+	connectors.PlatformTelegram, connectors.PlatformWeb, connectors.PlatformFacebook,
+	connectors.PlatformInstagram, connectors.PlatformYouTube, connectors.PlatformTikTok,
+}
 
 type EvidenceInput struct {
 	SourceID    int64
@@ -103,6 +116,30 @@ type LeadView struct {
 	CreatedAt      time.Time      `json:"created_at"`
 	Contacts       []Contact      `json:"contacts"`
 	Evidence       []EvidenceView `json:"evidence"`
+	Note           string         `json:"note"`
+	Origin         string         `json:"origin"`
+}
+
+// LeadUpdate changes what is set; Contacts replaces the whole list. The score and the
+// delivery follow from the work and are not edited.
+type LeadUpdate struct {
+	Note     *string    `json:"note,omitempty"`
+	Tier     *string    `json:"tier,omitempty"`
+	Contacts *[]Contact `json:"contacts,omitempty"`
+}
+
+// ManualLead is a person the customer adds by hand. Handle is the platform id, username
+// or profile link; on the web, a profile link or 'host:username'. It enters at the
+// profile's qualified line without a judgement, and FlowID makes it part of that task's
+// next delivery.
+type ManualLead struct {
+	Platform    string    `json:"platform"`
+	Handle      string    `json:"handle"`
+	DisplayName string    `json:"display_name,omitempty"`
+	FlowID      *int64    `json:"flow_id,omitempty"`
+	Tier        string    `json:"tier,omitempty"`
+	Contacts    []Contact `json:"contacts,omitempty"`
+	Note        string    `json:"note,omitempty"`
 }
 
 type LeadFilter struct {
@@ -533,6 +570,8 @@ func (s *Service) leadViews(ctx context.Context, leads []database.Lead) ([]LeadV
 			DeliveredRunID: nullInt(l.DeliveredRunID),
 			Contacts:       storedContacts(l.Contacts),
 			Evidence:       byLead[l.ID],
+			Note:           l.Note,
+			Origin:         l.Origin,
 		}
 		if v.Evidence == nil {
 			v.Evidence = []EvidenceView{}
@@ -547,6 +586,99 @@ func (s *Service) leadViews(ctx context.Context, leads []database.Lead) ([]LeadV
 		views = append(views, v)
 	}
 	return views, nil
+}
+
+func (s *Service) UpdateLead(ctx context.Context, userID, leadID int64, u LeadUpdate) (LeadView, error) {
+	params := database.UpdateUserLeadParams{ID: leadID, UserID: userID, Note: trimmedOrNull(u.Note)}
+	if u.Tier != nil {
+		if *u.Tier != TierQualified && *u.Tier != TierWatchlist {
+			return LeadView{}, fmt.Errorf("%w: tier is %s or %s", ErrInvalidLead, TierQualified, TierWatchlist)
+		}
+		params.Tier = sql.NullString{String: *u.Tier, Valid: true}
+	}
+	if u.Contacts != nil {
+		raw, err := leadContacts(*u.Contacts)
+		if err != nil {
+			return LeadView{}, err
+		}
+		params.Contacts = pqtype.NullRawMessage{RawMessage: raw, Valid: true}
+	}
+	lead, err := s.db.UpdateUserLead(ctx, params)
+	if err != nil {
+		return LeadView{}, err
+	}
+	views, err := s.leadViews(ctx, []database.Lead{lead})
+	if err != nil {
+		return LeadView{}, err
+	}
+	return views[0], nil
+}
+
+// DeleteLead removes a lead with its evidence and the scores of its messages; a
+// delivered lead goes too, though the lists already sent keep it.
+func (s *Service) DeleteLead(ctx context.Context, userID, leadID int64) error {
+	_, err := s.db.DeleteUserLead(ctx, database.DeleteUserLeadParams{ID: leadID, UserID: userID})
+	return err
+}
+
+func (s *Service) CreateLead(ctx context.Context, userID int64, in ManualLead) (LeadView, error) {
+	platform := connectors.Platform(strings.ToLower(strings.TrimSpace(in.Platform)))
+	if !slices.Contains(manualLeadPlatforms, platform) {
+		return LeadView{}, fmt.Errorf("%w: platform %q is not one this system reads", ErrInvalidLead, in.Platform)
+	}
+	id, kind, err := normaliseIdentity(platform, strings.TrimSpace(in.Handle), "", "")
+	if err != nil {
+		return LeadView{}, fmt.Errorf("%w: %v", ErrInvalidLead, err)
+	}
+	tier := cmp.Or(in.Tier, TierQualified)
+	if tier != TierQualified && tier != TierWatchlist {
+		return LeadView{}, fmt.Errorf("%w: tier is %s or %s", ErrInvalidLead, TierQualified, TierWatchlist)
+	}
+	contacts, err := leadContacts(in.Contacts)
+	if err != nil {
+		return LeadView{}, err
+	}
+	profile, err := s.judgingProfile(ctx, userID)
+	if err != nil {
+		return LeadView{}, err
+	}
+	scoring := profile.ScoringOrDefault()
+	score := scoring.Qualified
+	if tier == TierWatchlist {
+		score = scoring.Watchlist
+	}
+	params := database.InsertManualLeadParams{
+		UserID: userID, Platform: string(platform), PlatformUserID: id, IdentityKind: kind,
+		DisplayName: strings.TrimSpace(in.DisplayName), Score: int32(score), Tier: tier,
+		Contacts: contacts, Note: strings.TrimSpace(in.Note),
+	}
+	if in.FlowID != nil {
+		if _, err := s.db.GetUserFlow(ctx, database.GetUserFlowParams{ID: *in.FlowID, UserID: userID}); err != nil {
+			return LeadView{}, fmt.Errorf("%w: task %d is not one of yours", ErrInvalidLead, *in.FlowID)
+		}
+		params.FlowID = sql.NullInt64{Int64: *in.FlowID, Valid: true}
+	}
+	lead, err := s.db.InsertManualLead(ctx, params)
+	if errors.Is(err, sql.ErrNoRows) {
+		return LeadView{}, fmt.Errorf("%w: %s %s", ErrLeadExists, platform, id)
+	}
+	if err != nil {
+		return LeadView{}, fmt.Errorf("failed to add the lead: %w", err)
+	}
+	views, err := s.leadViews(ctx, []database.Lead{lead})
+	if err != nil {
+		return LeadView{}, err
+	}
+	return views[0], nil
+}
+
+// leadContacts is a list of contacts edited by hand, refused whole if one is unusable.
+func leadContacts(in []Contact) (json.RawMessage, error) {
+	contacts, dropped := cleanContacts(in)
+	if dropped != "" {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidLead, dropped)
+	}
+	return json.Marshal(contacts)
 }
 
 func nullInt(v sql.NullInt64) *int64 {

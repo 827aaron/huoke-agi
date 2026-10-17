@@ -48,7 +48,7 @@ func TestGrowth_Handle_OmitsTheProgressLineOutsideATask(t *testing.T) {
 	assert.NotContains(t, out, "PROGRESS:")
 }
 
-func TestGrowth_Handle_MarksLinksFoundInASourceAsDiscovered(t *testing.T) {
+func TestGrowth_Handle_AddsEveryLinkAsTheAIsDiscovery(t *testing.T) {
 	backend := &fakeGrowthBackend{}
 	tools := newGrowthTools(backend, 1, 42, nil)
 
@@ -60,7 +60,7 @@ func TestGrowth_Handle_MarksLinksFoundInASourceAsDiscovered(t *testing.T) {
 
 	_, err = tools.Handle(t.Context(), GrowthAddSourcesToolName, json.RawMessage(`{"links":["t.me/a_group"]}`))
 	require.NoError(t, err)
-	assert.Equal(t, growth.OriginManual, backend.lastOrigin)
+	assert.Equal(t, growth.OriginAI, backend.lastOrigin, "a link without the source it came from")
 	assert.Nil(t, backend.lastFrom)
 }
 

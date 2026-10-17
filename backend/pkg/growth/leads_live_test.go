@@ -4,12 +4,15 @@ package growth
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"pentagi/pkg/database"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -250,4 +253,115 @@ func TestLeads_UpsertLeads_WhenJevFailsOnTheExcerpts(t *testing.T) {
 		assert.Equal(t, 7, res[0].Score)
 		assert.Equal(t, TierQualified, res[0].Tier)
 	})
+}
+
+func TestLeads_CreateLead_AddsAPersonByHandWithoutAJudgement(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	flowID := scope.FlowID
+
+	lead, err := w.svc.CreateLead(ctx, w.user, ManualLead{
+		Platform: "Telegram", Handle: " @ann ", DisplayName: "Ann", FlowID: &flowID,
+		Contacts: []Contact{{Type: "Zalo", Value: "0901"}}, Note: " met at the expo ",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "telegram", lead.Platform)
+	assert.Equal(t, "@ann", lead.PlatformUserID)
+	assert.Equal(t, 8, lead.Score, "the default casino profile qualifies from 8")
+	assert.Equal(t, TierQualified, lead.Tier)
+	assert.Equal(t, "manual", lead.Origin)
+	assert.Equal(t, "met at the expo", lead.Note)
+	assert.Equal(t, &flowID, lead.FlowID)
+	assert.Equal(t, []Contact{{Type: "Zalo", Value: "0901"}}, lead.Contacts)
+	assert.Empty(t, lead.Evidence)
+
+	watch, err := w.svc.CreateLead(ctx, w.user, ManualLead{Platform: "web", Handle: "https://forum.example.com/u/bob", Tier: TierWatchlist})
+	require.NoError(t, err)
+	assert.Equal(t, 4, watch.Score)
+	assert.Equal(t, IdentityProfileURL, watch.IdentityKind)
+	assert.Nil(t, watch.FlowID)
+
+	_, err = w.svc.CreateLead(ctx, w.user, ManualLead{Platform: "telegram", Handle: "@ann"})
+	assert.ErrorIs(t, err, ErrLeadExists)
+
+	other := seedUser(t, w.db, "b@example.test")
+	for name, in := range map[string]ManualLead{
+		"an unknown platform":            {Platform: "fax", Handle: "1"},
+		"no handle":                      {Platform: "telegram"},
+		"a forum name without its host":  {Platform: "web", Handle: "carol"},
+		"a tier of its own":              {Platform: "telegram", Handle: "@dan", Tier: "hot"},
+		"a contact type over 30 letters": {Platform: "telegram", Handle: "@dan", Contacts: []Contact{{Type: strings.Repeat("x", 31), Value: "1"}}},
+	} {
+		_, err := w.svc.CreateLead(ctx, w.user, in)
+		assert.ErrorIs(t, err, ErrInvalidLead, name)
+	}
+	_, err = w.svc.CreateLead(ctx, other, ManualLead{Platform: "telegram", Handle: "@eve", FlowID: &flowID})
+	assert.ErrorIs(t, err, ErrInvalidLead, "another customer's task")
+}
+
+func TestLeads_UpdateLead_ChangesOnlyTheFieldsGiven(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	src := w.mustAddTelegramGroup(t, scope, tgGroup("905", "edit", "Edit"))
+	res, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{qualified("51", src, "m1")})
+	require.NoError(t, err)
+	id := res[0].LeadID
+
+	note, tier := "call after 6pm", TierWatchlist
+	contacts := []Contact{{Type: "LINE", Value: "ann_51"}, {Type: "phone", Value: "+66 81"}}
+	lead, err := w.svc.UpdateLead(ctx, w.user, id, LeadUpdate{Note: &note, Tier: &tier, Contacts: &contacts})
+	require.NoError(t, err)
+	assert.Equal(t, "call after 6pm", lead.Note)
+	assert.Equal(t, TierWatchlist, lead.Tier)
+	assert.Equal(t, []Contact{{Type: "line", Value: "ann_51"}, {Type: "phone", Value: "+66 81"}}, lead.Contacts)
+	assert.Equal(t, res[0].Score, lead.Score, "the score is not edited")
+	assert.Equal(t, OriginAI, lead.Origin)
+
+	empty := []Contact{}
+	lead, err = w.svc.UpdateLead(ctx, w.user, id, LeadUpdate{Contacts: &empty})
+	require.NoError(t, err)
+	assert.Equal(t, "call after 6pm", lead.Note)
+	assert.Equal(t, TierWatchlist, lead.Tier)
+	assert.Empty(t, lead.Contacts)
+
+	delivered := "delivered"
+	_, err = w.svc.UpdateLead(ctx, w.user, id, LeadUpdate{Tier: &delivered})
+	assert.ErrorIs(t, err, ErrInvalidLead)
+	_, err = w.svc.UpdateLead(ctx, seedUser(t, w.db, "b@example.test"), id, LeadUpdate{Note: &note})
+	assert.ErrorIs(t, err, sql.ErrNoRows)
+}
+
+func TestLeads_DeleteLead_DropsItsEvidenceAndTheScoresOfItsMessages(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	src := w.mustAddTelegramGroup(t, scope, tgGroup("906", "gone", "Gone"))
+	for _, id := range []string{"m1", "m2"} {
+		require.NoError(t, w.svc.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
+			UserID: w.user, SourceID: src, MessageID: id, Score: 9, Signals: "player+3",
+		}))
+	}
+	res, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{qualified("61", src, "m1"), qualified("62", src, "m2")})
+	require.NoError(t, err)
+
+	err = w.svc.DeleteLead(ctx, seedUser(t, w.db, "b@example.test"), res[0].LeadID)
+	assert.ErrorIs(t, err, sql.ErrNoRows, "another customer's lead")
+	require.NoError(t, w.svc.DeleteLead(ctx, w.user, res[0].LeadID))
+	assert.ErrorIs(t, w.svc.DeleteLead(ctx, w.user, res[0].LeadID), sql.ErrNoRows)
+
+	scores, err := w.svc.db.GetMessageScores(ctx, database.GetMessageScoresParams{
+		UserID: w.user, SourceID: src, MessageIds: []string{"m1", "m2"},
+	})
+	require.NoError(t, err)
+	require.Len(t, scores, 1)
+	assert.Equal(t, "m2", scores[0].MessageID)
+	var evidence int
+	require.NoError(t, w.db.QueryRow(`SELECT count(*) FROM lead_evidence WHERE lead_id = $1`, res[0].LeadID).Scan(&evidence))
+	assert.Zero(t, evidence)
+	left, err := w.svc.ListLeads(ctx, w.user, LeadFilter{})
+	require.NoError(t, err)
+	require.Len(t, left, 1)
+	assert.Equal(t, "62", left[0].PlatformUserID)
 }

@@ -63,6 +63,7 @@ type SourceView struct {
 	Status           string `json:"status"`
 	StatusReason     string `json:"status_reason,omitempty"`
 	JoinStatus       string `json:"join_status"`
+	Joinable         bool   `json:"joinable"`
 	MessagesRead     int64  `json:"messages_read"`
 	HistoryExhausted bool   `json:"history_exhausted"`
 	QualifiedLeads   int    `json:"qualified_leads"`
@@ -71,6 +72,13 @@ type SourceView struct {
 	LastSyncedAt     string `json:"last_synced_at,omitempty"`
 	DiscoveredFrom   *int64 `json:"discovered_from,omitempty"`
 	New              bool   `json:"new,omitempty"`
+	Note             string `json:"note"`
+}
+
+// SourceUpdate changes what is set; the link is the source's identity and stays.
+type SourceUpdate struct {
+	Title *string `json:"title,omitempty"`
+	Note  *string `json:"note,omitempty"`
 }
 
 type AddSourceResult struct {
@@ -278,11 +286,13 @@ func (s *Service) viewSource(ctx context.Context, src database.GrowthSource, acc
 		Status:       src.Status,
 		StatusReason: src.StatusReason,
 		JoinStatus:   string(connectors.JoinStatusNotJoined),
+		Joinable:     connectors.Joinable(connectors.Platform(src.Platform)),
 
 		QualifiedLeads: int(src.QualifiedLeads),
 		EmptyStreak:    int(src.EmptyStreak),
 		Health:         src.Health,
 		DiscoveredFrom: nullInt(src.DiscoveredFromID),
+		Note:           src.Note,
 	}
 	if src.LastSyncedAt.Valid {
 		v.LastSyncedAt = src.LastSyncedAt.Time.UTC().Format(time.RFC3339)
@@ -1101,6 +1111,35 @@ func (s *Service) DeleteSource(ctx context.Context, userID, sourceID int64) erro
 		return fmt.Errorf("%w: %d", ErrSourceNotFound, sourceID)
 	}
 	return err
+}
+
+func (s *Service) UpdateSource(ctx context.Context, userID, sourceID int64, u SourceUpdate) (SourceView, error) {
+	src, err := s.db.UpdateUserGrowthSource(ctx, database.UpdateUserGrowthSourceParams{
+		ID: sourceID, UserID: userID, Title: trimmedOrNull(u.Title), Note: trimmedOrNull(u.Note),
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return SourceView{}, fmt.Errorf("%w: %d", ErrSourceNotFound, sourceID)
+	}
+	if err != nil {
+		return SourceView{}, fmt.Errorf("failed to update source %d: %w", sourceID, err)
+	}
+	views, err := s.ListSources(ctx, userID)
+	if err != nil {
+		return SourceView{}, err
+	}
+	for _, v := range views {
+		if v.ID == src.ID {
+			return v, nil
+		}
+	}
+	return s.viewSource(ctx, src, 0), nil
+}
+
+func trimmedOrNull(v *string) sql.NullString {
+	if v == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: strings.TrimSpace(*v), Valid: true}
 }
 
 func joinRank(status string) int {
