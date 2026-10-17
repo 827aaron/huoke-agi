@@ -334,7 +334,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
 
     const shouldUseAgents = useMemo(() => {
         if (isAssistantCreating || !selectedAssistant) {
-            return settings?.assistantUseAgents ?? false;
+            return settings?.assistantUseAgents ?? true;
         }
 
         return selectedAssistant.useAgents;

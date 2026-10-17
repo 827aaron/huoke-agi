@@ -734,8 +734,8 @@ const zh = {
         submitting: '正在发送…',
         templates: '模板',
         templatesAndResources: '模板和资源',
-        useAgents: '多智能体协作',
-        useAgentsHint: '复杂任务时让多个智能体分工协作',
+        useAgents: '让团队成员协作',
+        useAgentsHint: '开启后助手会把搜索、加群、读消息、存线索交给对应角色；关闭则助手自己做，获客工具不可用',
     },
     flowLogs: {
         agentEmpty: '还没有智能体记录',
@@ -2488,8 +2488,9 @@ const en: Copy = {
         submitting: 'Submitting…',
         templates: 'Templates',
         templatesAndResources: 'Templates and resources',
-        useAgents: 'Use Agents',
-        useAgentsHint: 'Enable multi-agent collaboration for complex tasks',
+        useAgents: 'Let the team collaborate',
+        useAgentsHint:
+            'On: the assistant hands searching, joining groups, reading messages and saving leads to the matching roles. Off: it works alone and the lead-finding tools are unavailable',
     },
     flowLogs: {
         agentEmpty: 'No agent logs available',

@@ -675,7 +675,7 @@ export function FlowForm({
                                                             </FormItem>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
-                                                            <p className="max-w-48">{copy.flowForm.useAgentsHint}</p>
+                                                            <p className="max-w-64">{copy.flowForm.useAgentsHint}</p>
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </TooltipProvider>

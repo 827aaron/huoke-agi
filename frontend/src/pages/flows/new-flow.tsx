@@ -26,7 +26,7 @@ function NewFlow() {
     const [draft, setDraft] = useState({ key: 0, message: '' });
 
     const shouldUseAgents = useMemo(() => {
-        return settings?.assistantUseAgents ?? false;
+        return settings?.assistantUseAgents ?? true;
     }, [settings?.assistantUseAgents]);
 
     const handleSubmit = async (values: FlowFormValues) => {
