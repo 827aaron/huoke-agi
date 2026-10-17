@@ -125,12 +125,24 @@ const selectLabel = (field: string, value: string): string | undefined => text.s
 // Fields picked from a list rather than typed, with the option a new setting starts on.
 const SELECT_DEFAULTS: Record<string, string> = { protocol: 'openai_chat', risk_reminders: 'on', tls: 'starttls' };
 
-// Relay providers serve many models under their own names, so the card can ask them for the list.
-// The backend keeps a saved field when it is sent empty, so going back to the newest Jev
-// means saving its alias explicitly.
-const latestScreeningModel = (provider: null | string) =>
-    provider === 'openrouter' ? '~typesafe/jev-latest' : 'jev-latest';
+const isOpenRouterHost = (rawUrl: string): boolean => {
+    try {
+        const { hostname } = new URL(rawUrl);
 
+        return hostname === 'openrouter.ai' || hostname.endsWith('.openrouter.ai');
+    } catch {
+        return false;
+    }
+};
+
+// The server names the newest Jev by the host it calls, so a custom URL on OpenRouter takes its
+// alias. It keeps a saved field sent empty, so going back to the newest Jev means saving it explicitly.
+const latestScreeningModel = (provider: null | string, apiUrl = '') =>
+    provider === 'openrouter' || (provider === 'custom' && isOpenRouterHost(apiUrl))
+        ? '~typesafe/jev-latest'
+        : 'jev-latest';
+
+// Relay providers serve many models under their own names, so the card can ask them for the list.
 const canListModels = (kind: GrowthSettingKind, provider: null | string) =>
     (kind === 'llm' && provider === 'custom') ||
     (kind === 'screening' && !!provider && provider !== 'typesafe') ||
@@ -173,9 +185,7 @@ const fieldsFor = (kind: GrowthSettingKind, provider: null | string, setting: Gr
         case 'embedding':
             return ['api_key', 'model', 'server_url'];
         case 'llm':
-            return provider === 'custom'
-                ? ['server_url', 'protocol', 'model', 'api_key']
-                : ['api_key', 'model', 'server_url'];
+            return provider === 'custom' ? ['server_url', 'protocol', 'model', 'api_key'] : ['api_key', 'server_url'];
         case 'proxy':
             return ['url'];
         // A server without Jev routing reports no model field, and refuses one it does not know.
@@ -461,8 +471,13 @@ export function GrowthCredentialCard({
 
     const renderInput = (field: string) => {
         const id = `credential-${kind}-${field}`;
+        const isScreeningModel = kind === 'screening' && field === 'model';
         const placeholder =
-            canKeepSaved && MASKED_FIELDS.has(field) ? text.keepSaved : fieldPlaceholder(kind, provider, field);
+            canKeepSaved && MASKED_FIELDS.has(field)
+                ? text.keepSaved
+                : isScreeningModel
+                  ? text.modelDefault(latestScreeningModel(provider, values.api_url ?? setting?.fields.api_url))
+                  : fieldPlaceholder(kind, provider, field);
         const onValue = (value: string) => setValues((previous) => ({ ...previous, [field]: value }));
 
         if (!isEditing) {
@@ -479,7 +494,10 @@ export function GrowthCredentialCard({
                                 .split(/[\n,]/)
                                 .filter(Boolean)
                                 .map((line, index) => <div key={index}>{line}</div>)
-                          : setting?.fields[field] || copy.common.dash}
+                          : setting?.fields[field] ||
+                            (isScreeningModel
+                                ? text.modelDefault(latestScreeningModel(provider, setting?.fields.api_url))
+                                : copy.common.dash)}
                 </div>
             );
         }
@@ -581,13 +599,16 @@ export function GrowthCredentialCard({
                         isEditing &&
                         kind === 'screening' &&
                         !!setting?.fields.model &&
-                        setting.fields.model !== latestScreeningModel(provider) && (
+                        setting.fields.model !== latestScreeningModel(provider, values.api_url) && (
                             <Button
                                 className="h-auto p-0 text-xs"
                                 disabled={isBusy}
                                 onClick={() => {
                                     setModels(null);
-                                    setValues((previous) => ({ ...previous, model: latestScreeningModel(provider) }));
+                                    setValues((previous) => ({
+                                        ...previous,
+                                        model: latestScreeningModel(provider, values.api_url),
+                                    }));
                                 }}
                                 type="button"
                                 variant="link"
@@ -765,12 +786,17 @@ export function GrowthCredentialCard({
                 )}
 
                 {kind === 'llm' && (
-                    <Link
-                        className="self-start text-sm font-medium underline"
-                        to={routes.settings.providers}
-                    >
-                        {text.llmMode.rolesLink}
-                    </Link>
+                    <div className="flex flex-col gap-1">
+                        {provider !== 'custom' && (
+                            <p className="text-muted-foreground text-xs">{text.llmMode.rolesHint}</p>
+                        )}
+                        <Link
+                            className="self-start text-sm font-medium underline"
+                            to={routes.settings.providers}
+                        >
+                            {text.llmMode.rolesLink}
+                        </Link>
+                    </div>
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">

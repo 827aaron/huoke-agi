@@ -1836,6 +1836,55 @@ function SettingsProvider() {
         }
     };
 
+    const applyModelOption = (agentKey: string, option: ModelOption | undefined) => {
+        const price = option?.price;
+
+        setValue(`agents.${agentKey}.price.input` as const, price?.input ?? null);
+        setValue(`agents.${agentKey}.price.output` as const, price?.output ?? null);
+        setValue(`agents.${agentKey}.price.cacheRead` as const, price?.cacheRead ?? null);
+        setValue(`agents.${agentKey}.price.cacheWrite` as const, price?.cacheWrite ?? null);
+
+        setValue(
+            `agents.${agentKey}.reasoning.mode` as const,
+            option?.reasoning?.mode === ModelReasoningMode.AdaptiveOnly ? ReasoningMode.Adaptive : null,
+        );
+
+        const effort = getValues(`agents.${agentKey}.reasoning.effort` as const);
+        const efforts: string[] = option?.reasoning?.efforts ?? [];
+
+        setValue(
+            `agents.${agentKey}.reasoning.effort` as const,
+            effort != null && efforts.includes(effort) ? effort : null,
+        );
+        setValue(`agents.${agentKey}.reasoning.maxTokens` as const, null);
+
+        const ceiling = option?.maxOutputTokens ?? null;
+        const maxTokens = getValues(`agents.${agentKey}.maxTokens` as const);
+
+        if (ceiling != null && maxTokens != null && maxTokens > ceiling) {
+            setValue(`agents.${agentKey}.maxTokens` as const, ceiling);
+        }
+    };
+
+    // A provider without a default model leaves every role empty, and the form wants a model on each.
+    const applyModelToAll = (sourceKey: string) => {
+        const model = getValues(`agents.${sourceKey}.model` as const);
+
+        if (!model) {
+            return;
+        }
+
+        const option = availableModels.find(({ name }) => name === model) ?? { name: model };
+        const targets = agentTypes.filter((key) => key !== sourceKey);
+
+        for (const key of targets) {
+            setValue(`agents.${key}.model` as const, model, { shouldDirty: true, shouldValidate: true });
+            applyModelOption(key, option);
+        }
+
+        toast.success(copy.provider.modelAppliedToAll(targets.length));
+    };
+
     const handleTest = async () => {
         setSubmitError(null);
 
@@ -2048,45 +2097,26 @@ function SettingsProvider() {
                     </AccordionTrigger>
                     <AccordionContent className="flex flex-col gap-4 pt-4">
                         <div className="grid grid-cols-1 gap-4 p-px md:grid-cols-2">
-                            <FormModelComboboxItem
-                                control={control}
-                                disabled={isLoading}
-                                label={copy.provider.model}
-                                name={`agents.${agentKey}.model`}
-                                onOptionSelect={(option) => {
-                                    const price = option?.price;
-
-                                    setValue(`agents.${agentKey}.price.input` as const, price?.input ?? null);
-                                    setValue(`agents.${agentKey}.price.output` as const, price?.output ?? null);
-                                    setValue(`agents.${agentKey}.price.cacheRead` as const, price?.cacheRead ?? null);
-                                    setValue(`agents.${agentKey}.price.cacheWrite` as const, price?.cacheWrite ?? null);
-
-                                    setValue(
-                                        `agents.${agentKey}.reasoning.mode` as const,
-                                        option?.reasoning?.mode === ModelReasoningMode.AdaptiveOnly
-                                            ? ReasoningMode.Adaptive
-                                            : null,
-                                    );
-
-                                    const effort = getValues(`agents.${agentKey}.reasoning.effort` as const);
-                                    const efforts: string[] = option?.reasoning?.efforts ?? [];
-
-                                    setValue(
-                                        `agents.${agentKey}.reasoning.effort` as const,
-                                        effort != null && efforts.includes(effort) ? effort : null,
-                                    );
-                                    setValue(`agents.${agentKey}.reasoning.maxTokens` as const, null);
-
-                                    const ceiling = option?.maxOutputTokens ?? null;
-                                    const maxTokens = getValues(`agents.${agentKey}.maxTokens` as const);
-
-                                    if (ceiling != null && maxTokens != null && maxTokens > ceiling) {
-                                        setValue(`agents.${agentKey}.maxTokens` as const, ceiling);
-                                    }
-                                }}
-                                options={availableModels}
-                                placeholder={copy.provider.modelPlaceholder}
-                            />
+                            <div className="flex flex-col gap-1">
+                                <FormModelComboboxItem
+                                    control={control}
+                                    disabled={isLoading}
+                                    label={copy.provider.model}
+                                    name={`agents.${agentKey}.model`}
+                                    onOptionSelect={(option) => applyModelOption(agentKey, option)}
+                                    options={availableModels}
+                                    placeholder={copy.provider.modelPlaceholder}
+                                />
+                                <Button
+                                    className="h-auto self-start p-0 text-xs"
+                                    disabled={isLoading}
+                                    onClick={() => applyModelToAll(agentKey)}
+                                    type="button"
+                                    variant="link"
+                                >
+                                    {copy.provider.modelApplyToAll}
+                                </Button>
+                            </div>
 
                             <FormInputNumberItem
                                 control={control}

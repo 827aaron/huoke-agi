@@ -1647,3 +1647,37 @@ describe('SettingsProvider budget on a model that takes none', () => {
         expect((await created()).mode).toBe('off');
     });
 });
+
+describe('SettingsProvider model for every role', () => {
+    it('fills the other roles with the model picked for one', async () => {
+        const blank = { maxTokens: 1000, model: '', temperature: 0.7 };
+
+        queryResult.data = {
+            settingsProviders: {
+                ...settingsProviders,
+                default: { ...settingsProviders.default, deepseek: { agents: { primaryAgent: blank, simple: blank } } },
+                models: { ...settingsProviders.models, deepseek: [{ name: 'deepseek/deepseek-v4-flash' }] },
+            },
+        } as typeof queryResult.data;
+        setSearch('type=deepseek');
+        render(<SettingsProvider />);
+        fireEvent.change(screen.getByPlaceholderText('输入模型服务名称'), { target: { value: 'Relay' } });
+
+        fireEvent.click(screen.getByRole('button', { name: /Simple/ }));
+        fireEvent.change(screen.getByPlaceholderText('选择或输入模型名称'), {
+            target: { value: 'deepseek/deepseek-v4-flash' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: '所有角色都用这个模型' }));
+        fireEvent.click(screen.getByRole('button', { name: /主控/ }));
+
+        expect(
+            screen.getAllByPlaceholderText('选择或输入模型名称').map((input) => (input as HTMLInputElement).value),
+        ).toEqual(['deepseek/deepseek-v4-flash', 'deepseek/deepseek-v4-flash']);
+        expect(toast.success).toHaveBeenCalledWith('已给其余 1 个角色填上同一个模型');
+
+        fireEvent.click(screen.getByRole('button', { name: '创建' }));
+
+        await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
+        expect(toast.error).not.toHaveBeenCalled();
+    });
+});

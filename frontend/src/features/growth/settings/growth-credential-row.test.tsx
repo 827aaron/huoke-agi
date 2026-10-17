@@ -196,6 +196,36 @@ describe('GrowthCredentialCard', () => {
         );
     });
 
+    it('names the default Jev of the endpoint when no model is saved', () => {
+        const saved = (provider: string, apiUrl: string) =>
+            setting({
+                fields: { api_key: '••••7c1e', api_url: apiUrl, model: '' },
+                kind: 'screening',
+                provider,
+                providers: ['typesafe', 'openrouter', 'custom'],
+                source: 'database',
+                status: 'connected',
+            });
+
+        const { unmount } = renderCard(saved('typesafe', ''));
+
+        expect(screen.getByText('jev-latest（默认）')).toBeInTheDocument();
+        unmount();
+
+        renderCard(saved('custom', 'https://openrouter.ai/api/v1'));
+
+        expect(screen.getByText('~typesafe/jev-latest（默认）')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: '更换密钥' }));
+
+        expect(screen.getByLabelText('模型')).toHaveValue('');
+        expect(screen.getByLabelText('模型')).toHaveAttribute('placeholder', '~typesafe/jev-latest（默认）');
+
+        fireEvent.change(screen.getByLabelText('接口地址'), { target: { value: 'https://gateway.example.com/v1' } });
+
+        expect(screen.getByLabelText('模型')).toHaveAttribute('placeholder', 'jev-latest（默认）');
+    });
+
     it('sends neither a model nor a threshold to a server whose Jev setting still reports one', async () => {
         renderCard(setting({ fields: { api_key: '', threshold: '0.6' }, kind: 'screening' }));
 
@@ -211,6 +241,37 @@ describe('GrowthCredentialCard', () => {
                 provider: null,
             }),
         );
+    });
+
+    it('asks for a model name only for a custom language model', () => {
+        const { unmount } = renderCard(
+            setting({ kind: 'llm', provider: 'deepseek', providers: ['custom', 'deepseek'] }),
+        );
+
+        fireEvent.click(screen.getByText('自定义设置'));
+
+        expect(screen.getByLabelText('接口地址')).toBeInTheDocument();
+        expect(screen.queryByLabelText('模型名称')).not.toBeInTheDocument();
+        expect(screen.getByText(/这家服务商的模型按智能体角色自动分配/)).toBeInTheDocument();
+        unmount();
+
+        renderCard(setting({ kind: 'llm', provider: 'custom', providers: ['custom', 'deepseek'] }));
+
+        expect(screen.getByLabelText('模型名称')).toBeInTheDocument();
+        expect(screen.queryByText(/这家服务商的模型按智能体角色自动分配/)).not.toBeInTheDocument();
+    });
+
+    it('explains each pace field under the advanced toggle', () => {
+        renderCard(setting({ fields: { api_hash: '', api_id: '' }, kind: 'telegram' }));
+
+        fireEvent.click(screen.getByText('高级：加群节奏（建议值）'));
+
+        expect(
+            screen.getByText(
+                '同一个号读完一个群、换去读另一个群之前等多久，范围内随机取。默认 5-15 秒。这一项会真的等待：调小读得更快，但更容易被 Telegram 限流。',
+            ),
+        ).toBeInTheDocument();
+        expect(screen.getByText(/老号想跳过预热，填一个数，例如 5/)).toBeInTheDocument();
     });
 
     it('refuses a join interval that is not a number or a range', async () => {

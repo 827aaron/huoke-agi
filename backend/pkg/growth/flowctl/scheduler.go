@@ -25,15 +25,16 @@ type Schedules interface {
 	DeadlineHandled(ctx context.Context, runID int64) error
 }
 
-// ProviderType resolves a provider name for its owner, as a client's createFlow does.
-type ProviderType func(ctx context.Context, name provider.ProviderName, userID int64) (provider.ProviderType, error)
+// ProviderResolver resolves the provider a schedule names for its owner; a provider
+// that is gone resolves to the owner's current one, as a typed message does.
+type ProviderResolver func(ctx context.Context, name provider.ProviderName, userID int64) (provider.Provider, error)
 
 // Scheduler opens the task of every due schedule and stops the tasks whose round has
 // been closed at its end time. It runs in the API process: a deployment is one instance.
 type Scheduler struct {
 	fc       controller.FlowController
 	svc      Schedules
-	provider ProviderType
+	provider ProviderResolver
 	now      func() time.Time
 
 	// logged holds the rounds whose end-time line is written while their task has not
@@ -43,7 +44,7 @@ type Scheduler struct {
 
 // NewScheduler takes fc wrapped by Wrap, so a scheduled task starts with the business
 // profile as one a customer starts does.
-func NewScheduler(fc controller.FlowController, svc Schedules, prv ProviderType) *Scheduler {
+func NewScheduler(fc controller.FlowController, svc Schedules, prv ProviderResolver) *Scheduler {
 	return &Scheduler{fc: fc, svc: svc, provider: prv, now: time.Now, logged: make(map[int64]bool)}
 }
 
@@ -85,12 +86,11 @@ func (s *Scheduler) Tick(ctx context.Context) {
 }
 
 func (s *Scheduler) start(ctx context.Context, st growth.ScheduledStart) error {
-	name := provider.ProviderName(st.ProviderName)
-	prvtype, err := s.provider(ctx, name, st.UserID)
+	prv, err := s.provider(ctx, provider.ProviderName(st.ProviderName), st.UserID)
 	if err != nil {
 		return fmt.Errorf("provider %q of the task is unavailable: %w", st.ProviderName, err)
 	}
-	flowID, err := s.fc.CreateFlow(ctx, st.UserID, st.Input, name, prvtype, nil, nil)
+	flowID, err := s.fc.CreateFlow(ctx, st.UserID, st.Input, prv.Name(), prv.Type(), nil, nil)
 	if err != nil {
 		return err
 	}

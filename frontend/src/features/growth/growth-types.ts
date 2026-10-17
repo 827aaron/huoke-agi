@@ -6,11 +6,11 @@ export interface GrowthAccount {
     consecutive_errors: number;
     // DevTools address of the customer's own fingerprint browser (AdsPower, BitBrowser), masked; when set it
     // supplies the proxy and the fingerprint, and the system's own are unused.
-    external_browser_ws: null | string;
-    // Phone number or platform user id; only its last four characters are shown.
-    external_id: string;
-    // Generated per browser_session account; null for Telegram.
-    fingerprint: GrowthFingerprint | null;
+    external_browser_ws?: null | string;
+    // Phone number or platform user id; only its last four characters are shown. Absent on a browser account.
+    external_id?: string;
+    // Generated per browser_session account; absent for Telegram.
+    fingerprint?: GrowthFingerprint | null;
     first_signed_in_at?: null | string;
     id: number;
     // Reminder codes of a Telegram account past its suggested join pace; they never stop a join.
@@ -19,19 +19,19 @@ export interface GrowthAccount {
     joins_today?: number;
     kind: string;
     label: string;
-    last_error: null | string;
-    last_rate_limited_at: null | string;
-    last_success_at: null | string;
-    last_used_at: null | string;
+    last_error?: null | string;
+    last_rate_limited_at?: null | string;
+    last_success_at?: null | string;
+    last_used_at?: null | string;
     // When the suggested gap after the last join ends.
     next_join_at?: null | string;
     platform: GrowthAccountPlatform;
+    // The account's own proxy, credentials masked (scheme://••••@host:port); absent when it has none.
+    proxy?: null | string;
     // Which route the account's traffic takes: its own proxy, the default proxy, or none.
     proxy_source: GrowthProxySource;
-    // The account's own proxy, credentials masked (scheme://••••@host:port); null when it has none.
-    proxy_url: null | string;
     // Set while `rate_limited`: when the platform lets the account act again.
-    rate_limit_until: null | string;
+    rate_limit_until?: null | string;
     status: GrowthAccountStatus;
 }
 
@@ -178,6 +178,8 @@ export type GrowthContactType = 'email' | 'line' | 'other' | 'phone' | 'platform
 // Stored as the server generated it; only these keys are shown.
 export interface GrowthFingerprint {
     language?: string;
+    // What the browser service generates; `language` is the older name.
+    locale?: string;
     os?: string;
     timezone?: string;
 }

@@ -1,9 +1,12 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GrowthRun } from './growth-types';
 
+import { proxyRouteText } from './account-health';
+import RemoteLoginDialog from './accounts/remote-login-dialog';
 import { growthApi } from './growth-api';
 import GrowthProgressBar from './progress/growth-progress-bar';
 
@@ -414,5 +417,38 @@ describe('growth wire', () => {
         expect(screen.getByRole('progressbar', { name: '本轮已找到 1 / 50 位潜客' })).toBeInTheDocument();
         expect(screen.getByText('待观察 1')).toBeInTheDocument();
         expect(screen.queryByText(/已加入/)).not.toBeInTheDocument();
+    });
+
+    it('sends an account proxy under the key the server binds and reads it back from the same key', async () => {
+        server.put.mockResolvedValue(
+            ok({ id: 5, platform: 'facebook', proxy: 'http://••••@203.0.113.24:8080', proxy_source: 'account' }),
+        );
+
+        const account = await growthApi.setAccountProxy(5, 'http://user:pass@203.0.113.24:8080');
+
+        expect(server.put).toHaveBeenCalledWith('/growth/accounts/5', { proxy: 'http://user:pass@203.0.113.24:8080' });
+        expect(proxyRouteText(account)).toBe('http://••••@203.0.113.24:8080');
+    });
+
+    it('sends the proxy typed into the remote sign-in under the key the server binds', async () => {
+        server.post.mockResolvedValue(ok({ fingerprint: null, session_id: 's1', view_url: '/browser/login/x' }));
+
+        render(
+            <RemoteLoginDialog
+                onClose={() => {}}
+                onSignedIn={() => {}}
+                open
+                platform="facebook"
+            />,
+        );
+        await userEvent.type(screen.getByLabelText('代理（可选）'), 'socks5://203.0.113.24:1080');
+        await userEvent.click(screen.getByRole('button', { name: '远程登录' }));
+
+        expect(server.post).toHaveBeenCalledWith('/growth/accounts/remote-login', {
+            account_id: undefined,
+            external_browser_ws: null,
+            platform: 'facebook',
+            proxy: 'socks5://203.0.113.24:1080',
+        });
     });
 });
