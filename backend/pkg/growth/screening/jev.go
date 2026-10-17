@@ -140,7 +140,8 @@ type Client struct {
 // drops the message whatever its signals score, so it asks for explicit evidence only.
 const question = "Does `messages.%s` (posted on `platform`, in `source`) itself show that its sender is someone the " +
 	"business in `business` cannot serve: spam, advertising, a bot, a seller or booster, a competitor, someone " +
-	"`business` says is usually not a customer, or a person outside its regions or with no use for its offer?"
+	"`business` says is usually not a customer, a person outside its regions, one who says they use only a " +
+	"language outside its languages, or one with no use for its offer?"
 
 var criteria = map[string]string{
 	"true": "The message states it explicitly, in the sender's own words or as a plain fact",

@@ -700,6 +700,21 @@ func BrowserAccountID(platform Platform, accountID int64) string {
 	return fmt.Sprintf("%s-%d", platform, accountID)
 }
 
+// BrowserViewPath is where this server passes the browser service's login window on, so
+// the window opens on the web UI's own origin and scheme.
+const BrowserViewPath = "/browser"
+
+// sameOriginView moves the service's login link under BrowserViewPath: a UI served over
+// HTTPS cannot frame the service's plain HTTP address, whatever BROWSER_PUBLIC_URL says.
+func sameOriginView(loginURL string) string {
+	u, err := url.Parse(loginURL)
+	if err != nil || u.Path == "" {
+		return loginURL
+	}
+	view := url.URL{Path: BrowserViewPath + u.Path, RawQuery: u.RawQuery}
+	return view.String()
+}
+
 // browserRemoteLogin is the operator sign-in of a browser_session account:
 // the service's mirrored login page, opened in the account's own browser so
 // login and later automation share one proxy and fingerprint.
@@ -726,7 +741,7 @@ func (l browserRemoteLogin) Start(ctx context.Context, cfg *config.Config, acc A
 	if err != nil {
 		return RemoteLoginView{}, err
 	}
-	view := RemoteLoginView{ViewURL: login.LoginURL, ExpiresAt: login.ExpiresAt}
+	view := RemoteLoginView{ViewURL: sameOriginView(login.LoginURL), ExpiresAt: login.ExpiresAt}
 	if len(login.Fingerprint) > 0 && string(login.Fingerprint) != "null" {
 		view.Fingerprint = login.Fingerprint
 	}

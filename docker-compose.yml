@@ -278,8 +278,8 @@ services:
       - observability-network
       - langfuse-network
 
-  # One logged-in browser per Facebook and Instagram account. Operators sign accounts in through
-  # BROWSER_PUBLIC_URL, so that address must be reachable from their own browser.
+  # One logged-in browser per Facebook, Instagram and TikTok account. Operators sign accounts in
+  # through pentagi, which passes the login window on under /browser.
   browser:
     image: ${BROWSER_IMAGE:-kelai-browser:latest}
     build:
@@ -288,11 +288,8 @@ services:
     hostname: browser
     expose:
       - 7070/tcp
-    ports:
-      - ${BROWSER_LISTEN_IP:-127.0.0.1}:${BROWSER_LISTEN_PORT:-7070}:7070
     environment:
       - BROWSER_TOKEN=${BROWSER_TOKEN:-}
-      - BROWSER_PUBLIC_URL=${BROWSER_PUBLIC_URL:-http://localhost:7070}
       - BROWSER_PROXY=${BROWSER_PROXY:-}
     # An empty BROWSER_TOKEN means the one the backend generated; the service must never start
     # without a token, since an empty one accepts every request.
