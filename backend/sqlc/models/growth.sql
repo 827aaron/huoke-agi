@@ -306,13 +306,15 @@ ORDER BY lead_id, message_time DESC NULLS LAST, id DESC;
 -- name: GetUserLead :one
 SELECT * FROM leads WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
--- name: CountFlowLeads :one
+-- name: CountUserLeads :one
 SELECT
   COUNT(*) FILTER (WHERE tier = 'qualified' AND delivered_at IS NULL)::bigint AS deliverable,
   COUNT(*) FILTER (WHERE tier = 'watchlist' AND delivered_at IS NULL)::bigint AS watchlist,
   COUNT(*) FILTER (WHERE delivered_at IS NOT NULL)::bigint AS delivered
 FROM leads
-WHERE user_id = sqlc.arg(user_id) AND last_flow_id = sqlc.arg(flow_id);
+WHERE user_id = sqlc.arg(user_id)
+  AND (sqlc.narg(flow_id)::bigint IS NULL OR last_flow_id = sqlc.narg(flow_id)::bigint)
+  AND (sqlc.narg(since)::timestamptz IS NULL OR created_at >= sqlc.narg(since)::timestamptz);
 
 -- name: GetDeliverableLeads :many
 SELECT * FROM leads
@@ -338,6 +340,7 @@ WHERE user_id = sqlc.arg(user_id)
   AND (sqlc.narg(run_id)::bigint IS NULL OR delivered_run_id = sqlc.narg(run_id)::bigint)
   AND (sqlc.narg(tier)::text IS NULL OR tier = sqlc.narg(tier)::text)
   AND (sqlc.narg(delivered)::boolean IS NULL OR (delivered_at IS NOT NULL) = sqlc.narg(delivered)::boolean)
+  AND (sqlc.narg(since)::timestamptz IS NULL OR created_at >= sqlc.narg(since)::timestamptz)
 ORDER BY score DESC, updated_at DESC, id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 

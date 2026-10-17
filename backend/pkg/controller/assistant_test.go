@@ -35,10 +35,17 @@ type lifecycleChain struct {
 	cancelled chan struct{}
 	delay     time.Duration
 	err       error
+	lang      string
 }
 
-func (*lifecycleChain) Title() string                                      { return "assistant" }
-func (*lifecycleChain) Language() string                                   { return "English" }
+func (*lifecycleChain) Title() string { return "assistant" }
+func (c *lifecycleChain) Language() string {
+	if c.lang == "" {
+		return "English"
+	}
+	return c.lang
+}
+
 func (*lifecycleChain) ToolCallIDTemplate() string                         { return "call_%s" }
 func (*lifecycleChain) Model(pconfig.ProviderOptionsType) string           { return "model" }
 func (*lifecycleChain) PrepareAgentChain(context.Context) (int64, error)   { return 11, nil }
@@ -320,14 +327,23 @@ func TestAssistant_ReportFailure_ReachesExactlyOneOfCallerAndLog(t *testing.T) {
 		name     string
 		delay    time.Duration
 		toCaller bool
+		lang     string
+		want     string
 	}{
-		{name: "a failure after the input was taken goes to the log", delay: assistantInputTimeout + 300*time.Millisecond},
+		{
+			name: "a failure after the input was taken goes to the log", delay: assistantInputTimeout + 300*time.Millisecond,
+			want: "The assistant could not answer: failed to perform agent chain: 529: overloaded",
+		},
+		{
+			name: "a failure in a Chinese conversation is told in Chinese", delay: assistantInputTimeout + 300*time.Millisecond,
+			lang: "Chinese", want: "助手没能回答：failed to perform agent chain: 529: overloaded",
+		},
 		{name: "a failure at once goes to the caller only", delay: 50 * time.Millisecond, toCaller: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			log := &lifecycleAssistantLog{}
 			aw, err := loadRestoredAssistant(t, &lifecycleQuerier{}, database.AssistantStatusWaiting, log,
-				&lifecycleChain{delay: tc.delay, err: overloaded})
+				&lifecycleChain{delay: tc.delay, err: overloaded, lang: tc.lang})
 			require.NoError(t, err)
 
 			err = aw.PutInput(context.Background(), "scan the host", false, nil)
@@ -340,7 +356,7 @@ func TestAssistant_ReportFailure_ReachesExactlyOneOfCallerAndLog(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Eventually(t, func() bool { return len(reportNotes(log)) == 1 }, 5*time.Second, 10*time.Millisecond)
-			assert.Contains(t, reportNotes(log)[0].msg, "529: overloaded")
+			assert.Equal(t, tc.want, reportNotes(log)[0].msg)
 		})
 	}
 }

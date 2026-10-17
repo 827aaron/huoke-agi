@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -190,4 +191,41 @@ func decodeAttachment(t *testing.T, data string) string {
 	raw, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(body, "\r\n", ""))
 	require.NoError(t, err)
 	return string(raw)
+}
+
+func TestRunner_ProgressSince_CountsEveryLeadOfTheOwnerOutsideATask(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	first, second := w.seedTask(t), w.seedTask(t)
+	src := w.mustAddTelegramGroup(t, first, tgGroup("710", "rpg_fans", "RPG"))
+	w.mustSaveQualified(t, first, src, 1, 2)
+	w.mustSaveQualified(t, second, src, 3, 1)
+	_, err := w.db.Exec(`UPDATE leads SET created_at = $2 WHERE user_id = $1 AND platform_user_id = '1'`,
+		w.user, time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	since := time.Date(2026, 10, 17, 0, 0, 0, 0, time.FixedZone("Asia/Bangkok", 7*3600))
+	chat := Scope{UserID: w.user, FlowID: first.FlowID}
+
+	inTask, err := w.svc.ProgressSince(ctx, first, time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 2, inTask.NewLeads, "a task counts its own flow")
+	assert.Zero(t, inTask.Qualified)
+
+	all, err := w.svc.ProgressSince(ctx, chat, time.Time{})
+	require.NoError(t, err)
+	assert.Equal(t, 3, all.Qualified, "outside a task every flow of the owner counts")
+	assert.Empty(t, all.Since)
+
+	today, err := w.svc.ProgressSince(ctx, chat, since)
+	require.NoError(t, err)
+	assert.Equal(t, 2, today.Qualified)
+	assert.Equal(t, "2026-10-17T00:00:00+07:00", today.Since)
+
+	leads, err := w.svc.ListLeads(ctx, w.user, LeadFilter{Since: since})
+	require.NoError(t, err)
+	got := []string{}
+	for _, l := range leads {
+		got = append(got, l.PlatformUserID)
+	}
+	assert.ElementsMatch(t, []string{"2", "3"}, got)
 }

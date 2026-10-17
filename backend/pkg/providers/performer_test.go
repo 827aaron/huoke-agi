@@ -636,6 +636,58 @@ func TestPerformer_CallWithRetries_StopsAskingWhenRetryingCannotHelp(t *testing.
 	}
 }
 
+// performerTalkingProvider answers in plain text, streaming it when it is given a callback.
+type performerTalkingProvider struct {
+	performerFailingProvider
+}
+
+func (p *performerTalkingProvider) CallWithTools(
+	ctx context.Context, _ pconfig.ProviderOptionsType, _ []llms.MessageContent, _ []llms.Tool, streamCb streaming.Callback,
+) (*llms.ContentResponse, error) {
+	if streamCb != nil {
+		if err := streamCb(ctx, streaming.Chunk{Type: streaming.ChunkTypeText, Content: "I read the group."}); err != nil {
+			return nil, err
+		}
+	}
+
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: "I read the group."}}}, nil
+}
+
+func TestPerformer_CallWithRetries_StreamsOnlyTheAssistantsOwnText(t *testing.T) {
+	tests := []struct {
+		agent pconfig.ProviderOptionsType
+		want  []string
+	}{
+		{agent: pconfig.OptionsTypeAssistant, want: []string{"I read the group.", "I read the group."}},
+		{agent: pconfig.OptionsTypePentester},
+		{agent: pconfig.OptionsTypeSearcher},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.agent), func(t *testing.T) {
+			var streamed []string
+			fp := newFlowProvider()
+			fp.Provider = &performerTalkingProvider{}
+			fp.streamCb = func(_ context.Context, chunk *StreamMessageChunk) error {
+				if chunk.Content != "" {
+					streamed = append(streamed, chunk.Content)
+				}
+				return nil
+			}
+
+			result, err := fp.callWithRetries(
+				context.Background(), tt.agent, 42, nil, nil,
+				[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "read the group")},
+				oneToolExecutor{}, "read the group",
+			)
+
+			require.NoError(t, err)
+			assert.Equal(t, "I read the group.", result.content)
+			assert.Equal(t, tt.want, streamed)
+		})
+	}
+}
+
 // performerExecutor fails every call with err, or answers it as a call of a tool that does not exist.
 type performerExecutor struct {
 	tools.ContextToolsExecutor
@@ -724,6 +776,48 @@ func TestPerformer_ExecToolCall_ReturnsAnErrorNoCorrectionCanFixAtOnce(t *testin
 
 			assert.ErrorIs(t, err, tt.err)
 			assert.Equal(t, 1, executor.calls, "the call must not be tried again")
+		})
+	}
+}
+
+func TestPerformer_ExecToolCall_HandsAFailedDelegationBackWithoutRerunningIt(t *testing.T) {
+	errModel := errors.New("model gpt-x is not available")
+	tests := []struct {
+		name    string
+		tool    string
+		stopped bool
+		answer  string
+	}{
+		{name: "the researcher", tool: tools.PentesterToolName, answer: "the pentester specialist failed and returned no result: model gpt-x is not available"},
+		{name: "the searcher", tool: tools.SearchToolName, answer: "the searcher specialist failed and returned no result: model gpt-x is not available"},
+		{name: "a delegation the stop cut short", tool: tools.PentesterToolName, stopped: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fp := newFlowProvider()
+			fp.Provider = mock.NewProvider(provider.ProviderOpenAI, "openai", "gpt-5.6-sol")
+			executor := &performerExecutor{err: errModel}
+			result := performerToolCallResult()
+			result.funcCalls[0].FunctionCall.Name = tt.tool
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.stopped {
+				cancel()
+			}
+
+			answer, err := fp.execToolCall(
+				ctx, pconfig.OptionsTypeAssistant, 1, 0, result,
+				&executionMonitor{}, &repeatingDetector{}, executor, nil, nil, nil,
+			)
+
+			if tt.stopped {
+				assert.ErrorIs(t, err, errModel)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.answer, answer)
+			}
+			assert.Equal(t, 1, executor.calls, "the specialist must not be run again")
 		})
 	}
 }

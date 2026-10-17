@@ -1438,6 +1438,8 @@ These settings control the behavior of the AI assistant functionality, including
 | AssistantSummarizerMaxQASections  | `ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS`  | `7`           | Maximum QA sections to preserve in assistant context                    |
 | AssistantSummarizerMaxQABytes     | `ASSISTANT_SUMMARIZER_MAX_QA_BYTES`     | `76800`       | Maximum byte size for assistant's QA sections (75KB)                    |
 | AssistantSummarizerKeepQASections | `ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS` | `3`           | Number of recent QA sections to preserve without summarization          |
+| AssistantDelegationTimeout        | `ASSISTANT_DELEGATION_TIMEOUT`          | `15m`         | Longest one delegation from the assistant to a specialist may run; the assistant is then told the specialist timed out. `0` means no limit |
+| AssistantResearcherTimeout        | `ASSISTANT_RESEARCHER_TIMEOUT`          | `20m`         | The same limit for the researcher (`pentester`), which reads groups     |
 
 ### Usage Details
 

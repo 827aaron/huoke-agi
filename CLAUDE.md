@@ -77,7 +77,7 @@ go generate ./cmd/installer/files/           # REQUIRED once per fresh clone and
                                              #   gitignored; the installer tests fail without them
 go build -trimpath -o pentagi ./cmd/pentagi  # Quick compile; the binary reports version "ce"
 go test ./...                                # Default test tier (see Testing)
-golangci-lint run --timeout=5m               # Lint — config backend/.golangci.yml (v2 schema); CI pins v2.12.2
+golangci-lint run --timeout=10m              # Lint — config backend/.golangci.yml (v2 schema); CI pins v2.12.2
 ```
 
 A binary whose reported version matters needs the ldflags CI passes: `-ldflags "-X pentagi/pkg/version.PackageVer=<ver> -X pentagi/pkg/version.PackageRev=<short-sha>"`.

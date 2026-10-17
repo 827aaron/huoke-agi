@@ -527,9 +527,6 @@ func (s *Service) ListSettings(ctx context.Context, userID int64) ([]SettingView
 		}
 		views = append(views, settingView(row, spec, stored.Provider, stored.Values))
 	}
-	for i := range views {
-		views[i].Configured = views[i].Source != SettingSourceNone
-	}
 	return views, nil
 }
 
@@ -540,6 +537,7 @@ func settingView(row database.GrowthSetting, spec settingSpec, provider string, 
 		Providers:    spec.providers,
 		Fields:       maskFields(spec, values),
 		Source:       SettingSourceDatabase,
+		Configured:   true,
 		Status:       row.Status,
 		StatusReason: row.StatusReason,
 		TestedAt:     nullTime(row.TestedAt.Time, row.TestedAt.Valid),
@@ -587,7 +585,7 @@ func (s *Service) envView(kind string, spec settingSpec) SettingView {
 	v.Fields = maskFields(spec, values)
 	if values["api_key"] != "" || values["api_keys"] != "" || values["api_hash"] != "" ||
 		values["host"] != "" || values["url"] != "" || (kind == SettingEmbedding && provider != "") {
-		v.Source, v.Provider = SettingSourceEnv, provider
+		v.Source, v.Provider, v.Configured = SettingSourceEnv, provider, true
 	}
 	return v
 }

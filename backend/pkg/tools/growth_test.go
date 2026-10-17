@@ -101,6 +101,19 @@ func TestGrowth_Handle_TurnsDomainErrorsIntoInstructions(t *testing.T) {
 	}
 }
 
+func TestGrowth_Handle_SyncWithoutIDsAsksForEveryJoinedSource(t *testing.T) {
+	backend := &fakeGrowthBackend{}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(`{"action":"history"}`))
+	require.NoError(t, err)
+	assert.Empty(t, backend.lastSyncIDs)
+	assert.JSONEq(t, `{"results":[]}`, out)
+
+	out, err = newGrowthTools(&fakeGrowthBackend{err: growth.ErrNoJoinedSource}, 1, 42, nil).
+		Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(`{}`))
+	require.NoError(t, err)
+	assert.Equal(t, "no source in the pool is joined yet. Join sources with growth_join_source first, or pass source_ids.", out)
+}
+
 func TestGrowth_Handle_ReturnsTheErrorOfACancelledCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
@@ -130,6 +143,23 @@ func TestGrowth_Handle_ListLeadsScopesToTheFlow(t *testing.T) {
 	assert.True(t, *backend.lastFilter.Delivered)
 	assert.Equal(t, "qualified", backend.lastFilter.Tier)
 
+	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName,
+		json.RawMessage(`{"scope":"all","since":"2026-10-17T00:00:00+07:00"}`))
+	require.NoError(t, err)
+	assert.Nil(t, backend.lastFilter.FlowID, "all is every lead of the user")
+	assert.Nil(t, backend.lastFilter.TaskID)
+	assert.True(t, time.Date(2026, 10, 16, 17, 0, 0, 0, time.UTC).Equal(backend.lastFilter.Since), backend.lastFilter.Since)
+
 	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"scope":"everyone"}`))
 	assert.Error(t, err)
+	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"since":"today"}`))
+	assert.ErrorContains(t, err, "is not a time")
+}
+
+func TestGrowth_Handle_ProgressCountsFromSince(t *testing.T) {
+	backend := &fakeGrowthBackend{}
+	_, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthGetProgressToolName,
+		json.RawMessage(`{"since":"2026-10-17"}`))
+	require.NoError(t, err)
+	assert.True(t, time.Date(2026, 10, 17, 0, 0, 0, 0, time.UTC).Equal(backend.lastSince), backend.lastSince)
 }

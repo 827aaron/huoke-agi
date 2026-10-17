@@ -23,6 +23,7 @@ type GrowthBackend interface {
 	GetUser(ctx context.Context, scope growth.Scope, platform connectors.Platform, userID string) (connectors.UserProfile, error)
 	UpsertLeads(ctx context.Context, scope growth.Scope, leads []growth.LeadInput) ([]growth.LeadResult, error)
 	Progress(ctx context.Context, scope growth.Scope) (growth.Progress, error)
+	ProgressSince(ctx context.Context, scope growth.Scope, since time.Time) (growth.Progress, error)
 	SetTarget(ctx context.Context, scope growth.Scope, target int) (growth.Progress, error)
 	Deliver(ctx context.Context, scope growth.Scope, allowPartial bool) (growth.Delivery, error)
 	ListLeads(ctx context.Context, userID int64, filter growth.LeadFilter) ([]growth.LeadView, error)
@@ -166,9 +167,6 @@ func (g *growthTools) syncSource(ctx context.Context, args json.RawMessage) (str
 		if len(ids) == 0 && action.SourceID.Int64() > 0 {
 			ids = append(ids, action.SourceID.Int64())
 		}
-		if len(ids) == 0 {
-			return "", errors.New("source_id or source_ids is required for action=history")
-		}
 		opt := growth.SyncOptions{Direction: action.Direction.String(), Limit: action.Limit.Int(), All: action.AllMessages.Bool()}
 		results, err := g.backend.SyncSources(ctx, g.scope, ids, opt)
 		if len(ids) == 1 {
@@ -293,14 +291,15 @@ func (g *growthTools) getProgress(ctx context.Context, args json.RawMessage) (st
 		return "", fmt.Errorf("failed to parse %s args: %w", GrowthGetProgressToolName, err)
 	}
 
-	var (
-		p   growth.Progress
-		err error
-	)
+	since, err := parseSince(action.Since)
+	if err != nil {
+		return "", err
+	}
+	var p growth.Progress
 	if target := action.Target.Int(); target > 0 {
 		p, err = g.backend.SetTarget(ctx, g.scope, target)
 	} else {
-		p, err = g.backend.Progress(ctx, g.scope)
+		p, err = g.backend.ProgressSince(ctx, g.scope, since)
 	}
 	if err != nil {
 		return g.failure(ctx, err)
@@ -326,9 +325,14 @@ func (g *growthTools) listLeads(ctx context.Context, args json.RawMessage) (stri
 		return "", fmt.Errorf("failed to parse %s args: %w", GrowthListLeadsToolName, err)
 	}
 
-	filter := growth.LeadFilter{Limit: action.Limit.Int()}
+	since, err := parseSince(action.Since)
+	if err != nil {
+		return "", err
+	}
+	filter := growth.LeadFilter{Limit: action.Limit.Int(), Since: since}
 	flowID := g.scope.FlowID
 	switch action.Scope {
+	case "all":
 	case "", "flow":
 		filter.FlowID = &flowID
 	case "task":
@@ -341,7 +345,7 @@ func (g *growthTools) listLeads(ctx context.Context, args json.RawMessage) (stri
 		delivered := true
 		filter.Delivered = &delivered
 	default:
-		return "", fmt.Errorf("unknown scope %q: use flow, task or delivered", action.Scope)
+		return "", fmt.Errorf("unknown scope %q: use flow, task, delivered or all", action.Scope)
 	}
 	switch tier := strings.ToLower(action.Tier.String()); tier {
 	case "", "all":
@@ -356,6 +360,20 @@ func (g *growthTools) listLeads(ctx context.Context, args json.RawMessage) (stri
 		return g.failure(ctx, err)
 	}
 	return g.respond(ctx, map[string]any{"count": len(leads), "leads": leads})
+}
+
+func parseSince(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse(time.DateOnly, raw); err == nil {
+		return t, nil
+	}
+	return time.Time{}, fmt.Errorf("since %q is not a time: use RFC 3339, like 2026-10-17T00:00:00+07:00", raw)
 }
 
 // respond appends the round's progress line when the call belongs to a task, so every
@@ -402,6 +420,8 @@ func growthFailureText(err error) string {
 		return fmt.Sprintf("%v. Use a source_id returned by %s or %s.", err, GrowthSearchSourcesToolName, GrowthAddSourcesToolName)
 	case errors.Is(err, growth.ErrNoJudge):
 		return fmt.Sprintf("%v. Retrying will not help: report exactly this to the user and end this subtask.", err)
+	case errors.Is(err, growth.ErrNoJoinedSource):
+		return fmt.Sprintf("%v. Join sources with %s first, or pass source_ids.", err, GrowthJoinSourceToolName)
 	case errors.Is(err, growth.ErrNoTask):
 		return fmt.Sprintf("%v.", err)
 	default:

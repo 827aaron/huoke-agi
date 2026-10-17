@@ -46,7 +46,8 @@ var (
 	ErrSourceNotFound = errors.New("source not found in the pool")
 	// ErrBrowserSource is returned for operations a web source does not support:
 	// its pages are read with the browser tool, not through a connector.
-	ErrBrowserSource = errors.New("web sources are read with the browser tool")
+	ErrBrowserSource  = errors.New("web sources are read with the browser tool")
+	ErrNoJoinedSource = errors.New("no source in the pool is joined yet")
 )
 
 type SourceView struct {
@@ -749,7 +750,16 @@ func (s *Service) SyncSource(
 
 // SyncSources reads several sources in turn and stops early, keeping what it read, when
 // the platform rate-limits or no account can read.
+// SyncSources reads each source in turn; no ids reads every source an account of the
+// owner has joined.
 func (s *Service) SyncSources(ctx context.Context, scope Scope, sourceIDs []int64, opt SyncOptions) ([]SyncResult, error) {
+	if len(sourceIDs) == 0 {
+		joined, err := s.joinedSourceIDs(ctx, scope.UserID)
+		if err != nil {
+			return nil, err
+		}
+		sourceIDs = joined
+	}
 	results := make([]SyncResult, 0, len(sourceIDs))
 	for _, id := range sourceIDs {
 		res, err := s.syncOne(ctx, scope, id, opt)
@@ -767,6 +777,24 @@ func (s *Service) SyncSources(ctx context.Context, scope Scope, sourceIDs []int6
 		results = append(results, res)
 	}
 	return results, nil
+}
+
+func (s *Service) joinedSourceIDs(ctx context.Context, userID int64) ([]int64, error) {
+	states, err := s.db.GetUserAccountSources(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list account sources: %w", err)
+	}
+	var ids []int64
+	for _, st := range states {
+		if connectors.JoinStatus(st.JoinStatus) == connectors.JoinStatusJoined && !slices.Contains(ids, st.SourceID) {
+			ids = append(ids, st.SourceID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, ErrNoJoinedSource
+	}
+	slices.Sort(ids)
+	return ids, nil
 }
 
 func (s *Service) syncOne(ctx context.Context, scope Scope, sourceID int64, opt SyncOptions) (SyncResult, error) {
