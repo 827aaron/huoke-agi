@@ -135,6 +135,8 @@ func TestProfile_WithProfile_PutsTheCompactBlockFirstOnce(t *testing.T) {
 	require.True(t, strings.HasPrefix(input, "<business_profile>\nOffer: A licensed, regulated online gaming operator"), input)
 	assert.Contains(t, input, "Signal words: deposit experience; withdrawal speed; bonus terms; cashback; VIP program; odds; "+
 		"platform reliability; looking for a new platform; platform recommendation\n", "nothing holds the rest, so nothing is cut")
+	assert.Contains(t, input, "Scoring: audience +3, pain or switching +3, paying +3, recent +2 (7 days; +1 within 30), "+
+		"fit +3; qualified from 8, watchlist from 4, below that not saved\n")
 	assert.NotContains(t, input, "Full profile:")
 	assert.True(t, strings.HasSuffix(input, "</business_profile>\n\nfind 50 players"), input)
 	assert.Empty(t, res, "the default preset has no file")
@@ -149,6 +151,8 @@ func TestProfile_WithProfile_PutsTheCompactBlockFirstOnce(t *testing.T) {
 	assert.Contains(t, input, "Exclude: account sellers\n")
 	assert.Contains(t, input, "Notes: Players who quit Rival Saga after the last patch are the best fit.\n")
 	assert.Contains(t, input, "Lead target: 50\n")
+	assert.Contains(t, input, "Scoring: audience +3, pain or switching +3, paying +2, recent +2 (7 days; +1 within 30), "+
+		"fit +3; qualified from 7, watchlist from 4, below that not saved\n")
 	assert.Contains(t, input, "Full profile: /work/resources/business_profile.md (the lines above are cut")
 	require.Len(t, res, 1)
 	assert.Equal(t, "business_profile.md", res[0].Path)
