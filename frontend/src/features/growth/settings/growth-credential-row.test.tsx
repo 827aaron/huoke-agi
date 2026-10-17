@@ -213,6 +213,19 @@ describe('GrowthCredentialCard', () => {
         );
     });
 
+    it('explains each pace field under the advanced toggle', () => {
+        renderCard(setting({ fields: { api_hash: '', api_id: '' }, kind: 'telegram' }));
+
+        fireEvent.click(screen.getByText('高级：加群节奏（建议值）'));
+
+        expect(
+            screen.getByText(
+                '同一个号读完一个群、换去读另一个群之前等多久，范围内随机取。默认 5-15 秒。这一项会真的等待：调小读得更快，但更容易被 Telegram 限流。',
+            ),
+        ).toBeInTheDocument();
+        expect(screen.getByText(/老号想跳过预热，填一个数，例如 5/)).toBeInTheDocument();
+    });
+
     it('refuses a join interval that is not a number or a range', async () => {
         renderCard(
             setting({
