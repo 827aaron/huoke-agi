@@ -14,7 +14,7 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
         await page.goto('/settings/business-profile');
 
         await expect(page.getByText('还没有业务档案')).toBeVisible();
-        await expect(page.getByLabel('排除项')).toHaveValue('卖号\n代练\n竞品官方\n机器人');
+        await expect(page.getByLabel('排除规则')).toHaveValue('卖号\n代练\n竞品官方\n机器人');
 
         await page.getByRole('button', { name: '保存' }).click();
 
@@ -23,7 +23,7 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
         await expect(page.getByText('请选择游戏类型')).toBeVisible();
         await expect(page.getByText('请填写你想让玩家知道什么')).toBeVisible();
         await expect(page.getByText('请填写目标地区')).toBeVisible();
-        await expect(page.getByText('请选择目标语言')).toBeVisible();
+        await expect(page.getByText('请至少选择一种目标语言')).toBeVisible();
         await expect(page.getByText('业务档案已保存')).toHaveCount(0);
 
         expectCleanPage(pageErrorLog);
@@ -58,7 +58,7 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
         await page.getByLabel('你想让玩家知道什么').fill('新服开启，老玩家回归送礼包');
         await page.getByLabel('目标地区').fill('东南亚、台湾');
         await page.getByRole('button', { name: '中文' }).click();
-        await page.getByRole('button', { name: 'English' }).click();
+        await page.getByRole('button', { name: '英语' }).click();
         await page.getByLabel('默认每轮目标数').fill('30');
         await page.getByRole('button', { name: '保存' }).click();
 

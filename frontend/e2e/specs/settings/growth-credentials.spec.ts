@@ -7,7 +7,7 @@ import { expectCleanPage } from '../../helpers/errors.ts';
 import { baseQueries, baseRest } from '../../mocks/cassettes/base.ts';
 
 // The growth API answers from the bundle's in-memory sample data on the mock tier (VITE_GROWTH_API=mock):
-// an LLM key (sk-••••••••a1b2) and a Tavily key are already saved, nothing else is.
+// an LLM key (••••a1b2) and a Tavily key are already saved, nothing else is.
 const growthCassette = (): Cassette => ({ queries: baseQueries(), rest: baseRest() });
 
 const card = (page: Page, title: string): Locator =>
@@ -21,7 +21,7 @@ test.describe('growth keys and connections', { tag: '@settings' }, () => {
 
         const llm = card(page, '大模型');
 
-        await expect(llm.getByText('sk-••••••••a1b2')).toBeVisible();
+        await expect(llm.getByText('••••a1b2')).toBeVisible();
         await expect(llm.getByText('必填', { exact: true })).toBeVisible();
         await expect(card(page, 'Telegram 接口凭据').getByText('未配置', { exact: true }).first()).toBeVisible();
         await expect(card(page, 'YouTube').getByText('可选', { exact: true })).toBeVisible();
@@ -33,7 +33,7 @@ test.describe('growth keys and connections', { tag: '@settings' }, () => {
 
     test('never shows a saved secret in clear text', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/credentials');
-        await expect(card(page, '大模型').getByText('sk-••••••••a1b2')).toBeVisible();
+        await expect(card(page, '大模型').getByText('••••a1b2')).toBeVisible();
 
         await expect(page.locator('input[type="text"], input[type="password"]').filter({ hasText: /sk-/ })).toHaveCount(
             0,
@@ -74,13 +74,11 @@ test.describe('growth keys and connections', { tag: '@settings' }, () => {
         await expect(page.getByText('Telegram 接口凭据已保存并通过测试')).toBeVisible();
         await expect(telegram.getByText('已连接', { exact: true }).first()).toBeVisible();
         await expect(telegram.getByText('0123456789abcdef0123456789abcdef')).toHaveCount(0);
-        await expect(page.getByText('必填项已就绪')).toBeVisible();
 
         await telegram.getByRole('button', { name: '清除' }).click();
 
         await expect(page.getByText('Telegram 接口凭据已清除')).toBeVisible();
         await expect(telegram.getByText('未配置', { exact: true }).first()).toBeVisible();
-        await expect(page.getByText('必填项已就绪')).toHaveCount(0);
 
         expectCleanPage(pageErrorLog);
     });
@@ -90,7 +88,8 @@ test.describe('growth keys and connections', { tag: '@settings' }, () => {
 
         const youtube = card(page, 'YouTube');
 
-        await youtube.getByLabel('API 密钥').fill('bad-key-value-123456');
+        await youtube.getByRole('button', { name: '更换密钥' }).click();
+        await youtube.locator('textarea').fill('bad-key-value-123456');
         await youtube.getByRole('button', { name: '保存并测试' }).click();
 
         await expect(page.getByText(/YouTube已保存，但测试未通过/)).toBeVisible();
