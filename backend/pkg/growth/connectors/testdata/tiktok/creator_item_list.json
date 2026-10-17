@@ -1,0 +1,27 @@
+{
+  "statusCode": 0,
+  "itemList": [
+    {
+      "id": "7412345678900000001",
+      "desc": "New season tier list, who are you maining?",
+      "createTime": 1760300000,
+      "author": {"id": "6800000000000000001", "uniqueId": "pixel.ren", "nickname": "Ren"},
+      "stats": {"commentCount": 40, "diggCount": 800}
+    },
+    {
+      "id": "7412345678900000002",
+      "desc": "Server maintenance again, thinking of quitting",
+      "createTime": 1760600000,
+      "author": {"id": "6800000000000000001", "uniqueId": "pixel.ren", "nickname": "Ren"},
+      "stats": {"commentCount": 12, "diggCount": 150}
+    },
+    {
+      "id": "7412345678900000003",
+      "desc": "duet with @pixel.ren",
+      "createTime": 1760550000,
+      "author": {"id": "6800000000000000009", "uniqueId": "guest.star", "nickname": "Guest"},
+      "stats": {"commentCount": 1, "diggCount": 2}
+    }
+  ],
+  "hasMore": false
+}

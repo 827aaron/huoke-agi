@@ -92,6 +92,7 @@ const (
 	PlatformFacebook  Platform = "facebook"
 	PlatformInstagram Platform = "instagram"
 	PlatformYouTube   Platform = "youtube"
+	PlatformTikTok    Platform = "tiktok"
 )
 
 const (
@@ -323,6 +324,14 @@ func (c *BrowserClient) Navigate(ctx context.Context, account string, platform P
 func (c *BrowserClient) Scroll(ctx context.Context, account string, times int, wait time.Duration) (*BrowserPage, error) {
 	var out BrowserPage
 	body := map[string]any{"times": times, "wait_ms": wait.Milliseconds()}
+	return &out, c.post(ctx, account, "scroll", body, &out)
+}
+
+// ScrollIn turns the wheel over the first element matching selector, a panel
+// that scrolls on its own, or over the page when nothing matches.
+func (c *BrowserClient) ScrollIn(ctx context.Context, account, selector string, times int, wait time.Duration) (*BrowserPage, error) {
+	var out BrowserPage
+	body := map[string]any{"times": times, "wait_ms": wait.Milliseconds(), "selector": selector}
 	return &out, c.post(ctx, account, "scroll", body, &out)
 }
 
