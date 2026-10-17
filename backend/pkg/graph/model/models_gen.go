@@ -311,6 +311,7 @@ type MessageLog struct {
 	FlowID       int64          `json:"flowId"`
 	TaskID       *int64         `json:"taskId,omitempty"`
 	SubtaskID    *int64         `json:"subtaskId,omitempty"`
+	Agent        *AgentType     `json:"agent,omitempty"`
 	CreatedAt    time.Time      `json:"createdAt"`
 }
 

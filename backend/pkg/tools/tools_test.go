@@ -545,6 +545,8 @@ type toolsAgentExecutorCase struct {
 	// sandbox: the factory cannot build without the flow's primary container.
 	sandbox       bool
 	task, subtask int64 // 0: tool calls are not attributed to one
+	// agent is recorded on the executor's messages.
+	agent database.MsgchainType
 }
 
 func toolsWithout[C any](cfg C, field string) C {
@@ -589,6 +591,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 	return []toolsAgentExecutorCase{
 		{
 			factory: "GetAssistantExecutor",
+			agent:   "assistant",
 			build:   assistant(false),
 			tools: map[string]string{
 				"terminal": "", "file": "", "browser": "", "web_search": "",
@@ -604,6 +607,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetAssistantExecutor",
+			agent:   "assistant",
 			variant: "using agents",
 			build:   assistant(true),
 			tools: map[string]string{
@@ -619,6 +623,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetPrimaryExecutor",
+			agent:   "primary_agent",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetPrimaryExecutor(toolsWithout(PrimaryExecutorConfig{
 					TaskID: task, SubtaskID: subtask,
@@ -629,14 +634,16 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 			tools: map[string]string{
 				"done": "Barrier", "ask": "Barrier", "advice": "Adviser", "coder": "Coder",
 				"maintenance": "Installer", "memorist": "Memorist", "pentester": "Pentester", "search": "Searcher",
+				"growth_get_progress": "", "growth_deliver_leads": "",
 			},
-			optional: []string{"ask"},
+			optional: []string{"ask", "growth_get_progress", "growth_deliver_leads"},
 			barriers: []string{"done", "ask"},
 			required: []string{"Barrier", "Adviser", "Coder", "Installer", "Memorist", "Pentester", "Searcher"},
 			task:     task, subtask: subtask,
 		},
 		{
 			factory: "GetInstallerExecutor",
+			agent:   "installer",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetInstallerExecutor(toolsWithout(InstallerExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask,
@@ -656,6 +663,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetCoderExecutor",
+			agent:   "coder",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetCoderExecutor(toolsWithout(CoderExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask,
@@ -676,6 +684,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetPentesterExecutor",
+			agent:   "pentester",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetPentesterExecutor(toolsWithout(PentesterExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask,
@@ -688,8 +697,12 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 				"memorist": "Memorist", "search": "Searcher",
 				"terminal": "", "file": "", "browser": "", "store_guide": "", "search_guide": "",
 				"graphiti_search": "", "web_search": "",
+				"growth_sync_source": "", "growth_upsert_leads": "", "growth_add_sources": "", "growth_get_progress": "",
 			},
-			optional: []string{"browser", "store_guide", "search_guide", "graphiti_search", "web_search"},
+			optional: []string{
+				"browser", "store_guide", "search_guide", "graphiti_search", "web_search",
+				"growth_sync_source", "growth_upsert_leads", "growth_add_sources", "growth_get_progress",
+			},
 			barriers: []string{"hack_result"},
 			required: []string{"HackResult", "Adviser", "Coder", "Installer", "Memorist", "Searcher"},
 			sandbox:  true,
@@ -697,6 +710,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetSearcherExecutor",
+			agent:   "searcher",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetSearcherExecutor(toolsWithout(SearcherExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask,
@@ -706,14 +720,19 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 			tools: map[string]string{
 				"search_result": "SearchResult", "memorist": "Memorist",
 				"browser": "", "web_search": "", "search_answer": "", "store_answer": "",
+				"growth_search_sources": "", "growth_add_sources": "", "growth_join_source": "", "growth_get_progress": "",
 			},
-			optional: []string{"browser", "web_search", "search_answer", "store_answer"},
+			optional: []string{
+				"browser", "web_search", "search_answer", "store_answer",
+				"growth_search_sources", "growth_add_sources", "growth_join_source", "growth_get_progress",
+			},
 			barriers: []string{"search_result"},
 			required: []string{"SearchResult", "Memorist"},
 			task:     task, subtask: subtask,
 		},
 		{
 			factory: "GetGeneratorExecutor",
+			agent:   "generator",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetGeneratorExecutor(toolsWithout(GeneratorExecutorConfig{
 					TaskID:      task,
@@ -722,9 +741,9 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 			},
 			tools: map[string]string{
 				"subtask_list": "SubtaskList", "memorist": "Memorist", "search": "Searcher",
-				"terminal": "", "file": "", "browser": "",
+				"terminal": "", "file": "", "browser": "", "growth_get_progress": "",
 			},
-			optional: []string{"browser"},
+			optional: []string{"browser", "growth_get_progress"},
 			barriers: []string{"subtask_list"},
 			required: []string{"SubtaskList", "Memorist"},
 			sandbox:  true,
@@ -732,6 +751,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetRefinerExecutor",
+			agent:   "refiner",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetRefinerExecutor(toolsWithout(RefinerExecutorConfig{
 					TaskID:       task,
@@ -740,9 +760,9 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 			},
 			tools: map[string]string{
 				"subtask_patch": "SubtaskPatch", "memorist": "Memorist", "search": "Searcher",
-				"terminal": "", "file": "", "browser": "",
+				"terminal": "", "file": "", "browser": "", "growth_get_progress": "",
 			},
-			optional: []string{"browser"},
+			optional: []string{"browser", "growth_get_progress"},
 			barriers: []string{"subtask_patch"},
 			required: []string{"SubtaskPatch", "Memorist"},
 			sandbox:  true,
@@ -750,6 +770,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetMemoristExecutor",
+			agent:   "memorist",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetMemoristExecutor(toolsWithout(MemoristExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask, SearchResult: h("SearchResult"),
@@ -766,6 +787,7 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetEnricherExecutor",
+			agent:   "enricher",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetEnricherExecutor(toolsWithout(EnricherExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask, EnricherResult: h("EnricherResult"),
@@ -783,12 +805,14 @@ func toolsAgentExecutorCases() ([]toolsAgentExecutorCase, func(ExecutorHandler) 
 		},
 		{
 			factory: "GetReporterExecutor",
+			agent:   "reporter",
 			build: func(fte *flowToolsExecutor, _ bool, without string) (ContextToolsExecutor, error) {
 				return fte.GetReporterExecutor(toolsWithout(ReporterExecutorConfig{
 					TaskID: &task, SubtaskID: &subtask, ReportResult: h("ReportResult"),
 				}, without))
 			},
-			tools:    map[string]string{"report_result": "ReportResult"},
+			tools:    map[string]string{"report_result": "ReportResult", "growth_get_progress": "", "growth_list_leads": ""},
+			optional: []string{"growth_get_progress", "growth_list_leads"},
 			barriers: []string{"report_result"},
 			required: []string{"ReportResult"},
 			task:     task, subtask: subtask,
@@ -821,6 +845,7 @@ func toolsAgentFlow(t *testing.T, everyService bool) *flowToolsExecutor {
 	fte.store = newFakeVectorStore(t, &fakeVectorConn{}, &fakeEmbedder{})
 	fte.embedder = &fakeEmbedder{}
 	fte.SetGraphitiClient(graphitiClient)
+	fte.growth = &fakeGrowthBackend{}
 	return fte
 }
 
@@ -841,6 +866,7 @@ func TestTools_GetExecutors_GiveEachAgentItsTools(t *testing.T) {
 				executor, err := tc.build(fte, everyService, "")
 				require.NoError(t, err)
 				ce := executor.(*customExecutor)
+				assert.Equal(t, tc.agent, ce.agent, "the agent its messages are recorded for")
 
 				var wantTools, wantBarriers []string
 				for tool := range tc.tools {

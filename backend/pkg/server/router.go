@@ -21,6 +21,7 @@ import (
 	"pentagi/pkg/database/knowledge/vectorstore"
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/subscriptions"
+	"pentagi/pkg/growth"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/server/auth"
 	"pentagi/pkg/server/logger"
@@ -226,6 +227,13 @@ func NewRouter(
 	analyticsService := services.NewAnalyticsService(orm, timezones)
 	tokenService := services.NewTokenService(orm, cfg.AuthSalt(), tokenCache, subscriptions)
 	knowledgeService := services.NewKnowledgeService(orm, knowledgeStore)
+	// The REST side reads and edits stored rows, which needs no connector, so it works with growth disabled.
+	growthCore := growth.Default()
+	if growthCore == nil {
+		growthCore = growth.NewService(db, cfg)
+	}
+	growthCore.SetKnowledgeStore(knowledgeStore)
+	growthService := services.NewGrowthService(growthCore)
 	anonymizerService := services.NewAnonymizerService(textReplacer)
 	graphqlService := services.NewGraphqlService(
 		db, cfg, baseURL, cfg.CorsOrigins, tokenCache, providers, controller, subscriptions, knowledgeStore, textReplacer,
@@ -321,6 +329,7 @@ func NewRouter(
 		flow:         flowService,
 		flowFile:     flowFileService,
 		graphql:      graphqlService,
+		growth:       growthService,
 		knowledge:    knowledgeService,
 		msglog:       msglogService,
 		prompt:       promptService,
@@ -431,6 +440,44 @@ func setKnowledgeGroup(parent *gin.RouterGroup, svc *services.KnowledgeService) 
 	}
 }
 
+func setGrowthGroup(parent *gin.RouterGroup, svc *services.GrowthService) {
+	gg := parent.Group("/growth")
+	{
+		gg.GET("/sources/", auth.PrivilegesRequired("growth.view"), svc.ListSources)
+		gg.GET("/sources", auth.PrivilegesRequired("growth.view"), svc.ListSources)
+		gg.POST("/sources/", auth.PrivilegesRequired("growth.edit"), svc.AddSources)
+		gg.POST("/sources", auth.PrivilegesRequired("growth.edit"), svc.AddSources)
+		gg.DELETE("/sources/:sourceID", auth.PrivilegesRequired("growth.edit"), svc.DeleteSource)
+		gg.GET("/leads/", auth.PrivilegesRequired("growth.view"), svc.ListLeads)
+		gg.GET("/leads/:leadID", auth.PrivilegesRequired("growth.view"), svc.GetLead)
+		gg.GET("/leads/export", auth.PrivilegesRequired("growth.view"), svc.ExportLeads)
+		gg.POST("/leads/email", auth.PrivilegesRequired("growth.edit"), svc.EmailLeads)
+		gg.GET("/runs/", auth.PrivilegesRequired("growth.view"), svc.ListRuns)
+		gg.GET("/runs", auth.PrivilegesRequired("growth.view"), svc.ListRuns)
+		gg.GET("/accounts/", auth.PrivilegesRequired("growth.view"), svc.ListAccounts)
+		gg.POST("/accounts/", auth.PrivilegesRequired("growth.edit"), svc.CreateAccount)
+		gg.PUT("/accounts/:accountID", auth.PrivilegesRequired("growth.edit"), svc.UpdateAccount)
+		gg.POST("/accounts/:accountID/test-proxy", auth.PrivilegesRequired("growth.edit"), svc.TestAccountProxy)
+		gg.POST("/accounts/:accountID/enable", auth.PrivilegesRequired("growth.edit"), svc.EnableAccount)
+		gg.POST("/accounts/:accountID/disable", auth.PrivilegesRequired("growth.edit"), svc.DisableAccount)
+		gg.PUT("/accounts/:accountID/proxy", auth.PrivilegesRequired("growth.edit"), svc.SetAccountProxy)
+		gg.POST("/accounts/telegram/login", auth.PrivilegesRequired("growth.edit"), svc.StartTelegramLogin)
+		gg.POST("/accounts/telegram/login/:loginID/code", auth.PrivilegesRequired("growth.edit"), svc.SubmitTelegramCode)
+		gg.POST("/accounts/telegram/login/:loginID/password", auth.PrivilegesRequired("growth.edit"), svc.SubmitTelegramPassword)
+		gg.POST("/accounts/remote-login", auth.PrivilegesRequired("growth.edit"), svc.StartRemoteLogin)
+		gg.POST("/accounts/remote-login/:sessionID/finish", auth.PrivilegesRequired("growth.edit"), svc.FinishRemoteLogin)
+		gg.DELETE("/accounts/remote-login/:sessionID", auth.PrivilegesRequired("growth.edit"), svc.CancelRemoteLogin)
+		gg.GET("/profiles", auth.PrivilegesRequired("growth.view"), svc.ListProfiles)
+		gg.POST("/profiles", auth.PrivilegesRequired("growth.edit"), svc.CreateProfile)
+		gg.PUT("/profiles/:profileID", auth.PrivilegesRequired("growth.edit"), svc.UpdateProfile)
+		gg.GET("/settings/", auth.PrivilegesRequired("growth.view"), svc.ListSettings)
+		gg.POST("/settings/test-email", auth.PrivilegesRequired("growth.edit"), svc.SendTestEmail)
+		gg.PUT("/settings/:kind", auth.PrivilegesRequired("growth.edit"), svc.SaveSetting)
+		gg.DELETE("/settings/:kind", auth.PrivilegesRequired("growth.edit"), svc.DeleteSetting)
+		gg.POST("/settings/:kind/test", auth.PrivilegesRequired("growth.edit"), svc.TestSetting)
+	}
+}
+
 func setProvidersGroup(parent *gin.RouterGroup, svc *services.ProviderService) {
 	providersGroup := parent.Group("/providers")
 	{
@@ -455,6 +502,7 @@ type privateServices struct {
 	flow         *services.FlowService
 	flowFile     *services.FlowFileService
 	graphql      *services.GraphqlService
+	growth       *services.GrowthService
 	knowledge    *services.KnowledgeService
 	msglog       *services.MsglogService
 	prompt       *services.PromptService
@@ -508,6 +556,7 @@ func registerPrivateRoutes(tokenTier, userTier *gin.RouterGroup, svc privateServ
 	setPromptsGroup(tokenTier, svc.prompt)
 	setAnonymizeGroup(tokenTier, svc.anonymizer)
 	setAnalyticsGroup(tokenTier, svc.analytics)
+	setGrowthGroup(tokenTier, svc.growth)
 
 	setCurrentUserGroup(tokenTier, svc.user)
 

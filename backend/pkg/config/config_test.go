@@ -31,6 +31,11 @@ func TestConfig_GetSecretPatterns_SkipsBlankAndTrimsPaddedValues(t *testing.T) {
 			cfg:  &Config{OpenAIKey: "  sk-1234  ", GeminiAPIKey: "\tAIzaSyC123\n"},
 			want: []string{"(?P<replace>sk-1234)", "(?P<replace>AIzaSyC123)"},
 		},
+		{
+			name: "each key of a list is masked alone",
+			cfg:  &Config{TavilyAPIKey: "tvly-a, tvly-b\n", YouTubeAPIKey: "yt-1\nyt-2"},
+			want: []string{"(?P<replace>tvly-a)", "(?P<replace>tvly-b)", "(?P<replace>yt-1)", "(?P<replace>yt-2)"},
+		},
 	}
 
 	for _, tt := range tests {
@@ -115,7 +120,9 @@ func clearConfigEnv(t *testing.T) {
 	t.Helper()
 
 	envVars := []string{
-		"GROWTH_ENABLED", "TG_API_ID", "TG_API_HASH", "TG_SESSION_DIR",
+		"GROWTH_ENABLED", "TG_API_ID", "TG_API_HASH", "TG_SESSION_DIR", "YOUTUBE_API_KEY", "GROWTH_PROXY_URL", "BROWSER_SERVICE_URL", "BROWSER_TOKEN",
+		"GROWTH_SECRET_KEY",
+		"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_TLS",
 		"DATABASE_URL", "DEBUG", "DATA_DIR", "ASK_USER", "TENANT_ID", "INSTALLATION_ID", "LICENSE_KEY",
 		"DOCKER_INSIDE", "DOCKER_NET_ADMIN", "DOCKER_SOCKET", "DOCKER_NETWORK",
 		"DOCKER_INSIDE_HOST", "DOCKER_INSIDE_TLS_VERIFY", "DOCKER_INSIDE_CERT_PATH",
@@ -183,7 +190,7 @@ func TestConfig_NewConfig_FillsDefaultsForAnEmptyEnvironment(t *testing.T) {
 	require.NotNil(t, config)
 
 	assert.Equal(t, 8080, config.ServerPort)
-	assert.False(t, config.GrowthEnabled)
+	assert.True(t, config.GrowthEnabled)
 	assert.Equal(t, "./data/tg-session", config.TGSessionDir)
 	assert.Equal(t, "0.0.0.0", config.ServerHost)
 	assert.Equal(t, false, config.Debug)

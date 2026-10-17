@@ -18,6 +18,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/providers/pconfig"
+	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/providers/provider"
 
 	"github.com/sirupsen/logrus"
@@ -34,6 +35,16 @@ type stubProvidersQuerier struct {
 
 func (s stubProvidersQuerier) GetUserProviders(context.Context, int64) ([]database.Provider, error) {
 	return s.rows, nil
+}
+
+// GetUserProviderByName finds no row, as for a user who saved no provider of that name.
+func (s stubProvidersQuerier) GetUserProviderByName(
+	ctx context.Context, _ database.GetUserProviderByNameParams,
+) (database.Provider, error) {
+	if err := ctx.Err(); err != nil {
+		return database.Provider{}, err
+	}
+	return database.Provider{}, sql.ErrNoRows
 }
 
 func TestProviders_GetProviders_SkipsAnUnusableUserRowAndKeepsTheRest(t *testing.T) {
@@ -831,4 +842,61 @@ func (r *recordingProvidersQuerier) CreateProvider(
 	r.created++
 	r.lastName = params.Name
 	return database.Provider{Name: params.Name}, nil
+}
+
+func TestProviders_GetProviders_AddsWhatTheUsersOwnCredentialsEnable(t *testing.T) {
+	base := &config.Config{}
+	withKey := &config.Config{MiniMaxAPIKey: "user-key", MiniMaxServerURL: "https://api.minimax.io/v1"}
+	pc := &providerController{
+		cfg: base,
+		db:  stubProvidersQuerier{rows: []database.Provider{{Name: "my-minimax", Type: "minimax"}}},
+		userConfigFn: func(_ context.Context, userID int64) (*config.Config, error) {
+			if userID == 1 {
+				return withKey, nil
+			}
+			return base, nil
+		},
+	}
+
+	mine, err := pc.GetProviders(context.Background(), 1)
+	require.NoError(t, err)
+	assert.Contains(t, mine, provider.DefaultProviderNameMiniMax)
+	assert.Contains(t, mine, provider.ProviderName("my-minimax"), "a saved provider of a type only the user's key enables")
+
+	theirs, err := pc.GetProviders(context.Background(), 2)
+	require.NoError(t, err)
+	assert.Empty(t, theirs)
+}
+
+func TestProviders_LoadFlowProvider_EmbedsWithTheUsersOwnEmbeddingSettings(t *testing.T) {
+	base := &config.Config{EmbeddingProvider: "openai", OpenAIKey: "server-key", EmbeddingBatchSize: 512}
+	withKey := *base
+	withKey.OpenAIKey = "user-key"
+	serverEmbedder, err := embeddings.New(base)
+	require.NoError(t, err)
+	pc := &providerController{
+		cfg:             base,
+		db:              stubProvidersQuerier{},
+		embedder:        serverEmbedder,
+		startCallNumber: newAtomicInt64(0),
+		Providers:       provider.Providers{"default": stubTypedProvider{ptype: provider.ProviderOpenAI}},
+		userConfigFn: func(_ context.Context, userID int64) (*config.Config, error) {
+			if userID == 1 {
+				return &withKey, nil
+			}
+			same := *base
+			return &same, nil
+		},
+	}
+	load := func(userID int64) embeddings.Embedder {
+		fp, err := pc.LoadFlowProvider(context.Background(), "default", nil, nil, 9, userID, false, "", "en", "t", "")
+		require.NoError(t, err)
+		return fp.Embedder()
+	}
+
+	mine := load(1)
+	assert.NotSame(t, serverEmbedder, mine, "the user's own OpenAI key builds their embedder")
+	assert.True(t, mine.IsAvailable())
+	assert.Same(t, mine, load(1), "built once per configuration")
+	assert.Same(t, serverEmbedder, load(2), "an unchanged configuration keeps the server's embedder")
 }

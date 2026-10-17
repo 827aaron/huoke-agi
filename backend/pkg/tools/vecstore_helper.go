@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 
@@ -12,6 +14,9 @@ import (
 	"pentagi/pkg/providers/embeddings"
 
 	"github.com/google/uuid"
+	"github.com/vxcontrol/langchaingo/schema"
+	"github.com/vxcontrol/langchaingo/vectorstores"
+	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
 // truncateForEmbedding truncates text to maxBytes bytes for sending to the
@@ -76,4 +81,51 @@ func formatVectorFromFloat32s(v []float32) string {
 		strs[i] = strconv.FormatFloat(float64(f), 'f', -1, 32)
 	}
 	return "[" + strings.Join(strs, ",") + "]"
+}
+
+// SharedKnowledgeKey marks a knowledge document every customer may read, such as the
+// imported seed guides; everything else a growth deployment stores is its owner's.
+const SharedKnowledgeKey = "shared"
+
+// ownerFilterSets splits one search into the owner's documents and the shared ones,
+// because a metadata filter is a conjunction of equalities and cannot say "or".
+func ownerFilterSets(base map[string]any, userID int64, scoped bool) []map[string]any {
+	if !scoped {
+		return []map[string]any{base}
+	}
+	owner := maps.Clone(base)
+	owner["user_id"] = userID
+	shared := maps.Clone(base)
+	shared[SharedKnowledgeKey] = true
+	return []map[string]any{owner, shared}
+}
+
+// similaritySearchScoped runs one query under each filter set and fails only when every run failed.
+func similaritySearchScoped(
+	ctx context.Context,
+	store *pgvector.Store,
+	query string,
+	limit int,
+	threshold float32,
+	filterSets []map[string]any,
+) ([]schema.Document, error) {
+	var (
+		docs []schema.Document
+		errs []error
+	)
+	for _, filters := range filterSets {
+		found, err := store.SimilaritySearch(ctx, query, limit,
+			vectorstores.WithScoreThreshold(threshold),
+			vectorstores.WithFilters(filters),
+		)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		docs = append(docs, found...)
+	}
+	if len(errs) == len(filterSets) {
+		return nil, errors.Join(errs...)
+	}
+	return docs, nil
 }

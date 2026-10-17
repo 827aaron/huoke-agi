@@ -18,7 +18,6 @@ import (
 	"github.com/vxcontrol/cloud/anonymizer"
 	"github.com/vxcontrol/langchaingo/documentloaders"
 	"github.com/vxcontrol/langchaingo/schema"
-	"github.com/vxcontrol/langchaingo/vectorstores"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
@@ -42,6 +41,7 @@ type code struct {
 	maxEmbeddingBytes int
 	vslp              VectorStoreLogProvider
 	knp               KnowledgeProvider
+	ownerScoped       bool
 }
 
 func NewCodeTool(
@@ -135,12 +135,13 @@ func (c *code) Handle(ctx context.Context, name string, args json.RawMessage) (s
 				"query":       query[:min(len(query), 1000)],
 			})
 
-			docs, err := c.store.SimilaritySearch(
+			docs, err := similaritySearchScoped(
 				ctx,
+				c.store,
 				query,
 				codeVectorStoreResultLimit,
-				vectorstores.WithScoreThreshold(codeVectorStoreThreshold),
-				vectorstores.WithFilters(filters),
+				codeVectorStoreThreshold,
+				ownerFilterSets(filters, c.userID, c.ownerScoped),
 			)
 			if err != nil {
 				queryLogger.WithError(err).Error("failed to search code samples for query")
@@ -418,3 +419,5 @@ func (c *code) renderCode(explanation, lang, code string) string {
 	buffer.WriteString("\n```")
 	return buffer.String()
 }
+
+func (c *code) scopeToOwner() { c.ownerScoped = true }

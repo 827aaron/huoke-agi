@@ -18,7 +18,6 @@ import (
 	"github.com/vxcontrol/cloud/anonymizer"
 	"github.com/vxcontrol/langchaingo/documentloaders"
 	"github.com/vxcontrol/langchaingo/schema"
-	"github.com/vxcontrol/langchaingo/vectorstores"
 	"github.com/vxcontrol/langchaingo/vectorstores/pgvector"
 )
 
@@ -41,6 +40,7 @@ type search struct {
 	maxEmbeddingBytes int
 	vslp              VectorStoreLogProvider
 	knp               KnowledgeProvider
+	ownerScoped       bool
 }
 
 func NewSearchTool(
@@ -129,12 +129,13 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 				"query":       query[:min(len(query), 1000)],
 			})
 
-			docs, err := s.store.SimilaritySearch(
+			docs, err := similaritySearchScoped(
 				ctx,
+				s.store,
 				query,
 				searchVectorStoreResultLimit,
-				vectorstores.WithScoreThreshold(searchVectorStoreThreshold),
-				vectorstores.WithFilters(filters),
+				searchVectorStoreThreshold,
+				ownerFilterSets(filters, s.userID, s.ownerScoped),
 			)
 			if err != nil {
 				obs.LogErrorOrCancel(queryLogger, err, "failed to search answer for query")
@@ -394,3 +395,5 @@ func (s *search) Handle(ctx context.Context, name string, args json.RawMessage) 
 func (s *search) IsAvailable() bool {
 	return s.store != nil
 }
+
+func (s *search) scopeToOwner() { s.ownerScoped = true }

@@ -979,6 +979,10 @@ func (fp *flowProvider) putMsgLog(
 		return 0, nil
 	}
 
+	// Only the primary agent's loop writes through here.
+	if amlp, ok := msgLog.(tools.AgentMsgLogProvider); ok {
+		return amlp.PutAgentMsg(ctx, database.MsgchainTypePrimaryAgent, msgType, taskID, subtaskID, streamID, thinking, msg)
+	}
 	return msgLog.PutMsg(ctx, msgType, taskID, subtaskID, streamID, thinking, msg)
 }
 

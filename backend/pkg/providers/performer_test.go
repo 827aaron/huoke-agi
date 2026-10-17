@@ -1035,7 +1035,7 @@ func TestPerformer_PerformAgentChain_WritesAMissingScopeToGraphitiAsADash(t *tes
 				{
 					name:   "tool_execution_hack_result",
 					source: "PentAGI tool execution in flow 42, task 7, subtask 11",
-					content: "Tool: hack_result\nDescription: Send the penetration test result to the user with detailed report\n" +
+					content: "Tool: hack_result\nDescription: Send the lead research result to the user with detailed report\n" +
 						"Barrier Function: true\nArguments: {}\nInvoked by: pentester Agent\nStatus: success\nResult: ok\n" +
 						"Context: Task 7, Subtask 11\n\n",
 				},

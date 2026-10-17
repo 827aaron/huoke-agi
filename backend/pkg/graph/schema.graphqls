@@ -349,6 +349,7 @@ type MessageLog {
   flowId: ID!
   taskId: ID
   subtaskId: ID
+  agent: AgentType
   createdAt: Time!
 }
 

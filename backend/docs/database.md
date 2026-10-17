@@ -161,7 +161,7 @@ Flow and assistant rows contain model/provider selection and runtime function co
 |---|---|
 | `agentlogs` | Agent-to-agent delegation (`initiator`, `executor`, task/result text) |
 | `assistantlogs` | Assistant messages with optional `thinking` and `result_format` |
-| `msglogs` | General flow messages with optional `thinking` and `result_format` |
+| `msglogs` | General flow messages with optional `thinking`, `result_format` and the `agent` that wrote them |
 | `searchlogs` | Search engine calls (`engine`, query/result) |
 | `termlogs` | Terminal stdin/stdout/stderr; **requires** `container_id` and `flow_id` |
 | `vecstorelogs` | Vector-store ops (`action`, filter JSON, query/result) |
