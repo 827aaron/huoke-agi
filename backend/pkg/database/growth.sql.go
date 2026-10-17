@@ -239,7 +239,7 @@ func (q *Queries) DeleteUserGrowthSetting(ctx context.Context, arg DeleteUserGro
 }
 
 const deleteUserGrowthSource = `-- name: DeleteUserGrowthSource :one
-DELETE FROM growth_sources WHERE id = $1 AND user_id = $2 RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at
+DELETE FROM growth_sources WHERE id = $1 AND user_id = $2 RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note
 `
 
 type DeleteUserGrowthSourceParams struct {
@@ -277,6 +277,56 @@ func (q *Queries) DeleteUserGrowthSource(ctx context.Context, arg DeleteUserGrow
 		&i.DiscoveredTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Note,
+	)
+	return i, err
+}
+
+const deleteUserLead = `-- name: DeleteUserLead :one
+WITH evidence AS (
+  SELECT e.source_id, e.message_id FROM lead_evidence e
+  JOIN leads l ON l.id = e.lead_id
+  WHERE l.id = $1::bigint AND l.user_id = $2::bigint
+), dropped AS (
+  DELETE FROM growth_message_scores s USING evidence
+  WHERE s.user_id = $2::bigint AND s.source_id = evidence.source_id AND s.message_id = evidence.message_id
+)
+DELETE FROM leads WHERE id = $1::bigint AND user_id = $2::bigint
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
+`
+
+type DeleteUserLeadParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+// A lead's evidence goes with it by cascade; the scores of its messages go in the same
+// statement, so a later read of those messages is judged afresh.
+func (q *Queries) DeleteUserLead(ctx context.Context, arg DeleteUserLeadParams) (Lead, error) {
+	row := q.db.QueryRowContext(ctx, deleteUserLead, arg.ID, arg.UserID)
+	var i Lead
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Platform,
+		&i.PlatformUserID,
+		&i.IdentityKind,
+		&i.Username,
+		&i.DisplayName,
+		&i.Score,
+		&i.Tier,
+		&i.MatchReason,
+		&i.FirstFlowID,
+		&i.FirstTaskID,
+		&i.LastFlowID,
+		&i.LastTaskID,
+		&i.DeliveredAt,
+		&i.DeliveredRunID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Contacts,
+		&i.Note,
+		&i.Origin,
 	)
 	return i, err
 }
@@ -403,7 +453,7 @@ func (q *Queries) GetChannelAccountSession(ctx context.Context, id int64) ([]byt
 }
 
 const getDeliverableLeads = `-- name: GetDeliverableLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads
 WHERE user_id = $1 AND last_flow_id = $2
   AND tier = 'qualified' AND delivered_at IS NULL
   AND (NOT $3::boolean OR jsonb_array_length(contacts) > 0)
@@ -452,6 +502,8 @@ func (q *Queries) GetDeliverableLeads(ctx context.Context, arg GetDeliverableLea
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Contacts,
+			&i.Note,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -586,7 +638,7 @@ func (q *Queries) GetGrowthRunByTask(ctx context.Context, taskID sql.NullInt64) 
 }
 
 const getGrowthSource = `-- name: GetGrowthSource :one
-SELECT id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at FROM growth_sources WHERE id = $1
+SELECT id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note FROM growth_sources WHERE id = $1
 `
 
 func (q *Queries) GetGrowthSource(ctx context.Context, id int64) (GrowthSource, error) {
@@ -619,12 +671,13 @@ func (q *Queries) GetGrowthSource(ctx context.Context, id int64) (GrowthSource, 
 		&i.DiscoveredTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Note,
 	)
 	return i, err
 }
 
 const getGrowthSourceByKey = `-- name: GetGrowthSourceByKey :one
-SELECT id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at FROM growth_sources
+SELECT id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note FROM growth_sources
 WHERE user_id = $1 AND platform = $2 AND source_key = $3
 `
 
@@ -664,12 +717,13 @@ func (q *Queries) GetGrowthSourceByKey(ctx context.Context, arg GetGrowthSourceB
 		&i.DiscoveredTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Note,
 	)
 	return i, err
 }
 
 const getLeadByPlatformUser = `-- name: GetLeadByPlatformUser :one
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads
 WHERE user_id = $1 AND platform = $2 AND platform_user_id = $3
 `
 
@@ -702,6 +756,8 @@ func (q *Queries) GetLeadByPlatformUser(ctx context.Context, arg GetLeadByPlatfo
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Contacts,
+		&i.Note,
+		&i.Origin,
 	)
 	return i, err
 }
@@ -837,7 +893,7 @@ func (q *Queries) GetOverdueGrowthRuns(ctx context.Context, now time.Time) ([]Gr
 }
 
 const getRunDeliveredLeads = `-- name: GetRunDeliveredLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads WHERE delivered_run_id = $1 ORDER BY score DESC, id ASC
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads WHERE delivered_run_id = $1 ORDER BY score DESC, id ASC
 `
 
 func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64) ([]Lead, error) {
@@ -869,6 +925,8 @@ func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64)
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Contacts,
+			&i.Note,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -1414,7 +1472,7 @@ func (q *Queries) GetUserGrowthSettings(ctx context.Context, userID int64) ([]Gr
 }
 
 const getUserGrowthSource = `-- name: GetUserGrowthSource :one
-SELECT id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at FROM growth_sources WHERE id = $1 AND user_id = $2
+SELECT id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note FROM growth_sources WHERE id = $1 AND user_id = $2
 `
 
 type GetUserGrowthSourceParams struct {
@@ -1452,12 +1510,13 @@ func (q *Queries) GetUserGrowthSource(ctx context.Context, arg GetUserGrowthSour
 		&i.DiscoveredTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Note,
 	)
 	return i, err
 }
 
 const getUserGrowthSources = `-- name: GetUserGrowthSources :many
-SELECT id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at FROM growth_sources
+SELECT id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note FROM growth_sources
 WHERE user_id = $1
 ORDER BY qualified_leads DESC, updated_at DESC, id DESC
 `
@@ -1498,6 +1557,7 @@ func (q *Queries) GetUserGrowthSources(ctx context.Context, userID int64) ([]Gro
 			&i.DiscoveredTaskID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Note,
 		); err != nil {
 			return nil, err
 		}
@@ -1513,7 +1573,7 @@ func (q *Queries) GetUserGrowthSources(ctx context.Context, userID int64) ([]Gro
 }
 
 const getUserLead = `-- name: GetUserLead :one
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads WHERE id = $1 AND user_id = $2
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads WHERE id = $1 AND user_id = $2
 `
 
 type GetUserLeadParams struct {
@@ -1544,12 +1604,14 @@ func (q *Queries) GetUserLead(ctx context.Context, arg GetUserLeadParams) (Lead,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Contacts,
+		&i.Note,
+		&i.Origin,
 	)
 	return i, err
 }
 
 const getUserLeads = `-- name: GetUserLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads
 WHERE user_id = $1
   AND ($2::bigint IS NULL OR last_flow_id = $2::bigint)
   AND ($3::bigint IS NULL OR last_task_id = $3::bigint)
@@ -1615,6 +1677,8 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Contacts,
+			&i.Note,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -1750,6 +1814,72 @@ func (q *Queries) InsertLeadEvidence(ctx context.Context, arg InsertLeadEvidence
 	return result.RowsAffected()
 }
 
+const insertManualLead = `-- name: InsertManualLead :one
+INSERT INTO leads (
+  user_id, platform, platform_user_id, identity_kind, display_name, score, tier, contacts, note, origin,
+  first_flow_id, last_flow_id
+) VALUES (
+  $1, $2, $3, $4,
+  $5, $6, $7, $8, $9, 'manual',
+  $10, $10
+)
+ON CONFLICT (user_id, platform, platform_user_id) DO NOTHING
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
+`
+
+type InsertManualLeadParams struct {
+	UserID         int64           `json:"user_id"`
+	Platform       string          `json:"platform"`
+	PlatformUserID string          `json:"platform_user_id"`
+	IdentityKind   string          `json:"identity_kind"`
+	DisplayName    string          `json:"display_name"`
+	Score          int32           `json:"score"`
+	Tier           string          `json:"tier"`
+	Contacts       json.RawMessage `json:"contacts"`
+	Note           string          `json:"note"`
+	FlowID         sql.NullInt64   `json:"flow_id"`
+}
+
+func (q *Queries) InsertManualLead(ctx context.Context, arg InsertManualLeadParams) (Lead, error) {
+	row := q.db.QueryRowContext(ctx, insertManualLead,
+		arg.UserID,
+		arg.Platform,
+		arg.PlatformUserID,
+		arg.IdentityKind,
+		arg.DisplayName,
+		arg.Score,
+		arg.Tier,
+		arg.Contacts,
+		arg.Note,
+		arg.FlowID,
+	)
+	var i Lead
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Platform,
+		&i.PlatformUserID,
+		&i.IdentityKind,
+		&i.Username,
+		&i.DisplayName,
+		&i.Score,
+		&i.Tier,
+		&i.MatchReason,
+		&i.FirstFlowID,
+		&i.FirstTaskID,
+		&i.LastFlowID,
+		&i.LastTaskID,
+		&i.DeliveredAt,
+		&i.DeliveredRunID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Contacts,
+		&i.Note,
+		&i.Origin,
+	)
+	return i, err
+}
+
 const markChannelAccountSignedIn = `-- name: MarkChannelAccountSignedIn :one
 UPDATE channel_accounts
 SET status = 'active', first_signed_in_at = COALESCE(first_signed_in_at, now())
@@ -1800,7 +1930,7 @@ const markLeadsDelivered = `-- name: MarkLeadsDelivered :many
 UPDATE leads
 SET delivered_at = CURRENT_TIMESTAMP, delivered_run_id = $1
 WHERE id = ANY($2::bigint[]) AND delivered_at IS NULL
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
 `
 
 type MarkLeadsDeliveredParams struct {
@@ -1837,6 +1967,8 @@ func (q *Queries) MarkLeadsDelivered(ctx context.Context, arg MarkLeadsDelivered
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Contacts,
+			&i.Note,
+			&i.Origin,
 		); err != nil {
 			return nil, err
 		}
@@ -1994,7 +2126,7 @@ SET empty_streak = CASE
     qualified_at_sync = qualified_leads,
     last_synced_at = CURRENT_TIMESTAMP
 WHERE id = $3
-RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at
+RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note
 `
 
 type RecordSourceReadParams struct {
@@ -2033,6 +2165,7 @@ func (q *Queries) RecordSourceRead(ctx context.Context, arg RecordSourceReadPara
 		&i.DiscoveredTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Note,
 	)
 	return i, err
 }
@@ -2093,7 +2226,7 @@ SET source_key   = $1,
     status       = 'active',
     status_reason = ''
 WHERE id = $9
-RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at
+RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note
 `
 
 type ResolveGrowthSourceParams struct {
@@ -2148,6 +2281,7 @@ func (q *Queries) ResolveGrowthSource(ctx context.Context, arg ResolveGrowthSour
 		&i.DiscoveredTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Note,
 	)
 	return i, err
 }
@@ -2492,7 +2626,7 @@ const updateGrowthSourceStatus = `-- name: UpdateGrowthSourceStatus :one
 UPDATE growth_sources
 SET status = $1, status_reason = $2
 WHERE id = $3
-RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at
+RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note
 `
 
 type UpdateGrowthSourceStatusParams struct {
@@ -2531,6 +2665,7 @@ func (q *Queries) UpdateGrowthSourceStatus(ctx context.Context, arg UpdateGrowth
 		&i.DiscoveredTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Note,
 	)
 	return i, err
 }
@@ -2590,6 +2725,112 @@ func (q *Queries) UpdateUserChannelAccount(ctx context.Context, arg UpdateUserCh
 		&i.UpdatedAt,
 		&i.FirstSignedInAt,
 		&i.NextJoinAt,
+	)
+	return i, err
+}
+
+const updateUserGrowthSource = `-- name: UpdateUserGrowthSource :one
+UPDATE growth_sources
+SET title = COALESCE($1, title), note = COALESCE($2, note)
+WHERE id = $3 AND user_id = $4
+RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note
+`
+
+type UpdateUserGrowthSourceParams struct {
+	Title  sql.NullString `json:"title"`
+	Note   sql.NullString `json:"note"`
+	ID     int64          `json:"id"`
+	UserID int64          `json:"user_id"`
+}
+
+func (q *Queries) UpdateUserGrowthSource(ctx context.Context, arg UpdateUserGrowthSourceParams) (GrowthSource, error) {
+	row := q.db.QueryRowContext(ctx, updateUserGrowthSource,
+		arg.Title,
+		arg.Note,
+		arg.ID,
+		arg.UserID,
+	)
+	var i GrowthSource
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Platform,
+		&i.SourceKey,
+		&i.ExternalID,
+		&i.Username,
+		&i.Title,
+		&i.Link,
+		&i.Kind,
+		&i.MemberCount,
+		&i.Language,
+		&i.Description,
+		&i.Origin,
+		&i.Query,
+		&i.Status,
+		&i.StatusReason,
+		&i.QualifiedLeads,
+		&i.QualifiedAtSync,
+		&i.EmptyStreak,
+		&i.Health,
+		&i.LastSyncedAt,
+		&i.DiscoveredFromID,
+		&i.DiscoveredFlowID,
+		&i.DiscoveredTaskID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Note,
+	)
+	return i, err
+}
+
+const updateUserLead = `-- name: UpdateUserLead :one
+UPDATE leads
+SET note     = COALESCE($1, note),
+    tier     = COALESCE($2, tier),
+    contacts = COALESCE($3, contacts)
+WHERE id = $4 AND user_id = $5
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
+`
+
+type UpdateUserLeadParams struct {
+	Note     sql.NullString        `json:"note"`
+	Tier     sql.NullString        `json:"tier"`
+	Contacts pqtype.NullRawMessage `json:"contacts"`
+	ID       int64                 `json:"id"`
+	UserID   int64                 `json:"user_id"`
+}
+
+func (q *Queries) UpdateUserLead(ctx context.Context, arg UpdateUserLeadParams) (Lead, error) {
+	row := q.db.QueryRowContext(ctx, updateUserLead,
+		arg.Note,
+		arg.Tier,
+		arg.Contacts,
+		arg.ID,
+		arg.UserID,
+	)
+	var i Lead
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Platform,
+		&i.PlatformUserID,
+		&i.IdentityKind,
+		&i.Username,
+		&i.DisplayName,
+		&i.Score,
+		&i.Tier,
+		&i.MatchReason,
+		&i.FirstFlowID,
+		&i.FirstTaskID,
+		&i.LastFlowID,
+		&i.LastTaskID,
+		&i.DeliveredAt,
+		&i.DeliveredRunID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Contacts,
+		&i.Note,
+		&i.Origin,
 	)
 	return i, err
 }
@@ -2782,7 +3023,7 @@ SET external_id  = COALESCE(NULLIF(EXCLUDED.external_id, ''), growth_sources.ext
     origin       = CASE WHEN EXCLUDED.origin = 'manual' THEN 'manual' ELSE growth_sources.origin END,
     status       = CASE WHEN growth_sources.status = 'invalid' THEN growth_sources.status ELSE EXCLUDED.status END,
     discovered_from_id = COALESCE(growth_sources.discovered_from_id, EXCLUDED.discovered_from_id)
-RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, (xmax = 0)::boolean AS inserted
+RETURNING id, user_id, platform, source_key, external_id, username, title, link, kind, member_count, language, description, origin, query, status, status_reason, qualified_leads, qualified_at_sync, empty_streak, health, last_synced_at, discovered_from_id, discovered_flow_id, discovered_task_id, created_at, updated_at, note, (xmax = 0)::boolean AS inserted
 `
 
 type UpsertGrowthSourceParams struct {
@@ -2833,6 +3074,7 @@ type UpsertGrowthSourceRow struct {
 	DiscoveredTaskID sql.NullInt64 `json:"discovered_task_id"`
 	CreatedAt        sql.NullTime  `json:"created_at"`
 	UpdatedAt        sql.NullTime  `json:"updated_at"`
+	Note             string        `json:"note"`
 	Inserted         bool          `json:"inserted"`
 }
 
@@ -2885,6 +3127,7 @@ func (q *Queries) UpsertGrowthSource(ctx context.Context, arg UpsertGrowthSource
 		&i.DiscoveredTaskID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Note,
 		&i.Inserted,
 	)
 	return i, err
@@ -2909,7 +3152,7 @@ SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
     contacts     = EXCLUDED.contacts,
     last_flow_id = COALESCE(EXCLUDED.last_flow_id, leads.last_flow_id),
     last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id)
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
 `
 
 type UpsertLeadParams struct {
@@ -2963,6 +3206,8 @@ func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Contacts,
+		&i.Note,
+		&i.Origin,
 	)
 	return i, err
 }
