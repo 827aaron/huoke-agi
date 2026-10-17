@@ -157,6 +157,13 @@ func (s *Service) ProgressSince(ctx context.Context, scope Scope, since time.Tim
 	return p, nil
 }
 
+// DeliverOptions: HasContact delivers only leads with a contact beside their platform
+// account, so the target counts those alone.
+type DeliverOptions struct {
+	AllowPartial bool
+	HasContact   bool
+}
+
 func (s *Service) sourceStats(ctx context.Context, userID int64) (SourceStats, error) {
 	row, err := s.db.GetUserSourceStats(ctx, userID)
 	if err != nil {
@@ -179,7 +186,8 @@ func (s *Service) sourceStats(ctx context.Context, userID int64) (SourceStats, e
 // tells the caller how many more to collect, unless allowPartial is set (the sources are
 // exhausted), in which case it delivers what there is. Calling it again tops a partial
 // round up and returns a completed round's delivery unchanged.
-func (s *Service) Deliver(ctx context.Context, scope Scope, allowPartial bool) (Delivery, error) {
+func (s *Service) Deliver(ctx context.Context, scope Scope, opt DeliverOptions) (Delivery, error) {
+	allowPartial := opt.AllowPartial
 	run, err := s.EnsureRun(ctx, scope)
 	if err != nil {
 		return Delivery{}, err
@@ -197,8 +205,9 @@ func (s *Service) Deliver(ctx context.Context, scope Scope, allowPartial bool) (
 	if need > 0 {
 		candidates, err := s.db.GetDeliverableLeads(ctx, database.GetDeliverableLeadsParams{
 			UserID: scope.UserID,
-			FlowID: scope.flowID(),
-			Lim:    int64(need),
+			FlowID:     scope.flowID(),
+			HasContact: opt.HasContact,
+			Lim:        int64(need),
 		})
 		if err != nil {
 			return Delivery{}, fmt.Errorf("failed to select leads for round %d: %w", run.ID, err)

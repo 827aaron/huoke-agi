@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -590,23 +589,9 @@ func (aw *assistantWorker) reportFailure(err error) {
 		return
 	}
 
-	msg := fmt.Sprintf(assistantFailureText(aw.ap.Language()), err)
+	msg := fmt.Sprintf(templates.NoticeText(templates.NoticeAssistantFailed, aw.ap.Language()), err)
 	if _, putErr := aw.aslw.PutFlowAssistantMsg(aw.ctx, database.MsglogTypeReport, "", msg); putErr != nil {
 		aw.logger.WithError(putErr).Warn("failed to report why the assistant did not answer")
-	}
-}
-
-// assistantFailureText is the user-visible line for an assistant that could not answer, in
-// the conversation's detected language when there is a translation; the cause stays as
-// the error reads.
-func assistantFailureText(lang string) string {
-	switch strings.ToLower(strings.TrimSpace(lang)) {
-	case "chinese", "mandarin", "simplified chinese":
-		return "助手没能回答：%s"
-	case "traditional chinese":
-		return "助手沒能回答：%s"
-	default:
-		return "The assistant could not answer: %s"
 	}
 }
 

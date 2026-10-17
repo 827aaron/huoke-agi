@@ -108,6 +108,11 @@ type MessageView struct {
 	Link           string    `json:"link,omitempty"`
 	ReplyTo        string    `json:"reply_to,omitempty"`
 	Text           string    `json:"text"`
+	// Score, Tier and Signals are the judgement model's verdict on a screened message:
+	// a lead saved with this message as evidence takes this score.
+	Score   int    `json:"score,omitempty"`
+	Tier    string `json:"tier,omitempty"`
+	Signals string `json:"signals,omitempty"`
 }
 
 // SyncResult is one source's read. Read counts every message read, Skipped those the
@@ -748,10 +753,9 @@ func (s *Service) SyncSource(
 	return s.syncOne(ctx, scope, sourceID, SyncOptions{Direction: direction, Limit: limit})
 }
 
-// SyncSources reads several sources in turn and stops early, keeping what it read, when
-// the platform rate-limits or no account can read.
 // SyncSources reads each source in turn; no ids reads every source an account of the
-// owner has joined.
+// owner has joined. It stops early, keeping what it read, when the platform rate-limits
+// or cannot be reached, or no account can read.
 func (s *Service) SyncSources(ctx context.Context, scope Scope, sourceIDs []int64, opt SyncOptions) ([]SyncResult, error) {
 	if len(sourceIDs) == 0 {
 		joined, err := s.joinedSourceIDs(ctx, scope.UserID)
@@ -768,7 +772,7 @@ func (s *Service) SyncSources(ctx context.Context, scope Scope, sourceIDs []int6
 			results = append(results, res)
 			var flood *connectors.FloodWaitError
 			if errors.As(err, &flood) || errors.Is(err, ErrNoAccount) || errors.Is(err, connectors.ErrUnauthorized) ||
-				errors.Is(err, ErrNoJudge) ||
+				errors.Is(err, ErrNoJudge) || errors.Is(err, connectors.ErrUnreachable) ||
 				errors.Is(err, connectors.ErrNoConnector) || ctx.Err() != nil {
 				return results, err
 			}

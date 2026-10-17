@@ -18,6 +18,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/schema"
+	"pentagi/pkg/templates"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer"
@@ -398,12 +399,16 @@ func (ce *customExecutor) Execute(
 		if msgID != 0 {
 			// Without a result the message reads as still running, a stopped or failed
 			// delegation included.
-			outcome := fmt.Sprintf("Failed: %v", err)
-			if errors.Is(err, context.Canceled) {
-				outcome = "Stopped before it finished."
-			}
 			msgCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closingWriteTimeout)
 			defer cancel()
+			lang := ""
+			if flow, err := ce.db.GetFlow(msgCtx, ce.flowID); err == nil {
+				lang = flow.Language
+			}
+			outcome := fmt.Sprintf(templates.NoticeText(templates.NoticeToolFailed, lang), err)
+			if errors.Is(err, context.Canceled) {
+				outcome = templates.NoticeText(templates.NoticeToolStopped, lang)
+			}
 			if err := ce.mlp.UpdateMsgResult(msgCtx, msgID, streamID, outcome, database.MsglogResultFormatPlain); err != nil {
 				obs.LogErrorOrCancel(logger, err, "failed to update tool call message result")
 			}

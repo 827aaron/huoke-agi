@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -167,6 +168,9 @@ func newTelegramWithAPI(cfg TelegramConfig, acc Account, api telegramAPI) *Teleg
 	if cfg.CallTimeout <= 0 {
 		cfg.CallTimeout = 30 * time.Second
 	}
+	if cfg.ConnectTimeout <= 0 {
+		cfg.ConnectTimeout = 15 * time.Second
+	}
 	return &Telegram{
 		cfg:     cfg,
 		account: acc,
@@ -247,20 +251,25 @@ func (t *Telegram) Start(ctx context.Context) error {
 		t.mu.Unlock()
 	}()
 
-	timeout := time.NewTimer(t.cfg.CallTimeout)
+	// gotd's first connection can ignore its context for half a minute, so the timeout
+	// and a cancelled ctx do not wait for client.Run to return; runErr is buffered and
+	// the goroutine ends alone.
+	timeout := time.NewTimer(t.cfg.ConnectTimeout)
 	defer timeout.Stop()
 	select {
 	case <-ready:
 	case err := <-runErr:
 		cancel()
+		var netErr net.Error
+		if errors.As(err, &netErr) {
+			return fmt.Errorf("%w: connect to telegram: %v", ErrUnreachable, err)
+		}
 		return fmt.Errorf("connect to telegram: %w", err)
 	case <-timeout.C:
 		cancel()
-		<-done
-		return fmt.Errorf("connect to telegram: no connection within %s", t.cfg.CallTimeout)
+		return fmt.Errorf("%w: no connection to telegram within %s", ErrUnreachable, t.cfg.ConnectTimeout)
 	case <-ctx.Done():
 		cancel()
-		<-done
 		return ctx.Err()
 	}
 	t.pacer.resetLogin()
