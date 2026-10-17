@@ -123,9 +123,9 @@ func (s *Service) screen(
 	if len(msgs) == 0 {
 		return msgs, nil
 	}
-	var profile Profile
-	if v, err := s.GetProfile(ctx, userID); err == nil {
-		profile = v.Profile
+	profile, err := s.judgingProfile(ctx, userID)
+	if err != nil {
+		return nil, err
 	}
 	scoring := profile.ScoringOrDefault()
 	business := businessSummary(profile)
@@ -178,6 +178,85 @@ func (s *Service) screen(
 		}
 	}
 	return kept, nil
+}
+
+// judgeEvidence screens the excerpts of a lead whose messages no read scored, as on web
+// pages the researcher reads itself: the best excerpt's score, or false when Jev failed
+// and the agent's score has to stand. A score is stored per message id, so a repeat of
+// the lead is not judged again.
+func (s *Service) judgeEvidence(
+	ctx context.Context,
+	userID int64,
+	sc *screener,
+	src database.GrowthSource,
+	in LeadInput,
+) (int, bool, error) {
+	profile, err := s.judgingProfile(ctx, userID)
+	if err != nil {
+		return 0, false, err
+	}
+	scoring := profile.ScoringOrDefault()
+	who := strings.TrimSpace(strings.TrimPrefix(in.Username, "@"))
+	if who != "" {
+		who = "@" + who
+	}
+	who = strings.TrimSpace(who + " " + in.DisplayName)
+	if who == "" {
+		who = in.PlatformUserID
+	}
+	msgs := make([]screening.Message, 0, len(in.Evidence))
+	for i, ev := range in.Evidence {
+		msgs = append(msgs, screening.Message{
+			ID: strconv.Itoa(i), Sender: who, Text: strings.Join(strings.Fields(truncateRunes(ev.Excerpt, screenRunes)), " "),
+		})
+	}
+	source := src.Title
+	if source == "" {
+		source = src.Link
+	}
+	judged, _, err := sc.client.Judge(ctx, screening.Batch{
+		Platform: src.Platform, Source: source, Business: businessSummary(profile), Messages: msgs,
+		Signals: screening.Signals,
+	})
+	switch {
+	case errors.Is(err, screening.ErrUnauthorized):
+		return 0, false, fmt.Errorf("%w (%v)", ErrNoJudge, err)
+	case ctx.Err() != nil:
+		return 0, false, ctx.Err()
+	case err != nil:
+		logrus.WithContext(ctx).WithError(err).WithField("source_id", src.ID).
+			Warn("judging a lead's evidence failed; the agent's score stands")
+		return 0, false, nil
+	}
+
+	best, scored := 0, false
+	for i, ev := range in.Evidence {
+		j, ok := judged[strconv.Itoa(i)]
+		if !ok {
+			continue
+		}
+		scored = true
+		if j.Customer >= 0 && j.Customer < sc.threshold {
+			continue
+		}
+		score, signals := scoreMessage(scoring, j.Signals, evidenceTime(ev), sc.now())
+		best = max(best, score)
+		if id := strings.TrimSpace(ev.MessageID); id != "" && len(j.Signals) > 0 {
+			if err := s.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
+				UserID: userID, SourceID: ev.SourceID, MessageID: id, Score: int32(score), Signals: signals,
+			}); err != nil {
+				return 0, false, fmt.Errorf("failed to store the score of message %s: %w", id, err)
+			}
+		}
+	}
+	return best, scored, nil
+}
+
+func evidenceTime(ev EvidenceInput) time.Time {
+	if ev.MessageTime != nil {
+		return *ev.MessageTime
+	}
+	return time.Time{}
 }
 
 // signalYes is the probability from which Jev's answer counts as yes.
@@ -263,9 +342,11 @@ func businessSummary(p Profile) string {
 	}
 	line("Business", p.Name)
 	line("Offer", p.Pitch)
-	line("Games", strings.Join(p.Games, ", "))
-	line("Genre", p.Genre)
+	line("Products", strings.Join(p.Games, ", "))
+	line("Category", p.Genre)
 	line("Competitors", strings.Join(p.Competitors, ", "))
+	line("Regions", strings.Join(p.Regions, ", "))
+	line("Languages", strings.Join(p.Languages, ", "))
 	line("Words that often mark a likely customer", strings.Join(p.Signals, "; "))
 	line("Usually not a customer", strings.Join(p.Excludes, "; "))
 	line("Notes", p.Notes)

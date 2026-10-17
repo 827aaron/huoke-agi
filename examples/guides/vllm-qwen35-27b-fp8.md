@@ -1,6 +1,6 @@
-# Running PentAGI with vLLM and Qwen3.5-27B-FP8
+# Running KeLai AGI with vLLM and Qwen3.5-27B-FP8
 
-This guide explains how to deploy PentAGI with a fully local LLM setup using vLLM and Qwen3.5-27B-FP8. This configuration enables complete independence from cloud API providers while maintaining high performance for autonomous penetration testing workflows.
+This guide explains how to deploy KeLai AGI with a fully local LLM setup using vLLM and Qwen3.5-27B-FP8. This configuration enables complete independence from cloud API providers while keeping the agents fast.
 
 ## Table of Contents
 
@@ -10,7 +10,7 @@ This guide explains how to deploy PentAGI with a fully local LLM setup using vLL
 - [vLLM Installation](#vllm-installation)
 - [Server Configuration](#server-configuration)
 - [Testing the Deployment](#testing-the-deployment)
-- [PentAGI Integration](#pentagi-integration)
+- [KeLai AGI Integration](#pentagi-integration)
 - [Performance Benchmarks](#performance-benchmarks)
 - [Troubleshooting](#troubleshooting)
 
@@ -25,10 +25,10 @@ This guide explains how to deploy PentAGI with a fully local LLM setup using vLL
 - **Extended context**: Up to 1,010,000 tokens via YaRN
 - **Quantization**: FP8 W8A8 with block size 128 (performance nearly identical to BF16)
 
-This model is particularly well-suited for PentAGI's multi-agent workflows due to its:
+This model is particularly well-suited for KeLai AGI's multi-agent workflows due to its:
 - Strong reasoning capabilities with native thinking mode
 - Excellent function calling support
-- Large context window for complex security analysis
+- Large context window for long agent runs
 - Fast inference speed with FP8 quantization
 
 ---
@@ -252,7 +252,7 @@ curl "http://127.0.0.1:8000/v1/chat/completions" \
 
 **Expected**: Creative/diverse responses without thinking tags.
 
-If all tests return valid JSON responses with appropriate content, your vLLM server is ready for PentAGI integration.
+If all tests return valid JSON responses with appropriate content, your vLLM server is ready for KeLai AGI integration.
 
 ---
 
@@ -272,15 +272,15 @@ The Qwen team provides official recommendations for sampling parameters optimize
 - `max_tokens=32768` for most tasks
 - `max_tokens=81920` for complex math/coding tasks
 
-These parameters are already applied in the PentAGI provider configuration files referenced below.
+These parameters are already applied in the KeLai AGI provider configuration files referenced below.
 
 ---
 
-## PentAGI Integration
+## KeLai AGI Integration
 
-### Step 1: Configure Custom Provider in PentAGI
+### Step 1: Configure Custom Provider in KeLai AGI
 
-PentAGI includes pre-configured provider files for Qwen3.5-27B-FP8 with optimized sampling parameters for different agent roles.
+KeLai AGI includes pre-configured provider files for Qwen3.5-27B-FP8 with optimized sampling parameters for different agent roles.
 
 **Two provider configurations are available:**
 
@@ -294,9 +294,9 @@ PentAGI includes pre-configured provider files for Qwen3.5-27B-FP8 with optimize
    - Uses `temp=0.7` for general tasks, `temp=1.0` for reasoning
    - Recommended for faster responses
 
-### Step 2: Add Provider via PentAGI UI
+### Step 2: Add Provider via KeLai AGI UI
 
-1. Start PentAGI (see [Quick Start](../../README.md#-quick-start))
+1. Start KeLai AGI (see [Quick Start](../../README.md#-quick-start))
 2. Navigate to **Settings → Providers**
 3. Click **Add Provider**
 4. Fill in the form:
@@ -331,7 +331,7 @@ Based on internal testing with 4× RTX 5090 GPUs and 10 concurrent requests:
 | **VRAM Usage** | ~30 GB per GPU (at 0.75 utilization) |
 | **Context Window** | Full 262K tokens supported |
 
-These benchmarks demonstrate that Qwen3.5-27B-FP8 provides excellent throughput for running multiple PentAGI flows in parallel, making it suitable for production deployments.
+These benchmarks demonstrate that Qwen3.5-27B-FP8 provides excellent throughput for running multiple KeLai AGI flows in parallel, making it suitable for production deployments.
 
 ---
 
@@ -339,25 +339,25 @@ These benchmarks demonstrate that Qwen3.5-27B-FP8 provides excellent throughput 
 
 ### Issue: Automation Flow Runs for Hours or Repeats Commands
 
-**Cause**: Broad penetration testing prompts can leave smaller local or custom models exploring too much state, especially when the task has no stopping criteria. Repeated commands may indicate model weakness, target complexity, tool-call/provider issues, or a flow that needs additional supervision.
+**Cause**: Broad task prompts can leave smaller local or custom models exploring too much state, especially when the task has no stopping criteria. Repeated commands may indicate model weakness, target complexity, tool-call/provider issues, or a flow that needs additional supervision.
 
-**Solution**: First check the existing PentAGI execution controls before changing runtime behavior or assuming the target is broken:
+**Solution**: First check the existing KeLai AGI execution controls before changing runtime behavior or assuming the task is impossible:
 
 - Enable execution monitoring with `EXECUTION_MONITOR_ENABLED=true` so the Adviser can review repeated or inefficient tool-call patterns.
-- Tune `EXECUTION_MONITOR_SAME_TOOL_LIMIT` and `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT` if Adviser reviews happen too late or too often for your model and target.
-- Enable planning with `AGENT_PLANNING_STEP_ENABLED=true` for complex pentest flows so specialist agents receive a bounded execution plan.
+- Tune `EXECUTION_MONITOR_SAME_TOOL_LIMIT` and `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT` if Adviser reviews happen too late or too often for your model and task.
+- Enable planning with `AGENT_PLANNING_STEP_ENABLED=true` for complex flows so specialist agents receive a bounded execution plan.
 - Review hard tool-call limits with `MAX_GENERAL_AGENT_TOOL_CALLS` and `MAX_LIMITED_AGENT_TOOL_CALLS`; these remain the final guardrails for runaway executions.
 
-Also narrow the task prompt. Instead of only `Perform penetration testing on the host 192.168.136.136`, include the authorized target, scope, expected output, and stopping criteria, for example: enumerate exposed services, try likely public exploits, avoid repeating failed commands more than twice, and stop with a concise findings report if no path is found.
+Also narrow the task prompt. Instead of only `Find players for our game`, include the platforms, languages, the number of leads wanted and a stopping criterion, for example: search Telegram and forums in English, deliver 50 qualified leads, avoid repeating a failed search more than twice, and stop with what was found if no new sources turn up.
 
-Use PentAGI flow logs, Docker logs, and provider or vLLM logs together when diagnosing a long run:
+Use KeLai AGI flow logs, Docker logs, and provider or vLLM logs together when diagnosing a long run:
 
 - Repeated identical shell/browser actions point toward tool-loop behavior.
 - Long gaps between actions point toward slow model generation or provider latency.
 - Frequent malformed tool calls point toward provider/tool-call parser compatibility.
-- Varied but slow exploration can simply mean the target is complex or the prompt is too broad.
+- Varied but slow exploration can simply mean the task is complex or the prompt is too broad.
 
-Qwen3.5-27B-FP8 can run useful local flows, but complex autonomous pentests may still need execution monitoring, task planning, tighter prompts, and careful log review.
+Qwen3.5-27B-FP8 can run useful local flows, but complex autonomous tasks may still need execution monitoring, task planning, tighter prompts, and careful log review.
 
 ### Issue: "Unknown architecture 'qwen3_5'"
 
@@ -451,7 +451,7 @@ VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 vllm serve Qwen/Qwen3.5-27B-FP8 \
 - YaRN uses a **static scaling factor** regardless of input length, which may impact performance on shorter texts
 - Only enable YaRN when processing long contexts is required
 - Adjust `factor` based on typical context length (e.g., `factor=2.0` for 524K tokens)
-- For most PentAGI workflows, the native 262K context is sufficient
+- For most KeLai AGI workflows, the native 262K context is sufficient
 
 ---
 
@@ -460,5 +460,5 @@ VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 vllm serve Qwen/Qwen3.5-27B-FP8 \
 - **Official Qwen3.5 Documentation**: [HuggingFace Model Card](https://huggingface.co/Qwen/Qwen3.5-27B-FP8)
 - **vLLM Documentation**: [docs.vllm.ai](https://docs.vllm.ai/)
 - **vLLM Qwen3.5 Recipe**: [Official vLLM Guide](https://docs.vllm.ai/en/latest/models/supported_models/)
-- **PentAGI Main Documentation**: [README.md](../../README.md)
+- **KeLai AGI Main Documentation**: [README.md](../../README.md)
 - **Provider Configuration Reference**: See example configs in [`examples/configs/`](../configs/)

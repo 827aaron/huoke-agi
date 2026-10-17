@@ -45,7 +45,8 @@ func TestRunner_Deliver_CompletesAtTheTargetWithTheBestLeads(t *testing.T) {
 	require.NoError(t, err)
 	w.mustSaveQualified(t, scope, src, 1, 2)
 	best := qualified("99", src, "m99")
-	best.Score = 13
+	recent := time.Now().UTC()
+	best.Evidence[0].MessageTime = &recent
 	_, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{best})
 	require.NoError(t, err)
 

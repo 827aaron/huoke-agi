@@ -19,12 +19,16 @@ import (
 
 // Jev is served by TypeSafe and, under the same System One API, by OpenRouter, which
 // names its models with a "typesafe/" prefix. The default models track the newest Jev.
+// OpenRouter serves that as the tilde alias "~typesafe/jev-latest", which its model list
+// does not carry; "typesafe/jev-latest" is answered with "model not found".
 const (
 	DefaultURL             = "https://api.typesafe.ai"
 	DefaultModel           = "jev-latest"
 	OpenRouterURL          = "https://openrouter.ai/api"
-	OpenRouterDefaultModel = "typesafe/jev-latest"
+	OpenRouterDefaultModel = "~typesafe/jev-latest"
 	OpenRouterModelPrefix  = "typesafe/"
+
+	openRouterUntildedLatest = "typesafe/jev-latest"
 )
 
 // maxRetryAfter caps the wait a server asks for, so one read is not held for minutes.
@@ -70,7 +74,8 @@ type Judgement struct {
 	Signals  map[string]float64
 }
 
-// The buying signals of a player of a game, worded for any offer.
+// The buying signals of a likely customer. The keys are stable weight names; the
+// questions name no industry, so the business text decides who the audience is.
 const (
 	SignalPlayer = "player"
 	SignalPain   = "pain"
@@ -81,17 +86,18 @@ const (
 var Signals = []Signal{
 	{
 		Key: SignalPlayer,
-		Question: "Does the sender of `messages.%s` use, play or follow the kind of product the business in `business` " +
-			"offers, as its regular users or players do (talks about playing it, asks for guides, shares progress)?",
+		Question: "Is the sender of `messages.%s` part of the audience the business in `business` serves: do they use " +
+			"or follow its kind of product or service themselves (talk about using it, ask for tips, share their results)?",
 		Criteria: map[string]string{
-			"true":  "The sender shows they use or play this kind of product themselves",
-			"false": "No sign the sender uses or plays this kind of product",
+			"true":  "The sender shows they use or follow this kind of product or service themselves",
+			"false": "No sign the sender belongs to this audience",
 		},
 	},
 	{
 		Key: SignalPain,
 		Question: "Is the sender of `messages.%s` unhappy with what they use now, bored with it, leaving it, " +
-			"or asking for an alternative like the offer in `business`?",
+			"or asking for an alternative like the offer in `business`? Wanting to stop using this kind of product " +
+			"altogether is not this signal.",
 		Criteria: map[string]string{
 			"true":  "Complaint, boredom, quitting, or a request for something similar or better",
 			"false": "No complaint and no search for an alternative",
@@ -99,8 +105,8 @@ var Signals = []Signal{
 	},
 	{
 		Key: SignalPaying,
-		Question: "Does the sender of `messages.%s` mention paying for this kind of product: purchases, top-ups, " +
-			"subscriptions, in-app items, passes or memberships?",
+		Question: "Does the sender of `messages.%s` mention paying for this kind of product or service: purchases, " +
+			"deposits, top-ups, subscriptions, plans or memberships?",
 		Criteria: map[string]string{
 			"true":  "The sender mentions spending money on this kind of product",
 			"false": "No mention of spending",
@@ -109,9 +115,9 @@ var Signals = []Signal{
 	{
 		Key: SignalMatch,
 		Question: "Does what the sender of `messages.%s` wants or uses fit the offer in `business`: " +
-			"its genre, platform and style?",
+			"its category, platform, region and style?",
 		Criteria: map[string]string{
-			"true":  "Same or close genre, platform and style",
+			"true":  "Same or close category, platform and style",
 			"false": "Unrelated or opposite to the offer",
 		},
 	},
@@ -136,8 +142,10 @@ const question = "Could the sender of `messages.%s` (posted on `platform`, in `s
 	"or complains about an alternative?"
 
 var criteria = map[string]string{
-	"true":  "The message shows the sender may want or use what the business offers, even indirectly",
-	"false": "Spam, advertising, a bot, a seller or booster, a competitor, or nothing to do with the business",
+	"true": "The message shows the sender may want or use what the business offers, even indirectly",
+	"false": "Spam, advertising, a bot, a seller or booster, a competitor, someone `business` says is usually " +
+		"not a customer, or nothing to do with the business. Exclusions apply only on explicit evidence in the " +
+		"message; never infer them from style, age cues or platform",
 }
 
 // Judge returns the judgement of each message by id, and the model version that
@@ -309,20 +317,30 @@ func (c *Client) ResolvedURL() string {
 }
 
 // ResolvedModel is the model asked for: the set one, else the newest Jev under the
-// naming of the endpoint.
+// naming of the endpoint. A saved "typesafe/jev-latest" on OpenRouter means its alias.
 func (c *Client) ResolvedModel() string {
-	if c.Model != "" {
-		return c.Model
+	if c.Model == "" || (c.Model == openRouterUntildedLatest && isOpenRouter(c.ResolvedURL())) {
+		return DefaultModelFor(c.ResolvedURL())
 	}
-	return DefaultModelFor(c.ResolvedURL())
+	return c.Model
 }
 
 // DefaultModelFor is the newest Jev as the endpoint at rawURL names it.
 func DefaultModelFor(rawURL string) string {
-	if u, err := url.Parse(rawURL); err == nil && (u.Hostname() == "openrouter.ai" || strings.HasSuffix(u.Hostname(), ".openrouter.ai")) {
+	if isOpenRouter(rawURL) {
 		return OpenRouterDefaultModel
 	}
 	return DefaultModel
+}
+
+// IsOpenRouterModel tells a Jev model as OpenRouter lists or aliases it.
+func IsOpenRouterModel(id string) bool {
+	return strings.HasPrefix(strings.TrimPrefix(id, "~"), OpenRouterModelPrefix)
+}
+
+func isOpenRouter(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	return err == nil && (u.Hostname() == "openrouter.ai" || strings.HasSuffix(u.Hostname(), ".openrouter.ai"))
 }
 
 func (c *Client) client() *http.Client {

@@ -9,6 +9,7 @@ import type {
     GrowthModelsResponse,
     GrowthProfile,
     GrowthProfileInput,
+    GrowthProfilePreset,
     GrowthProxyTestResult,
     GrowthRemoteLogin,
     GrowthRun,
@@ -67,6 +68,7 @@ const live = {
     // Answers 502 Growth.ModelList when the relay does not list its models; the model is then typed by name.
     listModels: async (kind: GrowthSettingKind, input: GrowthModelsInput) =>
         unwrapApiResponse(await api.post<GrowthModelsResponse>(`/growth/settings/${kind}/models`, input)).models,
+    listProfilePresets: async () => unwrapApiResponse(await api.get<GrowthProfilePreset[]>('/growth/profiles/presets')),
     listProfiles: async () => unwrapApiResponse(await api.get<GrowthProfile[]>('/growth/profiles')),
     listRuns: async (flowId: number | string) =>
         unwrapApiResponse(await api.get<{ runs: GrowthRun[] }>('/growth/runs/', { params: { flow_id: flowId } })).runs,

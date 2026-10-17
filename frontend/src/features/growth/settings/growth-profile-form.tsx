@@ -1,5 +1,5 @@
 import { Check, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import * as z from 'zod';
 
@@ -7,6 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -14,7 +15,13 @@ import { useAppForm } from '@/hooks/use-app-form';
 import { getApiErrorMessage } from '@/lib/axios';
 import { copy } from '@/lib/copy';
 
-import type { GrowthContactType, GrowthProfile, GrowthProfileInput, GrowthScoringSignal } from '../growth-types';
+import type {
+    GrowthContactType,
+    GrowthProfile,
+    GrowthProfileInput,
+    GrowthProfilePreset,
+    GrowthScoringSignal,
+} from '../growth-types';
 
 import { growthApi } from '../growth-api';
 import { LANGUAGE_CODES, languageCode } from '../languages';
@@ -40,7 +47,8 @@ const selectedLanguages = (values: { languages: string[]; otherLanguages: string
     ]),
 ];
 
-const languageFormValues = (languages: string[] = []) => {
+const languageFormValues = (languages: null | string[] = []) => {
+    languages ??= [];
     const codes = languages.map(languageCode).filter((code): code is string => !!code);
     const others = languages.filter((language) => !languageCode(language));
 
@@ -79,7 +87,7 @@ const profileFormSchema = z
             .refine((value) => Number(value) >= 1 && Number(value) <= 1000, { message: copy.profile.targetRange }),
         excludes: z.string(),
         games: nonEmptyList(required.games),
-        genre: z.string().min(1, { message: required.genre }),
+        genre: z.string().trim().min(1, { message: required.genre }),
         languages: z.array(z.string()),
         name: z.string().trim().min(1, { message: required.name }),
         notes: z.string(),
@@ -144,7 +152,7 @@ const toInput = (values: ProfileFormValues): GrowthProfileInput => ({
     default_target: Number(values.defaultTarget),
     excludes: splitList(values.excludes),
     games: splitList(values.games),
-    genre: values.genre,
+    genre: values.genre.trim(),
     languages: selectedLanguages(values),
     name: values.name.trim(),
     notes: values.notes.trim(),
@@ -160,6 +168,52 @@ const toInput = (values: ProfileFormValues): GrowthProfileInput => ({
     signals: splitList(values.signals),
 });
 
+type ProfileField = keyof GrowthProfileInput;
+
+// The form fields each profile field fills. Typed as a Record so a field the server adds cannot be
+// left out of a preset by accident.
+export const PRESET_FORM_FIELDS: Record<ProfileField, (keyof ProfileFormValues)[]> = {
+    competitors: ['competitors'],
+    contact_types: ['contactTypes'],
+    default_target: ['defaultTarget'],
+    excludes: ['excludes'],
+    games: ['games'],
+    genre: ['genre'],
+    languages: ['languages', 'otherLanguages'],
+    name: ['name'],
+    notes: ['notes'],
+    pitch: ['pitch'],
+    regions: ['regions'],
+    scoring: ['weights', 'qualified', 'watchlist'],
+    signals: ['signals'],
+};
+
+const isBlank = (value: unknown) =>
+    value === null || value === undefined || value === '' || value === 0 || (Array.isArray(value) && !value.length);
+
+// A field the preset leaves empty keeps what the owner typed, such as the name and the regions, and is
+// returned in `uncovered` so the form can say so.
+export const withPreset = (
+    current: ProfileFormValues,
+    { profile }: GrowthProfilePreset,
+): { uncovered: Set<ProfileField>; values: ProfileFormValues } => {
+    const fields = Object.keys(PRESET_FORM_FIELDS) as ProfileField[];
+    const uncovered = new Set(fields.filter((name) => isBlank(profile[name])));
+    const preset = toFormValues({
+        ...(Object.fromEntries(fields.map((name) => [name, profile[name] ?? undefined])) as GrowthProfileInput),
+        id: 0,
+        updated_at: '',
+    });
+    const values = { ...current };
+
+    fields
+        .filter((name) => !uncovered.has(name))
+        .flatMap((name) => PRESET_FORM_FIELDS[name])
+        .forEach((name) => Object.assign(values, { [name]: preset[name] }));
+
+    return { uncovered, values };
+};
+
 interface GrowthProfileFormProps {
     onSaved: (profile: GrowthProfile) => void;
     profile: GrowthProfile | null;
@@ -167,7 +221,16 @@ interface GrowthProfileFormProps {
 
 const requiredMark = (name: string) => (name in required ? ' *' : '');
 
-type TextFieldName = 'competitors' | 'excludes' | 'games' | 'name' | 'notes' | 'pitch' | 'regions' | 'signals';
+type TextFieldName =
+    | 'competitors'
+    | 'excludes'
+    | 'games'
+    | 'genre'
+    | 'name'
+    | 'notes'
+    | 'pitch'
+    | 'regions'
+    | 'signals';
 
 export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) {
     const [error, setError] = useState<null | string>(null);
@@ -176,6 +239,66 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
         defaultValues: toFormValues(profile),
         schema: profileFormSchema,
     });
+
+    const [presets, setPresets] = useState<GrowthProfilePreset[]>([]);
+    const [uncovered, setUncovered] = useState<Set<ProfileField>>(new Set());
+    const [presetId, setPresetId] = useState('');
+
+    const fill = (preset: GrowthProfilePreset, keepTyped = false) => {
+        const current = form.getValues();
+        const next = withPreset(current, preset);
+
+        // The presets load after the form shows, so the default one must not overwrite what the owner
+        // typed meanwhile; picking a preset by hand does.
+        if (keepTyped) {
+            const blank = toFormValues(null);
+
+            (Object.keys(blank) as (keyof ProfileFormValues)[])
+                .filter((name) => JSON.stringify(current[name]) !== JSON.stringify(blank[name]))
+                .forEach((name) => Object.assign(next.values, { [name]: current[name] }));
+        }
+
+        form.reset(next.values, { keepDefaultValues: true });
+        setUncovered(next.uncovered);
+    };
+
+    useEffect(() => {
+        let isCancelled = false;
+
+        growthApi
+            .listProfilePresets()
+            .then((list) => {
+                if (isCancelled) {
+                    return;
+                }
+
+                const initial = list.find((preset) => preset.default) ?? list[0];
+
+                setPresets(list);
+
+                if (initial && !profile) {
+                    setPresetId(initial.id);
+                    fill(initial, true);
+                }
+            })
+            .catch(() => {});
+
+        return () => {
+            isCancelled = true;
+        };
+        // Runs once: a new profile starts from the default preset; a saved one is left as it is.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handlePreset = (id: string) => {
+        const preset = presets.find((item) => item.id === id);
+
+        setPresetId(id);
+
+        if (preset) {
+            fill(preset);
+        }
+    };
 
     const handleSubmit = async (values: ProfileFormValues) => {
         setError(null);
@@ -193,6 +316,11 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
             setError(getApiErrorMessage(saveError, copy.common.saveFailed));
         }
     };
+
+    const notCovered = (name: ProfileField) =>
+        uncovered.has(name) && (
+            <p className="text-xs text-yellow-800 dark:text-yellow-300">{copy.profile.preset.notCovered}</p>
+        );
 
     const renderText = (name: TextFieldName, multiline = false) => (
         <FormField
@@ -219,6 +347,7 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                         )}
                     </FormControl>
                     <FormDescription>{field[name].help}</FormDescription>
+                    {notCovered(name)}
                     <FormMessage />
                 </FormItem>
             )}
@@ -233,42 +362,36 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                 onSubmit={form.handleSubmit(handleSubmit)}
             >
                 <p className="text-muted-foreground text-sm">{copy.profile.aiHint}</p>
+                {presets.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                        <Label htmlFor="growth-profile-preset">{copy.profile.preset.label}</Label>
+                        <Select
+                            onValueChange={handlePreset}
+                            value={presetId || undefined}
+                        >
+                            <SelectTrigger
+                                className="w-full"
+                                id="growth-profile-preset"
+                            >
+                                <SelectValue placeholder={copy.profile.preset.placeholder} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {presets.map((preset) => (
+                                    <SelectItem
+                                        key={preset.id}
+                                        value={preset.id}
+                                    >
+                                        {copy.profile.preset.names[preset.id] ?? preset.id}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-muted-foreground text-xs">{copy.profile.preset.help}</p>
+                    </div>
+                )}
                 {renderText('name')}
                 {renderText('games', true)}
-                <FormField
-                    control={form.control}
-                    name="genre"
-                    render={({ field: input }) => (
-                        <FormItem>
-                            <FormLabel>
-                                {field.genre.label}
-                                {requiredMark('genre')}
-                            </FormLabel>
-                            <Select
-                                onValueChange={input.onChange}
-                                value={input.value}
-                            >
-                                <FormControl>
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder={field.genre.placeholder} />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                    {copy.profile.genres.map((genre) => (
-                                        <SelectItem
-                                            key={genre}
-                                            value={genre}
-                                        >
-                                            {genre}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <FormDescription>{field.genre.help}</FormDescription>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
+                {renderText('genre')}
                 {renderText('pitch', true)}
                 {renderText('regions')}
                 <FormField
@@ -316,6 +439,7 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                                 />
                             )}
                             <FormDescription>{field.languages.help}</FormDescription>
+                            {notCovered('languages')}
                             <FormMessage />
                         </FormItem>
                     )}
@@ -353,6 +477,7 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                                 </ToggleGroup>
                             </FormControl>
                             <FormDescription>{field.contactTypes.help}</FormDescription>
+                            {notCovered('contact_types')}
                             <FormMessage />
                         </FormItem>
                     )}
@@ -372,6 +497,7 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                                 />
                             </FormControl>
                             <FormDescription>{field.defaultTarget.help}</FormDescription>
+                            {notCovered('default_target')}
                             <FormMessage />
                         </FormItem>
                     )}
@@ -387,6 +513,7 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-3 flex flex-col gap-3">
                         <p className="text-muted-foreground text-xs">{scoringText.hint}</p>
+                        {notCovered('scoring')}
                         <div className="grid gap-3 sm:grid-cols-2">
                             {SCORING_SIGNALS.map((signal) => (
                                 <FormField

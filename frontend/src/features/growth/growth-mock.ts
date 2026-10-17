@@ -7,6 +7,7 @@ import type {
     GrowthModelsInput,
     GrowthProfile,
     GrowthProfileInput,
+    GrowthProfilePreset,
     GrowthProxyTestResult,
     GrowthRemoteLogin,
     GrowthRun,
@@ -399,6 +400,77 @@ const runs: GrowthRun[] = [
     },
 ];
 
+const profilePresets: GrowthProfilePreset[] = [
+    {
+        default: true,
+        id: 'licensed_casino',
+        profile: {
+            competitors: null,
+            contact_types: ['platform_handle'],
+            default_target: 50,
+            excludes: [
+                'a stated age under 18',
+                'an explicit request for help to stop gambling, or a stated self-exclusion',
+                'a stated location outside the licensed regions',
+                'affiliates and agents promoting other platforms',
+                'bots and spam',
+            ],
+            games: ['casino games', 'live dealer games', 'sports'],
+            genre: 'Licensed online gaming platform',
+            languages: null,
+            name: '',
+            notes: 'The licensed regions are the ones under Regions. Exclusions apply only on explicit evidence in the message; never infer them from style, age cues or platform.',
+            pitch: 'A licensed, regulated online gaming operator (casino games and sports) serving the regions its license covers. Leads are adult players who already discuss online gaming platforms in public and say what they want from one; they are delivered to the operator, and nobody is contacted on its behalf.',
+            regions: null,
+            scoring: { qualified: 8, watchlist: 4, weights: { active: 2, match: 3, pain: 3, paying: 3, player: 3 } },
+            signals: [
+                'deposit experience',
+                'withdrawal speed',
+                'bonus terms',
+                'cashback',
+                'VIP program',
+                'odds',
+                'platform reliability',
+                'looking for a new platform',
+                'platform recommendation',
+            ],
+        },
+    },
+    {
+        default: false,
+        id: 'game_publisher',
+        profile: {
+            competitors: null,
+            contact_types: ['platform_handle'],
+            default_target: 50,
+            excludes: [
+                'accounts selling or boosting services',
+                'bots and spam',
+                'developers advertising their own game',
+            ],
+            games: null,
+            genre: 'Mobile and PC games',
+            languages: null,
+            name: '',
+            notes: '',
+            pitch: 'A mobile or PC game looking for players who play similar games and are open to a new one.',
+            regions: null,
+            signals: [
+                'looking for a new game',
+                'any game like',
+                'bored of',
+                'quitting',
+                'top up',
+                'skins',
+                'battle pass',
+                'guide',
+                'build',
+                'rank',
+            ],
+        },
+    },
+];
+
 const providersOf: Record<GrowthSettingKind, string[]> = {
     email: [],
     embedding: ['openai', 'openrouter', 'ollama', 'mistral', 'jina', 'huggingface', 'googleai', 'voyageai'],
@@ -437,7 +509,7 @@ let settings: GrowthSetting[] = [
     emptySetting('embedding'),
     {
         ...emptySetting('screening'),
-        fields: { api_key: '••••7c1e', api_url: '', model: 'typesafe/jev-latest', threshold: '0.6' },
+        fields: { api_key: '••••7c1e', api_url: '', model: '~typesafe/jev-latest', threshold: '0.6' },
         provider: 'openrouter',
         source: 'database',
         status: 'connected',
@@ -694,12 +766,13 @@ export const growthMock = {
             ? Promise.reject(new Error('mock: the key was refused'))
             : delay(
                   (kind === 'screening'
-                      ? ['typesafe/jev-latest', 'typesafe/jev-2026-09', 'typesafe/jev-2026-06']
+                      ? ['~typesafe/jev-latest', 'typesafe/jev-2026-09', 'typesafe/jev-2026-06']
                       : kind === 'embedding'
                         ? ['openai/text-embedding-3-small', 'openai/text-embedding-3-large']
                         : ['openai/gpt-5.1-mini', 'deepseek/deepseek-chat', 'qwen/qwen3-max']
                   ).map((id) => ({ id })),
               ),
+    listProfilePresets: () => delay(profilePresets),
     listProfiles: () => delay(profiles),
     listRuns: (flowId: number | string) => delay(runs.map((run) => ({ ...run, flow_id: Number(flowId) }))),
     listSchedules: (flowId: number | string) =>

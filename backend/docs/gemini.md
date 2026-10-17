@@ -57,7 +57,7 @@ Each agent type is optimized with specific parameters for Google AI models:
 - **Enricher**: Data enhancement and augmentation
 - **Coder**: Programming tasks with minimal temperature
 - **Installer**: System setup with deterministic responses
-- **Pentester**: Security testing with balanced creativity
+- **Researcher**: Reading sources and judging intent with balanced creativity
 
 ## Usage Examples
 
@@ -132,7 +132,7 @@ PROXY_URL=http://your-proxy:port
 
 The Google AI provider is automatically available when `GEMINI_API_KEY` is set. You can use it for:
 
-- **Flow Execution**: Autonomous penetration testing workflows
+- **Flow Execution**: Autonomous lead-finding workflows
 - **Assistant Mode**: Interactive chat and analysis
 - **Custom Tasks**: Specialized security assessments
 - **API Integration**: Programmatic access to Google AI models

@@ -12,7 +12,7 @@ even there the call graph is deliberately conservative — reaching any symbol o
 module is enough to attribute every advisory filed against that module, including
 advisories in code the module ships but we never execute.
 
-Everything with a published fix is taken. Fifteen findings stay, in two classes.
+Everything with a published fix is taken, and the `go` line names a toolchain past every standard-library fix filed so far. Eight findings stay, all in one module.
 
 ## Eight in a server we only talk to
 
@@ -26,21 +26,13 @@ say as much: `api.AuthorizationError.Error`, i.e. formatting an error we
 received, and `api.Client.Chat`, i.e. making a request. The vulnerable code lives
 on whatever host serves the endpoint an operator configures.
 
-## Seven the `go` line reports and the binary does not carry
+## The `go` line
 
-GO-2026-6218, 6091, 6090, 6089, 6088, 5972 and 5026 are filed against `net/url`,
-`html/template`, `crypto/tls`, `net/http`, `encoding/xml` and `encoding/asn1`,
-all fixed in go1.26.6. govulncheck attributes standard-library advisories to the
-version on the `go` line of `go.mod`, which states the floor the module supports
-rather than the toolchain that compiles it. The image builds on `golang:1.26`;
-`go version` run against the binary inside the built image prints a patch past
-those fixes. Raising the `go` line silences all seven, and it also raises the
-floor for everyone building from source, so it is a release decision and not a
-security fix.
+govulncheck attributes standard-library advisories to the version on the `go` line of `go.mod`, not to the toolchain that compiles the binary, so that line moves with each standard-library fix. It is the floor for everyone building from source; the image builds on `golang:1.26`, which is always the newest patch.
 
 ## What would change this
 
 An advisory here gaining a `Fixed in` version, our code starting to run Ollama's
-server side in-process, or the `go` line moving. Re-run the command above after
+server side in-process, or a standard-library advisory fixed past the `go` line. Re-run the command above after
 any dependency work and compare the module list, not just the count: a new module
 appearing is the signal.

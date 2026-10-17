@@ -41,6 +41,7 @@ const (
 var (
 	ErrInvalidProfile = errors.New("invalid business profile")
 	ErrNoProfile      = errors.New("no business profile is saved")
+	errCorruptProfile = errors.New("stored business profile is corrupt")
 
 	profileBlock = regexp.MustCompile(`(?s)<business_profile>.*?</business_profile>\s*`)
 )
@@ -85,7 +86,7 @@ type ScoringWeights struct {
 	Match  int `json:"match"`
 }
 
-// DefaultScoring is the weighting of a game company looking for players.
+// DefaultScoring weighs the five signals for an offer with no weighting of its own.
 var DefaultScoring = Scoring{
 	Weights:   ScoringWeights{Player: 3, Pain: 3, Paying: 2, Active: 2, Match: 3},
 	Qualified: QualifiedMinScore,
@@ -166,7 +167,7 @@ func (p *Profile) normalize() {
 func (p Profile) validate() error {
 	switch {
 	case p.Name == "" && p.Pitch == "" && len(p.Games) == 0:
-		return fmt.Errorf("%w: name, pitch or a game is required", ErrInvalidProfile)
+		return fmt.Errorf("%w: name, pitch or a product is required", ErrInvalidProfile)
 	case p.DefaultTarget < 0:
 		return fmt.Errorf("%w: default_target cannot be negative", ErrInvalidProfile)
 	}
@@ -206,7 +207,7 @@ func (s *Service) GetProfile(ctx context.Context, userID int64) (ProfileView, er
 func profileView(row database.GrowthProfile) (ProfileView, error) {
 	v := ProfileView{ID: row.UserID, UpdatedAt: nullTime(row.UpdatedAt.Time, row.UpdatedAt.Valid)}
 	if err := json.Unmarshal(row.Profile, &v.Profile); err != nil {
-		return ProfileView{}, fmt.Errorf("stored business profile is corrupt: %w", err)
+		return ProfileView{}, fmt.Errorf("%w: %w", errCorruptProfile, err)
 	}
 	v.normalize()
 	return v, nil
@@ -226,6 +227,9 @@ func (s *Service) ListProfiles(ctx context.Context, userID int64) ([]ProfileView
 
 // SaveProfile stores the profile, rewrites its resource file and replaces its guide
 // documents. The knowledge step needs an embedder; without one it is skipped and said so.
+// A change to what the judgement model reads or to the weights drops the owner's stored
+// message scores: they were judged for another audience, and a message saved as evidence
+// later is judged again. Leads already saved keep their scores.
 func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (ProfileView, error) {
 	p.normalize()
 	if err := p.validate(); err != nil {
@@ -235,7 +239,20 @@ func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (Pro
 	if err != nil {
 		return ProfileView{}, err
 	}
-	row, err := s.db.UpsertGrowthProfile(ctx, database.UpsertGrowthProfileParams{UserID: userID, Profile: raw})
+	prev, err := s.judgingProfile(ctx, userID)
+	if err != nil {
+		return ProfileView{}, err
+	}
+	var row database.GrowthProfile
+	if businessSummary(prev) != businessSummary(p) || prev.ScoringOrDefault() != p.ScoringOrDefault() {
+		row, err = s.db.ReplaceGrowthProfileDroppingScores(ctx, database.ReplaceGrowthProfileDroppingScoresParams{UserID: userID, Profile: raw})
+		if err == nil {
+			logrus.WithContext(ctx).WithField("user_id", userID).
+				Info("business profile changed what leads are judged by; stored message scores dropped")
+		}
+	} else {
+		row, err = s.db.UpsertGrowthProfile(ctx, database.UpsertGrowthProfileParams{UserID: userID, Profile: raw})
+	}
 	if err != nil {
 		return ProfileView{}, fmt.Errorf("failed to store the business profile: %w", err)
 	}
@@ -347,6 +364,11 @@ func (s *Service) seedProfileKnowledge(ctx context.Context, userID int64, p Prof
 // agent call carries it, summarised, in the execution context; long lists and text are
 // cut here and read in full from the file or with search_guide.
 func (p Profile) Compact() string {
+	return p.compact(true)
+}
+
+// compact without the file is the whole profile, since nothing else holds what it cuts.
+func (p Profile) compact(withFile bool) string {
 	var b strings.Builder
 	cut := false
 	line := func(label, value string) {
@@ -355,7 +377,10 @@ func (p Profile) Compact() string {
 		}
 	}
 	list := func(label string, items []string, sep string) {
-		shown := head(items, compactItems)
+		shown := items
+		if withFile {
+			shown = head(items, compactItems)
+		}
 		text := strings.Join(shown, sep)
 		if len(shown) < len(items) {
 			text += sep + "…"
@@ -364,7 +389,10 @@ func (p Profile) Compact() string {
 		line(label, text)
 	}
 	text := func(label, value string) {
-		short := truncateRunes(value, compactRunes)
+		short := value
+		if withFile {
+			short = truncateRunes(value, compactRunes)
+		}
 		if short != value {
 			cut = true
 		}
@@ -374,8 +402,8 @@ func (p Profile) Compact() string {
 	b.WriteString("<business_profile>\n")
 	line("Business", p.Name)
 	text("Offer", p.Pitch)
-	list("Games", p.Games, ", ")
-	line("Genre", p.Genre)
+	list("Products", p.Games, ", ")
+	line("Category", p.Genre)
 	list("Regions", p.Regions, ", ")
 	list("Languages", p.Languages, ", ")
 	if p.DefaultTarget > 0 {
@@ -388,11 +416,14 @@ func (p Profile) Compact() string {
 	if !slices.Equal(p.ContactTypes, []string{ContactPlatformHandle}) {
 		line("Contacts to find", strings.Join(p.ContactTypes, ", "))
 	}
-	fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, ProfileResourcePath)
-	if cut {
-		b.WriteString(" (the lines above are cut; read the file, or search_guide \"business profile\")")
+	if withFile {
+		fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, ProfileResourcePath)
+		if cut {
+			b.WriteString(" (the lines above are cut; read the file, or search_guide \"business profile\")")
+		}
+		b.WriteString("\n")
 	}
-	b.WriteString("\n</business_profile>")
+	b.WriteString("</business_profile>")
 	return b.String()
 }
 
@@ -410,8 +441,8 @@ func (p Profile) Markdown() string {
 		}
 	}
 	field("Business", p.Name)
-	field("Games", strings.Join(p.Games, ", "))
-	field("Genre", p.Genre)
+	field("Products", strings.Join(p.Games, ", "))
+	field("Category", p.Genre)
 	field("Regions", strings.Join(p.Regions, ", "))
 	field("Languages", strings.Join(p.Languages, ", "))
 	if p.DefaultTarget > 0 {
@@ -444,8 +475,8 @@ func head(items []string, n int) []string {
 }
 
 // WithProfile puts the owner's compact profile at the start of input, replacing a block
-// already there, and adds the profile file to resources. Without a saved profile both
-// come back unchanged.
+// already there, and adds the profile file to resources. Without a saved profile the
+// block is DefaultProfile's and there is no file to add.
 func (s *Service) WithProfile(
 	ctx context.Context,
 	userID int64,
@@ -453,14 +484,29 @@ func (s *Service) WithProfile(
 	res []database.UserResource,
 ) (string, []database.UserResource) {
 	v, err := s.GetProfile(ctx, userID)
-	if err != nil {
-		if !errors.Is(err, ErrNoProfile) {
-			logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).Warn("task started without the business profile")
-		}
+	switch {
+	case errors.Is(err, ErrNoProfile):
+		return DefaultProfile().compact(false) + "\n\n" + strings.TrimSpace(profileBlock.ReplaceAllString(input, "")), res
+	case err != nil:
+		logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).Warn("task started without the business profile")
 		return input, res
 	}
 	input = v.Compact() + "\n\n" + strings.TrimSpace(profileBlock.ReplaceAllString(input, ""))
 	return input, s.WithProfileResource(ctx, userID, res)
+}
+
+// judgingProfile is the profile leads are judged by: the owner's, or DefaultProfile when
+// they have none or it is unreadable. A failure to load is returned, so a passing
+// database error neither judges by the wrong profile nor drops scores.
+func (s *Service) judgingProfile(ctx context.Context, userID int64) (Profile, error) {
+	v, err := s.GetProfile(ctx, userID)
+	switch {
+	case errors.Is(err, ErrNoProfile), errors.Is(err, errCorruptProfile):
+		return DefaultProfile(), nil
+	case err != nil:
+		return Profile{}, err
+	}
+	return v.Profile, nil
 }
 
 // WithProfileResource adds the profile file to res unless it is there already.

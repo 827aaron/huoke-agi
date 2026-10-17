@@ -44,8 +44,9 @@ type LeadInput struct {
 	PlatformUserID string
 	Username       string
 	DisplayName    string
-	// Score is the agent's; a lead whose evidence the judgement model scored takes the
-	// model's score instead.
+	// Score is the agent's. The judgement model scores every lead's evidence, from the
+	// read that screened its messages or else from its excerpts, and its score replaces
+	// this one; the agent's stands only when the model could not answer.
 	Score int
 	// Tier is what the agent concluded; the stored tier always follows from the score.
 	Tier        string
@@ -123,13 +124,24 @@ type LeadFilter struct {
 func (s *Service) UpsertLeads(ctx context.Context, scope Scope, inputs []LeadInput) ([]LeadResult, error) {
 	sources := map[int64]database.GrowthSource{}
 	results := make([]LeadResult, 0, len(inputs))
-	scoring := DefaultScoring
-	if v, err := s.GetProfile(ctx, scope.UserID); err == nil {
-		scoring = v.ScoringOrDefault()
+	profile, err := s.judgingProfile(ctx, scope.UserID)
+	if err != nil {
+		return nil, err
 	}
+	scoring := profile.ScoringOrDefault()
 
+	var sc *screener
+	judge := func(src database.GrowthSource, in LeadInput) (int, bool, error) {
+		if sc == nil {
+			var err error
+			if sc, err = s.screenerFor(ctx, scope.UserID); err != nil {
+				return 0, false, err
+			}
+		}
+		return s.judgeEvidence(ctx, scope.UserID, sc, src, in)
+	}
 	for i, in := range inputs {
-		res, err := s.upsertLead(ctx, scope, in, sources, scoring)
+		res, err := s.upsertLead(ctx, scope, in, sources, scoring, judge)
 		res.Index = i
 		if err != nil {
 			return results, err
@@ -155,6 +167,7 @@ func (s *Service) upsertLead(
 	in LeadInput,
 	sources map[int64]database.GrowthSource,
 	scoring Scoring,
+	judge func(database.GrowthSource, LeadInput) (int, bool, error),
 ) (LeadResult, error) {
 	res := LeadResult{PlatformUserID: in.PlatformUserID, Score: in.Score}
 	reject := func(reason string) (LeadResult, error) {
@@ -198,6 +211,11 @@ func (s *Service) upsertLead(
 	score, judged, err := s.judgedScore(ctx, scope.UserID, in.Evidence)
 	if err != nil {
 		return res, err
+	}
+	if !judged {
+		if score, judged, err = judge(firstSource, in); err != nil {
+			return res, err
+		}
 	}
 	if !judged {
 		score = in.Score

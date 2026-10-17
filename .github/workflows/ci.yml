@@ -56,7 +56,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.26.5"
+          go-version: "1.26.9"
           cache: true
           cache-dependency-path: backend/go.sum
 
@@ -260,7 +260,8 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: vxcontrol/pentagi
+          # Pushed only to the Docker Hub account whose secrets are configured.
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/kelai-agi
           tags: |
             # For main branch - latest tag
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}

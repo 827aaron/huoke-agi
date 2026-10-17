@@ -507,3 +507,12 @@ WHERE id = sqlc.arg(id) AND next_start_at = sqlc.arg(handled_start_at);
 UPDATE growth_schedules
 SET last_run_id = COALESCE(sqlc.narg(last_run_id), last_run_id), last_error = sqlc.arg(last_error)
 WHERE id = sqlc.arg(id);
+
+-- One statement, so the profile and the scores it outdates change together.
+-- name: ReplaceGrowthProfileDroppingScores :one
+WITH dropped AS (
+  DELETE FROM growth_message_scores WHERE user_id = sqlc.arg(user_id)
+)
+INSERT INTO growth_profiles (user_id, profile) VALUES (sqlc.arg(user_id), sqlc.arg(profile))
+ON CONFLICT (user_id) DO UPDATE SET profile = EXCLUDED.profile
+RETURNING *;

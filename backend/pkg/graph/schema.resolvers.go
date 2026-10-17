@@ -13,6 +13,7 @@ import (
 	"pentagi/pkg/controller"
 	"pentagi/pkg/database"
 	"pentagi/pkg/database/converter"
+	"pentagi/pkg/database/knowledge"
 	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
 	"pentagi/pkg/providers"
@@ -2624,7 +2625,7 @@ func (r *queryResolver) SearchKnowledge(ctx context.Context, query string, filte
 	}
 
 	if admin {
-		return r.Knowledge.SearchDocuments(ctx, query, filter, lim)
+		return r.Knowledge.SearchDocuments(knowledge.WithActor(ctx, uid), query, filter, lim)
 	}
 	return r.Knowledge.SearchUserDocuments(ctx, uid, query, filter, lim)
 }

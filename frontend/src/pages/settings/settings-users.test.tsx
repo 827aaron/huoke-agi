@@ -70,6 +70,20 @@ describe('SettingsUsers', () => {
         expect(await screen.findByText('已停用')).toBeInTheDocument();
     });
 
+    it('deletes a user only after the confirmation', async () => {
+        render(<SettingsUsers />);
+
+        fireEvent.click(await screen.findByRole('button', { name: '删除' }));
+
+        expect(usersApi.delete).not.toHaveBeenCalled();
+
+        const dialog = await screen.findByRole('dialog');
+        fireEvent.click(within(dialog).getByRole('button', { name: /删除/ }));
+
+        await waitFor(() => expect(usersApi.delete).toHaveBeenCalledWith(sales));
+        await waitFor(() => expect(screen.queryByText(sales.mail)).not.toBeInTheDocument());
+    });
+
     it('refuses a short password that misses a character class', async () => {
         render(<SettingsUsers />);
 

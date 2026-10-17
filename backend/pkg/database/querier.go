@@ -318,6 +318,8 @@ type Querier interface {
 	RecordGrowthScheduleStart(ctx context.Context, arg RecordGrowthScheduleStartParams) error
 	RecordSourceRead(ctx context.Context, arg RecordSourceReadParams) (GrowthSource, error)
 	RefreshSourceYield(ctx context.Context, ids []int64) error
+	// One statement, so the profile and the scores it outdates change together.
+	ReplaceGrowthProfileDroppingScores(ctx context.Context, arg ReplaceGrowthProfileDroppingScoresParams) (GrowthProfile, error)
 	ResolveGrowthSource(ctx context.Context, arg ResolveGrowthSourceParams) (GrowthSource, error)
 	SaveAssistantLog(ctx context.Context, arg SaveAssistantLogParams) error
 	SaveAssistantLogContent(ctx context.Context, arg SaveAssistantLogContentParams) error

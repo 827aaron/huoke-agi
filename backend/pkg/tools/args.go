@@ -947,7 +947,7 @@ func (s IDString) String() string { return string(s) }
 
 type GrowthSearchSourcesAction struct {
 	Mode     String  `json:"mode" jsonschema:"required,type=string,enum=search,enum=resolve,enum=recommend" jsonschema_description:"'search' finds public Telegram groups and channels by keyword (query). 'resolve' turns links found elsewhere (Telegram links, @usernames, or forum and web page URLs) into pool sources (links). 'recommend' lists Telegram channels similar to a pool source (source_id). Every source found is added to the source pool."`
-	Query    string  `json:"query,omitempty" jsonschema_description:"search only: keywords in the language the target audience writes in, e.g. a game title or genre. Short queries return more; rotate several."`
+	Query    string  `json:"query,omitempty" jsonschema_description:"search only: keywords in the language the target audience writes in, e.g. a product name or category. Short queries return more; rotate several."`
 	Links    Strings `json:"links,omitempty" jsonschema_description:"resolve only: links to add, e.g. https://t.me/somegroup, @somechannel, https://forum.example.com/thread/123"`
 	SourceID Int64   `json:"source_id,omitempty" jsonschema:"type=integer" jsonschema_description:"recommend only: the pool source_id to find similar channels for"`
 	Limit    Int64   `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum results (1-50, default 20)"`

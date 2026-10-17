@@ -16,7 +16,7 @@
 
 ## Overview
 
-The Docker client package (`backend/pkg/docker`) provides a secure and isolated containerized environment for PentAGI's AI agents to execute penetration testing operations. This package serves as a wrapper around the official Docker SDK, offering specialized functionality for managing containers that AI agents use to perform security testing tasks.
+The Docker client package (`backend/pkg/docker`) provides a secure and isolated containerized environment for PentAGI's AI agents to execute command-line operations. This package serves as a wrapper around the official Docker SDK, offering specialized functionality for managing containers that AI agents use to perform task operations.
 
 ### Key Features
 
@@ -31,10 +31,10 @@ The Docker client package (`backend/pkg/docker`) provides a secure and isolated 
 
 ### Role in PentAGI Ecosystem
 
-The Docker client is a critical component that enables PentAGI's core promise of secure, isolated penetration testing. It provides the foundation for:
+The Docker client is a critical component that enables PentAGI's core promise of secure, isolated task execution. It provides the foundation for:
 
 - **Terminal Access**: AI agents execute commands in isolated environments
-- **Tool Execution**: Professional pentesting tools run in dedicated containers
+- **Tool Execution**: Command-line tools run in dedicated containers
 - **File Management**: Secure file operations and artifact storage
 - **Environment Preparation**: Dynamic container setup based on task requirements
 - **Resource Cleanup**: Automatic cleanup of completed or failed operations
@@ -112,7 +112,7 @@ The Docker client is configured through several environment variables defined in
 | `DOCKER_PUBLIC_IP` | `0.0.0.0` | Public IP for port binding (bridge mode only) |
 | `DOCKER_WORK_DIR` | | Custom work directory path on host |
 | `DOCKER_DEFAULT_IMAGE` | `debian:latest` | Fallback image if AI-selected image fails |
-| `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for penetration testing tasks |
+| `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for tasks that need the full command-line toolset |
 | `DATA_DIR` | `./data` | Local data directory for file operations |
 
 ### Configuration Structure
@@ -143,7 +143,7 @@ The three `DOCKER_INSIDE_*` values are consumed through helpers on `*config.Conf
 
 ### NET_ADMIN Capability Configuration
 
-The `DOCKER_NET_ADMIN` option controls whether PentAGI containers are granted the `NET_ADMIN` Linux capability, which provides advanced networking permissions essential for many penetration testing operations.
+The `DOCKER_NET_ADMIN` option controls whether PentAGI containers are granted the `NET_ADMIN` Linux capability, which provides advanced networking permissions essential for many network operations.
 
 #### Network Administration Capabilities
 
@@ -160,15 +160,15 @@ When `DOCKER_NET_ADMIN=true`, containers receive the following networking capabi
 #### Security Implications
 
 **Enabling NET_ADMIN (`DOCKER_NET_ADMIN=true`)**:
-- **Benefits**: Enables full-featured network penetration testing tools
+- **Benefits**: Enables full-featured network tools
 - **Risks**: Containers can potentially modify host network configuration
 - **Use Cases**: Network scanning, traffic interception, custom routing setups
-- **Tools Enabled**: Advanced nmap features, tcpdump, wireshark, custom networking tools
+- **Tools Enabled**: Advanced packet-capture features, tcpdump, wireshark, custom networking tools
 
 **Disabling NET_ADMIN (`DOCKER_NET_ADMIN=false`)**:
 - **Benefits**: Enhanced security isolation from host networking
-- **Limitations**: Some advanced networking tools may not function fully (nmap)
-- **Use Cases**: Application-level testing, web security assessment
+- **Limitations**: Some advanced raw-socket networking tools may not function fully
+- **Use Cases**: Application-level tasks, web content retrieval
 - **Recommended**: For environments where network-level testing is not required
 
 #### Container Capability Assignment
@@ -198,7 +198,7 @@ hostConfig := &container.HostConfig{
 }
 ```
 
-Why the full default set (minus one) instead of just `NET_RAW`/`NET_ADMIN`: pentest workflows routinely install new tools at runtime via `apt`/`dpkg` (the Installer Agent's core job), and several common network tools' `postinst` maintainer scripts call `setcap` on their binaries instead of relying on setuid (`ping`, `traceroute`, `nmap`, `dumpcap`, `hping3`, …). That needs `SETFCAP`; `SETPCAP`/`FSETID`/`AUDIT_WRITE` round out the rest of Docker's default set that ordinary package management and privilege-dropping daemons expect. See [Capability Management](#capability-management) below for the full rationale, including the one deliberate omission (`MKNOD`).
+Why the full default set (minus one) instead of just `NET_RAW`/`NET_ADMIN`: agent workflows routinely install new tools at runtime via `apt`/`dpkg` (the Installer Agent's core job), and several common network tools' `postinst` maintainer scripts call `setcap` on their binaries instead of relying on setuid (`ping`, `traceroute`, `dumpcap`, …). That needs `SETFCAP`; `SETPCAP`/`FSETID`/`AUDIT_WRITE` round out the rest of Docker's default set that ordinary package management and privilege-dropping daemons expect. See [Capability Management](#capability-management) below for the full rationale, including the one deliberate omission (`MKNOD`).
 
 ### Worker Docker Access
 
@@ -291,7 +291,7 @@ When `DOCKER_NETWORK` is set to the special value `host`, containers use the hos
 - **Performance**: Eliminates network virtualization overhead
 - **Use Cases**: Advanced network testing, raw packet manipulation, network monitoring
 
-**Security Consideration**: Host network mode reduces isolation. Use only when necessary for penetration testing tasks requiring direct host network access.
+**Security Consideration**: Host network mode reduces isolation. Use only when necessary for tasks requiring direct host network access.
 
 ## Core Interfaces
 
@@ -390,7 +390,7 @@ The `RunContainer` method handles the complete container creation workflow:
 
 ```go
 containerConfig := &container.Config{
-    Image:      "kali:latest",                    // AI-selected or default image
+    Image:      "debian:latest",                  // AI-selected or default image
     Hostname:   "a1b2c3d4",                      // Generated from container name
     WorkingDir: "/work",                         // Standard working directory
     Entrypoint: []string{"tail", "-f", "/dev/null"}, // Keep container running
@@ -508,26 +508,26 @@ Why this exact set, rather than a minimal `NET_RAW`-only list:
 
 | Capability | Why it is needed |
 |---|---|
-| `NET_RAW` | Raw sockets — nmap, ping, packet crafting |
-| `NET_BIND_SERVICE` | Bind ports below 1024 — reverse shells, Responder, rogue DNS |
+| `NET_RAW` | Raw sockets — ping, packet crafting |
+| `NET_BIND_SERVICE` | Bind ports below 1024 — services that listen on privileged ports |
 | `SETUID` / `SETGID` | Daemons and tools that drop privileges after starting as root |
-| `SETFCAP` / `SETPCAP` | `apt`/`dpkg` `postinst` scripts that `setcap` network tools instead of relying on setuid (`ping`, `traceroute`, `nmap`, `dumpcap`, `hping3`, …) — without these, on-the-fly package installs (the Installer Agent's core job) fail |
+| `SETFCAP` / `SETPCAP` | `apt`/`dpkg` `postinst` scripts that `setcap` network tools instead of relying on setuid (`ping`, `traceroute`, `dumpcap`, …) — without these, on-the-fly package installs (the Installer Agent's core job) fail |
 | `FSETID` | Preserves set-id bits when dpkg installs/modifies files as a non-owner |
 | `CHOWN` / `DAC_OVERRIDE` / `FOWNER` | Root file-permission overrides needed during package installs and builds |
 | `KILL` | Signal other processes inside the container |
 | `SYS_CHROOT` | chroot-based isolation within the sandbox |
 | `AUDIT_WRITE` | Lets `sudo`/`sshd` write audit-log entries instead of warning |
-| `SYS_PTRACE` | Not a Docker default — added so `gdb`/`strace`/`ltrace`/dynamic binary analysis (`pwndbg`, `radare2`) work for the Coder Agent's exploit-development role. Without it, `ptrace()` and friends (`process_vm_readv`/`writev`, `kcmp`) stay blocked by Docker's *default seccomp profile*, which independently gates them behind `CAP_SYS_PTRACE` — no custom seccomp profile is needed to unblock them, since moby/containerd auto-extend the default profile's syscall allow-list to match added capabilities. Scope stays contained to the sandbox: `ptrace` only works within the container's own PID namespace, never against host or sibling-container processes. |
-| `NET_ADMIN` (opt-in via `DOCKER_NET_ADMIN`) | Interface/routing/firewall control for advanced network pentesting |
+| `SYS_PTRACE` | Not a Docker default — added so `gdb`/`strace`/`ltrace`/dynamic binary analysis work for the Coder Agent's debugging role. Without it, `ptrace()` and friends (`process_vm_readv`/`writev`, `kcmp`) stay blocked by Docker's *default seccomp profile*, which independently gates them behind `CAP_SYS_PTRACE` — no custom seccomp profile is needed to unblock them, since moby/containerd auto-extend the default profile's syscall allow-list to match added capabilities. Scope stays contained to the sandbox: `ptrace` only works within the container's own PID namespace, never against host or sibling-container processes. |
+| `NET_ADMIN` (opt-in via `DOCKER_NET_ADMIN`) | Interface/routing/firewall control for advanced network administration |
 
-**`MKNOD` is the one deliberate omission** from Docker's default set: creating device nodes has no legitimate use for pentest tooling or package management, and this repository's own dind-hardening research (see [Worker Node Setup](../../examples/guides/worker_node.md) and its [`authz.rego`](../../examples/guides/worker_node/authz.rego)) identifies block-device `mknod` combined with `debugfs` as "the primary confirmed escape vector" for a hostile-code container. `SYS_ADMIN`, `SYS_MODULE`, `SYS_RAWIO`, and `SYS_BOOT` are never granted — none are part of Docker's default set and none are required by any supported workflow.
+**`MKNOD` is the one deliberate omission** from Docker's default set: creating device nodes has no legitimate use for the agent's tooling or package management, and this repository's own dind-hardening research (see [Worker Node Setup](../../examples/guides/worker_node.md) and its [`authz.rego`](../../examples/guides/worker_node/authz.rego)) identifies block-device `mknod` combined with `debugfs` as "the primary confirmed escape vector" for a hostile-code container. `SYS_ADMIN`, `SYS_MODULE`, `SYS_RAWIO`, and `SYS_BOOT` are never granted — none are part of Docker's default set and none are required by any supported workflow.
 
-Docker's default set minus `MKNOD`, plus `NET_ADMIN`, is exactly the `allowed_caps` whitelist already vetted in `authz.rego` for nested dind containers running the same kind of pentest workload — the two are kept intentionally consistent at that shared baseline. `SYS_PTRACE` is the one place the primary container's allow-list goes further than `authz.rego`'s: it is not offered to nested dind containers (an agent there can request arbitrary `containers/create` calls, and the dind threat model does not special-case debugging), but the primary worker container is created solely by PentAGI itself with a fixed capability list, so granting it here does not expand what an agent can ask for.
+Docker's default set minus `MKNOD`, plus `NET_ADMIN`, is exactly the `allowed_caps` whitelist already vetted in `authz.rego` for nested dind containers running the same kind of agent workload — the two are kept intentionally consistent at that shared baseline. `SYS_PTRACE` is the one place the primary container's allow-list goes further than `authz.rego`'s: it is not offered to nested dind containers (an agent there can request arbitrary `containers/create` calls, and the dind threat model does not special-case debugging), but the primary worker container is created solely by PentAGI itself with a fixed capability list, so granting it here does not expand what an agent can ask for.
 
-An earlier revision of this container also forced `no-new-privileges:true` via `SecurityOpt`, intended as defense-in-depth against setuid/file-capability escalation. It was removed: the capability bounding set above already caps what any process can ever gain regardless of setuid, so the flag added no protection beyond the allow-list while unconditionally breaking SUID/SGID privilege-escalation testing and `sudo`/`su` from a non-root shell — both routine penetration-testing workflows.
+An earlier revision of this container also forced `no-new-privileges:true` via `SecurityOpt`, intended as defense-in-depth against setuid/file-capability escalation. It was removed: the capability bounding set above already caps what any process can ever gain regardless of setuid, so the flag added no protection beyond the allow-list while unconditionally breaking SUID/SGID transitions and `sudo`/`su` from a non-root shell — both routine for the agent's command-line workflows.
 
 #### Resource Limits
-- **PidsLimit**: Defaults to 2048 when the caller does not set one — a cheap fork-bomb / resource-exhaustion guard, generous enough for parallel scans (nmap, hydra). Mirrors the same default used for the dind daemon in the [Worker Node Setup](../../examples/guides/worker_node.md) guide.
+- **PidsLimit**: Defaults to 2048 when the caller does not set one — a cheap fork-bomb / resource-exhaustion guard, generous enough for parallel workloads. Mirrors the same default used for the dind daemon in the [Worker Node Setup](../../examples/guides/worker_node.md) guide.
 - **Memory/CPU**: Controlled via standard `HostConfig` resource fields when set by the caller.
 
 #### Process Isolation
@@ -655,7 +655,7 @@ container, err := dockerClient.RunContainer(
     database.ContainerTypePrimary,
     flowID,
     &container.Config{
-        Image:      "kali:latest",
+        Image:      "debian:latest",
         Entrypoint: []string{"tail", "-f", "/dev/null"},
     },
     &container.HostConfig{
@@ -677,7 +677,7 @@ container, err := dockerClient.RunContainer(
 ```go
 // Execute command in container
 createResp, err := dockerClient.ContainerExecCreate(ctx, containerName, container.ExecOptions{
-    Cmd:          []string{"sh", "-c", "nmap -sS 192.168.1.1"},
+    Cmd:          []string{"sh", "-c", "curl -s https://forum.example.com/t/123"},
     AttachStdout: true,
     AttachStderr: true,
     WorkingDir:   "/work",

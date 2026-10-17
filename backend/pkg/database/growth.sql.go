@@ -2053,6 +2053,33 @@ func (q *Queries) RefreshSourceYield(ctx context.Context, ids []int64) error {
 	return err
 }
 
+const replaceGrowthProfileDroppingScores = `-- name: ReplaceGrowthProfileDroppingScores :one
+WITH dropped AS (
+  DELETE FROM growth_message_scores WHERE user_id = $1
+)
+INSERT INTO growth_profiles (user_id, profile) VALUES ($1, $2)
+ON CONFLICT (user_id) DO UPDATE SET profile = EXCLUDED.profile
+RETURNING user_id, profile, created_at, updated_at
+`
+
+type ReplaceGrowthProfileDroppingScoresParams struct {
+	UserID  int64           `json:"user_id"`
+	Profile json.RawMessage `json:"profile"`
+}
+
+// One statement, so the profile and the scores it outdates change together.
+func (q *Queries) ReplaceGrowthProfileDroppingScores(ctx context.Context, arg ReplaceGrowthProfileDroppingScoresParams) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, replaceGrowthProfileDroppingScores, arg.UserID, arg.Profile)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const resolveGrowthSource = `-- name: ResolveGrowthSource :one
 UPDATE growth_sources
 SET source_key   = $1,

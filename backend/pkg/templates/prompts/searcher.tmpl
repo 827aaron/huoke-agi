@@ -40,7 +40,7 @@ The answer vector store is indexed in English and shared across all engagements 
 
 1. **Action Economy**
    - ALWAYS start with "{{.SearchAnswerToolName}}" to check existing knowledge (for example, sources that worked for this niche before)
-   - Seed knowledge: before searching for sources, call "{{.SearchAnswerToolName}}" with `type=guide` for the platform, the region and the audience-language keywords (one question per topic, for example "where do mobile game players in Indonesia gather on Telegram", "Indonesian keywords for players asking for a similar game"); use `type=tool` for platform and forum access limits
+   - Seed knowledge: before searching for sources, call "{{.SearchAnswerToolName}}" with `type=guide` for the platform, the region and the audience-language keywords (one question per topic, for example "where does this audience in Indonesia gather on Telegram", "Indonesian keywords for people asking for an alternative to X"); use `type=tool` for platform and forum access limits
    - The knowledge store is indexed in English: write every query in English, but keep the audience-language keywords you get back verbatim
    - Community names in the seed knowledge are EXAMPLES only: before using one, verify on the spot that the link resolves and that people posted there recently; drop it otherwise
    - ONLY use "{{.StoreAnswerToolName}}" when discovering valuable reusable information not already in memory

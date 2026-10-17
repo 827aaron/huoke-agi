@@ -70,7 +70,7 @@ cd kelai-agi
 cp .env.example .env
 ```
 
-The repository is private: the GitHub account doing the clone needs access to it.
+If the repository is private, the GitHub account doing the clone needs access to it.
 
 ## 5. Fill in `.env`
 
@@ -81,7 +81,7 @@ Open `.env` in a text editor. Three things are required. Everything else is opti
 | What | Variable | Notes |
 |---|---|---|
 | One language model key | for example `DEEPSEEK_API_KEY=` or `OPEN_AI_KEY=` or `ANTHROPIC_API_KEY=` | Can instead be entered after login under Settings → Keys & connections → Language model |
-| Judgement model (Jev) key | `TYPESAFE_API_KEY=` | Screens every message read from a group; can also be entered on the settings page. Without it, reading groups stops with "no judgement model (Jev) is configured" |
+| Judgement model (Jev) key | `TYPESAFE_API_KEY=`, a TypeSafe key; or an OpenRouter key with `TYPESAFE_API_URL=https://openrouter.ai/api` | Screens every message read from a group; can also be entered on the settings page. Without it, reading groups stops with "no judgement model (Jev) is configured" |
 | Embedding key for memory and the knowledge base | `EMBEDDING_KEY=` (an OpenAI key; `EMBEDDING_PROVIDER` defaults to `openai`) | Not needed when the language model is OpenAI. Without it, memory and knowledge base tools are switched off and only a log line says so. Usage is tiny |
 
 ### Change before the first start
@@ -119,7 +119,23 @@ All of these can also be entered on the settings page:
 - YouTube: `YOUTUBE_API_KEY`.
 - Search: `TAVILY_API_KEY`, `GOOGLE_API_KEY` and others. DuckDuckGo works without a key.
 - Proxy: `GROWTH_PROXY_URL`, the default proxy for platform accounts.
-- Email: the `SMTP_*` group, for emailed lead lists.
+- Email: see below.
+
+### Email for lead lists
+
+Set the mail server once in `.env`, and every customer on this deployment can receive lead lists without running a mail server of their own:
+
+```ini
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=leads@example.com
+SMTP_PASSWORD=
+SMTP_FROM=KeLai AGI <leads@example.com>
+SMTP_TLS=starttls
+```
+
+`SMTP_TLS` is `starttls` for port 587, `tls` for port 465, or `none`. With this set, a customer enters only the addresses that should receive the lists on the Email card; left empty, lists go to their login email. A customer can still enter their own server on that card, and theirs is then used for their mail. With `SMTP_HOST` empty, a customer who enters no server of their own gets no email; their lead lists stay on the page. Check the server with the card's test button, which sends a test message.
+
 
 The defaults already in `.env.example` keep these:
 
@@ -156,7 +172,7 @@ Every card in Settings → Keys & connections has a test button and says whether
    - Search.
    - Email.
    - Proxy.
-2. **Business profile:** the game, target languages and regions, signal words, exclusions and notes. Every task reads it.
+2. **Business profile:** the product and its audience, target languages and regions, signal words, exclusions and notes. Every task reads it, and a starting profile can be copied in: a licensed online casino (the default, which leads are judged by until a profile is saved) or a game publisher. An exclusion applies only when a message says so explicitly; a person is never excluded on a guess from their writing style, apparent age or the platform they post on.
 3. **Accounts:**
    - Telegram signs in with a phone code.
    - Facebook, Instagram and TikTok sign in through the login window served by the browser service.
@@ -264,7 +280,8 @@ Back up first. Database changes apply by themselves when the application starts,
 | Facebook, Instagram or TikTok login link does not open | Run `docker compose ps browser`. On a server, `BROWSER_PUBLIC_URL` must be the server address, not `localhost`, and port 7070 must be open |
 | `browser` stays in a waiting state | It waits until `pentagi` has written the token on its first start. Check that `pentagi` is running |
 | Saving a key on the settings page fails | The data volume is not writable, so the encryption key could not be stored. See `docker compose logs pentagi` |
-| Memory and knowledge base never show up | No embedding key. Set `EMBEDDING_KEY` or choose OpenAI as the language model |
+| Memory and knowledge base never show up | No embedding model. Fill in the embedding model under the language model card on the settings page, set `EMBEDDING_KEY`, or choose OpenAI or OpenRouter as the language model |
+| A forum such as Pantip shows "not allowed to access this page" and the researcher skips it | The site blocks data-centre IP addresses. The proxy on the Accounts page covers platform accounts, not the researcher's own browsing, so run the server on a residential connection or route the host's outbound traffic through a residential proxy or VPN |
 | A task cannot start its sandbox | The worker image is missing: run `docker compose build growth-worker`. `pentagi` needs `/var/run/docker.sock`, mounted by the compose file |
 | A specialist hangs for minutes | A model call waits at most `HTTP_CLIENT_TIMEOUT` seconds, 300 by default. Check the model provider's status and key |
 | Port 8443 is taken | Set `PENTAGI_LISTEN_PORT` to another port and update `PUBLIC_URL` |

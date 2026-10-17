@@ -9,7 +9,7 @@ import { GrowthCredentialCard } from './growth-credential-row';
 
 vi.mock('../growth-api', () => ({
     growthApi: {
-        listModels: vi.fn(async () => [{ id: 'typesafe/jev-latest' }, { id: 'typesafe/jev-2026-09' }]),
+        listModels: vi.fn(async () => [{ id: '~typesafe/jev-latest' }, { id: 'typesafe/jev-2026-09' }]),
         saveSetting: vi.fn(async () => savedProxy),
         testEmail: vi.fn(async () => ({ sent: true, to: ['ops@example.com'] })),
         testSetting: vi.fn(async () => savedProxy),
@@ -173,13 +173,13 @@ describe('GrowthCredentialCard', () => {
         fireEvent.click(screen.getByRole('button', { name: '更换密钥' }));
         fireEvent.click(screen.getByRole('button', { name: '改回最新' }));
 
-        expect(screen.getByLabelText('模型')).toHaveValue('typesafe/jev-latest');
+        expect(screen.getByLabelText('模型')).toHaveValue('~typesafe/jev-latest');
 
         fireEvent.click(screen.getByRole('button', { name: /保存/ }));
 
         await waitFor(() =>
             expect(growthApi.saveSetting).toHaveBeenCalledWith('screening', {
-                fields: expect.objectContaining({ model: 'typesafe/jev-latest' }),
+                fields: expect.objectContaining({ model: '~typesafe/jev-latest' }),
                 provider: 'openrouter',
             }),
         );

@@ -62,8 +62,27 @@ type knowledgeStore struct {
 	db                database.Querier
 	store             vectorstores.VectorStore // may be nil when no embedder is configured
 	embedder          embeddings.Embedder      // used for computing new embeddings on create/update
+	embedderFor       EmbedderFunc
 	newKnp            PublisherFactory
 	maxEmbeddingBytes int
+}
+
+// EmbedderFunc returns the embedder of the user a call acts for, or nil for the
+// store's own. The vectors of one user's documents and queries must come from one model.
+type EmbedderFunc func(ctx context.Context, userID int64) embeddings.Embedder
+
+type Option func(*knowledgeStore)
+
+// WithUserEmbedders embeds each user's documents and queries with that user's embedder.
+func WithUserEmbedders(fn EmbedderFunc) Option {
+	return func(ks *knowledgeStore) { ks.embedderFor = fn }
+}
+
+type actorKey struct{}
+
+// WithActor names the user an admin call acts for, whose embedder it then uses.
+func WithActor(ctx context.Context, userID int64) context.Context {
+	return context.WithValue(ctx, actorKey{}, userID)
 }
 
 // NewKnowledgeStore constructs a KnowledgeStore.
@@ -81,17 +100,22 @@ func NewKnowledgeStore(
 	embedder embeddings.Embedder,
 	newKnp PublisherFactory,
 	maxEmbeddingBytes int,
+	opts ...Option,
 ) KnowledgeStore {
 	if maxEmbeddingBytes <= 0 {
 		maxEmbeddingBytes = 8192
 	}
-	return &knowledgeStore{
+	ks := &knowledgeStore{
 		db:                db,
 		store:             store,
 		embedder:          embedder,
 		newKnp:            newKnp,
 		maxEmbeddingBytes: maxEmbeddingBytes,
 	}
+	for _, opt := range opts {
+		opt(ks)
+	}
+	return ks
 }
 
 // ---- cmetadata helpers -------------------------------------------------------
@@ -239,11 +263,20 @@ func applyGoFilters(docs []*model.KnowledgeDocument, filter *model.KnowledgeFilt
 	return result
 }
 
-func (ks *knowledgeStore) requireEmbedder() error {
-	if ks.embedder == nil || !ks.embedder.IsAvailable() {
-		return fmt.Errorf("knowledge: embedding provider is not available")
+func (ks *knowledgeStore) requireEmbedder(ctx context.Context, userID int64) (embeddings.Embedder, error) {
+	e := ks.embedder
+	if ks.embedderFor != nil {
+		if actor, ok := ctx.Value(actorKey{}).(int64); ok && userID == 0 {
+			userID = actor
+		}
+		if own := ks.embedderFor(ctx, userID); own != nil {
+			e = own
+		}
 	}
-	return nil
+	if e == nil || !e.IsAvailable() {
+		return nil, fmt.Errorf("knowledge: embedding provider is not available")
+	}
+	return e, nil
 }
 
 // ---- ListDocuments (admin) --------------------------------------------------
@@ -349,7 +382,8 @@ func (ks *knowledgeStore) SearchUserDocuments(ctx context.Context, userID int64,
 //  2. Go layer   — multi-value enum filters (DocTypes, GuideTypes, etc.) and
 //     the Manual flag that cannot be expressed as static SQL predicates.
 func (ks *knowledgeStore) doSearch(ctx context.Context, userID int64, query string, filter *model.KnowledgeFilter, limit int) ([]*model.KnowledgeDocumentWithScore, error) {
-	if err := ks.requireEmbedder(); err != nil {
+	embedder, err := ks.requireEmbedder(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
@@ -363,7 +397,7 @@ func (ks *knowledgeStore) doSearch(ctx context.Context, userID int64, query stri
 	}
 
 	// Compute query embedding.
-	vecs, err := ks.embedder.EmbedDocuments(ctx, []string{query})
+	vecs, err := embedder.EmbedDocuments(ctx, []string{query})
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: embed query: %w", err)
 	}
@@ -492,7 +526,8 @@ func (ks *knowledgeStore) createDocument(
 	input model.CreateKnowledgeDocumentInput,
 	shared bool,
 ) (*model.KnowledgeDocument, error) {
-	if err := ks.requireEmbedder(); err != nil {
+	embedder, err := ks.requireEmbedder(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -530,7 +565,7 @@ func (ks *knowledgeStore) createDocument(
 	if len(embeddingText) > ks.maxEmbeddingBytes {
 		embeddingText = embeddingText[:ks.maxEmbeddingBytes]
 	}
-	vecs, err := ks.embedder.EmbedDocuments(ctx, []string{embeddingText})
+	vecs, err := embedder.EmbedDocuments(ctx, []string{embeddingText})
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: compute embedding: %w", err)
 	}
@@ -657,7 +692,8 @@ func (ks *knowledgeStore) doRename(ctx context.Context, userID int64, id string,
 }
 
 func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string, existing *model.KnowledgeDocument, input model.UpdateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
-	if err := ks.requireEmbedder(); err != nil {
+	embedder, err := ks.requireEmbedder(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -721,7 +757,7 @@ func (ks *knowledgeStore) doUpdate(ctx context.Context, userID int64, id string,
 	if len(embeddingText) > ks.maxEmbeddingBytes {
 		embeddingText = embeddingText[:ks.maxEmbeddingBytes]
 	}
-	vecs, err := ks.embedder.EmbedDocuments(ctx, []string{embeddingText})
+	vecs, err := embedder.EmbedDocuments(ctx, []string{embeddingText})
 	if err != nil {
 		return nil, fmt.Errorf("knowledge: compute embedding: %w", err)
 	}

@@ -681,12 +681,32 @@ func (s *Service) envView(kind string, spec settingSpec) SettingView {
 	v := SettingView{Kind: kind, Providers: spec.providerList(), Source: SettingSourceNone, Status: SettingStatusUntested}
 	provider, values := envValues(s.cfg, kind)
 	v.Fields = maskFields(spec, values)
-	if values["api_key"] != "" || values["api_keys"] != "" || values["api_hash"] != "" ||
-		values["host"] != "" || values["url"] != "" || (kind == SettingEmbedding && provider != "") {
+	configured := values["api_key"] != "" || values["api_keys"] != "" || values["api_hash"] != "" ||
+		values["host"] != "" || values["url"] != ""
+	if kind == SettingEmbedding {
+		configured = envEmbedder(s.cfg)
+	}
+	if configured {
 		v.Source, v.Provider, v.Configured = SettingSourceEnv, provider, true
 	}
 	s.markPlatformSMTP(&v)
 	return v
+}
+
+// envEmbedder tells whether .env gives the embedder what it needs: a key, which openai
+// and mistral take from their chat keys too, or for ollama its server.
+func envEmbedder(cfg *config.Config) bool {
+	switch cfg.EmbeddingProvider {
+	case "", "none":
+		return false
+	case "openai":
+		return cfg.EmbeddingKey != "" || cfg.OpenAIKey != ""
+	case "mistral":
+		return cfg.EmbeddingKey != "" || cfg.MistralAPIKey != ""
+	case "ollama":
+		return cfg.EmbeddingURL != "" || cfg.OllamaServerURL != ""
+	}
+	return cfg.EmbeddingKey != ""
 }
 
 // envValues reads one kind from cfg in the stored-setting shape; for a kind with

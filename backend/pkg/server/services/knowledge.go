@@ -330,7 +330,7 @@ func (s *KnowledgeService) SearchDocuments(c *gin.Context) {
 		err     error
 	)
 	if admin {
-		results, err = s.store.SearchDocuments(ctx, req.Query, filter, req.Limit)
+		results, err = s.store.SearchDocuments(knowledgepkg.WithActor(ctx, uid), req.Query, filter, req.Limit)
 	} else {
 		results, err = s.store.SearchUserDocuments(ctx, uid, req.Query, filter, req.Limit)
 	}

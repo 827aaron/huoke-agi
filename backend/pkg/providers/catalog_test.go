@@ -875,7 +875,7 @@ func readmeHeading(t *testing.T, lines []string, level, heading string) []string
 func readmeSection(t *testing.T, heading string) []string {
 	t.Helper()
 
-	raw, err := os.ReadFile("../../../README.md")
+	raw, err := os.ReadFile("../../../docs/providers.md")
 	require.NoError(t, err)
 
 	return readmeHeading(t, strings.Split(string(raw), "\n"), "###", heading)

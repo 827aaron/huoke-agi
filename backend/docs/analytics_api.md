@@ -484,7 +484,7 @@ Why different?
 ```
 
 **When to use which:**
-- User wants to know "how long did my pentest take?" → Use **Execution Stats**
+- User wants to know "how long did my flow take?" → Use **Execution Stats**
 - Developer wants to optimize slow tools → Use **Toolcalls Stats**
 - Manager wants to see system utilization → Use **Toolcalls Stats**
 - SLA monitoring → Use **Execution Stats**
@@ -626,7 +626,7 @@ query ResourceAttribution {
 **Analysis:**
 - Which agents consume most resources
 - Tool time distribution (execution time budget)
-- Cost attribution by capability (pentesting vs coding vs searching)
+- Cost attribution by capability (research vs coding vs searching)
 
 ---
 
@@ -721,7 +721,7 @@ query CostAttribution {
 - `primary_agent`: Orchestration overhead
 - `generator`: Planning cost (usually low, runs once per task)
 - `refiner`: Replanning cost (high value = many adjustments)
-- `pentester`: Security testing operations
+- `pentester`: Research and lead-finding operations
 - `coder`: Development work
 - `searcher`: Research and information gathering
 
