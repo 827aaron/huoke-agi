@@ -27,6 +27,9 @@ const DAYS: GrowthScheduleDays[] = ['daily', 'weekdays', 'weekly', 'once'];
 // Monday first, as a week reads; the wire numbers Sunday 0.
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
+// The server takes HH:MM only; a time input whose step allows seconds reports HH:MM:SS.
+const toClock = (value: string): string => value.slice(0, 5);
+
 const browserTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 interface ScheduleDraft {
@@ -54,7 +57,7 @@ export const validateScheduleDraft = (draft: ScheduleDraft): null | string => {
         return text.timeRequired;
     }
 
-    if (draft.start === draft.end) {
+    if (toClock(draft.start) === toClock(draft.end)) {
         return text.sameTime;
     }
 
@@ -307,10 +310,10 @@ function ScheduleForm({ flowId, onDone, schedule }: ScheduleFormProps) {
 
         const input: GrowthScheduleInput = {
             days: draft.days,
-            end_time: draft.end,
+            end_time: toClock(draft.end),
             flow_id: flowId,
             input: draft.input.trim(),
-            start_time: draft.start,
+            start_time: toClock(draft.start),
             timezone,
             ...(draft.days === 'weekly' && { weekdays: draft.weekdays.map(Number).sort((a, b) => a - b) }),
             ...(draft.days === 'once' && { date: draft.date }),
