@@ -14,7 +14,7 @@
     output: 2.75
 
 - name: us.amazon.nova-pro-v1:0
-  description: Highly capable multimodal model with optimal balance of accuracy, speed, and cost for wide range of penetration testing tasks and complex security analysis workflows
+  description: Highly capable multimodal model with optimal balance of accuracy, speed, and cost for wide range of research tasks and complex analysis workflows
   thinking: false
   release_date: 2024-12-03
   context_window: 300000
@@ -24,7 +24,7 @@
     output: 3.2
 
 - name: us.amazon.nova-lite-v1:0
-  description: Very low-cost multimodal model optimized for lightning-fast processing of security assessments, rapid vulnerability scanning, and high-volume pentesting operations
+  description: Very low-cost multimodal model optimized for lightning-fast processing of message screening, rapid classification, and high-volume extraction
   thinking: false
   release_date: 2024-12-03
   context_window: 300000
@@ -34,7 +34,7 @@
     output: 0.24
 
 - name: us.amazon.nova-micro-v1:0
-  description: Ultra-efficient text-only model delivering lowest latency responses for real-time security monitoring, quick threat analysis, and automated incident response
+  description: Ultra-efficient text-only model delivering lowest latency responses for real-time monitoring, quick message triage, and automated filtering
   thinking: false
   release_date: 2024-12-03
   context_window: 128000
@@ -90,7 +90,7 @@
     cache_write: 13.75
 
 - name: us.anthropic.claude-opus-4-8
-  description: Anthropic Opus 4.8 - flagship model for coding, agents, and deep reasoning in enterprise security workflows, with adaptive thinking only
+  description: Anthropic Opus 4.8 - flagship model for coding, agents, and deep reasoning in enterprise research workflows, with adaptive thinking only
   thinking: true
   reasoning:
     mode: adaptive-only
@@ -105,7 +105,7 @@
     cache_write: 6.875
 
 - name: us.anthropic.claude-opus-4-7
-  description: Most capable Opus model for advanced software engineering, long-running agentic tasks, professional work, and rigorous security analysis with adaptive thinking
+  description: Most capable Opus model for advanced software engineering, long-running agentic tasks, professional work, and rigorous evidence analysis with adaptive thinking
   thinking: true
   reasoning:
     mode: adaptive-only
@@ -135,7 +135,7 @@
     cache_write: 2.75
 
 - name: us.anthropic.claude-opus-4-6-v1
-  description: World's best model for coding, enterprise agents, and professional work with industry-leading reliability for agentic workflows and security analysis
+  description: World's best model for coding, enterprise agents, and professional work with industry-leading reliability for agentic workflows and evidence analysis
   thinking: true
   reasoning:
     mode: adaptive

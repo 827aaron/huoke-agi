@@ -81,7 +81,7 @@ The `controller` package is a central part of the backend architecture, responsi
 - Interfacing with provider abstractions for LLMs, tools, and execution environments.
 - Publishing events to the subscription system for real-time updates.
 - Ensuring correct state transitions and error handling for all managed entities.
-- Supporting both autonomous pentesting flows and interactive assistant conversations.
+- Supporting both autonomous lead-finding flows and interactive assistant conversations.
 
 ### Architectural Integration
 
@@ -148,7 +148,7 @@ flowchart TD
 
 The `controller` package is the main orchestrator for all user and system-initiated operations related to flows and their sub-entities. It ensures that all business logic, state transitions, and side effects (such as event publication and logging) are handled consistently and safely. It supports two main operational modes:
 
-1. **Autonomous Pentesting Mode**: Complete flows with automated task generation and execution
+1. **Autonomous Flow Mode**: Complete flows with automated task generation and execution
 2. **Interactive Assistant Mode**: Conversational AI assistants that can optionally use agents and tools
 
 ## Core Concepts and Main Interfaces
@@ -852,7 +852,7 @@ func (tw *taskWorker) SetStatus(ctx context.Context, status database.TaskStatus)
 
 ## Log Management and Event Publication
 
-The `controller` package manages seven distinct types of logs, each serving specific purposes in the penetration testing workflow. All logs are handled through a consistent controller/worker pattern and support real-time event publication.
+The `controller` package manages seven distinct types of logs, each serving specific purposes in the lead-finding workflow. All logs are handled through a consistent controller/worker pattern and support real-time event publication.
 
 ### Log Types and Their Roles
 
@@ -878,11 +878,11 @@ The `controller` package manages seven distinct types of logs, each serving spec
    - Records web searches and OSINT operations
    - Tracks different search engines (Google, DuckDuckGo, etc.)
    - Stores search queries and results
-   - Essential for reconnaissance phases
+   - Essential for discovery phases
 
 5. **Terminal Logs** (`TermLogController`/`FlowTermLogWorker`)
    - Records all command-line interactions
-   - Tracks input/output from pentesting tools
+   - Tracks input/output from command-line tools
    - Associates with specific Docker containers
    - Critical for audit trail and debugging
 
@@ -1158,4 +1158,4 @@ func wrapErrorEndSpan(ctx context.Context, span langfuse.Span, msg string, err e
 6. **Resource cleanup**: Implement proper cleanup in `Finish()` methods.
 7. **Observability**: Use tracing and logging for all significant operations.
 
-The controller package provides a robust foundation for managing complex AI-driven penetration testing workflows while maintaining reliability, observability, and extensibility.
+The controller package provides a robust foundation for managing complex AI-driven lead-finding workflows while maintaining reliability, observability, and extensibility.

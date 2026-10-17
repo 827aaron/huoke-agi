@@ -1,11 +1,11 @@
 # Flow Execution in PentAGI
 
-This document describes the internal architecture and execution workflow of Flow in PentAGI, an autonomous penetration testing system that leverages AI agents to perform complex security testing workflows.
+This document describes the internal architecture and execution workflow of Flow in PentAGI, an autonomous system that leverages AI agents to perform complex workflows.
 
 ## 1. Core Concepts and Terminology
 
 ### Hierarchy
-- **Flow** - Top-level workflow representing a complete penetration testing session (persistent)
+- **Flow** - Top-level workflow representing a complete lead-finding session (persistent)
 - **Task** - User-defined objective within a Flow (multiple Tasks can exist in one Flow)
 - **Subtask** - Auto-decomposed sequential step to complete a Task (generated and refined by system)
 - **Action** - Individual operation performed by agents (commands, searches, analyses)
@@ -27,7 +27,7 @@ This document describes the internal architecture and execution workflow of Flow
 - **Refiner Agent** - Reviews and updates planned Subtask list after each Subtask completion (can add/remove/modify planned Subtasks)
 - **Reporter Agent** - Creates comprehensive final reports for completed Tasks
 - **Coder Agent** - Writes and maintains code for specific requirements
-- **Pentester Agent** - Performs penetration testing and vulnerability assessment
+- **Researcher Agent** - Joins sources, reads messages, and judges intent
 - **Installer Agent** - Manages environment setup and tool installation
 - **Memorist Agent** - Handles long-term memory storage and retrieval
 - **Searcher Agent** - Conducts internet research and information gathering
@@ -109,7 +109,7 @@ sequenceDiagram
     participant Rep as Reporter Agent
     participant DB as Database
 
-    U->>FC: Submit penetration testing request
+    U->>FC: Submit lead-finding request
     FC->>FW: Create new Flow
     FW->>FP: Initialize FlowProvider
     FP->>FP: Call Image Chooser (select Docker image)
@@ -136,8 +136,8 @@ sequenceDiagram
         PA->>PA: Evaluate Subtask requirements
         
         alt Needs specialist agent
-            PA->>Coder/Pentester/etc: Delegate specialized work
-            Coder/Pentester/etc-->>PA: Return results
+            PA->>Coder/Researcher/etc: Delegate specialized work
+            Coder/Researcher/etc-->>PA: Return results
         end
         
         alt Agent returns unstructured text
@@ -182,7 +182,7 @@ sequenceDiagram
 graph TD
     subgraph "Primary Execution Flow"
         PA[Primary Agent<br/>Orchestrator] --> Coder[Coder Agent<br/>Development Specialist]
-        PA --> Pentester[Pentester Agent<br/>Security Testing Specialist]
+        PA --> Pentester[Researcher Agent<br/>Reads sources, writes leads]
         PA --> Installer[Installer Agent<br/>Infrastructure Maintenance]
         PA --> Memorist[Memorist Agent<br/>Long-term Memory Specialist]
         PA --> Searcher[Searcher Agent<br/>Information Retrieval Specialist]
@@ -395,7 +395,7 @@ graph TD
         Enricher[Enricher Agent]
         Coder[Coder Agent]
         Installer[Installer Agent]
-        Pentester[Pentester Agent]
+        Pentester[Researcher Agent]
     end
     
     OpenAI --> Simple
@@ -620,7 +620,7 @@ Each AI agent interaction is managed through typed message chains that maintain 
 - `MsgchainTypeRefiner` - Subtask refinement chains
 - `MsgchainTypeReporter` - Final report generation chains
 - `MsgchainTypeCoder` - Code development chains
-- `MsgchainTypePentester` - Security testing chains
+- `MsgchainTypePentester` - Research chains
 - `MsgchainTypeInstaller` - Infrastructure maintenance chains
 - `MsgchainTypeMemorist` - Memory operation chains
 - `MsgchainTypeSearcher` - Information retrieval chains
@@ -750,7 +750,7 @@ The Searcher Agent follows a strict hierarchy for information retrieval:
 2. **Priority 3: `web_search`** - All external web search, via one unified tool
    - The agent supplies a `query` and an intent `mode`; it does NOT choose a provider.
    - **Modes**: `links` (fast link discovery), `answer` (synthesized answer, default),
-     `research` (deep multi-source synthesis), `exploit` (exploits/PoCs/offensive tools).
+     `research` (deep multi-source synthesis), `exploit` (specialized technical index search).
 
 3. **Priority 4: `browser`** - Targeted content extraction from a specific, known URL
 
@@ -770,7 +770,7 @@ truth at the top of `backend/pkg/tools/web_search.go`.
 - **Tavily** - Research-grade exploration with raw content and citations (answer/research)
 - **Traversaal** - Structured Q&A responses with web links (answer/research)
 - **Perplexity** - AI-powered synthesis with configurable context size (answer/research)
-- **Sploitus** - Security exploits and pentest tools (exploit)
+- **Sploitus** - Specialized technical search index (`exploit` mode)
 - **Internal Analytics Engine** - optional, off by default (`WEB_SEARCH_INTERNAL_ENABLED`);
   answers analytic queries by scraping and summarizing pages via the browser, bounded to
   a configurable byte budget per site
@@ -847,7 +847,7 @@ The architecture supports multiple users with isolation:
 The system uses 25+ dedicated prompt types for specific functions:
 
 **System Function Prompts**:
-- **Image Chooser** - Selects optimal Docker image, fallback to `vxcontrol/kali-linux` for pentest
+- **Image Chooser** - Selects optimal Docker image, fallback to `vxcontrol/kali-linux`
 - **Language Chooser** - Detects user's preferred language for responses  
 - **Flow Descriptor** - Generates concise Flow titles (max 20 characters)
 - **Task Descriptor** - Creates descriptive Task titles (max 150 characters)  
@@ -858,7 +858,7 @@ The system uses 25+ dedicated prompt types for specific functions:
 **Agent System Prompts** (13 types):
 - **Primary Agent** - Team orchestration with delegation capabilities
 - **Assistant** - Interactive mode with UseAgents flag configuration
-- **Specialist Agents** - Pentester, Coder, Installer, Searcher, Memorist, Adviser
+- **Specialist Agents** - Researcher, Coder, Installer, Searcher, Memorist, Adviser
 - **Meta Agents** - Generator, Refiner, Reporter, Enricher, Reflector, Summarizer
 
 **Question Templates** (13 types):
@@ -1006,7 +1006,7 @@ When LLM fails to generate valid tool calls after 3 attempts in `callWithRetries
 To prevent runaway executions, each agent has a hard limit on tool calls. The limit varies by agent type to balance capabilities with efficiency:
 
 **Agent Types and Limits**:
-- **General Agents** (Assistant, Primary Agent, Pentester, Coder, Installer):
+- **General Agents** (Assistant, Primary Agent, Researcher, Coder, Installer):
   - Default: 100 tool calls
   - Configurable via `MAX_GENERAL_AGENT_TOOL_CALLS`
   - Designed for complex, multi-step workflows requiring extensive tool usage
@@ -1031,14 +1031,14 @@ To prevent runaway executions, each agent has a hard limit on tool calls. The li
 
 **Why Differentiated Limits**:
 - **Resource Efficiency**: Limited agents handle focused tasks and don't require extensive iteration
-- **Task Complexity**: General agents need more autonomy for complex penetration testing, coding, and installation workflows
+- **Task Complexity**: General agents need more autonomy for complex research, coding, and installation workflows
 - **System Stability**: Prevents resource exhaustion while maintaining necessary capabilities for each agent type
 
 ### Intelligent Task Planning (Planner)
 
 **Planner-Generated Execution Plans**:
 
-When specialist agents (Pentester, Coder, Installer) are invoked, the Planner (adviser in planning mode) optionally generates a structured execution plan before task execution:
+When specialist agents (Researcher, Coder, Installer) are invoked, the Planner (adviser in planning mode) optionally generates a structured execution plan before task execution:
 
 **Planning Process**:
 1. **Context Analysis**: Planner analyzes full execution context via enricher agent
@@ -1074,7 +1074,7 @@ When specialist agents (Pentester, Coder, Installer) are invoked, the Planner (a
 
 ### Mentor Supervision Protocol
 
-All agents with adviser handler access (Primary, Pentester, Coder, Installer, Assistant) now include explicit awareness of mentor supervision in their system prompts:
+All agents with adviser handler access (Primary, Researcher, Coder, Installer, Assistant) now include explicit awareness of mentor supervision in their system prompts:
 
 **Enhanced Response Format**:
 Agents are instructed to expect tool responses containing both:
@@ -1178,7 +1178,7 @@ graph TB
 
 ## Summary
 
-The Flow execution system represents a sophisticated orchestration platform that combines multiple AI agents, tools, and infrastructure components to deliver autonomous penetration testing capabilities. Key architectural highlights include:
+The Flow execution system represents a sophisticated orchestration platform that combines multiple AI agents, tools, and infrastructure components to deliver autonomous lead-finding capabilities. Key architectural highlights include:
 
 ### System Robustness
 - **Triple-layer error handling** - Tool call fixing, reflector correction, and retry mechanisms
@@ -1264,4 +1264,4 @@ The Flow execution system represents a sophisticated orchestration platform that
 - **Network segmentation**: Separate containers for web scraping vs. tool execution
 - **Resource limits**: Comprehensive timeout and resource management
 
-This architecture enables autonomous security testing while maintaining human oversight, technical precision, and operational security throughout the entire penetration testing workflow.
+This architecture enables autonomous lead-finding while maintaining human oversight, technical precision, and operational security throughout the entire workflow.

@@ -1092,7 +1092,6 @@ Only test systems you own or are explicitly authorized to assess. See [EULA.md](
 The new flow form includes a template picker, which can prefill the message box with a saved flow template. This is useful when you run similar assessments repeatedly.
 
 - Use an existing template if you already have one saved in **Templates**
-- Start from the example prompt in [`examples/prompts/base_web_pentest.md`](examples/prompts/base_web_pentest.md) if you need a practical baseline for web testing
 - Adjust the target, scope, and constraints before starting the flow
 
 Templates are starting points. You do not need special syntax to use PentAGI: plain natural-language instructions work well as long as the target and goal are clear.
@@ -4153,7 +4152,7 @@ When refining prompts for offensive security work, give the agent a clear method
 4. Validate findings with reproducible evidence before escalating to deeper exploitation
 5. Finish with report-ready notes that capture impact, prerequisites, and next steps
 
-For PentAGI-specific prompt guidance, see [`backend/docs/prompt_engineering_pentagi.md`](backend/docs/prompt_engineering_pentagi.md). For a practical starting point, reuse and adapt [`examples/prompts/base_web_pentest.md`](examples/prompts/base_web_pentest.md) to match the target application, technology stack, and engagement scope.
+For prompt guidance on the agents, see [`backend/docs/prompt_engineering_agents.md`](backend/docs/prompt_engineering_agents.md).
 
 ## Building
 

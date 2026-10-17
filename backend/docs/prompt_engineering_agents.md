@@ -1,6 +1,6 @@
 # PentAGI Prompt Engineering Guide
 
-A comprehensive framework for designing high-performance prompts within the PentAGI penetration testing system. This guide provides specialized principles for creating prompts that leverage the multi-agent architecture, memory systems, security tools, and specific operational context of PentAGI.
+A comprehensive framework for designing high-performance prompts within the PentAGI system. This guide provides specialized principles for creating prompts that leverage the multi-agent architecture, memory systems, command-line tools, and specific operational context of PentAGI.
 
 ## Understanding Cognitive Aspects of Language Models
 
@@ -24,7 +24,7 @@ A comprehensive framework for designing high-performance prompts within the Pent
 
 **Clear Hierarchical Structure**
 - Use Markdown headings (`#`, `##`, `###`) for clear visual hierarchy and logical grouping of instructions. Ensure a logical flow from high-level role definition to specific protocols and requirements.
-- Begin with a clear definition of the agent's specific **role** (e.g., Orchestrator, Pentester, Searcher), its primary **objective** within the PentAGI workflow, and any overarching **security focus**.
+- Begin with a clear definition of the agent's specific **role** (e.g., Orchestrator, Researcher, Searcher), its primary **objective** within the PentAGI workflow, and any overarching **operational focus**.
 - Place critical **operational constraints** (security, environment) early in the prompt for high visibility.
 - Use separate, clearly marked sections for key areas:
     - `CORE CAPABILITIES / KNOWLEDGE BASE`
@@ -87,22 +87,22 @@ A comprehensive framework for designing high-performance prompts within the Pent
 ### 2. Agent-Specific Instructions
 
 **Role-Based Customization**
-- Tailor instructions, tone, knowledge references, and complexity directly to the agent's specialized role within the PentAGI system (Orchestrator, Pentester, Searcher, Developer, Adviser, Memorist, Installer). Explicitly reference `ai-concepts.mdc` for role definitions.
-- Enforce stricter command protocols and safety measures for agents with direct system/tool access (Pentester, Maintenance/Installer).
-- Include references to specialized knowledge bases or toolsets relevant to the agent's function (e.g., specific security tools from `security-tools.mdc` for Pentester; search strategies and tool priorities for Searcher).
+- Tailor instructions, tone, knowledge references, and complexity directly to the agent's specialized role within the PentAGI system (Orchestrator, Researcher, Searcher, Developer, Adviser, Memorist, Installer).
+- Enforce stricter command protocols and safety measures for agents with direct system/tool access (Researcher, Maintenance/Installer).
+- Include references to specialized knowledge bases or toolsets relevant to the agent's function (e.g., specific command-line tools for the Researcher; search strategies and tool priorities for Searcher).
 - Clearly define inter-agent communication protocols, especially delegation criteria and the expected format/content of information exchange between agents.
 
 **Security and Operational Boundaries**
-- Explicitly state the **scope** of permitted actions and **security constraints**. Reference `security-tools.mdc` for general tool security context.
-- For engagement-level boundaries, start from the reusable [scope-of-work pentest prompt template](../../examples/prompts/scope_of_work_pentest.md) and adapt the allowed targets, out-of-scope targets, stop conditions, and evidence expectations before the flow starts.
+- Explicitly state the **scope** of permitted actions and **security constraints**.
+- For engagement-level boundaries, define the in-scope sources, out-of-scope sources, stop conditions, and evidence expectations before the flow starts.
 - Define **Docker container limitations** within `<container_constraints>`, populated by template variables like `{{.DockerImage}}`, `{{.Cwd}}`, `{{.ContainerPorts}}`. Specify restrictions clearly (e.g., "No direct host access," "No GUI applications," "No UDP scanning").
 - Specify **forbidden actions** clearly. Use **ALL CAPS** for critical security warnings, permissions, or prohibitions (e.g., "DO NOT attempt to install new software packages," "ONLY execute commands related to the current SubTask").
 - Emphasize working **strictly within the scope of the current `SubTask`**. The agent must understand its current objective based on `{{.ExecutionContext}}` and not attempt actions related to other SubTasks or the overall Flow goal unless explicitly instructed within the current SubTask. Reference `data-models.mdc` and `controller.md` for task/subtask relationships.
 
 **Ethical Boundaries and Safety**
-- Explicitly include ethics guidance relevant to penetration testing context: legal compliance, responsible disclosure, data protection.
+- Explicitly include ethics guidance relevant to the task context: legal compliance, responsible data handling, data protection.
 - Specify techniques for identifying and mitigating potential risks in generated prompts.
-- Establish explicit guidelines for avoiding harmful outputs, jailbreaking, or prompt injection vulnerabilities.
+- Establish explicit guidelines for avoiding harmful outputs, jailbreaking, or prompt injection.
 - Include a verification step requiring agents to review outputs for potentially harmful consequences.
 - Create clear escalation paths for handling edge cases requiring human judgment.
 
@@ -142,7 +142,7 @@ A comprehensive framework for designing high-performance prompts within the Pent
 **Memory Operations Protocol (`<memory_protocol>`)**
 - Provide explicit, actionable instructions on *when* and *how* to interact with PentAGI's vector memory system. Reference `ai-concepts.mdc` (Memory section).
 - **Crucially, specify the primary action:** Agents MUST **always attempt to retrieve relevant information from memory first** using retrieval tools (e.g., `{{.SearchGuideToolName}}`, `{{.SearchAnswerToolName}}`) *before* performing external actions like web searches or running discovery tools.
-- Define clear criteria for *storing* new information: Only store valuable, novel, and reusable knowledge (e.g., confirmed vulnerabilities, successful complex command sequences, effective troubleshooting steps, reusable code snippets) using storage tools (e.g., `{{.StoreGuideToolName}}`, `{{.StoreAnswerToolName}}`). Avoid cluttering memory with trivial or intermediate results.
+- Define clear criteria for *storing* new information: Only store valuable, novel, and reusable knowledge (e.g., confirmed findings, successful complex command sequences, effective troubleshooting steps, reusable code snippets) using storage tools (e.g., `{{.StoreGuideToolName}}`, `{{.StoreAnswerToolName}}`). Avoid cluttering memory with trivial or intermediate results.
 - Specify the exact tool names (`{{.ToolName}}`) for memory interaction.
 
 **Vector Database Awareness**
@@ -152,7 +152,7 @@ A comprehensive framework for designing high-performance prompts within the Pent
 ### 5. Multi-Agent Team Collaboration
 
 **Team Specialist Definition (`<team_specialists>`)**
-- Include a complete, accurate roster of **all available specialist agents** within PentAGI (searcher, pentester, developer, adviser, memorist, installer).
+- Include a complete, accurate roster of **all available specialist agents** within PentAGI (`searcher`, `pentester`, `coder`, `adviser`, `memorist`, `installer`).
 - For each specialist, clearly define:
     - `skills`: Core competencies.
     - `use_cases`: Specific situations or types of problems they should be delegated.
@@ -189,7 +189,7 @@ A comprehensive framework for designing high-performance prompts within the Pent
 - Define **action economy rules:** Limit the total number of search tool calls per query/subtask (e.g., 3-5 max). Instruct the agent to **stop searching as soon as sufficient information is found** to fulfill the request or subtask objective. Do not exhaust all search tools unnecessarily.
 
 **Mandatory Result Delivery Tools**
-- Clearly specify the **exact final tool** (e.g., `{{.HackResultToolName}}` for Pentester, `{{.SearchResultToolName}}` for Searcher, `{{.FinalyToolName}}` for Orchestrator) that an agent **MUST** use to deliver its final output, report success/failure, and signify the completion of its current subtask.
+- Clearly specify the **exact final tool** (e.g., `{{.HackResultToolName}}` for the Researcher, `{{.SearchResultToolName}}` for Searcher, `{{.FinalyToolName}}` for Orchestrator) that an agent **MUST** use to deliver its final output, report success/failure, and signify the completion of its current subtask.
 - Define the expected structure of the output within this final tool call (e.g., "result" field contains the detailed findings/answer, "message" field contains a concise summary or status update). This signals completion to the controlling system (`controller.md`).
 
 ### 7. Context Preservation and Summarization
@@ -212,10 +212,10 @@ A comprehensive framework for designing high-performance prompts within the Pent
 
 **Container Constraints (`<container_constraints>`)**
 - Clearly define the **Docker runtime environment** using template variables: `{{.DockerImage}}` (image name), `{{.Cwd}}` (working directory), `{{.ContainerPorts}}` (available ports).
-- Specify **resource limitations** (e.g., default command timeouts) and **operational restrictions** derived from PentAGI's secure execution model (No GUI, No host access, No UDP scanning, No arbitrary software installation). Reference `security-tools.mdc`.
+- Specify **resource limitations** (e.g., default command timeouts) and **operational restrictions** derived from PentAGI's secure execution model (No GUI, No host access, No UDP scanning, No arbitrary software installation).
 
 **Available Tools (`<tools>`)**
-- For agents like the Pentester, explicitly **list the specific security testing tools** confirmed to be available within their container environment. Reference the list in `pentester.tmpl` and cross-check with `security-tools.mdc`.
+- For agents like the Researcher, explicitly **list the specific command-line tools** confirmed to be available within their container environment. Reference the list in `pentester.tmpl`.
 - Provide version-specific guidance or known limitations if necessary.
 
 ## Effective Few-Shot Learning
@@ -254,7 +254,7 @@ A comprehensive framework for designing high-performance prompts within the Pent
 
 **Structured Tool Invocation is Mandatory**
 - **Reiterate:** *All* actions, queries, commands, memory operations, delegations, and final result reporting **MUST** be performed via **structured tool calls** using the correct tool name variable (e.g., `{{.ToolName}}`).
-- **Explicitly state:** Plain text descriptions or simulations of actions (e.g., writing "Running command `nmap -sV target.com`") **will not be executed** by the system.
+- **Explicitly state:** Plain text descriptions or simulations of actions (e.g., writing "Running command `curl https://forum.example.com/threads`") **will not be executed** by the system.
 - Use consistent template variables for tool names (see list below).
 - Ensure prompts clearly specify expected parameters for critical tool calls.
 
@@ -305,7 +305,7 @@ A comprehensive framework for designing high-performance prompts within the Pent
         - `{{.SearchCodeToolName}}` (*Likely needed*) (Retrieve Code Snippet)
         - `{{.StoreCodeToolName}}` (*Likely needed*) (Store Code Snippet)
     - *Result Delivery:*
-        - `{{.HackResultToolName}}` (Pentester Final Report)
+        - `{{.HackResultToolName}}` (Researcher Final Report)
         - `{{.SearchResultToolName}}` (Searcher Final Report)
         - `{{.FinalyToolName}}` (Orchestrator Subtask Completion Report)
     - *System & Environment Tools:*
@@ -363,24 +363,23 @@ A comprehensive framework for designing high-performance prompts within the Pent
 - **Key Sections**: `TEAM CAPABILITIES`, `OPERATIONAL PROTOCOLS` (esp. Task Analysis, Boundaries, Delegation Efficiency), `DELEGATION PROTOCOL`, `SUMMARIZATION AWARENESS PROTOCOL`, `COMPLETION REQUIREMENTS` (using `{{.FinalyToolName}}`).
 - **Critical Instructions**: Gather context *before* delegating, strictly enforce current subtask scope, provide *full* context upon delegation, manage execution attempts/failures, report subtask completion status and comprehensive results using `{{.FinalyToolName}}`.
 
-### Pentester Agent
-- **Focus**: Hands-on security testing, execution of tools (`nmap`, `sqlmap`, etc.), vulnerability exploitation, evidence collection and documentation.
-- **Key Sections**: `KNOWLEDGE MANAGEMENT` (Memory Protocol), `OPERATIONAL ENVIRONMENT` (Container Constraints), `COMMAND EXECUTION RULES` (Terminal Protocol), `PENETRATION TESTING TOOLS` (list available), `TEAM COLLABORATION`, `DELEGATION PROTOCOL`, `SUMMARIZATION AWARENESS PROTOCOL`, `COMPLETION REQUIREMENTS` (using `{{.HackResultToolName}}`).
-- **Critical Instructions**: Check memory first, strictly adhere to terminal rules & container constraints, use only listed available tools, delegate appropriately (e.g., exploit development to Coder), provide detailed, evidence-backed exploitation reports using `{{.HackResultToolName}}`.
+### Researcher Agent
+- **Focus**: Hands-on investigation, execution of command-line tools (`curl`, `python`, etc.), reading sources, evidence collection and documentation.
+- **Key Sections**: `KNOWLEDGE MANAGEMENT` (Memory Protocol), `OPERATIONAL ENVIRONMENT` (Container Constraints), `COMMAND EXECUTION RULES` (Terminal Protocol), `AVAILABLE TOOLS` (list available), `TEAM COLLABORATION`, `DELEGATION PROTOCOL`, `SUMMARIZATION AWARENESS PROTOCOL`, `COMPLETION REQUIREMENTS` (using `{{.HackResultToolName}}`).
+- **Critical Instructions**: Check memory first, strictly adhere to terminal rules & container constraints, use only listed available tools, delegate appropriately (e.g., script development to Coder), provide detailed, evidence-backed reports using `{{.HackResultToolName}}`.
 
-#### Pentesting Methodology Checklist for Prompt Authors
-- Encode authorization boundaries explicitly. Prompts should remind the agent to test only approved targets, respect engagement scope, and avoid destructive actions unless the task requires them.
-- Start with coverage before exploitation. Instruct the agent to map routes, roles, inputs, file handling, integrations, and trust boundaries before choosing attack paths.
-- Organize testing by attack surface. Good prompts group checks around authentication, access control, injection, cross-site scripting, server-side request forgery, file processing, and business logic instead of presenting a random payload dump.
-- Prefer low-risk validation first. Reflection markers, controlled payloads, timing checks, and out-of-band verification should be used deliberately to confirm hypotheses before deeper exploitation.
-- Require evidence at every stage. Prompts should ask for captured requests, responses, tool output, prerequisites, and impact notes so confirmed findings can move directly into a report.
+#### Research Methodology Checklist for Prompt Authors
+- Encode scope boundaries explicitly. Prompts should remind the agent to work only on approved sources, respect the task scope, and avoid destructive actions unless the task requires them.
+- Start with coverage before deep analysis. Instruct the agent to map the available sources, their structure, content types, and access paths before choosing where to focus.
+- Organize work by source type. Good prompts group checks around groups, forums, directories, and message threads instead of presenting a random set of queries.
+- Prefer low-cost checks first. Lightweight reads, targeted queries, and spot verification should be used deliberately to confirm hypotheses before deeper investigation.
+- Require evidence at every stage. Prompts should ask for captured requests, responses, tool output, prerequisites, and context notes so confirmed findings can move directly into a report.
 - Use memory and iteration intentionally. The agent should record confirmed dead ends, revisit promising leads with new context, and avoid repeating the same failed checks.
-- End with actionable reporting. A strong pentesting prompt tells the agent to summarize what was confirmed, what remains unverified, how the issue can be reproduced, and which follow-up actions are justified.
+- End with actionable reporting. A strong prompt tells the agent to summarize what was confirmed, what remains unverified, how a result can be reproduced, and which follow-up actions are justified.
 
 #### Recommended Reference Material
-- Use public methodology resources such as [HackTricks](https://book.hacktricks.wiki/en/index.html) and [Pentest Book](https://pentestbook.six2dez.com/) as inspiration for attack-surface coverage and testing depth.
-- Translate those references into concise phases, priorities, and verification rules for the agent instead of copying long checklists into the system prompt verbatim.
-- Keep prompt examples aligned with live PentAGI assets such as [`backend/pkg/templates/prompts/pentester.tmpl`](../pkg/templates/prompts/pentester.tmpl) and [`examples/prompts/base_web_pentest.md`](../../examples/prompts/base_web_pentest.md).
+- Translate general research methodology into concise phases, priorities, and verification rules for the agent instead of copying long checklists into the system prompt verbatim.
+- Keep prompt examples aligned with live PentAGI assets such as [`backend/pkg/templates/prompts/pentester.tmpl`](../pkg/templates/prompts/pentester.tmpl).
 
 ### Searcher Agent
 - **Focus**: Highly efficient information retrieval (internal memory & external sources), source evaluation and prioritization, synthesis of findings.
