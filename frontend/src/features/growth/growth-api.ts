@@ -5,6 +5,8 @@ import type {
     GrowthAccountsResponse,
     GrowthEmailResult,
     GrowthLead,
+    GrowthModelsInput,
+    GrowthModelsResponse,
     GrowthProfile,
     GrowthProfileInput,
     GrowthProxyTestResult,
@@ -14,8 +16,8 @@ import type {
     GrowthSettingInput,
     GrowthSettingKind,
     GrowthSettingsResponse,
-    GrowthSource,
     GrowthSourcesAddResponse,
+    GrowthSourcesResponse,
     GrowthTelegramLoginStep,
 } from './growth-types';
 
@@ -54,11 +56,14 @@ const live = {
     listLeads: async (flowId: number | string) =>
         unwrapApiResponse(await api.get<{ leads: GrowthLead[] }>('/growth/leads/', { params: { flow_id: flowId } }))
             .leads,
+    // Answers 502 Growth.ModelList when the relay does not list its models; the model is then typed by name.
+    listModels: async (kind: GrowthSettingKind, input: GrowthModelsInput) =>
+        unwrapApiResponse(await api.post<GrowthModelsResponse>(`/growth/settings/${kind}/models`, input)).models,
     listProfiles: async () => unwrapApiResponse(await api.get<GrowthProfile[]>('/growth/profiles')),
     listRuns: async (flowId: number | string) =>
         unwrapApiResponse(await api.get<{ runs: GrowthRun[] }>('/growth/runs/', { params: { flow_id: flowId } })).runs,
     listSettings: async () => unwrapApiResponse(await api.get<GrowthSettingsResponse>('/growth/settings/')).settings,
-    listSources: async () => unwrapApiResponse(await api.get<{ sources: GrowthSource[] }>('/growth/sources/')).sources,
+    listSources: async () => unwrapApiResponse(await api.get<GrowthSourcesResponse>('/growth/sources/')),
     // Answers 503 Growth.NoSecretKey while the server has no key to encrypt secrets with.
     saveSetting: async (kind: GrowthSettingKind, input: GrowthSettingInput) =>
         unwrapApiResponse(await api.put<GrowthSetting>(`/growth/settings/${kind}`, input)),

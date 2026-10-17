@@ -51,9 +51,27 @@ export const EMBEDDING_PROVIDERS = [
 
 export const SEARCH_PROVIDERS = ['tavily', 'google', 'perplexity', 'firecrawl', 'traversaal'] as const;
 
-export const REQUIRED_KINDS: GrowthSettingKind[] = ['llm'];
+export const REQUIRED_KINDS: GrowthSettingKind[] = ['llm', 'screening'];
 
 const TLS_MODES = ['starttls', 'tls', 'none'] as const;
+
+// The Telegram join pace: suggestions that only raise reminders, each empty field taking the server's default.
+const PACE_FIELDS = [
+    'joins_per_day',
+    'join_interval_minutes',
+    'join_ramp',
+    'private_joins_per_day',
+    'joined_groups_warning',
+    'read_interval_seconds',
+    'first_sync_days',
+    'first_sync_messages',
+    'risk_reminders',
+];
+
+const SMTP_FIELDS = ['host', 'port', 'username', 'password', 'from', 'tls'];
+
+const COUNT = /^\d+$/;
+const RANGE = /^\d+(\s*-\s*\d+)?$/;
 
 export const isProxyUrl = (value: string): boolean =>
     /^(https?|socks5h?):\/\/([^\s@/]+@)?[^\s:/@]+:\d{1,5}\/?$/i.test(value);
@@ -63,9 +81,19 @@ const EMAIL = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
 const FIELD_CHECKS: Record<string, (value: string) => boolean> = {
     api_hash: (value) => /^[\da-z]{32}$/i.test(value),
     api_id: (value) => /^\d+$/.test(value),
+    api_url: (value) => /^https?:\/\/\S+$/i.test(value),
+    first_sync_days: (value) => COUNT.test(value),
+    first_sync_messages: (value) => COUNT.test(value),
     from: (value) => EMAIL.test(value),
+    join_interval_minutes: (value) => RANGE.test(value),
+    join_ramp: (value) => /^\d+(\s*,\s*\d+)*$/.test(value),
+    joined_groups_warning: (value) => COUNT.test(value),
+    joins_per_day: (value) => COUNT.test(value),
     notify_emails: (value) => value.split(',').every((address) => EMAIL.test(address.trim())),
     port: (value) => /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535,
+    private_joins_per_day: (value) => COUNT.test(value),
+    read_interval_seconds: (value) => RANGE.test(value),
+    threshold: (value) => /^0?\.\d+$/.test(value) && Number(value) > 0 && Number(value) < 1,
     url: (value) => isProxyUrl(value),
 };
 
@@ -78,32 +106,63 @@ const MASKED_FIELDS = new Set([...SECRET_FIELDS, 'url']);
 // One value per line; YouTube rotates to the next key when one runs out of quota.
 const MULTILINE_FIELDS = new Set(['api_keys']);
 
-// Empty means "send to the sign-in email", so it is never required.
-const OPTIONAL_FIELDS = new Set(['notify_emails']);
+// Empty means "send to the sign-in email", the server's default, or Jev's latest model, so these are never required.
+const OPTIONAL_FIELDS = new Set(['notify_emails', 'threshold', ...PACE_FIELDS]);
 
 // A catalogue provider already knows its model and endpoint; these only override them.
 const LLM_OVERRIDE_FIELDS = new Set(['model', 'server_url']);
 
 const PROTOCOLS = ['openai_chat', 'anthropic_messages'] as const;
 
-const selectLabel = (field: string, value: string): string | undefined =>
-    field === 'tls' ? text.tlsOption[value] : text.protocol[value];
+const SELECT_OPTIONS: Record<string, readonly string[]> = {
+    protocol: PROTOCOLS,
+    risk_reminders: ['on', 'off'],
+    tls: TLS_MODES,
+};
+
+const selectLabel = (field: string, value: string): string | undefined => text.selectOption[field]?.[value];
 
 // Fields picked from a list rather than typed, with the option a new setting starts on.
-const SELECT_DEFAULTS: Record<string, string> = { protocol: 'openai_chat', tls: 'starttls' };
+const SELECT_DEFAULTS: Record<string, string> = { protocol: 'openai_chat', risk_reminders: 'on', tls: 'starttls' };
 
-const isOverrideField = (kind: GrowthSettingKind, provider: null | string, field: string) =>
+// Relay providers serve many models under their own names, so the card can ask them for the list.
+const canListModels = (kind: GrowthSettingKind, provider: null | string) =>
+    (kind === 'llm' && provider === 'custom') || (kind === 'screening' && !!provider && provider !== 'typesafe');
+
+// With the platform's SMTP server set in .env, a customer only names where the email goes.
+const usesPlatformSmtp = (kind: GrowthSettingKind, setting: GrowthSetting | undefined) =>
+    kind === 'email' && setting?.platform_smtp === true;
+
+// Fields folded under the card's "advanced" toggle.
+const isOverrideField = (
+    kind: GrowthSettingKind,
+    provider: null | string,
+    field: string,
+    setting: GrowthSetting | undefined,
+) =>
     (kind === 'llm' && provider !== 'custom' && LLM_OVERRIDE_FIELDS.has(field)) ||
-    (kind === 'embedding' && LLM_OVERRIDE_FIELDS.has(field));
+    (kind === 'embedding' && LLM_OVERRIDE_FIELDS.has(field)) ||
+    (kind === 'telegram' && PACE_FIELDS.includes(field)) ||
+    (usesPlatformSmtp(kind, setting) && SMTP_FIELDS.includes(field));
 
 // Empty embedding fields mean the built-in local embedder.
-const isOptionalField = (kind: GrowthSettingKind, provider: null | string, field: string) =>
-    OPTIONAL_FIELDS.has(field) || kind === 'embedding' || isOverrideField(kind, provider, field);
+const isOptionalField = (
+    kind: GrowthSettingKind,
+    provider: null | string,
+    field: string,
+    setting: GrowthSetting | undefined,
+) =>
+    OPTIONAL_FIELDS.has(field) ||
+    kind === 'embedding' ||
+    (kind === 'screening' && field === 'model') ||
+    isOverrideField(kind, provider, field, setting);
 
-const fieldsFor = (kind: GrowthSettingKind, provider: null | string): string[] => {
+const fieldsFor = (kind: GrowthSettingKind, provider: null | string, setting: GrowthSetting | undefined): string[] => {
     switch (kind) {
         case 'email':
-            return ['host', 'port', 'username', 'password', 'from', 'tls', 'notify_emails'];
+            return usesPlatformSmtp(kind, setting)
+                ? ['notify_emails', ...SMTP_FIELDS]
+                : [...SMTP_FIELDS, 'notify_emails'];
         case 'embedding':
             return ['api_key', 'model', 'server_url'];
         case 'llm':
@@ -112,8 +171,17 @@ const fieldsFor = (kind: GrowthSettingKind, provider: null | string): string[] =
                 : ['api_key', 'model', 'server_url'];
         case 'proxy':
             return ['url'];
+        // A server without Jev routing reports no model field, and refuses one it does not know.
+        case 'screening':
+            if (!setting || !('model' in setting.fields)) {
+                return ['api_key', 'threshold'];
+            }
+
+            return provider === 'custom'
+                ? ['api_url', 'model', 'api_key', 'threshold']
+                : ['api_key', 'model', 'threshold'];
         case 'telegram':
-            return ['api_id', 'api_hash'];
+            return ['api_id', 'api_hash', ...PACE_FIELDS];
         case 'web_search':
             return provider === 'google' ? ['api_keys', 'cx'] : ['api_keys'];
         case 'youtube':
@@ -147,6 +215,17 @@ const stateVariant: Record<GrowthSettingState, BadgeVariant> = {
 const reasonText = (setting: GrowthSetting) =>
     (setting.status_reason && (text.reason[setting.status_reason] ?? setting.status_reason)) || text.unknownReason;
 
+const fieldLabel = (kind: GrowthSettingKind, provider: null | string, field: string): string =>
+    text.fieldByKind[`${kind}.${provider}.${field}`]?.label ??
+    text.fieldByKind[`${kind}.${field}`]?.label ??
+    text.field[field]?.label ??
+    field;
+
+const fieldPlaceholder = (kind: GrowthSettingKind, provider: null | string, field: string): string | undefined =>
+    text.fieldByKind[`${kind}.${provider}.${field}`]?.placeholder ??
+    text.fieldByKind[`${kind}.${field}`]?.placeholder ??
+    text.field[field]?.placeholder;
+
 const statusLine = (kind: GrowthSettingKind, setting: GrowthSetting | undefined): string => {
     switch (settingState(setting)) {
         case 'connected':
@@ -160,6 +239,10 @@ const statusLine = (kind: GrowthSettingKind, setting: GrowthSetting | undefined)
         default:
             if (kind === 'web_search') {
                 return text.statusLine.unsetSearch;
+            }
+
+            if (kind === 'screening') {
+                return text.statusLine.unsetScreening;
             }
 
             return REQUIRED_KINDS.includes(kind) ? text.statusLine.unsetRequired : text.statusLine.unsetOptional;
@@ -197,15 +280,21 @@ export function GrowthCredentialCard({
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
+    const [isListingModels, setIsListingModels] = useState(false);
+    const [models, setModels] = useState<null | string[]>(null);
 
-    const fields = fieldsFor(kind, provider);
+    const fields = fieldsFor(kind, provider, setting);
     const isCustomLlm = kind === 'llm' && provider === 'custom';
     const catalogProviders = kind === 'llm' ? providers.filter((option) => option !== 'custom') : providers;
-    const mainFields = fields.filter((field) => !isOverrideField(kind, provider, field));
-    const overrideFields = fields.filter((field) => isOverrideField(kind, provider, field));
-    const isBusy = isSaving || isTesting || isAutoTesting;
+    const mainFields = fields.filter((field) => !isOverrideField(kind, provider, field, setting));
+    const overrideFields = fields.filter((field) => isOverrideField(kind, provider, field, setting));
+    const advanced = text.advanced[kind] ?? { hint: text.llmMode.overridesHint, title: text.llmMode.overrides };
+    const isBusy = isSaving || isTesting || isAutoTesting || isListingModels;
     const state = settingState(setting);
-    const guide = text.guide[providers.length ? (provider ?? '') : kind];
+    const guide = providers.length
+        ? (text.guide[`${kind}.${provider}`] ?? text.guide[provider ?? ''])
+        : text.guide[kind];
+    const isRequiredUnset = REQUIRED_KINDS.includes(kind) && state === 'unset';
     // Saving with the same provider may leave any field empty to keep what is stored.
     const canKeepSaved = isSaved && setting?.provider === (providers.length ? provider : null);
 
@@ -229,10 +318,10 @@ export function GrowthCredentialCard({
                       .filter(Boolean)
                       .join('\n')
                 : raw.trim();
-            const label = text.field[field]?.label ?? field;
+            const label = fieldLabel(kind, provider, field);
 
             if (!value) {
-                if (!canKeepSaved && !isOptionalField(kind, provider, field)) {
+                if (!canKeepSaved && !isOptionalField(kind, provider, field, setting)) {
                     nextErrors[field] = text.fieldRequired(label);
                 }
 
@@ -244,6 +333,17 @@ export function GrowthCredentialCard({
             }
 
             filled[field] = value;
+        }
+
+        // An empty host is the one empty value the server does not keep: it drops the customer's own server and goes
+        // back to the platform's, and it refuses the other SMTP fields without a host.
+        if (usesPlatformSmtp(kind, setting) && !filled.host) {
+            for (const field of SMTP_FIELDS) {
+                delete nextErrors[field];
+                delete filled[field];
+            }
+
+            filled.host = '';
         }
 
         setErrors(nextErrors);
@@ -306,6 +406,37 @@ export function GrowthCredentialCard({
         }
     };
 
+    // An unchanged key is sent empty, and the server lists the models with the one it has saved.
+    const handleListModels = async () => {
+        setIsListingModels(true);
+
+        try {
+            const listed = await growthApi.listModels(
+                kind,
+                kind === 'llm'
+                    ? {
+                          api_key: values.api_key?.trim() ?? '',
+                          protocol: values.protocol ?? '',
+                          provider,
+                          server_url: values.server_url?.trim() ?? '',
+                      }
+                    : { api_key: values.api_key?.trim() ?? '', api_url: values.api_url?.trim() ?? '', provider },
+            );
+
+            if (listed.length) {
+                setModels(listed.map((model) => model.id));
+            } else {
+                setModels(null);
+                toast.error(text.modelsEmpty);
+            }
+        } catch {
+            setModels(null);
+            toast.error(text.modelsFailed);
+        } finally {
+            setIsListingModels(false);
+        }
+    };
+
     const handleClear = async () => {
         try {
             await growthApi.clearSetting(kind);
@@ -320,7 +451,8 @@ export function GrowthCredentialCard({
 
     const renderInput = (field: string) => {
         const id = `credential-${kind}-${field}`;
-        const placeholder = canKeepSaved && MASKED_FIELDS.has(field) ? text.keepSaved : text.field[field]?.placeholder;
+        const placeholder =
+            canKeepSaved && MASKED_FIELDS.has(field) ? text.keepSaved : fieldPlaceholder(kind, provider, field);
         const onValue = (value: string) => setValues((previous) => ({ ...previous, [field]: value }));
 
         if (!isEditing) {
@@ -356,12 +488,39 @@ export function GrowthCredentialCard({
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        {(field === 'tls' ? TLS_MODES : PROTOCOLS).map((option) => (
+                        {(SELECT_OPTIONS[field] ?? []).map((option) => (
                             <SelectItem
                                 key={option}
                                 value={option}
                             >
                                 {selectLabel(field, option)}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            );
+        }
+
+        if (field === 'model' && models) {
+            return (
+                <Select
+                    disabled={isBusy}
+                    onValueChange={onValue}
+                    value={values.model || undefined}
+                >
+                    <SelectTrigger
+                        className="w-full"
+                        id={id}
+                    >
+                        <SelectValue placeholder={text.modelsPick} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {models.map((option) => (
+                            <SelectItem
+                                key={option}
+                                value={option}
+                            >
+                                {option}
                             </SelectItem>
                         ))}
                     </SelectContent>
@@ -405,7 +564,21 @@ export function GrowthCredentialCard({
             className={MULTILINE_FIELDS.has(field) ? 'flex flex-col gap-1.5 sm:col-span-2' : 'flex flex-col gap-1.5'}
             key={field}
         >
-            <Label htmlFor={`credential-${kind}-${field}`}>{text.field[field]?.label ?? field}</Label>
+            <div className="flex min-h-5 items-center justify-between gap-2">
+                <Label htmlFor={`credential-${kind}-${field}`}>{fieldLabel(kind, provider, field)}</Label>
+                {field === 'model' && isEditing && canListModels(kind, provider) && (
+                    <Button
+                        className="h-auto p-0 text-xs"
+                        disabled={isBusy}
+                        onClick={models ? () => setModels(null) : handleListModels}
+                        type="button"
+                        variant="link"
+                    >
+                        {isListingModels && <Spinner variant="circle" />}
+                        {models ? text.modelsManual : text.modelsFetch}
+                    </Button>
+                )}
+            </div>
             {renderInput(field)}
             {text.fieldHelp[`${kind}.${field}`] && (
                 <p className="text-muted-foreground text-xs">{text.fieldHelp[`${kind}.${field}`]}</p>
@@ -442,7 +615,13 @@ export function GrowthCredentialCard({
                         </Button>
                     )}
                 </div>
-                <p className={state === 'invalid' ? 'text-destructive text-xs' : 'text-muted-foreground text-xs'}>
+                <p
+                    className={
+                        state === 'invalid' || (kind === 'screening' && isRequiredUnset)
+                            ? 'text-destructive text-xs'
+                            : 'text-muted-foreground text-xs'
+                    }
+                >
                     {statusLine(kind, setting)}
                 </p>
                 {setting?.source === 'env' && <p className="text-muted-foreground text-xs">{text.envSourceNote}</p>}
@@ -503,6 +682,7 @@ export function GrowthCredentialCard({
                             onValueChange={(value) => {
                                 setProvider(value);
                                 setErrors({});
+                                setModels(null);
                             }}
                             value={provider ?? undefined}
                         >
@@ -515,7 +695,9 @@ export function GrowthCredentialCard({
                                         key={option}
                                         value={option}
                                     >
-                                        {text.providerLabel[option] ?? option}
+                                        {text.providerLabel[`${kind}.${option}`] ??
+                                            text.providerLabel[option] ??
+                                            option}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -526,20 +708,27 @@ export function GrowthCredentialCard({
                 {guide && !isCustomLlm && <p className="text-muted-foreground text-sm">{guide}</p>}
                 {kind === 'llm' && <p className="text-muted-foreground text-xs">{text.llmTopUpNote}</p>}
                 {kind === 'telegram' && <p className="text-muted-foreground text-xs">{text.telegramNote}</p>}
+                {usesPlatformSmtp(kind, setting) && (
+                    <p className="text-muted-foreground text-xs">{text.platformSmtpOn}</p>
+                )}
+                {kind === 'email' && setting?.platform_smtp === false && (
+                    <p className="text-xs text-yellow-800 dark:text-yellow-400">{text.platformSmtpOff}</p>
+                )}
 
                 <div className="grid gap-3 sm:grid-cols-2">{mainFields.map(renderField)}</div>
 
                 {overrideFields.length > 0 && (
                     <Collapsible
                         className="border-t pt-3"
-                        defaultOpen={overrideFields.some((field) => !!setting?.fields[field])}
+                        // The pace always comes back filled with its defaults, so it stays folded.
+                        defaultOpen={kind !== 'telegram' && overrideFields.some((field) => !!setting?.fields[field])}
                     >
                         <CollapsibleTrigger className="group flex items-center gap-1 text-sm font-medium">
                             <ChevronRight className="size-4 transition-transform group-data-[state=open]:rotate-90" />
-                            {text.llmMode.overrides}
+                            {advanced.title}
                         </CollapsibleTrigger>
                         <CollapsibleContent className="mt-3 flex flex-col gap-3">
-                            <p className="text-muted-foreground text-xs">{text.llmMode.overridesHint}</p>
+                            <p className="text-muted-foreground text-xs">{advanced.hint}</p>
                             <div className="grid gap-3 sm:grid-cols-2">{overrideFields.map(renderField)}</div>
                         </CollapsibleContent>
                     </Collapsible>
@@ -573,6 +762,7 @@ export function GrowthCredentialCard({
                                         setValues({});
                                         setErrors({});
                                         setProvider(setting?.provider ?? providers[0] ?? null);
+                                        setModels(null);
                                     }}
                                     size="sm"
                                     variant="ghost"

@@ -16,6 +16,10 @@ const evidence = (n: number) => ({
 });
 
 const lead: GrowthLead = {
+    contacts: [
+        { type: 'phone', value: '+66 81 234 5678' },
+        { type: 'messenger', value: 'line: jay88' },
+    ],
     delivered_at: null,
     delivered_task_id: null,
     display_name: '阿杰',
@@ -57,7 +61,11 @@ describe('buildLeadsCsv', () => {
     });
 
     it('writes the row in header order', () => {
-        expect(row?.startsWith('阿杰,@jay,telegram,9,合格,是玩家、有付费迹象,Group,https://t.me/g,')).toBe(true);
+        expect(
+            row?.startsWith(
+                '阿杰,@jay,telegram,9,合格,是玩家、有付费迹象,手机号：+66 81 234 5678; 即时通讯（WhatsApp、Line、Telegram 等）：line: jay88,Group,https://t.me/g,',
+            ),
+        ).toBe(true);
     });
 });
 

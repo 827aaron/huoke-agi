@@ -163,6 +163,19 @@ function SettingsAccounts() {
                                     <p className="text-muted-foreground mt-1 text-xs whitespace-normal">
                                         {statusHint(account)}
                                     </p>
+                                    {account.joined_sources !== undefined && (
+                                        <p className="text-muted-foreground mt-1 text-xs whitespace-normal">
+                                            {health.joinCounts(account.joins_today ?? 0, account.joined_sources)}
+                                        </p>
+                                    )}
+                                    {account.join_advice?.map((code) => (
+                                        <p
+                                            className="mt-1 text-xs whitespace-normal text-yellow-800 dark:text-yellow-400"
+                                            key={code}
+                                        >
+                                            {health.joinAdvice[code] ?? code}
+                                        </p>
+                                    ))}
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">
                                     {account.last_success_at

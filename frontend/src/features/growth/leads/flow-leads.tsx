@@ -30,6 +30,7 @@ import LeadsExportMenu from './leads-export-menu';
 import {
     EMPTY_LEAD_FILTERS,
     filterLeads,
+    type LeadContactFilter,
     type LeadDeliveryFilter,
     type LeadFilters,
     type LeadFlag,
@@ -171,6 +172,22 @@ function FlowLeads() {
                         ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
+                <Select
+                    onValueChange={(value) => update({ contact: value as LeadContactFilter })}
+                    value={filters.contact}
+                >
+                    <SelectTrigger
+                        aria-label={copy.leads.column.contacts}
+                        className="w-36"
+                    >
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={ALL}>{copy.leads.filter.allContacts}</SelectItem>
+                        <SelectItem value="with">{copy.leads.filter.withContact}</SelectItem>
+                        <SelectItem value="without">{copy.leads.filter.withoutContact}</SelectItem>
+                    </SelectContent>
+                </Select>
                 <PlatformFilter
                     onChange={(platform) => update({ platform })}
                     value={filters.platform}
@@ -233,6 +250,7 @@ function FlowLeads() {
                                     <TableHead>{copy.leads.column.player}</TableHead>
                                     <TableHead>{copy.leads.column.score}</TableHead>
                                     <TableHead>{copy.leads.column.signals}</TableHead>
+                                    <TableHead>{copy.leads.column.contacts}</TableHead>
                                     <TableHead>{copy.leads.column.source}</TableHead>
                                     <TableHead>{copy.leads.column.evidence}</TableHead>
                                     <TableHead>{copy.leads.column.lastActive}</TableHead>
@@ -267,6 +285,27 @@ function FlowLeads() {
                                                     </Badge>
                                                 ))}
                                             </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            {lead.contacts?.length ? (
+                                                <div className="flex w-48 flex-col gap-0.5 text-xs">
+                                                    {lead.contacts.map((contact) => (
+                                                        <span
+                                                            className="break-all"
+                                                            key={`${contact.type}:${contact.value}`}
+                                                        >
+                                                            {copy.leads.contactText(
+                                                                copy.profile.contactType[contact.type] ?? contact.type,
+                                                                contact.value,
+                                                            )}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs whitespace-nowrap">
+                                                    {copy.leads.contactOnlyHandle}
+                                                </span>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             <button
