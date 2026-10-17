@@ -50,7 +50,7 @@ export interface RemoteLoginInput extends StartLoginInput {
 // `account_id` signs an existing account in again; without it a new account is added.
 export interface StartLoginInput {
     account_id?: number;
-    proxy_url: null | string;
+    proxy: null | string;
 }
 
 const getWireLeads = async (flowId: number | string) =>
@@ -130,7 +130,7 @@ const live = {
         ),
     // An empty string clears the account's own proxy, so it falls back to the default one.
     setAccountProxy: async (id: number, proxyUrl: null | string) =>
-        unwrapApiResponse(await api.put<GrowthAccount>(`/growth/accounts/${id}`, { proxy_url: proxyUrl ?? '' })),
+        unwrapApiResponse(await api.put<GrowthAccount>(`/growth/accounts/${id}`, { proxy: proxyUrl ?? '' })),
     startRemoteLogin: async (input: RemoteLoginInput) =>
         unwrapApiResponse(await api.post<GrowthRemoteLogin>('/growth/accounts/remote-login', input)),
     startTelegramLogin: async (input: StartLoginInput & { phone: string }) =>

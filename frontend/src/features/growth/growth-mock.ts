@@ -48,8 +48,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: ago(3),
         last_used_at: ago(3),
         platform: 'telegram',
+        proxy: null,
         proxy_source: 'direct',
-        proxy_url: null,
         rate_limit_until: null,
         status: 'active',
     },
@@ -67,8 +67,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: ago(20),
         last_used_at: ago(20),
         platform: 'telegram',
+        proxy: null,
         proxy_source: 'direct',
-        proxy_url: null,
         rate_limit_until: new Date(now + 6 * 60_000).toISOString(),
         status: 'rate_limited',
     },
@@ -86,8 +86,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: ago(4320),
         last_used_at: ago(4320),
         platform: 'telegram',
+        proxy: null,
         proxy_source: 'direct',
-        proxy_url: null,
         rate_limit_until: null,
         status: 'needs_login',
     },
@@ -105,8 +105,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: ago(35),
         last_used_at: ago(35),
         platform: 'facebook',
+        proxy: 'http://••••@203.0.113.24:8080',
         proxy_source: 'account',
-        proxy_url: 'http://••••@203.0.113.24:8080',
         rate_limit_until: null,
         status: 'active',
     },
@@ -124,8 +124,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: null,
         last_used_at: null,
         platform: 'instagram',
+        proxy: null,
         proxy_source: 'direct',
-        proxy_url: null,
         rate_limit_until: null,
         status: 'needs_login',
     },
@@ -143,8 +143,8 @@ let accounts: GrowthAccount[] = [
         last_success_at: ago(90),
         last_used_at: ago(90),
         platform: 'tiktok',
+        proxy: null,
         proxy_source: 'direct',
-        proxy_url: null,
         rate_limit_until: null,
         status: 'active',
     },
@@ -622,9 +622,9 @@ const maskProxy = (proxy: null | string | undefined): null | string => {
     }
 };
 
-const proxyFields = (proxy: null | string | undefined): Pick<GrowthAccount, 'proxy_source' | 'proxy_url'> => ({
+const proxyFields = (proxy: null | string | undefined): Pick<GrowthAccount, 'proxy' | 'proxy_source'> => ({
+    proxy: maskProxy(proxy),
     proxy_source: proxy ? 'account' : 'direct',
-    proxy_url: maskProxy(proxy),
 });
 
 const telegramLogins = new Map<string, StartLoginInput & { phone: string }>();
@@ -632,7 +632,7 @@ const remoteLogins = new Map<string, { input: RemoteLoginInput }>();
 
 const upsertAccount = (
     accountId: number | undefined,
-    fields: Pick<GrowthAccount, 'external_id' | 'kind' | 'label' | 'platform' | 'proxy_source' | 'proxy_url'>,
+    fields: Pick<GrowthAccount, 'external_id' | 'kind' | 'label' | 'platform' | 'proxy' | 'proxy_source'>,
     externalBrowserWs?: null | string,
 ): GrowthAccount => {
     const existing = accounts.find((account) => account.id === accountId);
@@ -650,9 +650,7 @@ const upsertAccount = (
         status: 'active',
         ...fields,
         ...(existing ? { external_id: existing.external_id, label: existing.label } : {}),
-        ...(fields.proxy_url || !existing
-            ? {}
-            : { proxy_source: existing.proxy_source, proxy_url: existing.proxy_url }),
+        ...(fields.proxy || !existing ? {} : { proxy: existing.proxy, proxy_source: existing.proxy_source }),
         ...(externalBrowserWs !== undefined ? { external_browser_ws: externalBrowserWs || null } : {}),
     };
 
@@ -669,7 +667,7 @@ const finishTelegramLogin = (loginId: string, input: StartLoginInput & { phone: 
         kind: 'user',
         label: 'Telegram 账号',
         platform: 'telegram',
-        ...proxyFields(input.proxy_url),
+        ...proxyFields(input.proxy),
     });
 };
 
@@ -752,7 +750,7 @@ export const growthMock = {
                     kind: 'browser_session',
                     label: `${{ facebook: 'Facebook', instagram: 'Instagram', tiktok: 'TikTok' }[pending.input.platform]} 账号`,
                     platform: pending.input.platform,
-                    ...proxyFields(pending.input.proxy_url),
+                    ...proxyFields(pending.input.proxy),
                 },
                 pending.input.external_browser_ws,
             ),
@@ -864,7 +862,7 @@ export const growthMock = {
     // A proxy on host "bad" fails, so both outcomes can be tried by hand.
     testAccountProxy: (id: number): Promise<GrowthProxyTestResult> => {
         const account = accounts.find((item) => item.id === id);
-        const route = { proxy: account?.proxy_url ?? null, source: account?.proxy_source ?? ('direct' as const) };
+        const route = { proxy: account?.proxy ?? null, source: account?.proxy_source ?? ('direct' as const) };
 
         return delay(
             route.proxy?.includes('bad')

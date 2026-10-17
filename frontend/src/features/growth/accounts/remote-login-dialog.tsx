@@ -71,7 +71,7 @@ function RemoteLoginDialog({ account, onClose, onSignedIn, open, platform }: Rem
                     account_id: account?.id,
                     external_browser_ws: externalWs.trim() || null,
                     platform,
-                    proxy_url: proxy.trim() || null,
+                    proxy: proxy.trim() || null,
                 }),
             );
         } catch (openError) {

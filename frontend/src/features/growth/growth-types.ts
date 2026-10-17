@@ -26,10 +26,10 @@ export interface GrowthAccount {
     // When the suggested gap after the last join ends.
     next_join_at?: null | string;
     platform: GrowthAccountPlatform;
+    // The account's own proxy, credentials masked (scheme://••••@host:port); null when it has none.
+    proxy: null | string;
     // Which route the account's traffic takes: its own proxy, the default proxy, or none.
     proxy_source: GrowthProxySource;
-    // The account's own proxy, credentials masked (scheme://••••@host:port); null when it has none.
-    proxy_url: null | string;
     // Set while `rate_limited`: when the platform lets the account act again.
     rate_limit_until: null | string;
     status: GrowthAccountStatus;
