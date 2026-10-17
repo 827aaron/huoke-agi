@@ -30,7 +30,7 @@ const fingerprintText = copy.telegram.fingerprint;
 export const fingerprintSummary = (fingerprint: GrowthFingerprint) =>
     fingerprintText.auto(
         fingerprint.os ?? copy.common.dash,
-        fingerprint.language ?? copy.common.dash,
+        fingerprint.locale ?? fingerprint.language ?? copy.common.dash,
         fingerprint.timezone ?? copy.common.dash,
     );
 
@@ -71,7 +71,7 @@ function RemoteLoginDialog({ account, onClose, onSignedIn, open, platform }: Rem
                     account_id: account?.id,
                     external_browser_ws: externalWs.trim() || null,
                     platform,
-                    proxy_url: proxy.trim() || null,
+                    proxy: proxy.trim() || null,
                 }),
             );
         } catch (openError) {

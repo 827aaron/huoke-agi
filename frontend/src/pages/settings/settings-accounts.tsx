@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
+    accountLabel,
     accountLast4,
     accountName,
     accountsBanner,
@@ -152,8 +153,10 @@ function SettingsAccounts() {
                         return (
                             <TableRow key={account.id}>
                                 <TableCell className="whitespace-nowrap">
-                                    {account.label || account.external_id}{' '}
-                                    <span className="text-muted-foreground">…{accountLast4(account)}</span>
+                                    {accountLabel(account)}
+                                    {accountLast4(account) && (
+                                        <span className="text-muted-foreground"> …{accountLast4(account)}</span>
+                                    )}
                                     {browserNote && <p className="text-muted-foreground text-xs">{browserNote}</p>}
                                 </TableCell>
                                 <TableCell className="w-52 min-w-52 whitespace-normal">

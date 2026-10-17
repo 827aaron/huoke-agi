@@ -15,10 +15,17 @@ export interface AccountTransition {
 
 const health = copy.telegram.health;
 
-export const accountLast4 = (account: Pick<GrowthAccount, 'external_id'>): string => account.external_id.slice(-4);
+export const accountLast4 = (account: Pick<GrowthAccount, 'external_id'>): string =>
+    (account.external_id ?? '').slice(-4);
 
-export const accountName = (account: Pick<GrowthAccount, 'external_id' | 'label'>): string =>
-    health.accountName(account.label || account.external_id, accountLast4(account));
+export const accountLabel = (account: Pick<GrowthAccount, 'external_id' | 'id' | 'label'>): string =>
+    account.label || account.external_id || `#${account.id}`;
+
+export const accountName = (account: Pick<GrowthAccount, 'external_id' | 'id' | 'label'>): string => {
+    const last4 = accountLast4(account);
+
+    return last4 ? health.accountName(accountLabel(account), last4) : accountLabel(account);
+};
 
 export const formatClock = (date: Date): string => format(date, 'HH:mm');
 
@@ -109,7 +116,7 @@ export function accountTransitions(previous: GrowthAccount[], next: GrowthAccoun
 
 export const proxyRouteText = (account: GrowthAccount): string =>
     account.proxy_source === 'account'
-        ? (account.proxy_url ?? copy.telegram.proxy.direct)
+        ? (account.proxy ?? copy.telegram.proxy.direct)
         : account.proxy_source === 'global'
           ? copy.telegram.proxy.global
           : copy.telegram.proxy.direct;

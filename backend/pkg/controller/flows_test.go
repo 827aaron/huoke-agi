@@ -34,6 +34,13 @@ type cascadeFakeQuerier struct {
 	containersResult []database.Container
 	containersErr    error
 	references       []string
+	allFlows         []database.Flow
+	getFlowsCalls    int
+}
+
+func (f *cascadeFakeQuerier) GetFlows(ctx context.Context) ([]database.Flow, error) {
+	f.getFlowsCalls++
+	return f.allFlows, ctx.Err()
 }
 
 func (f *cascadeFakeQuerier) GetUserProviderReferences(ctx context.Context, _ int64) ([]string, error) {
@@ -184,6 +191,26 @@ func TestFlows_RepointDanglingProviders_RepointsEveryGoneNameAtTheCurrentProvide
 		{NewName: "custom", UserID: 1, OldName: "deepseek"},
 		{NewName: "custom", UserID: 1, OldName: "openai"},
 	}, q.assistantsCalls)
+}
+
+func TestFlows_LoadFlows_RepointsEveryOwnerBeforeLoading(t *testing.T) {
+	q := &cascadeFakeQuerier{
+		references: []string{"deepseek"},
+		allFlows: []database.Flow{
+			{ID: 1, UserID: 1, Status: database.FlowStatusFinished},
+			{ID: 2, UserID: 2, Status: database.FlowStatusFinished},
+			{ID: 3, UserID: 1, Status: database.FlowStatusFinished},
+		},
+	}
+	fc, _ := newTestFlowController(q)
+	fc.provs.(*cascadeFakeProviders).current = "custom"
+
+	require.NoError(t, fc.LoadFlows(context.Background()))
+	assert.Equal(t, []database.UpdateFlowsProviderNameByOldNameParams{
+		{NewName: "custom", UserID: 1, OldName: "deepseek"},
+		{NewName: "custom", UserID: 2, OldName: "deepseek"},
+	}, q.flowsCalls)
+	assert.Equal(t, 2, q.getFlowsCalls, "the rows are read again after the rewrite")
 }
 
 func TestFlows_ReassignFlowsProvider_RewritesOnlyADanglingName(t *testing.T) {
