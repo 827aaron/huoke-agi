@@ -96,7 +96,7 @@ Generate each value with `openssl rand -hex 32`.
 
 ### Generated for you
 
-`GROWTH_SECRET_KEY` (encrypts every key saved on the settings page) and `BROWSER_TOKEN` (between the application and the browser service) are generated on first start and kept in the data volumes. Leave them empty. Back up the volumes as described in step 9: losing `growth_secret_key` means entering every saved key again.
+`GROWTH_SECRET_KEY` (encrypts every key saved on the settings page) and `BROWSER_TOKEN` (between the application and the browser service) are generated on first start and kept in the data volumes. Leave them empty. Back up the volumes as described in step 10: losing `growth_secret_key` means entering every saved key again.
 
 ### Deploying on a server
 
@@ -165,7 +165,55 @@ Every card in Settings → Keys & connections has a test button and says whether
 
 To start work, open New task, pick a preset from Templates and send it. When using the assistant, keep the switch that lets specialists collaborate turned on. Only the specialists can join groups, read messages and save leads.
 
-## 9. Backup and restore
+## 9. Accounts for colleagues and customers
+
+Give each person their own login instead of sharing the administrator's. Only an administrator can create accounts.
+
+The interface has no user management page yet; one is planned. Until it ships, create accounts on the API page that comes with the server:
+
+1. Log in to KeLai AGI as the administrator in your browser.
+2. In the same browser, open `https://localhost:8443/api/v1/swagger/index.html`, or the same path under your `PUBLIC_URL`. It uses the login you just made, so no token is needed.
+3. Open `POST /users/`, press Try it out, replace the example body with the one below, and press Execute.
+4. The response shows `"status": "success"`. Send the person the address, the email and the starting password.
+
+```json
+{
+  "mail": "colleague@example.com",
+  "name": "Colleague",
+  "password": "Welcome2Kelai!",
+  "role_id": 2,
+  "status": "active",
+  "type": "local",
+  "password_change_required": true
+}
+```
+
+- `role_id` `2` is an ordinary user. `1` is an administrator, who can also create and block accounts.
+- `status` must be `active`, otherwise the person cannot log in.
+- `password` must meet the policy in step 7.
+- `password_change_required: true` makes the person choose their own password at first login.
+
+Without a browser, for example from an AI assistant on the server, the same request works with `curl`:
+
+```bash
+curl -sk -c jar -H 'Content-Type: application/json' \
+  -d '{"mail":"admin@pentagi.com","password":"YOUR_ADMIN_PASSWORD"}' \
+  https://localhost:8443/api/v1/auth/login
+curl -sk -b jar -H 'Content-Type: application/json' \
+  -d '{"mail":"colleague@example.com","name":"Colleague","password":"Welcome2Kelai!","role_id":2,"status":"active","type":"local","password_change_required":true}' \
+  https://localhost:8443/api/v1/users/
+rm jar
+```
+
+To stop someone from logging in:
+
+1. Find their `hash` with `GET /users/`, setting `page` to `1` and `type` to `init`.
+2. Send `PUT /users/{hash}` with their record from that list and `status` changed to `blocked`. This also ends the sessions they already have open.
+3. Set `status` back to `active` to let them in again, or use `DELETE /users/{hash}` to remove the account.
+
+**Google and GitHub sign-in.** If `OAUTH_GOOGLE_CLIENT_ID` or `OAUTH_GITHUB_CLIENT_ID` is set, anyone who can open the login page and has a verified Google or GitHub email gets an ordinary account automatically, the first time they sign in. There is no list of allowed addresses. Leave those variables empty unless only your own team can reach the server, and block unwanted accounts as described above.
+
+## 10. Backup and restore
 
 The volumes carry the folder name as a prefix. List them with `docker volume ls`. The ones to keep:
 
@@ -196,7 +244,7 @@ Restore on a new machine:
 4. Run the loop above with `tar xzf "/b/$v.tgz" -C /v`.
 5. Run `docker compose up -d`.
 
-## 10. Upgrade
+## 11. Upgrade
 
 ```bash
 git pull
@@ -206,7 +254,7 @@ docker compose up -d
 
 Back up first. Database changes apply by themselves when the application starts, and a failed change stops the start with a message in `docker compose logs pentagi`.
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 | Symptom | Cause and fix |
 |---|---|
