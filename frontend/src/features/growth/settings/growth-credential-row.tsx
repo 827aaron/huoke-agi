@@ -130,7 +130,7 @@ const SELECT_DEFAULTS: Record<string, string> = { protocol: 'openai_chat', risk_
 // The backend keeps a saved field when it is sent empty, so going back to the newest Jev
 // means saving its alias explicitly.
 const latestScreeningModel = (provider: null | string) =>
-    provider === 'openrouter' ? 'typesafe/jev-latest' : 'jev-latest';
+    provider === 'openrouter' ? '~typesafe/jev-latest' : 'jev-latest';
 
 const canListModels = (kind: GrowthSettingKind, provider: null | string) =>
     (kind === 'llm' && provider === 'custom') ||

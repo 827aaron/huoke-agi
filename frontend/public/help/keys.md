@@ -118,7 +118,7 @@
 1. 打开 openrouter.ai，用邮箱或 Google 账号注册登录。
 2. 右上角头像 → Credits，充值少量余额（例如 5 美元）。
 3. 打开 openrouter.ai/keys，点 Create Key，复制密钥（只显示一次）。接口地址是 https://openrouter.ai/api，卡片会自动填好，不用自己填。
-4. 在卡片里接入方式选“OpenRouter”，密钥粘贴到“OpenRouter 密钥”。模型默认用最新版（typesafe/jev-latest），一般不用改；想固定版本可以点“获取模型”从列表里选。
+4. 在卡片里接入方式选“OpenRouter”，密钥粘贴到“OpenRouter 密钥”。模型默认用最新版（~typesafe/jev-latest，前面有波浪号），一般不用改；想固定版本可以点“获取模型”从列表里选。
 
 ### 2.2 TypeSafe 官方
 
