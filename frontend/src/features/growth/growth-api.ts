@@ -4,6 +4,7 @@ import type {
     GrowthAccount,
     GrowthAccountsResponse,
     GrowthEmailResult,
+    GrowthJoinWarning,
     GrowthLead,
     GrowthModelsInput,
     GrowthModelsResponse,
@@ -26,6 +27,16 @@ import type {
 } from './growth-types';
 
 import { growthMock } from './growth-mock';
+import {
+    fromWireLeads,
+    fromWireRuns,
+    fromWireSource,
+    fromWireSourceAddResult,
+    type WireLead,
+    type WireRun,
+    type WireSource,
+    type WireSourceAddResult,
+} from './growth-wire';
 
 const isMock = import.meta.env.VITE_GROWTH_API
     ? import.meta.env.VITE_GROWTH_API === 'mock'
@@ -42,9 +53,27 @@ export interface StartLoginInput {
     proxy_url: null | string;
 }
 
+const getWireLeads = async (flowId: number | string) =>
+    unwrapApiResponse(await api.get<{ leads: null | WireLead[] }>('/growth/leads/', { params: { flow_id: flowId } }))
+        .leads ?? [];
+
+const getWireRuns = async (flowId: number | string) =>
+    unwrapApiResponse(await api.get<{ runs: null | WireRun[] }>('/growth/runs/', { params: { flow_id: flowId } }))
+        .runs ?? [];
+
+const getWireSources = async () =>
+    unwrapApiResponse(
+        await api.get<{ sources: null | WireSource[]; total: number; warnings: GrowthJoinWarning[] | null }>(
+            '/growth/sources/',
+        ),
+    );
+
 const live = {
-    addSources: async (links: string[]) =>
-        unwrapApiResponse(await api.post<GrowthSourcesAddResponse>('/growth/sources/', { links })),
+    addSources: async (links: string[]): Promise<GrowthSourcesAddResponse> => ({
+        results: unwrapApiResponse(
+            await api.post<{ results: WireSourceAddResult[] }>('/growth/sources/', { links }),
+        ).results.map(fromWireSourceAddResult),
+    }),
     // Leaves the account as it was (`needs_login` for a re-login, nothing for a new one).
     cancelRemoteLogin: async (sessionId: string) => {
         await api.delete(`/growth/accounts/remote-login/${sessionId}`);
@@ -62,21 +91,30 @@ const live = {
     finishRemoteLogin: async (sessionId: string) =>
         unwrapApiResponse(await api.post<GrowthAccount>(`/growth/accounts/remote-login/${sessionId}/finish`)),
     listAccounts: async () => unwrapApiResponse(await api.get<GrowthAccountsResponse>('/growth/accounts/')).accounts,
-    listLeads: async (flowId: number | string) =>
-        unwrapApiResponse(await api.get<{ leads: GrowthLead[] }>('/growth/leads/', { params: { flow_id: flowId } }))
-            .leads,
+    listLeads: async (flowId: number | string): Promise<GrowthLead[]> => {
+        const [leads, runs, sources] = await Promise.all([getWireLeads(flowId), getWireRuns(flowId), getWireSources()]);
+
+        return fromWireLeads(leads, fromWireRuns(runs, leads), runs, (sources.sources ?? []).map(fromWireSource));
+    },
     // Answers 502 Growth.ModelList when the relay does not list its models; the model is then typed by name.
     listModels: async (kind: GrowthSettingKind, input: GrowthModelsInput) =>
         unwrapApiResponse(await api.post<GrowthModelsResponse>(`/growth/settings/${kind}/models`, input)).models,
     listProfilePresets: async () => unwrapApiResponse(await api.get<GrowthProfilePreset[]>('/growth/profiles/presets')),
     listProfiles: async () => unwrapApiResponse(await api.get<GrowthProfile[]>('/growth/profiles')),
-    listRuns: async (flowId: number | string) =>
-        unwrapApiResponse(await api.get<{ runs: GrowthRun[] }>('/growth/runs/', { params: { flow_id: flowId } })).runs,
+    listRuns: async (flowId: number | string): Promise<GrowthRun[]> => {
+        const [runs, leads] = await Promise.all([getWireRuns(flowId), getWireLeads(flowId)]);
+
+        return fromWireRuns(runs, leads);
+    },
     listSchedules: async (flowId: number | string) =>
         unwrapApiResponse(await api.get<GrowthSchedulesResponse>('/growth/schedules', { params: { flow_id: flowId } }))
             .schedules,
     listSettings: async () => unwrapApiResponse(await api.get<GrowthSettingsResponse>('/growth/settings/')).settings,
-    listSources: async () => unwrapApiResponse(await api.get<GrowthSourcesResponse>('/growth/sources/')),
+    listSources: async (): Promise<GrowthSourcesResponse> => {
+        const { sources, total, warnings } = await getWireSources();
+
+        return { sources: (sources ?? []).map(fromWireSource), total, warnings };
+    },
     // Answers 503 Growth.NoSecretKey while the server has no key to encrypt secrets with.
     saveSetting: async (kind: GrowthSettingKind, input: GrowthSettingInput) =>
         unwrapApiResponse(await api.put<GrowthSetting>(`/growth/settings/${kind}`, input)),
