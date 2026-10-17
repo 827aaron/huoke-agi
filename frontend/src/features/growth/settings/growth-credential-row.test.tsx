@@ -196,6 +196,36 @@ describe('GrowthCredentialCard', () => {
         );
     });
 
+    it('names the default Jev of the endpoint when no model is saved', () => {
+        const saved = (provider: string, apiUrl: string) =>
+            setting({
+                fields: { api_key: '••••7c1e', api_url: apiUrl, model: '' },
+                kind: 'screening',
+                provider,
+                providers: ['typesafe', 'openrouter', 'custom'],
+                source: 'database',
+                status: 'connected',
+            });
+
+        const { unmount } = renderCard(saved('typesafe', ''));
+
+        expect(screen.getByText('jev-latest（默认）')).toBeInTheDocument();
+        unmount();
+
+        renderCard(saved('custom', 'https://openrouter.ai/api/v1'));
+
+        expect(screen.getByText('~typesafe/jev-latest（默认）')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: '更换密钥' }));
+
+        expect(screen.getByLabelText('模型')).toHaveValue('');
+        expect(screen.getByLabelText('模型')).toHaveAttribute('placeholder', '~typesafe/jev-latest（默认）');
+
+        fireEvent.change(screen.getByLabelText('接口地址'), { target: { value: 'https://gateway.example.com/v1' } });
+
+        expect(screen.getByLabelText('模型')).toHaveAttribute('placeholder', 'jev-latest（默认）');
+    });
+
     it('sends neither a model nor a threshold to a server whose Jev setting still reports one', async () => {
         renderCard(setting({ fields: { api_key: '', threshold: '0.6' }, kind: 'screening' }));
 

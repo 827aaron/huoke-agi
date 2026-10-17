@@ -309,7 +309,7 @@ const zh = {
             },
             'embedding.openrouter.model': { label: '模型', placeholder: '默认 openai/text-embedding-3-small' },
             'screening.api_key': { label: 'TypeSafe 密钥', placeholder: '粘贴 TypeSafe 给你的密钥' },
-            'screening.model': { label: '模型', placeholder: '默认最新版，可填具体版本号' },
+            'screening.model': { label: '模型', placeholder: '' },
             'screening.openrouter.api_key': { label: 'OpenRouter 密钥', placeholder: '粘贴 OpenRouter 的密钥' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
@@ -387,6 +387,7 @@ const zh = {
         llmTopUpNote: '新注册的账号请先在服务商后台充值，否则测试会提示额度不足。',
         loadFailed: '密钥状态加载失败，请刷新重试。',
         mailLanguage: 'Chinese',
+        modelDefault: (model: string) => `${model}（默认）`,
         modelsEmpty: '没有拿到模型列表，请手动填写模型名称',
         modelsFailed: '获取模型失败，请检查密钥和地址，或手动填写模型名称',
         modelsFetch: '获取模型',
@@ -2321,7 +2322,7 @@ const en: Copy = {
             },
             'embedding.openrouter.model': { label: 'Model', placeholder: 'Defaults to openai/text-embedding-3-small' },
             'screening.api_key': { label: 'TypeSafe key', placeholder: 'Paste the key TypeSafe gave you' },
-            'screening.model': { label: 'Model', placeholder: 'Latest by default; enter a version to pin one' },
+            'screening.model': { label: 'Model', placeholder: '' },
             'screening.openrouter.api_key': { label: 'OpenRouter key', placeholder: 'Paste your OpenRouter key' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
@@ -2403,6 +2404,7 @@ const en: Copy = {
         llmTopUpNote: 'New accounts need a top-up first, or the test reports no quota.',
         loadFailed: 'Failed to load the key status. Please refresh.',
         mailLanguage: 'English',
+        modelDefault: (model: string) => `${model} (default)`,
         modelsEmpty: 'No models came back; enter the model name by hand',
         modelsFailed: 'Could not fetch the models; check the key and URL, or enter the model name by hand',
         modelsFetch: 'Fetch models',

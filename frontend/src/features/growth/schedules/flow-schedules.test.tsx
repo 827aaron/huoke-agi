@@ -91,6 +91,21 @@ describe('FlowSchedules', () => {
         );
     });
 
+    it('sends times with seconds as HH:MM', async () => {
+        render(<FlowSchedules flowId={5} />);
+
+        fireEvent.click(await screen.findByRole('button', { name: '添加定时' }));
+        fireEvent.change(screen.getByLabelText('开始时间'), { target: { value: '09:30:00' } });
+        fireEvent.change(screen.getByLabelText('结束时间'), { target: { value: '17:45:00' } });
+        fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+        await waitFor(() =>
+            expect(growthApi.createSchedule).toHaveBeenCalledWith(
+                expect.objectContaining({ end_time: '17:45', start_time: '09:30' }),
+            ),
+        );
+    });
+
     it('refuses equal start and end times', async () => {
         render(<FlowSchedules flowId={5} />);
 
