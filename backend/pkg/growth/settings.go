@@ -24,6 +24,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/growth/connectors"
+	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/system"
 
 	"github.com/sirupsen/logrus"
@@ -36,6 +37,7 @@ const (
 	SettingWebSearch = "web_search"
 	SettingEmail     = "email"
 	SettingProxy     = "proxy"
+	SettingEmbedding = "embedding"
 
 	SettingStatusUntested  = "untested"
 	SettingStatusConnected = "connected"
@@ -121,6 +123,34 @@ var settingSpecs = map[string]settingSpec{
 			if provider == "custom" && v["model"] != "" {
 				c.LLMServerModel = v["model"]
 			}
+			if provider == "openai" {
+				useOpenAIForEmbedding(c)
+			}
+		},
+	},
+	// Every field is optional: what is left empty keeps the .env value. Applied after
+	// llm, so an explicit embedding setting wins over reusing the OpenAI key.
+	SettingEmbedding: {
+		providers: embeddingProviders,
+		fields: []settingField{
+			{name: "api_key", secret: true},
+			{name: "model"},
+			{name: "server_url"},
+		},
+		apply: func(c *config.Config, provider string, v map[string]string) {
+			if provider != c.EmbeddingProvider {
+				c.EmbeddingModel, c.EmbeddingURL, c.EmbeddingKey = "", "", ""
+			}
+			c.EmbeddingProvider = provider
+			if v["api_key"] != "" {
+				c.EmbeddingKey = v["api_key"]
+			}
+			if v["model"] != "" {
+				c.EmbeddingModel = v["model"]
+			}
+			if v["server_url"] != "" {
+				c.EmbeddingURL = v["server_url"]
+			}
 		},
 	},
 	SettingTelegram: {
@@ -185,7 +215,22 @@ var settingSpecs = map[string]settingSpec{
 	},
 }
 
-var settingKinds = []string{SettingLLM, SettingTelegram, SettingYouTube, SettingWebSearch, SettingEmail, SettingProxy}
+// settingKinds is also the order ConfigFor applies saved settings in.
+var settingKinds = []string{
+	SettingLLM, SettingEmbedding, SettingTelegram, SettingYouTube, SettingWebSearch, SettingEmail, SettingProxy,
+}
+
+// embeddingProviders are the EMBEDDING_PROVIDER values PentAGI's embedder implements.
+var embeddingProviders = []string{"googleai", "huggingface", "jina", "mistral", "ollama", "openai", "voyageai"}
+
+// useOpenAIForEmbedding has the embedder take the customer's OpenAI key and URL, which
+// PentAGI's OpenAI embedder falls back to when EMBEDDING_KEY and EMBEDDING_URL are empty.
+func useOpenAIForEmbedding(c *config.Config) {
+	if c.EmbeddingProvider != "openai" {
+		c.EmbeddingModel = ""
+	}
+	c.EmbeddingProvider, c.EmbeddingKey, c.EmbeddingURL = "openai", "", ""
+}
 
 func sortedKeys[V any](m map[string]V) []string {
 	keys := make([]string, 0, len(m))
@@ -508,7 +553,7 @@ func (s *Service) envView(kind string, spec settingSpec) SettingView {
 	provider, values := envValues(s.cfg, kind)
 	v.Fields = maskFields(spec, values)
 	if values["api_key"] != "" || values["api_keys"] != "" || values["api_hash"] != "" ||
-		values["host"] != "" || values["url"] != "" {
+		values["host"] != "" || values["url"] != "" || (kind == SettingEmbedding && provider != "") {
 		v.Source, v.Provider = SettingSourceEnv, provider
 	}
 	return v
@@ -537,6 +582,10 @@ func envValues(cfg *config.Config, kind string) (string, map[string]string) {
 		return "", map[string]string{"api_keys": strings.Join(cfg.YouTubeAPIKeys(), ",")}
 	case SettingProxy:
 		return "", map[string]string{"url": cfg.GrowthProxyURL}
+	case SettingEmbedding:
+		return cfg.EmbeddingProvider, map[string]string{
+			"api_key": cfg.EmbeddingKey, "model": cfg.EmbeddingModel, "server_url": cfg.EmbeddingURL,
+		}
 	case SettingWebSearch:
 		for _, p := range sortedKeys(searchTargets) {
 			if key := *searchTargets[p](cfg); key != "" {
@@ -567,6 +616,9 @@ func (s *Service) ConfigFor(ctx context.Context, userID int64) (*config.Config, 
 		return s.cfg, nil
 	}
 
+	slices.SortStableFunc(rows, func(a, b database.GrowthSetting) int {
+		return slices.Index(settingKinds, a.Kind) - slices.Index(settingKinds, b.Kind)
+	})
 	cfg := *s.cfg
 	applied := false
 	for _, row := range rows {
@@ -686,6 +738,9 @@ func (s *Service) probe(ctx context.Context, cfg *config.Config, kind, provider 
 		}
 		return SettingStatusConnected, ""
 	}
+	if kind == SettingEmbedding {
+		return probeEmbedding(ctx, cfg)
+	}
 	if kind == SettingProxy {
 		latency, err := checkProxy(ctx, cfg, cfg.GrowthProxyURL)
 		if err != nil {
@@ -702,6 +757,22 @@ func (s *Service) probe(ctx context.Context, cfg *config.Config, kind, provider 
 		}
 	}
 	return s.probeHTTP(ctx, cfg, kind, provider)
+}
+
+// probeEmbedding embeds one short text with the embedder PentAGI would build from cfg.
+func probeEmbedding(ctx context.Context, cfg *config.Config) (string, string) {
+	e, err := embeddings.New(cfg)
+	if err != nil {
+		return SettingStatusInvalid, err.Error()
+	}
+	if !e.IsAvailable() {
+		return SettingStatusInvalid, "no embedding model is configured"
+	}
+	vec, err := e.EmbedQuery(ctx, "connection test")
+	if err != nil {
+		return SettingStatusInvalid, err.Error()
+	}
+	return SettingStatusConnected, fmt.Sprintf("%s returned a %d-dimension vector", cfg.EmbeddingProvider, len(vec))
 }
 
 // probeKeys checks every key of a list. A key whose quota is spent still counts as

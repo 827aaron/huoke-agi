@@ -1003,6 +1003,13 @@ type FlowTemplate struct {
 	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
+type GrowthProfile struct {
+	UserID    int64           `json:"user_id"`
+	Profile   json.RawMessage `json:"profile"`
+	CreatedAt sql.NullTime    `json:"created_at"`
+	UpdatedAt sql.NullTime    `json:"updated_at"`
+}
+
 type GrowthRun struct {
 	ID             int64         `json:"id"`
 	UserID         int64         `json:"user_id"`
@@ -1142,6 +1149,7 @@ type Msglog struct {
 	CreatedAt    sql.NullTime       `json:"created_at"`
 	ResultFormat MsglogResultFormat `json:"result_format"`
 	Thinking     sql.NullString     `json:"thinking"`
+	Agent        NullMsgchainType   `json:"agent"`
 }
 
 type Privilege struct {

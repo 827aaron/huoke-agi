@@ -139,6 +139,8 @@ func (w *noopObservationWrapper) end(result string, err error, durationSeconds f
 }
 
 type customExecutor struct {
+	// agent is the role this executor serves, recorded on its messages; empty records none.
+	agent     database.MsgchainType
 	userID    int64
 	flowID    int64
 	taskID    *int64
@@ -321,7 +323,11 @@ func (ce *customExecutor) Execute(
 	msgID, msg := int64(0), ce.getMessage(args)
 	if strings.Trim(msg, " \t\n\r") != "" {
 		msgType := getMessageType(name)
-		msgID, err = ce.mlp.PutMsg(ctx, msgType, ce.taskID, ce.subtaskID, streamID, thinking, msg)
+		if amlp, ok := ce.mlp.(AgentMsgLogProvider); ok && ce.agent != "" {
+			msgID, err = amlp.PutAgentMsg(ctx, ce.agent, msgType, ce.taskID, ce.subtaskID, streamID, thinking, msg)
+		} else {
+			msgID, err = ce.mlp.PutMsg(ctx, msgType, ce.taskID, ce.subtaskID, streamID, thinking, msg)
+		}
 		if err != nil {
 			return "", err
 		}

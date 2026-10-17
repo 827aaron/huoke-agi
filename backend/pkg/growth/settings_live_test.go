@@ -5,6 +5,7 @@ package growth
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
+	"pentagi/pkg/growth/connectors"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -172,7 +174,17 @@ func TestSettings_TestSetting_RecordsWhatTheServiceAnswers(t *testing.T) {
 	assert.Equal(t, SettingStatusInvalid, settingOf(t, w, SettingLLM).Status)
 }
 
-func TestSettings_TestSetting_LeavesTelegramUntestedWithoutACheck(t *testing.T) {
+func TestSettings_TestSetting_AsksTheTelegramCheckWithTheSavedCredentials(t *testing.T) {
+	if real, ok := connectors.LookupCredentialCheck(connectors.PlatformTelegram); ok {
+		t.Cleanup(func() { connectors.RegisterCredentialCheck(connectors.PlatformTelegram, real) })
+	}
+	var gotHash string
+	verdict := errors.New("API_ID_INVALID")
+	connectors.RegisterCredentialCheck(connectors.PlatformTelegram, func(_ context.Context, cfg *config.Config) error {
+		gotHash = cfg.TGAPIHash
+		return verdict
+	})
+
 	w := newWorld(t)
 	ctx := context.Background()
 	_, err := w.svc.SaveSetting(ctx, w.user, SettingTelegram, "", map[string]string{
@@ -182,7 +194,13 @@ func TestSettings_TestSetting_LeavesTelegramUntestedWithoutACheck(t *testing.T) 
 
 	v, err := w.svc.TestSetting(ctx, w.user, SettingTelegram)
 	require.NoError(t, err)
-	assert.Equal(t, SettingStatusUntested, v.Status)
+	assert.Equal(t, "0123456789abcdef0123456789abcdef", gotHash)
+	assert.Equal(t, SettingStatusInvalid, v.Status)
+
+	verdict = nil
+	v, err = w.svc.TestSetting(ctx, w.user, SettingTelegram)
+	require.NoError(t, err)
+	assert.Equal(t, SettingStatusConnected, v.Status)
 }
 
 func TestSettings_SendTestEmail_GoesToTheLoginAddressByDefault(t *testing.T) {
@@ -287,4 +305,64 @@ func TestSettings_ConfigFor_SendsAnAnthropicProtocolEndpointToTheAnthropicProvid
 	assert.Equal(t, "gw-key-0001", cfg.AnthropicAPIKey)
 	assert.Equal(t, "https://gw.example.test/anthropic", cfg.AnthropicServerURL)
 	assert.Empty(t, cfg.LLMServerKey)
+}
+
+func TestSettings_ConfigFor_PicksTheEmbeddingKeyExplicitThenOpenAIThenEnv(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	w.svc.cfg.EmbeddingProvider, w.svc.cfg.EmbeddingKey, w.svc.cfg.EmbeddingModel = "openai", "env-embed-key", "text-embedding-3-small"
+
+	cfg, err := w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, "env-embed-key", cfg.EmbeddingKey, "nothing saved: .env")
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingLLM, "openai", map[string]string{"api_key": "sk-user"})
+	require.NoError(t, err)
+	cfg, err = w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, "openai", cfg.EmbeddingProvider)
+	assert.Empty(t, cfg.EmbeddingKey, "the OpenAI embedder falls back to the customer's OpenAI key")
+	assert.Equal(t, "sk-user", cfg.OpenAIKey)
+	assert.Equal(t, "text-embedding-3-small", cfg.EmbeddingModel)
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingEmbedding, "voyageai", map[string]string{"api_key": "voy-key"})
+	require.NoError(t, err)
+	cfg, err = w.svc.ConfigFor(ctx, w.user)
+	require.NoError(t, err)
+	assert.Equal(t, "voyageai", cfg.EmbeddingProvider, "an explicit embedding setting wins")
+	assert.Equal(t, "voy-key", cfg.EmbeddingKey)
+	assert.Empty(t, cfg.EmbeddingModel, "another provider does not inherit the .env model")
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingEmbedding, "nowhere", map[string]string{})
+	assert.ErrorIs(t, err, ErrInvalidSetting)
+}
+
+func TestSettings_TestSetting_EmbedsOnceToTestTheEmbeddingModel(t *testing.T) {
+	var auth string
+	stub := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		if auth != "Bearer good-key" {
+			rw.WriteHeader(http.StatusUnauthorized)
+			_, _ = rw.Write([]byte(`{"error":{"message":"Incorrect API key provided","type":"invalid_request_error"}}`))
+			return
+		}
+		rw.Header().Set("Content-Type", "application/json")
+		_, _ = rw.Write([]byte(`{"object":"list","model":"m","data":[{"object":"embedding","index":0,"embedding":[0.1,0.2,0.3]}]}`))
+	}))
+	t.Cleanup(stub.Close)
+	w := newWorld(t)
+	ctx := context.Background()
+
+	_, err := w.svc.SaveSetting(ctx, w.user, SettingEmbedding, "openai", map[string]string{"api_key": "bad-key", "server_url": stub.URL})
+	require.NoError(t, err)
+	v, err := w.svc.TestSetting(ctx, w.user, SettingEmbedding)
+	require.NoError(t, err)
+	assert.Equal(t, SettingStatusInvalid, v.Status)
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingEmbedding, "openai", map[string]string{"api_key": "good-key", "server_url": stub.URL})
+	require.NoError(t, err)
+	v, err = w.svc.TestSetting(ctx, w.user, SettingEmbedding)
+	require.NoError(t, err)
+	assert.Equal(t, SettingStatusConnected, v.Status, v.StatusReason)
+	assert.Equal(t, "openai returned a 3-dimension vector", v.StatusReason)
 }

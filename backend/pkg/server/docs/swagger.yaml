@@ -89,7 +89,7 @@ definitions:
         type: object
       label:
         type: string
-      proxy_url:
+      proxy:
         type: string
       status:
         type: string
@@ -122,12 +122,12 @@ definitions:
         type: string
       platform:
         type: string
-      proxy_source:
-        type: string
-      proxy_url:
+      proxy:
         description: |-
           ProxyURL is the account's own proxy, masked; ProxySource says which proxy its
           traffic takes: its own, the customer's default, or none.
+        type: string
+      proxy_source:
         type: string
       rate_limit_until:
         type: string
@@ -197,6 +197,108 @@ definitions:
       username:
         type: string
     type: object
+  growth.LoginStart:
+    properties:
+      account_id:
+        type: integer
+      external_browser_ws:
+        type: string
+      phone:
+        type: string
+      platform:
+        type: string
+      proxy:
+        type: string
+    type: object
+  growth.LoginStep:
+    properties:
+      account:
+        $ref: '#/definitions/growth.AccountView'
+      login_id:
+        type: string
+      next:
+        type: string
+    type: object
+  growth.Profile:
+    properties:
+      competitors:
+        items:
+          type: string
+        type: array
+      default_target:
+        type: integer
+      excludes:
+        items:
+          type: string
+        type: array
+      games:
+        items:
+          type: string
+        type: array
+      genre:
+        type: string
+      languages:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      notes:
+        type: string
+      pitch:
+        type: string
+      regions:
+        items:
+          type: string
+        type: array
+      signals:
+        items:
+          type: string
+        type: array
+    type: object
+  growth.ProfileView:
+    properties:
+      competitors:
+        items:
+          type: string
+        type: array
+      default_target:
+        type: integer
+      excludes:
+        items:
+          type: string
+        type: array
+      games:
+        items:
+          type: string
+        type: array
+      genre:
+        type: string
+      id:
+        type: integer
+      knowledge:
+        type: string
+      languages:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      notes:
+        type: string
+      pitch:
+        type: string
+      regions:
+        items:
+          type: string
+        type: array
+      signals:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+    type: object
   growth.ProxyCheck:
     properties:
       error:
@@ -208,6 +310,17 @@ definitions:
       proxy:
         type: string
       source:
+        type: string
+    type: object
+  growth.RemoteLoginView:
+    properties:
+      expires_at:
+        type: string
+      fingerprint:
+        type: object
+      session_id:
+        type: string
+      view_url:
         type: string
     type: object
   growth.SettingView:
@@ -2097,6 +2210,13 @@ definitions:
           $ref: '#/definitions/growth.AddSourceResult'
         type: array
     type: object
+  services.growthCodeRequest:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
   services.growthCreateAccountRequest:
     properties:
       external_browser_ws:
@@ -2109,7 +2229,7 @@ definitions:
         type: string
       platform:
         type: string
-      proxy_url:
+      proxy:
         type: string
       status:
         type: string
@@ -2124,6 +2244,28 @@ definitions:
         type: array
       total:
         type: integer
+    type: object
+  services.growthLeadsEmailRequest:
+    properties:
+      flow_id:
+        minimum: 1
+        type: integer
+      task_id:
+        type: integer
+    required:
+    - flow_id
+    type: object
+  services.growthPasswordRequest:
+    properties:
+      password:
+        type: string
+    required:
+    - password
+    type: object
+  services.growthProxyRequest:
+    properties:
+      proxy:
+        type: string
     type: object
   services.growthRun:
     properties:
@@ -2183,6 +2325,17 @@ definitions:
         type: array
       total:
         type: integer
+    type: object
+  services.growthTelegramLoginRequest:
+    properties:
+      account_id:
+        type: integer
+      phone:
+        type: string
+      proxy:
+        type: string
+    required:
+    - phone
     type: object
   services.growthTestEmailRequest:
     properties:
@@ -5450,6 +5603,131 @@ paths:
         external browser of an account
       tags:
       - Growth
+  /growth/accounts/{accountID}/disable:
+    post:
+      parameters:
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: account disabled successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.AccountView'
+              type: object
+        "403":
+          description: changing accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: account not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on disabling account
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Keep an account and its session but never pick it for work
+      tags:
+      - Growth
+  /growth/accounts/{accountID}/enable:
+    post:
+      parameters:
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: account enabled successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.AccountView'
+              type: object
+        "403":
+          description: changing accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: account not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on enabling account
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Return a disabled account to work: active when it was signed in before,
+        needs_login otherwise'
+      tags:
+      - Growth
+  /growth/accounts/{accountID}/proxy:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      - description: http, https, socks5 or socks5h URL, optionally with user:pass@
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.growthProxyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: proxy saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.AccountView'
+              type: object
+        "400":
+          description: invalid proxy
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: changing accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: account not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: GROWTH_SECRET_KEY is not set
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set the account's own proxy; null or empty falls back to the default
+        proxy, else a direct connection
+      tags:
+      - Growth
   /growth/accounts/{accountID}/test-proxy:
     post:
       description: source is account, global or direct; ok false carries the error.
@@ -5459,6 +5737,12 @@ paths:
         name: accountID
         required: true
         type: integer
+      - description: a proxy to try before saving it; without one the account's own
+          route is tested
+        in: body
+        name: json
+        schema:
+          $ref: '#/definitions/services.growthProxyRequest'
       produces:
       - application/json
       responses:
@@ -5471,6 +5755,10 @@ paths:
                 data:
                   $ref: '#/definitions/growth.ProxyCheck'
               type: object
+        "400":
+          description: invalid proxy
+          schema:
+            $ref: '#/definitions/ErrorResponse'
         "403":
           description: testing accounts not permitted
           schema:
@@ -5487,6 +5775,254 @@ paths:
       - BearerAuth: []
       summary: Reach the internet the way the account's traffic goes and report the
         latency or the error
+      tags:
+      - Growth
+  /growth/accounts/remote-login:
+    post:
+      consumes:
+      - application/json
+      description: account_id signs that account in again; without it a new account
+        of platform is added. view_url is the live view to embed.
+      parameters:
+      - description: the account, or the platform of a new one
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.LoginStart'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: browser opened successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.RemoteLoginView'
+              type: object
+        "400":
+          description: invalid request data
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: adding accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: account not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: no remote login for this platform in this build
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Open a Facebook or Instagram account's browser on the server for an
+        operator to sign in by hand
+      tags:
+      - Growth
+  /growth/accounts/remote-login/{sessionID}:
+    delete:
+      parameters:
+      - description: remote login session id
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: login cancelled successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "404":
+          description: login not found or expired
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Close the browser view; the account stays as it was and a new one is
+        removed
+      tags:
+      - Growth
+  /growth/accounts/remote-login/{sessionID}/finish:
+    post:
+      parameters:
+      - description: remote login session id
+        in: path
+        name: sessionID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: account signed in successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.AccountView'
+              type: object
+        "404":
+          description: login not found or expired
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: the browser is not signed in yet; the message says what the
+            page shows
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Check that the operator signed the browser in; the account turns active
+      tags:
+      - Growth
+  /growth/accounts/telegram/login:
+    post:
+      consumes:
+      - application/json
+      description: account_id signs that account in again; without it the phone number
+        becomes a new account. next is code.
+      parameters:
+      - description: phone in international format
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.growthTelegramLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: code sent successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.LoginStep'
+              type: object
+        "400":
+          description: invalid phone or proxy
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: adding accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: account not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "429":
+          description: Telegram asked to wait
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "503":
+          description: no Telegram login in this build, or GROWTH_SECRET_KEY is not
+            set
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: 'Add or re-sign a Telegram account: Telegram sends a code to the phone'
+      tags:
+      - Growth
+  /growth/accounts/telegram/login/{loginID}/code:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: login id
+        in: path
+        name: loginID
+        required: true
+        type: string
+      - description: the code
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.growthCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: code accepted successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.LoginStep'
+              type: object
+        "400":
+          description: the code was rejected; try again
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: login not found or expired
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "429":
+          description: Telegram asked to wait
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pass on the login code; next is done, or password for an account with
+        two-step verification
+      tags:
+      - Growth
+  /growth/accounts/telegram/login/{loginID}/password:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: login id
+        in: path
+        name: loginID
+        required: true
+        type: string
+      - description: the password
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.growthPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: password accepted successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.LoginStep'
+              type: object
+        "400":
+          description: the password was rejected; try again
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: login not found or expired
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "429":
+          description: Telegram asked to wait
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Pass on the two-step verification password; next is done
       tags:
       - Growth
   /growth/leads/:
@@ -5591,6 +6127,51 @@ paths:
       summary: Retrieve one lead with its evidence
       tags:
       - Growth
+  /growth/leads/email:
+    post:
+      consumes:
+      - application/json
+      description: 'With task_id: the round''s delivered leads, or its qualified leads
+        while none are delivered. Without: the flow''s delivered leads, else its qualified
+        ones.'
+      parameters:
+      - description: the flow and optionally the round's task
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.growthLeadsEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: email sent successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthTestEmailResult'
+              type: object
+        "400":
+          description: invalid request, no SMTP server configured, or no leads to
+            send
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: sending email not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "502":
+          description: the email could not be sent
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mail a round's lead list to the notification addresses, as the email
+        of a finished round
+      tags:
+      - Growth
   /growth/leads/export:
     get:
       parameters:
@@ -5636,6 +6217,128 @@ paths:
       security:
       - BearerAuth: []
       summary: Download leads as CSV, one row per lead with its first evidence
+      tags:
+      - Growth
+  /growth/profiles:
+    get:
+      description: A user has at most one profile, so the list is empty or holds one.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: profiles received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/growth.ProfileView'
+                  type: array
+              type: object
+        "403":
+          description: getting the profile not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting the profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the business profile every task of the current user starts
+        from
+      tags:
+      - Growth
+    post:
+      consumes:
+      - application/json
+      description: 'Saving when a profile exists replaces it. knowledge says whether
+        the lists reached the knowledge store: seeded, or skipped with the reason.'
+      parameters:
+      - description: business profile
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.Profile'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: profile saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.ProfileView'
+              type: object
+        "400":
+          description: invalid profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: saving the profile not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on saving the profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Save the business profile; new tasks start with it
+      tags:
+      - Growth
+  /growth/profiles/{profileID}:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: profile id
+        in: path
+        minimum: 0
+        name: profileID
+        required: true
+        type: integer
+      - description: business profile
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.Profile'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: profile saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.ProfileView'
+              type: object
+        "400":
+          description: invalid profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: saving the profile not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: profile not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on saving the profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change the business profile; new tasks start with it
       tags:
       - Growth
   /growth/runs/:
@@ -5706,7 +6409,7 @@ paths:
   /growth/settings/{kind}:
     delete:
       parameters:
-      - description: llm, telegram, youtube, web_search, email or proxy
+      - description: llm, embedding, telegram, youtube, web_search, email or proxy
         in: path
         name: kind
         required: true
@@ -5739,7 +6442,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: llm, telegram, youtube, web_search, email or proxy
+      - description: llm, embedding, telegram, youtube, web_search, email or proxy
         in: path
         name: kind
         required: true
@@ -5788,7 +6491,7 @@ paths:
       description: status is connected or invalid; untested means the service has
         no check without a login.
       parameters:
-      - description: llm, telegram, youtube, web_search, email or proxy
+      - description: llm, embedding, telegram, youtube, web_search, email or proxy
         in: path
         name: kind
         required: true

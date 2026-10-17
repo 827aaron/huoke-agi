@@ -108,6 +108,18 @@ type MsgLogProvider interface {
 	) error
 }
 
+// AgentMsgLogProvider is a MsgLogProvider that also records which agent wrote a message.
+type AgentMsgLogProvider interface {
+	PutAgentMsg(
+		ctx context.Context,
+		agent database.MsgchainType,
+		msgType database.MsglogType,
+		taskID, subtaskID *int64,
+		streamID int64,
+		thinking, msg string,
+	) (int64, error)
+}
+
 type SearchLogProvider interface {
 	PutLog(
 		ctx context.Context,
@@ -1036,6 +1048,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 	}
 
 	ce := &customExecutor{
+		agent:       database.MsgchainTypeAssistant,
 		userID:      fte.userID,
 		flowID:      fte.flowID,
 		mlp:         fte.mlp,
@@ -1083,6 +1096,7 @@ func (fte *flowToolsExecutor) GetPrimaryExecutor(cfg PrimaryExecutorConfig) (Con
 	}
 
 	ce := &customExecutor{
+		agent:     database.MsgchainTypePrimaryAgent,
 		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    &cfg.TaskID,
@@ -1163,6 +1177,7 @@ func (fte *flowToolsExecutor) GetInstallerExecutor(cfg InstallerExecutorConfig) 
 	)
 
 	ce := &customExecutor{
+		agent:     database.MsgchainTypeInstaller,
 		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
@@ -1272,6 +1287,7 @@ func (fte *flowToolsExecutor) GetCoderExecutor(cfg CoderExecutorConfig) (Context
 	)
 
 	ce := &customExecutor{
+		agent:     database.MsgchainTypeCoder,
 		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
@@ -1399,6 +1415,7 @@ func (fte *flowToolsExecutor) GetPentesterExecutor(cfg PentesterExecutorConfig) 
 	)
 
 	ce := &customExecutor{
+		agent:     database.MsgchainTypePentester,
 		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
@@ -1504,6 +1521,7 @@ func (fte *flowToolsExecutor) GetSearcherExecutor(cfg SearcherExecutorConfig) (C
 	}
 
 	ce := &customExecutor{
+		agent:     database.MsgchainTypeSearcher,
 		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
@@ -1602,6 +1620,7 @@ func (fte *flowToolsExecutor) GetGeneratorExecutor(cfg GeneratorExecutorConfig) 
 	)
 
 	ce := &customExecutor{
+		agent:    database.MsgchainTypeGenerator,
 		userID:   fte.userID,
 		flowID:   fte.flowID,
 		taskID:   &cfg.TaskID,
@@ -1674,6 +1693,7 @@ func (fte *flowToolsExecutor) GetRefinerExecutor(cfg RefinerExecutorConfig) (Con
 	)
 
 	ce := &customExecutor{
+		agent:    database.MsgchainTypeRefiner,
 		userID:   fte.userID,
 		flowID:   fte.flowID,
 		taskID:   &cfg.TaskID,
@@ -1742,6 +1762,7 @@ func (fte *flowToolsExecutor) GetMemoristExecutor(cfg MemoristExecutorConfig) (C
 	)
 
 	ce := &customExecutor{
+		agent:     database.MsgchainTypeMemorist,
 		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
@@ -1817,6 +1838,7 @@ func (fte *flowToolsExecutor) GetEnricherExecutor(cfg EnricherExecutorConfig) (C
 	)
 
 	ce := &customExecutor{
+		agent:     database.MsgchainTypeEnricher,
 		userID:    fte.userID,
 		flowID:    fte.flowID,
 		taskID:    cfg.TaskID,
@@ -1889,6 +1911,7 @@ func (fte *flowToolsExecutor) GetReporterExecutor(cfg ReporterExecutorConfig) (C
 	}
 
 	ce := &customExecutor{
+		agent:       database.MsgchainTypeReporter,
 		userID:      fte.userID,
 		flowID:      fte.flowID,
 		taskID:      cfg.TaskID,

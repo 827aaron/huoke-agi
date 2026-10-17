@@ -35,7 +35,10 @@ const (
 	NotifySkipped = "skipped"
 )
 
-var ErrNoSMTP = errors.New("no SMTP server is configured")
+var (
+	ErrNoSMTP        = errors.New("no SMTP server is configured")
+	ErrNoLeadsToSend = errors.New("there are no delivered or qualified leads to send")
+)
 
 type attachment struct {
 	name        string
@@ -265,16 +268,7 @@ func (s *Service) notifyDelivery(ctx context.Context, scope Scope, run database.
 	case cfg.SMTPHost == "":
 		status, reason = NotifySkipped, ErrNoSMTP.Error()
 	default:
-		var to []string
-		if to, err = s.notifyRecipients(ctx, scope.UserID); err == nil {
-			subject, body := deliverySummary(s.flowTitle(ctx, scope), leads, target)
-			err = sendMail(ctx, cfg, to, subject, body, attachment{
-				name:        fmt.Sprintf("leads-round-%d.csv", run.ID),
-				contentType: "text/csv; charset=utf-8",
-				data:        LeadsCSV(leads),
-			})
-		}
-		if err != nil {
+		if _, err = s.mailLeads(ctx, cfg, scope, run.ID, leads, target); err != nil {
 			status, reason = NotifyFailed, truncateRunes(err.Error(), 500)
 		}
 	}
@@ -326,4 +320,82 @@ func deliverySummary(business string, leads []LeadView, target int) (string, str
 	}
 	b.WriteString("\nThe full list with evidence is attached as CSV.\n")
 	return subject, b.String()
+}
+
+func (s *Service) mailLeads(
+	ctx context.Context,
+	cfg *config.Config,
+	scope Scope,
+	runID int64,
+	leads []LeadView,
+	target int,
+) ([]string, error) {
+	to, err := s.notifyRecipients(ctx, scope.UserID)
+	if err != nil {
+		return nil, err
+	}
+	subject, body := deliverySummary(s.flowTitle(ctx, scope), leads, target)
+	name := fmt.Sprintf("leads-flow-%d.csv", scope.FlowID)
+	if runID != 0 {
+		name = fmt.Sprintf("leads-round-%d.csv", runID)
+	}
+	return to, sendMail(ctx, cfg, to, subject, body, attachment{
+		name:        name,
+		contentType: "text/csv; charset=utf-8",
+		data:        LeadsCSV(leads),
+	})
+}
+
+// EmailLeads mails the leads of one round on demand, as the email of a finished round:
+// the round's delivered leads, or its qualified leads while it has delivered none.
+// Without a task it mails the flow's delivered leads, else its qualified ones.
+func (s *Service) EmailLeads(ctx context.Context, userID, flowID int64, taskID *int64) ([]string, error) {
+	cfg, err := s.ConfigFor(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.SMTPHost == "" {
+		return nil, ErrNoSMTP
+	}
+	scope := Scope{UserID: userID, FlowID: flowID, TaskID: taskID}
+
+	var (
+		runID  int64
+		target int
+		leads  []LeadView
+	)
+	if taskID != nil {
+		run, err := s.db.GetGrowthRunByTask(ctx, sql.NullInt64{Int64: *taskID, Valid: true})
+		switch {
+		case err == nil && run.UserID == userID:
+			runID, target = run.ID, int(run.Target)
+			if leads, err = s.ListLeads(ctx, userID, LeadFilter{RunID: &run.ID, Limit: maxListLimit}); err != nil {
+				return nil, err
+			}
+		case err != nil && !errors.Is(err, sql.ErrNoRows):
+			return nil, fmt.Errorf("failed to load the round of task %d: %w", *taskID, err)
+		}
+	}
+	if len(leads) == 0 {
+		delivered := true
+		f := LeadFilter{FlowID: &flowID, TaskID: taskID, Delivered: &delivered, Limit: maxListLimit}
+		if taskID == nil {
+			if leads, err = s.ListLeads(ctx, userID, f); err != nil {
+				return nil, err
+			}
+		}
+		if len(leads) == 0 {
+			f.Delivered, f.Tier = nil, TierQualified
+			if leads, err = s.ListLeads(ctx, userID, f); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if len(leads) == 0 {
+		return nil, ErrNoLeadsToSend
+	}
+	if target == 0 {
+		target = len(leads)
+	}
+	return s.mailLeads(ctx, cfg, scope, runID, leads, target)
 }
