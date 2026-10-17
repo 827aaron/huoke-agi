@@ -30,7 +30,7 @@ const fingerprintText = copy.telegram.fingerprint;
 export const fingerprintSummary = (fingerprint: GrowthFingerprint) =>
     fingerprintText.auto(
         fingerprint.os ?? copy.common.dash,
-        fingerprint.language ?? copy.common.dash,
+        fingerprint.locale ?? fingerprint.language ?? copy.common.dash,
         fingerprint.timezone ?? copy.common.dash,
     );
 

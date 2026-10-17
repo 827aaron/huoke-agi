@@ -93,6 +93,19 @@ describe('accountTransitions', () => {
         ).toEqual(['账号 A1（…0001） 已恢复，重新加入可用账号。', '账号 A2（…0002） 已添加，当前共 2 个可用账号。']);
     });
 
+    it('names a browser account that has no label or external id by its id', () => {
+        const { external_id: _omitted, ...facebook } = account(5, 'needs_login', { label: '', platform: 'facebook' });
+
+        expect(
+            accountTransitions([facebook], [{ ...facebook, status: 'active' }, account(6, 'needs_login')]).map(
+                (notice) => notice.message,
+            ),
+        ).toEqual([]);
+        expect(
+            accountTransitions([{ ...facebook, status: 'active' }], [facebook]).map((notice) => notice.message),
+        ).toEqual(['账号 #5 登录已失效，没有其他可用账号，进行中的项目已暂停。请重新登录。']);
+    });
+
     it('stays silent when nothing changed', () => {
         expect(accountTransitions([account(1, 'needs_login')], [account(1, 'needs_login')])).toEqual([]);
     });
