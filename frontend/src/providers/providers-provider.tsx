@@ -1,5 +1,5 @@
 import { useApolloClient, useQuery, useSubscription } from '@apollo/client/react';
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { Provider } from '@/models/provider';
 
@@ -15,6 +15,7 @@ import { findProviderByName, pickDefaultProvider, sortProviders } from '@/models
 import { useUser } from '@/providers/user-provider';
 
 const SELECTED_PROVIDER_KEY = 'selectedProvider';
+const APPLIED_LLM_TYPE_KEY = 'selectedProviderLlmType';
 
 interface ProvidersContextValue {
     providers: Provider[];
@@ -68,7 +69,29 @@ export function ProvidersProvider({ children }: ProvidersProviderProps) {
     );
     const llmProviderType = growthSettings?.find((setting) => setting.kind === 'llm')?.provider;
 
-    // Only a provider the user picked is remembered; otherwise the default follows the growth LLM card.
+    // Choosing a provider on the growth LLM card overrides the remembered pick once, so the two never disagree;
+    // a later pick in the composer stays until the card changes again.
+    const [appliedLlmType, setAppliedLlmType] = useState(() => localStorage.getItem(APPLIED_LLM_TYPE_KEY));
+    const cardProvider =
+        llmProviderType && llmProviderType !== appliedLlmType ? pickDefaultProvider(providers, llmProviderType) : null;
+
+    if (llmProviderType && cardProvider?.type === llmProviderType) {
+        setAppliedLlmType(llmProviderType);
+        setSelectedProviderName(cardProvider.name);
+    }
+
+    useEffect(() => {
+        if (appliedLlmType) {
+            localStorage.setItem(APPLIED_LLM_TYPE_KEY, appliedLlmType);
+        }
+    }, [appliedLlmType]);
+
+    useEffect(() => {
+        if (selectedProviderName) {
+            localStorage.setItem(SELECTED_PROVIDER_KEY, selectedProviderName);
+        }
+    }, [selectedProviderName]);
+
     const selectedProvider = useMemo(() => {
         const savedProvider = selectedProviderName ? findProviderByName(selectedProviderName, providers) : undefined;
 
@@ -76,7 +99,6 @@ export function ProvidersProvider({ children }: ProvidersProviderProps) {
     }, [llmProviderType, providers, selectedProviderName]);
 
     const setSelectedProvider = useCallback((provider: Provider) => {
-        localStorage.setItem(SELECTED_PROVIDER_KEY, provider.name);
         setSelectedProviderName(provider.name);
     }, []);
 
