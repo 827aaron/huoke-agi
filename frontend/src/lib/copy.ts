@@ -1175,6 +1175,10 @@ const zh = {
                 placeholder: '例如：某某传奇、某某世界',
             },
             contactTypes: {
+                customAdd: '添加这个联系方式',
+                customLabel: '其他联系方式名称',
+                customPlaceholder: '填写联系方式名称，例如 Zalo，按 ➕ 添加',
+                customTooLong: (max: number) => `名称最多 ${max} 个字`,
                 help: '智能体会在公开发言和资料里留意这些联系方式；每个潜客都有平台账号',
                 label: '希望的联系方式',
                 placeholder: '',
@@ -3205,6 +3209,10 @@ const en: Copy = {
                 placeholder: 'e.g. Legend X, World Y',
             },
             contactTypes: {
+                customAdd: 'Add this contact method',
+                customLabel: 'Other contact method name',
+                customPlaceholder: 'Name a contact method, such as Zalo, and press ➕',
+                customTooLong: (max) => `At most ${max} characters`,
                 help: 'The agents look out for these in public posts and profiles; every lead has its platform account',
                 label: 'Preferred contact methods',
                 placeholder: '',

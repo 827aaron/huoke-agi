@@ -98,8 +98,8 @@ export interface GrowthLead {
 }
 
 export interface GrowthLeadContact {
-    // Leads delivered before the split keep 'messenger'.
-    type: 'messenger' | Exclude<GrowthContactType, 'platform_handle'>;
+    // A GrowthContactType, a name the owner added, or 'messenger' on leads delivered before the split.
+    type: string;
     value: string;
 }
 
@@ -160,8 +160,8 @@ export interface GrowthFingerprint {
 
 export interface GrowthProfile {
     competitors: string[];
-    // Empty means the platform account alone.
-    contact_types?: GrowthContactType[];
+    // Empty means the platform account alone. Anything not a GrowthContactType is a name the owner added.
+    contact_types?: string[];
     default_target: number;
     excludes: string[];
     games: string[];
