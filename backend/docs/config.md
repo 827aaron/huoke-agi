@@ -1431,7 +1431,7 @@ These settings control the behavior of the AI assistant functionality, including
 
 | Option                            | Environment Variable                    | Default Value | Description                                                             |
 | --------------------------------- | --------------------------------------- | ------------- | ----------------------------------------------------------------------- |
-| AssistantUseAgents                | `ASSISTANT_USE_AGENTS`                  | `false`       | Controls the default value for agent usage when creating new assistants |
+| AssistantUseAgents                | `ASSISTANT_USE_AGENTS`                  | `false`       | Controls the default value for agent usage when creating new assistants. The shipped `docker-compose.yml` sets `true`: only the specialist agents hold the growth tools |
 | AssistantSummarizerPreserveLast   | `ASSISTANT_SUMMARIZER_PRESERVE_LAST`    | `true`        | Whether to preserve all messages in the assistant's last section        |
 | AssistantSummarizerLastSecBytes   | `ASSISTANT_SUMMARIZER_LAST_SEC_BYTES`   | `76800`       | Maximum byte size for assistant's last section (75KB)                   |
 | AssistantSummarizerMaxBPBytes     | `ASSISTANT_SUMMARIZER_MAX_BP_BYTES`     | `16384`       | Maximum byte size for a single body pair in assistant context (16KB)    |
