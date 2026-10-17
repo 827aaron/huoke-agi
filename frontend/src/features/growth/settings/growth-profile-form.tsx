@@ -244,8 +244,19 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
     const [uncovered, setUncovered] = useState<Set<ProfileField>>(new Set());
     const [presetId, setPresetId] = useState('');
 
-    const fill = (preset: GrowthProfilePreset) => {
-        const next = withPreset(form.getValues(), preset);
+    const fill = (preset: GrowthProfilePreset, keepTyped = false) => {
+        const current = form.getValues();
+        const next = withPreset(current, preset);
+
+        // The presets load after the form shows, so the default one must not overwrite what the owner
+        // typed meanwhile; picking a preset by hand does.
+        if (keepTyped) {
+            const blank = toFormValues(null);
+
+            (Object.keys(blank) as (keyof ProfileFormValues)[])
+                .filter((name) => JSON.stringify(current[name]) !== JSON.stringify(blank[name]))
+                .forEach((name) => Object.assign(next.values, { [name]: current[name] }));
+        }
 
         form.reset(next.values, { keepDefaultValues: true });
         setUncovered(next.uncovered);
@@ -267,7 +278,7 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
 
                 if (initial && !profile) {
                     setPresetId(initial.id);
-                    fill(initial);
+                    fill(initial, true);
                 }
             })
             .catch(() => {});
