@@ -227,6 +227,7 @@ describe('growth wire', () => {
 
         expect(jay).toEqual({
             contacts: [{ type: 'line', value: 'jay88' }],
+            created_at: '2026-10-17T14:10:00Z',
             delivered_at: '2026-10-17T14:30:00Z',
             delivered_task_id: 11,
             display_name: 'Jay',

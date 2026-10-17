@@ -186,6 +186,7 @@ export const fromWireLeads = (
 
         return {
             contacts: (lead.contacts ?? []) as GrowthLead['contacts'],
+            created_at: lead.created_at,
             delivered_at: lead.delivered_at ?? null,
             delivered_task_id:
                 lead.delivered_run_id === undefined ? null : (taskOfRun.get(lead.delivered_run_id) ?? null),

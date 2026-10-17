@@ -246,6 +246,7 @@ const lead = (
 
     return {
         contacts: id % 3 === 1 ? [{ type: 'line', value: username ?? name }] : [],
+        created_at: ago(activeMinutesAgo + (id - 1) * 1440),
         delivered_at: delivered ? ago(5) : null,
         delivered_task_id: delivered ? 11 : null,
         display_name: name,
@@ -739,6 +740,7 @@ export const growthMock = {
 
         leads.push({
             contacts: input.contacts ?? [],
+            created_at: new Date().toISOString(),
             delivered_at: null,
             delivered_task_id: null,
             display_name: input.display_name || input.handle,
