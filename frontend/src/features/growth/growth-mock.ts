@@ -437,7 +437,7 @@ let settings: GrowthSetting[] = [
     emptySetting('embedding'),
     {
         ...emptySetting('screening'),
-        fields: { api_key: '••••7c1e', api_url: '', model: 'typesafe/jev-latest', threshold: '0.6' },
+        fields: { api_key: '••••7c1e', api_url: '', model: '~typesafe/jev-latest', threshold: '0.6' },
         provider: 'openrouter',
         source: 'database',
         status: 'connected',
@@ -694,7 +694,7 @@ export const growthMock = {
             ? Promise.reject(new Error('mock: the key was refused'))
             : delay(
                   (kind === 'screening'
-                      ? ['typesafe/jev-latest', 'typesafe/jev-2026-09', 'typesafe/jev-2026-06']
+                      ? ['~typesafe/jev-latest', 'typesafe/jev-2026-09', 'typesafe/jev-2026-06']
                       : kind === 'embedding'
                         ? ['openai/text-embedding-3-small', 'openai/text-embedding-3-large']
                         : ['openai/gpt-5.1-mini', 'deepseek/deepseek-chat', 'qwen/qwen3-max']

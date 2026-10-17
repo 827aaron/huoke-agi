@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
+import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Badge, type BadgeVariant } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -246,6 +247,7 @@ function SettingsUsers() {
     const [loadError, setLoadError] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const [resetting, setResetting] = useState<ManagedUser | null>(null);
+    const [deleting, setDeleting] = useState<ManagedUser | null>(null);
     const [busyHash, setBusyHash] = useState<null | string>(null);
 
     useEffect(() => {
@@ -370,13 +372,7 @@ function SettingsUsers() {
                                                     <Button
                                                         className="text-destructive"
                                                         disabled={isBusy}
-                                                        onClick={() =>
-                                                            act(
-                                                                user,
-                                                                () => usersApi.delete(user),
-                                                                text.deleted(user.mail),
-                                                            )
-                                                        }
+                                                        onClick={() => setDeleting(user)}
                                                         size="sm"
                                                         variant="ghost"
                                                     >
@@ -427,6 +423,18 @@ function SettingsUsers() {
                     }}
                 />
             )}
+            <ConfirmationDialog
+                confirmText={text.delete}
+                description={deleting ? text.deleteConfirm(deleting.mail) : undefined}
+                handleConfirm={async () => {
+                    if (deleting) {
+                        await act(deleting, () => usersApi.delete(deleting), text.deleted(deleting.mail));
+                    }
+                }}
+                handleOpenChange={(isOpen) => !isOpen && setDeleting(null)}
+                isOpen={!!deleting}
+                title={text.deleteTitle}
+            />
             {resetting && (
                 <ResetPasswordDialog
                     onClose={() => setResetting(null)}
