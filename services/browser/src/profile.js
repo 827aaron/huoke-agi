@@ -1,3 +1,5 @@
+import { FingerprintGenerator } from 'fingerprint-generator';
+import { FingerprintInjector } from 'fingerprint-injector';
 import { ServiceError } from './errors.js';
 
 // Locale and timezone per exit country, so a page sees a browser that matches
@@ -35,6 +37,7 @@ export const REGIONS = {
 const SYSTEMS = [
   {
     os: 'windows',
+    suiteOs: 'windows',
     weight: 7,
     platform: 'Win32',
     ua: 'Windows NT 10.0; Win64; x64',
@@ -49,6 +52,7 @@ const SYSTEMS = [
   },
   {
     os: 'mac',
+    suiteOs: 'macos',
     weight: 3,
     platform: 'MacIntel',
     ua: 'Macintosh; Intel Mac OS X 10_15_7',
@@ -65,29 +69,95 @@ const CORES = [4, 8, 8, 12, 16];
 
 const pick = (list, rand) => list[Math.floor(rand() * list.length) % list.length];
 
+let defaultGenerator;
+function suiteGenerator() {
+  defaultGenerator ??= new FingerprintGenerator();
+  return defaultGenerator;
+}
+
 // The browser's own major version goes into the UA: claiming another version
-// than the engine has is easier to spot than any default.
-export function generateFingerprint({ chromeMajor, region, cfg, rand = Math.random }) {
+// than the engine has is easier to spot than any default. fingerprint-suite
+// draws the rest (screen, cores, memory, WebGL, codecs, fonts) as a set seen
+// together on real devices; when its data has no device for this engine
+// version, the small tables above are used instead.
+export function generateFingerprint({ chromeMajor, region, cfg, rand = Math.random, generator = suiteGenerator() }) {
   const country = (region || '').toUpperCase();
   const known = REGIONS[country];
   const total = SYSTEMS.reduce((n, s) => n + s.weight, 0);
   let roll = rand() * total;
   const system = SYSTEMS.find((s) => (roll -= s.weight) < 0) || SYSTEMS[0];
-  const [width, height] = pick(system.viewports, rand);
-  return {
-    version: 1,
+  const locale = known ? known.locale : cfg.locale;
+  const base = {
     os: system.os,
     region: known ? country : '',
     chrome_version: String(chromeMajor),
+    locale,
+    timezone: known ? pick(known.timezones, rand) : cfg.timezoneId || 'America/New_York',
+  };
+  const suite = generator && drawSuite(generator, Number(chromeMajor), system.suiteOs, locale);
+  if (suite) {
+    const { navigator: nav, screen } = suite.fingerprint;
+    return {
+      version: 2,
+      ...base,
+      user_agent: nav.userAgent,
+      platform: nav.platform,
+      viewport: { width: screen.width, height: Math.max(screen.availHeight - 80, 480) },
+      screen: { width: screen.width, height: screen.height },
+      device_scale_factor: screen.devicePixelRatio || 1,
+      hardware_concurrency: nav.hardwareConcurrency || 8,
+      suite,
+    };
+  }
+  const [width, height] = pick(system.viewports, rand);
+  return {
+    version: 1,
+    ...base,
     user_agent: `Mozilla/5.0 (${system.ua}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.0.0 Safari/537.36`,
     platform: system.platform,
-    locale: known ? known.locale : cfg.locale,
-    timezone: known ? pick(known.timezones, rand) : cfg.timezoneId || 'America/New_York',
     viewport: { width, height: height - 130 },
     screen: { width, height },
     device_scale_factor: pick(system.scales, rand),
     hardware_concurrency: pick(CORES, rand),
   };
+}
+
+// The generator relaxes constraints it cannot meet, down to another browser,
+// so what it returns is checked rather than trusted.
+function drawSuite(generator, major, os, locale) {
+  let suite;
+  try {
+    suite = generator.getFingerprint({
+      browsers: [{ name: 'chrome', minVersion: major, maxVersion: major }],
+      operatingSystems: [os],
+      devices: ['desktop'],
+      locales: [locale],
+    });
+  } catch {
+    return null;
+  }
+  const ua = suite.fingerprint.navigator.userAgent || '';
+  if (!ua.includes(`Chrome/${major}.`) || /Edg\/|OPR\//.test(ua)) return null;
+  return suite;
+}
+
+// The top-level fields win over the suite's copies of them, so a fingerprint
+// the backend edited is what the page sees.
+export async function attachSuite(context, fp) {
+  const suite = structuredClone(fp.suite);
+  const nav = suite.fingerprint.navigator;
+  nav.userAgent = fp.user_agent;
+  nav.platform = fp.platform;
+  nav.hardwareConcurrency = fp.hardware_concurrency || nav.hardwareConcurrency;
+  nav.language = fp.locale;
+  nav.languages = acceptLanguage(fp.locale).split(',').map((l) => l.split(';')[0]);
+  Object.assign(suite.fingerprint.screen, {
+    width: fp.screen.width,
+    height: fp.screen.height,
+    devicePixelRatio: fp.device_scale_factor || 1,
+  });
+  suite.headers['user-agent'] = fp.user_agent;
+  await new FingerprintInjector().attachFingerprintToPlaywright(context, suite);
 }
 
 export function validateFingerprint(fp) {

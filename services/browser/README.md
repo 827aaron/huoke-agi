@@ -1,6 +1,6 @@
 # Browser service
 
-A small HTTP service that keeps one persistent Chromium profile per platform account and lets the growth connectors (`backend/pkg/growth/connectors/browser.go`, `facebook.go`, `instagram.go`) drive it. An operator logs each account in once through the login page; the agents reuse that session and never fill a login form or a verification code.
+A small HTTP service that keeps one persistent Chromium profile per platform account and lets the growth connectors (`backend/pkg/growth/connectors/browser.go`, `facebook.go`, `instagram.go`, `tiktok.go`) drive it. An operator logs each account in once through the login page; the agents reuse that session and never fill a login form or a verification code.
 
 ## Run
 
@@ -25,6 +25,7 @@ Every pacing value is a default an operator can change, not a quota.
 | `BROWSER_LOCALE`, `BROWSER_TIMEZONE` | `en-US`, `America/New_York` | Locale and timezone of a new fingerprint whose region is unknown |
 | `BROWSER_PROXY` | none | Proxy for accounts that were never given one |
 | `BROWSER_ACTION_DELAY_MIN_MS` / `_MAX_MS` | 1500 / 4500 | Random pause before every agent action |
+| `BROWSER_PACE_FACTOR_<PLATFORM>` | from the platform file | Multiplies the pause for one platform, e.g. `BROWSER_PACE_FACTOR_TIKTOK=1`; TikTok's file sets 2 |
 | `BROWSER_WARMUP_DAYS`, `BROWSER_WARMUP_FACTOR` | 7, 2.5 | For this many days after a login the pauses are this many times longer |
 | `BROWSER_RATE_LIMIT_BACKOFF_SEC` | 3600 | Cool-down after a page says the account is temporarily blocked |
 | `BROWSER_LOGIN_TICKET_TTL_SEC` | 1800 | Lifetime of a login link |
@@ -40,7 +41,7 @@ All bodies are JSON. Every response to an account route carries `account`, the h
 | Route | Body | Returns |
 |---|---|---|
 | `POST /sessions/{id}/navigate` | `platform` (required the first time), `url`, `wait_ms` | `url, title, http_status, captures[], cursor` |
-| `POST /sessions/{id}/scroll` | `times`, `wait_ms` | `url, reached_end, captures[], cursor` |
+| `POST /sessions/{id}/scroll` | `times`, `wait_ms`, `selector` (a panel that scrolls on its own; the page when nothing matches) | `url, reached_end, captures[], cursor` |
 | `POST /sessions/{id}/content` | `format: html\|text`, `selector` | `url, title, format, body` |
 | `POST /sessions/{id}/click` | `selector` or `role`+`name` or `text`, `exact`, `wait_ms` | `url, captures[], cursor` |
 | `POST /sessions/{id}/type` | target as for click, `text`, `submit` | `url, captures[], cursor` |
@@ -55,7 +56,7 @@ All bodies are JSON. Every response to an account route carries `account`, the h
 | `POST /sessions/{id}/config` | `platform`, account settings | the account record |
 | `POST /sessions/{id}/close` | | the account record |
 
-`captures` are the JSON responses the page fetched from the platform's own API (Facebook `/api/graphql/`, Instagram `/api/v1/` and `/graphql/query`), which the connectors parse instead of the DOM.
+`captures` are the JSON responses the page fetched from the platform's own API (Facebook `/api/graphql/`, Instagram `/api/v1/` and `/graphql/query`, TikTok `/api/search/`, `/api/comment/list/`, `/api/post/item_list/`), which the connectors parse instead of the DOM.
 
 An account record is `{account_id, platform, state: new|ok|needs_login, state_reason, login_confirmed_at, cooldown_until, warming_up, open, url, proxy, external_browser, fingerprint}`, with the proxy password masked. Agent routes refuse an account whose state is not `ok` with `needs_login`, and one in a cool-down with `rate_limited`.
 
@@ -69,5 +70,24 @@ Every POST made with the service token may carry account settings; they are stor
 
 - `proxy`: `http://`, `https://` or `socks5://` with optional `user:pass@`; empty means a direct connection, and an account never given one uses `BROWSER_PROXY`. Chromium cannot authenticate to SOCKS5, so a socks5 proxy with credentials is refused.
 - `region`: the proxy's ISO country. It only shapes the first fingerprint.
-- `fingerprint`: generated once, when the account first launches, and kept: user agent with the engine's real Chrome version, `platform`, locale, timezone, viewport and screen, device scale and `hardware_concurrency`. Locale and timezone follow `region` when it is in the table in `src/profile.js`. The backend stores the generated one from the account record and may send it back to restore it; a page sees it through standard Playwright context options plus `navigator.platform` and `navigator.hardwareConcurrency`.
+- `fingerprint`: generated once, when the account first launches, and kept. [fingerprint-suite](https://github.com/apify/fingerprint-suite) (Apache-2.0) draws a desktop Chrome of the engine's own version for the account's OS and locale, with the screen, cores, memory, WebGL card, codecs and fonts seen together on real devices, and injects it into every page (`version: 2`, the drawn set under `suite`). When its data has no device for the engine version, a small built-in table is used instead (`version: 1`). The top-level fields (`user_agent`, `platform`, `locale`, `timezone`, `viewport`, `screen`, `device_scale_factor`, `hardware_concurrency`) win over the suite's copies, so a fingerprint the backend edited is what the page sees. Locale and timezone follow `region` when it is in the table in `src/profile.js`. The backend stores the generated one from the account record and may send it back to restore it.
 - `external_browser_ws`: a CDP endpoint of a fingerprint browser (AdsPower, BitBrowser local API). The service connects to it instead of launching Chromium and applies none of its own proxy or fingerprint settings, since that browser owns them. Closing the account disconnects without closing that browser. Empty switches back to the built-in browser.
+
+## Platforms
+
+Each platform is one file in `src/platforms/`, named after it and loaded at start; adding a platform is adding a file. A file exports:
+
+| Field | Meaning |
+|---|---|
+| `home`, `login` | The page a health check opens and the page the operator login window opens |
+| `capture` | URL patterns of the platform's own API responses that are captured |
+| `loginPaths` | Paths that mean the account was logged out or sent to a checkpoint |
+| `challengeText` | Page text of a verification (a slider puzzle); stops the account as `needs_login` for an operator |
+| `rateLimitText` | Page text that starts the cool-down |
+| `needsLogin` | `false` for public pages that need no operator login (default `true`) |
+| `agentPaths` | When set, the only paths an agent may `navigate` to; the operator login window is not limited |
+| `block` | Playwright resource types never fetched for agent work, e.g. `media`, `image`, `font`; the operator login window loads them so a puzzle shows |
+| `paceFactor` | Multiplies the pause before every agent action (default 1) |
+| `initScript` | Script run in every page before the platform's own |
+
+TikTok blocks media, images and fonts, keeps its players from starting, opens only search, creator pages and single videos (whose page holds the comments), and pauses twice as long as the other platforms. Its verification puzzles stop the account until an operator solves one in the login window.

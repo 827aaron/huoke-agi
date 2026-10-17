@@ -1,0 +1,39 @@
+{
+  "status_code": 0,
+  "comments": [
+    {
+      "cid": "7412000000000000101",
+      "text": "is there a server for SEA players?",
+      "create_time": 1760510000,
+      "digg_count": 5,
+      "reply_comment_total": 1,
+      "aweme_id": "7412345678901234567",
+      "reply_id": "0",
+      "user": {"uid": "6900000000000000001", "unique_id": "sea_player", "nickname": "Ari"},
+      "reply_comment": [
+        {
+          "cid": "7412000000000000102",
+          "text": "yes, the Singapore one",
+          "create_time": 1760520000,
+          "digg_count": 1,
+          "aweme_id": "7412345678901234567",
+          "reply_id": "7412000000000000101",
+          "user": {"uid": "6800000000000000001", "unique_id": "pixel.ren", "nickname": "Ren"}
+        }
+      ]
+    },
+    {
+      "cid": "7412000000000000103",
+      "text": "spent $200 and still no 5 star",
+      "create_time": 1760505000,
+      "digg_count": 40,
+      "reply_comment_total": 0,
+      "aweme_id": "7412345678901234567",
+      "reply_id": "0",
+      "user": {"uid": "6900000000000000002", "unique_id": "whale.kid", "nickname": "K"}
+    }
+  ],
+  "cursor": 20,
+  "has_more": 1,
+  "total": 3
+}
