@@ -81,7 +81,7 @@ Open `.env` in a text editor. Three things are required. Everything else is opti
 | What | Variable | Notes |
 |---|---|---|
 | One language model key | for example `DEEPSEEK_API_KEY=` or `OPEN_AI_KEY=` or `ANTHROPIC_API_KEY=` | Can instead be entered after login under Settings → Keys & connections → Language model |
-| Judgement model (Jev) key | `TYPESAFE_API_KEY=` | Screens every message read from a group; can also be entered on the settings page. Without it, reading groups stops with "no judgement model (Jev) is configured" |
+| Judgement model (Jev) key | `TYPESAFE_API_KEY=`, a TypeSafe key; or an OpenRouter key with `TYPESAFE_API_URL=https://openrouter.ai/api` | Screens every message read from a group; can also be entered on the settings page. Without it, reading groups stops with "no judgement model (Jev) is configured" |
 | Embedding key for memory and the knowledge base | `EMBEDDING_KEY=` (an OpenAI key; `EMBEDDING_PROVIDER` defaults to `openai`) | Not needed when the language model is OpenAI. Without it, memory and knowledge base tools are switched off and only a log line says so. Usage is tiny |
 
 ### Change before the first start
@@ -119,7 +119,23 @@ All of these can also be entered on the settings page:
 - YouTube: `YOUTUBE_API_KEY`.
 - Search: `TAVILY_API_KEY`, `GOOGLE_API_KEY` and others. DuckDuckGo works without a key.
 - Proxy: `GROWTH_PROXY_URL`, the default proxy for platform accounts.
-- Email: the `SMTP_*` group, for emailed lead lists.
+- Email: see below.
+
+### Email for lead lists
+
+Set the mail server once in `.env`, and every customer on this deployment can receive lead lists without running a mail server of their own:
+
+```ini
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=leads@example.com
+SMTP_PASSWORD=
+SMTP_FROM=KeLai AGI <leads@example.com>
+SMTP_TLS=starttls
+```
+
+`SMTP_TLS` is `starttls` for port 587, `tls` for port 465, or `none`. With this set, a customer enters only the addresses that should receive the lists on the Email card; left empty, lists go to their login email. A customer can still enter their own server on that card, and theirs is then used for their mail. With `SMTP_HOST` empty, a customer who enters no server of their own gets no email; their lead lists stay on the page. Check the server with the card's test button, which sends a test message.
+
 
 The defaults already in `.env.example` keep these:
 
