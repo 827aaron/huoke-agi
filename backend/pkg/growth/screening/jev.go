@@ -144,7 +144,8 @@ const question = "Could the sender of `messages.%s` (posted on `platform`, in `s
 var criteria = map[string]string{
 	"true": "The message shows the sender may want or use what the business offers, even indirectly",
 	"false": "Spam, advertising, a bot, a seller or booster, a competitor, someone `business` says is usually " +
-		"not a customer, or nothing to do with the business",
+		"not a customer, or nothing to do with the business. Exclusions apply only on explicit evidence in the " +
+		"message; never infer them from style, age cues or platform",
 }
 
 // Judge returns the judgement of each message by id, and the model version that

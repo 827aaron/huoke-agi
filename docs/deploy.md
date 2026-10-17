@@ -172,7 +172,7 @@ Every card in Settings → Keys & connections has a test button and says whether
    - Search.
    - Email.
    - Proxy.
-2. **Business profile:** the game, target languages and regions, signal words, exclusions and notes. Every task reads it.
+2. **Business profile:** the product and its audience, target languages and regions, signal words, exclusions and notes. Every task reads it, and a starting profile for a game publisher or a licensed online casino can be copied in. An exclusion applies only when a message says so explicitly; a person is never excluded on a guess from their writing style, apparent age or the platform they post on.
 3. **Accounts:**
    - Telegram signs in with a phone code.
    - Facebook, Instagram and TikTok sign in through the login window served by the browser service.

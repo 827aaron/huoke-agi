@@ -48,7 +48,8 @@ func ProfilePresets() []ProfilePreset {
 					"agents and affiliates advertising other sites", "bots and spam",
 				},
 				Notes: "Adults only, and only in the regions the license covers; fill those in under Regions. " +
-					"Someone who talks about losing control or wanting to quit is not a customer.",
+					"Someone who says they are losing control or want to quit is not a customer. Exclusions apply " +
+					"only on explicit evidence in the message; never infer them from style, age cues or platform.",
 				Scoring: &Scoring{
 					Weights:   ScoringWeights{Player: 3, Pain: 3, Paying: 3, Active: 2, Match: 3},
 					Qualified: 8,
