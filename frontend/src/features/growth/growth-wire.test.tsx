@@ -131,11 +131,17 @@ const sources = [
 
 const serve = (body: { leads: unknown; runs: unknown; sources: unknown }) =>
     server.get.mockImplementation(async (url: string) => {
-        if (url === '/growth/leads/') {return ok({ leads: body.leads, total: 0 });}
+        if (url === '/growth/leads/') {
+            return ok({ leads: body.leads, total: 0 });
+        }
 
-        if (url === '/growth/runs/') {return ok({ runs: body.runs, total: 0 });}
+        if (url === '/growth/runs/') {
+            return ok({ runs: body.runs, total: 0 });
+        }
 
-        if (url === '/growth/sources/') {return ok({ sources: body.sources, total: 0, warnings: null });}
+        if (url === '/growth/sources/') {
+            return ok({ sources: body.sources, total: 0, warnings: null });
+        }
 
         throw new Error(url);
     });
