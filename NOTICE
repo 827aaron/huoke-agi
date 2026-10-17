@@ -1,9 +1,7 @@
-PentAGI, Fully autonomous AI Agent capable of performing complex penetration testing tasks.
+KeLai AGI, a lead-finding agent for game studios.
 
-Copyright 2025 PentAGI Development Team
+KeLai AGI is derived from PentAGI, Copyright 2025 PentAGI Development Team,
+licensed under the MIT License. See LICENSE for terms.
 
-Licensed under MIT License. See LICENSE and EULA for terms.
-
-NOTICE: This software integrates VXControl Cloud SDK for enhanced intelligence services.
-VXControl Cloud SDK is licensed under AGPL-3.0 with a special exception for this official PentAGI project.
-For more details, see the License section in README.md and VXControl Cloud SDK license terms.
+This software includes the VXControl Cloud SDK (github.com/vxcontrol/cloud),
+Copyright 2026 PentAGI Development Team, licensed under the MIT License.
