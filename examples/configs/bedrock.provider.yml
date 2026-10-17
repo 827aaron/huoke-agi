@@ -161,7 +161,7 @@ installer:
     cache_read: 0.33
     cache_write: 4.125
 
-# Researcher (pentester id) - multimodal and thinking capabilities
+# Pentester - security testing with multimodal and thinking capabilities
 pentester:
   model: us.anthropic.claude-sonnet-4-5-20250929-v1:0
   temperature: 1.0
