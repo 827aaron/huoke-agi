@@ -1,15 +1,17 @@
 import { useApolloClient, useQuery, useSubscription } from '@apollo/client/react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
 import type { Provider } from '@/models/provider';
 
+import { growthApi } from '@/features/growth/growth-api';
+import { useGrowthPoll } from '@/features/growth/use-growth-poll';
 import {
     ProviderCreatedDocument,
     ProviderDeletedDocument,
     ProvidersDocument,
     ProviderUpdatedDocument,
 } from '@/graphql/types';
-import { findProviderByName, sortProviders } from '@/models/provider';
+import { findProviderByName, pickDefaultProvider, sortProviders } from '@/models/provider';
 import { useUser } from '@/providers/user-provider';
 
 const SELECTED_PROVIDER_KEY = 'selectedProvider';
@@ -59,29 +61,22 @@ export function ProvidersProvider({ children }: ProvidersProviderProps) {
         return localStorage.getItem(SELECTED_PROVIDER_KEY);
     });
 
+    const { data: growthSettings } = useGrowthPoll(
+        isAuthenticated() ? 'settings:default-provider' : null,
+        () => growthApi.listSettings(),
+        null,
+    );
+    const llmProviderType = growthSettings?.find((setting) => setting.kind === 'llm')?.provider;
+
+    // Only a provider the user picked is remembered; otherwise the default follows the growth LLM card.
     const selectedProvider = useMemo(() => {
-        if (providers.length === 0) {
-            return null;
-        }
+        const savedProvider = selectedProviderName ? findProviderByName(selectedProviderName, providers) : undefined;
 
-        if (selectedProviderName) {
-            const savedProvider = findProviderByName(selectedProviderName, providers);
-
-            if (savedProvider) {
-                return savedProvider;
-            }
-        }
-
-        return providers[0] ?? null;
-    }, [providers, selectedProviderName]);
-
-    useEffect(() => {
-        if (selectedProvider) {
-            localStorage.setItem(SELECTED_PROVIDER_KEY, selectedProvider.name);
-        }
-    }, [selectedProvider]);
+        return savedProvider ?? pickDefaultProvider(providers, llmProviderType);
+    }, [llmProviderType, providers, selectedProviderName]);
 
     const setSelectedProvider = useCallback((provider: Provider) => {
+        localStorage.setItem(SELECTED_PROVIDER_KEY, provider.name);
         setSelectedProviderName(provider.name);
     }, []);
 
