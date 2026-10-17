@@ -220,3 +220,39 @@ func TestProfile_SaveProfile_ChecksTheScoringAndTheContactTypes(t *testing.T) {
 	assert.Equal(t, []string{"phone", "email"}, saved.ContactTypes)
 	assert.Contains(t, saved.Compact(), "Contacts to find: phone, email")
 }
+
+func TestProfile_SaveProfile_DropsTheMessageScoresWhenTheAudienceChanges(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	src := w.mustAddTelegramGroup(t, w.seedTask(t), tgGroup("905", "rpg_chat", "RPG"))
+	scored := func() int {
+		rows, err := w.svc.db.GetMessageScores(ctx, database.GetMessageScoresParams{UserID: w.user, SourceID: src, MessageIds: []string{"m1"}})
+		require.NoError(t, err)
+		return len(rows)
+	}
+	_, err := w.svc.SaveProfile(ctx, w.user, gameProfile())
+	require.NoError(t, err)
+	require.NoError(t, w.svc.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
+		UserID: w.user, SourceID: src, MessageID: "m1", Score: 8, Signals: "player+3",
+	}))
+
+	same := gameProfile()
+	same.DefaultTarget = 80
+	_, err = w.svc.SaveProfile(ctx, w.user, same)
+	require.NoError(t, err)
+	assert.Equal(t, 1, scored(), "a change the judgement model does not read keeps the scores")
+
+	casino := gameProfile()
+	casino.Pitch = "A licensed online casino"
+	_, err = w.svc.SaveProfile(ctx, w.user, casino)
+	require.NoError(t, err)
+	assert.Equal(t, 0, scored())
+
+	require.NoError(t, w.svc.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
+		UserID: w.user, SourceID: src, MessageID: "m1", Score: 8, Signals: "player+3",
+	}))
+	casino.Scoring = &Scoring{Weights: ScoringWeights{Player: 1, Pain: 3, Paying: 3, Active: 2, Match: 3}, Qualified: 7, Watchlist: 4}
+	_, err = w.svc.SaveProfile(ctx, w.user, casino)
+	require.NoError(t, err)
+	assert.Equal(t, 0, scored(), "new weights drop the scores too")
+}

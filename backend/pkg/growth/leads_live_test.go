@@ -201,3 +201,46 @@ func TestLeads_UpsertLeads_KeepsEveryContactOnceAndListsByIt(t *testing.T) {
 	assert.Equal(t, "42", without[0].PlatformUserID)
 	assert.Equal(t, []Contact{}, without[0].Contacts)
 }
+
+func TestLeads_UpsertLeads_WhenJevFailsOnTheExcerpts(t *testing.T) {
+	jevBackoff = time.Millisecond
+	t.Cleanup(func() { jevBackoff = 2 * time.Second })
+	webLead := func(t *testing.T, w *world) (Scope, LeadInput) {
+		scope := w.seedTask(t)
+		added, err := w.svc.AddSources(context.Background(), scope, []string{"https://forum.example.com/t/7"}, OriginManual, nil)
+		require.NoError(t, err)
+		return scope, LeadInput{PlatformUserID: "fan", Score: 7, Evidence: []EvidenceInput{
+			{SourceID: added[0].Source.ID, MessageID: "p1", Excerpt: "bored of my RPG, I play daily"},
+		}}
+	}
+
+	t.Run("a refused key stops the save", func(t *testing.T) {
+		w := newWorld(t)
+		refused := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+			rw.WriteHeader(http.StatusUnauthorized)
+		}))
+		t.Cleanup(refused.Close)
+		w.svc.cfg.TypeSafeAPIURL = refused.URL
+		scope, in := webLead(t, w)
+
+		_, err := w.svc.UpsertLeads(context.Background(), scope, []LeadInput{in})
+		require.ErrorIs(t, err, ErrNoJudge)
+		leads, err := w.svc.ListLeads(context.Background(), w.user, LeadFilter{})
+		require.NoError(t, err)
+		assert.Empty(t, leads)
+	})
+
+	t.Run("an unreachable Jev leaves the agent's score", func(t *testing.T) {
+		w := newWorld(t)
+		gone := httptest.NewServer(http.NotFoundHandler())
+		gone.Close()
+		w.svc.cfg.TypeSafeAPIURL = gone.URL
+		scope, in := webLead(t, w)
+
+		res, err := w.svc.UpsertLeads(context.Background(), scope, []LeadInput{in})
+		require.NoError(t, err)
+		assert.Equal(t, LeadStatusNew, res[0].Status)
+		assert.Equal(t, 7, res[0].Score)
+		assert.Equal(t, TierQualified, res[0].Tier)
+	})
+}

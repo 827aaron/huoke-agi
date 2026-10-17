@@ -342,9 +342,11 @@ func businessSummary(p Profile) string {
 	}
 	line("Business", p.Name)
 	line("Offer", p.Pitch)
-	line("Games", strings.Join(p.Games, ", "))
-	line("Genre", p.Genre)
+	line("Products", strings.Join(p.Games, ", "))
+	line("Category", p.Genre)
 	line("Competitors", strings.Join(p.Competitors, ", "))
+	line("Regions", strings.Join(p.Regions, ", "))
+	line("Languages", strings.Join(p.Languages, ", "))
 	line("Words that often mark a likely customer", strings.Join(p.Signals, "; "))
 	line("Usually not a customer", strings.Join(p.Excludes, "; "))
 	line("Notes", p.Notes)

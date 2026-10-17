@@ -5669,6 +5669,51 @@ const docTemplate = `{
                 }
             }
         },
+        "/growth/profiles/presets": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Retrieve the starting profiles, one per kind of customer, to copy into the profile form",
+                "responses": {
+                    "200": {
+                        "description": "presets received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/growth.ProfilePreset"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "getting the presets not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/growth/profiles/{profileID}": {
             "put": {
                 "security": [
@@ -10526,6 +10571,17 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                }
+            }
+        },
+        "growth.ProfilePreset": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "profile": {
+                    "$ref": "#/definitions/growth.Profile"
                 }
             }
         },

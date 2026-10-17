@@ -929,6 +929,18 @@ func (s *GrowthService) ListProfiles(c *gin.Context) {
 	response.Success(c, http.StatusOK, profiles)
 }
 
+// ListProfilePresets is a function to return the starting profiles
+// @Summary Retrieve the starting profiles, one per kind of customer, to copy into the profile form
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.successResp{data=[]growth.ProfilePreset} "presets received successful"
+// @Failure 403 {object} response.errorResp "getting the presets not permitted"
+// @Router /growth/profiles/presets [get]
+func (s *GrowthService) ListProfilePresets(c *gin.Context) {
+	response.Success(c, http.StatusOK, growth.ProfilePresets())
+}
+
 // CreateProfile is a function to store the business profile
 // @Summary Save the business profile; new tasks start with it
 // @Description Saving when a profile exists replaces it. knowledge says whether the lists reached the knowledge store: seeded, or skipped with the reason.

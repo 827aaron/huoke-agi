@@ -85,7 +85,7 @@ type ScoringWeights struct {
 	Match  int `json:"match"`
 }
 
-// DefaultScoring is the weighting of a game company looking for players.
+// DefaultScoring weighs the five signals for an offer with no weighting of its own.
 var DefaultScoring = Scoring{
 	Weights:   ScoringWeights{Player: 3, Pain: 3, Paying: 2, Active: 2, Match: 3},
 	Qualified: QualifiedMinScore,
@@ -166,7 +166,7 @@ func (p *Profile) normalize() {
 func (p Profile) validate() error {
 	switch {
 	case p.Name == "" && p.Pitch == "" && len(p.Games) == 0:
-		return fmt.Errorf("%w: name, pitch or a game is required", ErrInvalidProfile)
+		return fmt.Errorf("%w: name, pitch or a product is required", ErrInvalidProfile)
 	case p.DefaultTarget < 0:
 		return fmt.Errorf("%w: default_target cannot be negative", ErrInvalidProfile)
 	}
@@ -226,6 +226,9 @@ func (s *Service) ListProfiles(ctx context.Context, userID int64) ([]ProfileView
 
 // SaveProfile stores the profile, rewrites its resource file and replaces its guide
 // documents. The knowledge step needs an embedder; without one it is skipped and said so.
+// A change to what the judgement model reads or to the weights drops the owner's stored
+// message scores: they were judged for another audience, and a message saved as evidence
+// later is judged again. Leads already saved keep their scores.
 func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (ProfileView, error) {
 	p.normalize()
 	if err := p.validate(); err != nil {
@@ -235,9 +238,18 @@ func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (Pro
 	if err != nil {
 		return ProfileView{}, err
 	}
+	var prev Profile
+	if v, err := s.GetProfile(ctx, userID); err == nil {
+		prev = v.Profile
+	}
 	row, err := s.db.UpsertGrowthProfile(ctx, database.UpsertGrowthProfileParams{UserID: userID, Profile: raw})
 	if err != nil {
 		return ProfileView{}, fmt.Errorf("failed to store the business profile: %w", err)
+	}
+	if businessSummary(prev) != businessSummary(p) || prev.ScoringOrDefault() != p.ScoringOrDefault() {
+		if err := s.db.DeleteMessageScores(ctx, userID); err != nil {
+			return ProfileView{}, fmt.Errorf("failed to drop the message scores of the previous profile: %w", err)
+		}
 	}
 	if err := s.writeProfileResource(ctx, userID, p); err != nil {
 		return ProfileView{}, err
@@ -374,8 +386,8 @@ func (p Profile) Compact() string {
 	b.WriteString("<business_profile>\n")
 	line("Business", p.Name)
 	text("Offer", p.Pitch)
-	list("Games", p.Games, ", ")
-	line("Genre", p.Genre)
+	list("Products", p.Games, ", ")
+	line("Category", p.Genre)
 	list("Regions", p.Regions, ", ")
 	list("Languages", p.Languages, ", ")
 	if p.DefaultTarget > 0 {
@@ -410,8 +422,8 @@ func (p Profile) Markdown() string {
 		}
 	}
 	field("Business", p.Name)
-	field("Games", strings.Join(p.Games, ", "))
-	field("Genre", p.Genre)
+	field("Products", strings.Join(p.Games, ", "))
+	field("Category", p.Genre)
 	field("Regions", strings.Join(p.Regions, ", "))
 	field("Languages", strings.Join(p.Languages, ", "))
 	if p.DefaultTarget > 0 {

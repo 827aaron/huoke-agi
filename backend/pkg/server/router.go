@@ -469,6 +469,7 @@ func setGrowthGroup(parent *gin.RouterGroup, svc *services.GrowthService) {
 		gg.POST("/accounts/remote-login/:sessionID/finish", auth.PrivilegesRequired("growth.edit"), svc.FinishRemoteLogin)
 		gg.DELETE("/accounts/remote-login/:sessionID", auth.PrivilegesRequired("growth.edit"), svc.CancelRemoteLogin)
 		gg.GET("/profiles", auth.PrivilegesRequired("growth.view"), svc.ListProfiles)
+		gg.GET("/profiles/presets", auth.PrivilegesRequired("growth.view"), svc.ListProfilePresets)
 		gg.POST("/profiles", auth.PrivilegesRequired("growth.edit"), svc.CreateProfile)
 		gg.PUT("/profiles/:profileID", auth.PrivilegesRequired("growth.edit"), svc.UpdateProfile)
 		gg.GET("/settings/", auth.PrivilegesRequired("growth.view"), svc.ListSettings)
