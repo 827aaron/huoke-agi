@@ -1040,7 +1040,7 @@ func (s *GrowthService) ListSettings(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param kind path string true "llm, telegram, youtube, web_search, email or proxy"
+// @Param kind path string true "llm, embedding, telegram, youtube, web_search, email or proxy"
 // @Param json body growthSaveSettingRequest true "provider and fields"
 // @Success 200 {object} response.successResp{data=growth.SettingView} "setting saved successful"
 // @Failure 400 {object} response.errorResp "invalid setting"
@@ -1071,7 +1071,7 @@ func (s *GrowthService) SaveSetting(c *gin.Context) {
 // @Tags Growth
 // @Produce json
 // @Security BearerAuth
-// @Param kind path string true "llm, telegram, youtube, web_search, email or proxy"
+// @Param kind path string true "llm, embedding, telegram, youtube, web_search, email or proxy"
 // @Success 200 {object} response.successResp "setting deleted successful"
 // @Failure 403 {object} response.errorResp "deleting settings not permitted"
 // @Failure 404 {object} response.errorResp "no saved setting of this kind"
@@ -1094,7 +1094,7 @@ func (s *GrowthService) DeleteSetting(c *gin.Context) {
 // @Tags Growth
 // @Produce json
 // @Security BearerAuth
-// @Param kind path string true "llm, telegram, youtube, web_search, email or proxy"
+// @Param kind path string true "llm, embedding, telegram, youtube, web_search, email or proxy"
 // @Success 200 {object} response.successResp{data=growth.SettingView} "setting tested successful"
 // @Failure 400 {object} response.errorResp "unknown kind"
 // @Failure 403 {object} response.errorResp "testing settings not permitted"

@@ -233,7 +233,7 @@ CREATE TABLE IF NOT EXISTS growth_settings (
   updated_at     TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
 
   CONSTRAINT growth_settings_user_kind_unique UNIQUE (user_id, kind),
-  CONSTRAINT growth_settings_kind_check CHECK (kind IN ('llm', 'telegram', 'youtube', 'web_search', 'email', 'proxy')),
+  CONSTRAINT growth_settings_kind_check CHECK (kind IN ('llm', 'embedding', 'telegram', 'youtube', 'web_search', 'email', 'proxy')),
   CONSTRAINT growth_settings_status_check CHECK (status IN ('untested', 'connected', 'invalid'))
 );
 

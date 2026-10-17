@@ -6409,7 +6409,7 @@ paths:
   /growth/settings/{kind}:
     delete:
       parameters:
-      - description: llm, telegram, youtube, web_search, email or proxy
+      - description: llm, embedding, telegram, youtube, web_search, email or proxy
         in: path
         name: kind
         required: true
@@ -6442,7 +6442,7 @@ paths:
       consumes:
       - application/json
       parameters:
-      - description: llm, telegram, youtube, web_search, email or proxy
+      - description: llm, embedding, telegram, youtube, web_search, email or proxy
         in: path
         name: kind
         required: true
@@ -6491,7 +6491,7 @@ paths:
       description: status is connected or invalid; untested means the service has
         no check without a login.
       parameters:
-      - description: llm, telegram, youtube, web_search, email or proxy
+      - description: llm, embedding, telegram, youtube, web_search, email or proxy
         in: path
         name: kind
         required: true

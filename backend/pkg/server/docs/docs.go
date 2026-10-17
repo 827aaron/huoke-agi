@@ -5950,7 +5950,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "llm, telegram, youtube, web_search, email or proxy",
+                        "description": "llm, embedding, telegram, youtube, web_search, email or proxy",
                         "name": "kind",
                         "in": "path",
                         "required": true
@@ -6026,7 +6026,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "llm, telegram, youtube, web_search, email or proxy",
+                        "description": "llm, embedding, telegram, youtube, web_search, email or proxy",
                         "name": "kind",
                         "in": "path",
                         "required": true
@@ -6078,7 +6078,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "llm, telegram, youtube, web_search, email or proxy",
+                        "description": "llm, embedding, telegram, youtube, web_search, email or proxy",
                         "name": "kind",
                         "in": "path",
                         "required": true
