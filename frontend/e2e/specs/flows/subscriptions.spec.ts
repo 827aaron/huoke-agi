@@ -86,7 +86,7 @@ test.describe('flow subscriptions across a pager switch', { tag: '@flows' }, () 
 
         const idsA = await extractMessageIds(page.locator('body'));
 
-        await page.locator('header').getByRole('button', { name: 'Next' }).click();
+        await page.locator('header').getByRole('button', { name: '下一个' }).click();
         await expect(page).toHaveURL(/\/flows\/6$/);
         await expect(page.locator(MESSAGE_ID_SELECTOR)).toHaveCount(FLOW_B_IDS.length);
 

@@ -48,8 +48,8 @@ describe('Knowledge detail load states', () => {
 
         render(<Knowledge />);
 
-        expect(screen.getByText('Error loading knowledge document')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
+        expect(screen.getByText('知识文档加载失败')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /重试/ })).toBeInTheDocument();
         expect(navigate).not.toHaveBeenCalled();
     });
 
@@ -63,7 +63,7 @@ describe('Knowledge detail load states', () => {
 
         render(<Knowledge />);
 
-        expect(screen.queryByText('Error loading knowledge document')).not.toBeInTheDocument();
+        expect(screen.queryByText('知识文档加载失败')).not.toBeInTheDocument();
         expect(toastError).toHaveBeenCalled();
         expect(navigate).toHaveBeenCalledWith(routes.knowledges, { replace: true });
     });

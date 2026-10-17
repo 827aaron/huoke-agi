@@ -34,6 +34,7 @@ import { InputSearch } from '@/components/ui/input-search';
 import { Spinner } from '@/components/ui/spinner';
 import { KnowledgeDocType } from '@/graphql/types';
 import { useTableState } from '@/hooks/use-table-state';
+import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { mergeHrefWithSearchParams, URL_PARAMS } from '@/lib/url-params';
 import { type Knowledge, useKnowledges } from '@/providers/knowledges-provider';
@@ -46,11 +47,11 @@ const docTypeBadgeVariant: Record<KnowledgeDocType, BadgeVariant> = {
 
 const docTypeSubtype = (k: Knowledge): null | string => {
     if (k.docType === KnowledgeDocType.Guide) {
-        return k.guideType ?? null;
+        return k.guideType ? (copy.knowledge.guideTypeLabel[k.guideType] ?? k.guideType) : null;
     }
 
     if (k.docType === KnowledgeDocType.Answer) {
-        return k.answerType ?? null;
+        return k.answerType ? (copy.knowledge.answerTypeLabel[k.answerType] ?? k.answerType) : null;
     }
 
     if (k.docType === KnowledgeDocType.Code) {
@@ -149,7 +150,7 @@ function Knowledges() {
 
         try {
             await renameKnowledge(editingKnowledgeId, newQuestion);
-            toast.success('Knowledge renamed successfully');
+            toast.success(copy.knowledge.renamed);
             setEditingKnowledgeId(null);
         } catch {
             // Error already handled in provider with toast
@@ -193,7 +194,7 @@ function Knowledges() {
                             className="shrink-0 whitespace-nowrap"
                             variant={docTypeBadgeVariant[docType]}
                         >
-                            {docType}
+                            {copy.knowledge.docTypeLabel[docType] ?? docType}
                         </Badge>
                         {subtype ? (
                             <span
@@ -209,11 +210,11 @@ function Knowledges() {
             header: ({ column }) => (
                 <DataTableColumnHeader
                     column={column}
-                    title="Type"
+                    title={copy.knowledge.type}
                 />
             ),
             maxSize: 180,
-            meta: { columnMenuLabel: 'Type', searchable: true },
+            meta: { columnMenuLabel: copy.knowledge.type, searchable: true },
             minSize: 110,
             size: 130,
         },
@@ -234,7 +235,7 @@ function Knowledges() {
                                 inputRef={editingInputRef}
                                 onCancel={handleKnowledgeRenameCancel}
                                 onSave={handleKnowledgeRenameSave}
-                                placeholder="Knowledge question"
+                                placeholder={copy.knowledge.renamePlaceholder}
                             />
                         </div>
                     );
@@ -252,10 +253,10 @@ function Knowledges() {
             header: ({ column }) => (
                 <DataTableColumnHeader
                     column={column}
-                    title="Question"
+                    title={copy.knowledge.question}
                 />
             ),
-            meta: { columnMenuLabel: 'Question', searchable: true },
+            meta: { columnMenuLabel: copy.knowledge.question, searchable: true },
             minSize: 180,
             size: 280,
         },
@@ -270,14 +271,14 @@ function Knowledges() {
                                 className="shrink-0 whitespace-nowrap"
                                 variant="outline"
                             >
-                                flow #{k.flowId}
+                                {copy.knowledge.flowNumber(k.flowId)}
                             </Badge>
                         ) : null}
                         <Badge
                             className="shrink-0 whitespace-nowrap"
                             variant={k.manual ? 'secondary' : 'outline'}
                         >
-                            {k.manual ? 'manual' : 'agent'}
+                            {k.manual ? copy.knowledge.manual : copy.knowledge.agent}
                         </Badge>
                     </div>
                 );
@@ -285,12 +286,12 @@ function Knowledges() {
             enableSorting: false,
             header: () => (
                 <span className="text-muted-foreground inline-flex w-full items-center justify-end text-sm font-medium">
-                    Flags
+                    {copy.knowledge.flags}
                 </span>
             ),
             id: 'flags',
             maxSize: 200,
-            meta: { columnMenuLabel: 'Flags' },
+            meta: { columnMenuLabel: copy.knowledge.flags },
             minSize: 110,
             size: 150,
         },
@@ -303,7 +304,7 @@ function Knowledges() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    aria-label="Open menu"
+                                    aria-label={copy.providers.openMenu}
                                     className="size-8 p-0"
                                     onClick={(event) => event.stopPropagation()}
                                     variant="ghost"
@@ -318,11 +319,11 @@ function Knowledges() {
                             >
                                 <DropdownMenuItem onClick={() => handleOpen(k.id)}>
                                     <Pencil />
-                                    Edit
+                                    {copy.action.edit}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleKnowledgeRenameStart(k)}>
                                     <PencilLine />
-                                    Rename
+                                    {copy.action.rename}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -332,12 +333,12 @@ function Knowledges() {
                                     {deletingIds.has(k.id) ? (
                                         <>
                                             <Spinner variant="circle" />
-                                            Deleting...
+                                            {copy.action.deleting}
                                         </>
                                     ) : (
                                         <>
                                             <Trash />
-                                            Delete
+                                            {copy.action.delete}
                                         </>
                                     )}
                                 </DropdownMenuItem>
@@ -360,11 +361,11 @@ function Knowledges() {
         <>
             <ContextMenuItem onClick={() => handleOpen(k.id)}>
                 <Pencil />
-                Edit
+                {copy.action.edit}
             </ContextMenuItem>
             <ContextMenuItem onClick={() => handleKnowledgeRenameStart(k)}>
                 <PencilLine />
-                Rename
+                {copy.action.rename}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -372,7 +373,7 @@ function Knowledges() {
                 onClick={() => handleDeleteDialogOpen(k)}
             >
                 <Trash />
-                {deletingIds.has(k.id) ? 'Deleting...' : 'Delete'}
+                {deletingIds.has(k.id) ? copy.action.deleting : copy.action.delete}
             </ContextMenuItem>
         </>
     );
@@ -380,21 +381,23 @@ function Knowledges() {
     const pageHeader = (
         <AppHeader>
             <AppHeaderContent>
-                <AppHeaderTitle icon={<LibraryBig className="size-4 shrink-0" />}>Knowledges</AppHeaderTitle>
+                <AppHeaderTitle icon={<LibraryBig className="size-4 shrink-0" />}>
+                    {copy.knowledge.knowledges}
+                </AppHeaderTitle>
             </AppHeaderContent>
             <AppHeaderActions>
                 <InputSearch
-                    ariaLabel="Search knowledge documents"
+                    ariaLabel={copy.knowledge.search}
                     // Mod+K, not Mod+F — Mod+F collides with the browser's native find-in-page.
                     hotkey="k"
                     maxWidth={220}
                     onSearchChange={handleSemanticQueryChange}
-                    placeholder="Semantic search..."
+                    placeholder={copy.knowledge.searchPlaceholder}
                     searchQuery={semanticQuery}
                 />
                 <AppHeaderAction
                     icon={<Plus />}
-                    label="New Knowledge"
+                    label={copy.knowledge.newKnowledge}
                     onClick={() => navigate(routes.newKnowledge)}
                     variant="secondary"
                 />
@@ -408,8 +411,8 @@ function Knowledges() {
                 {pageHeader}
                 <div className="flex flex-1 flex-col gap-4 p-4">
                     <LoadingState
-                        description="Please wait while we fetch your knowledge documents"
-                        title="Loading knowledges..."
+                        description={copy.knowledge.loadingHint}
+                        title={copy.knowledge.loading}
                     />
                 </div>
             </>
@@ -425,7 +428,7 @@ function Knowledges() {
                     <ErrorState
                         message={error.message}
                         onRetry={refetch}
-                        title="Error loading knowledge documents"
+                        title={copy.knowledge.loadListFailed}
                     />
                 </div>
             </>
@@ -442,10 +445,8 @@ function Knowledges() {
                             <EmptyMedia variant="icon">
                                 <LibraryBig />
                             </EmptyMedia>
-                            <EmptyTitle>No knowledge documents yet</EmptyTitle>
-                            <EmptyDescription>
-                                Create your first knowledge document to enrich the vector store
-                            </EmptyDescription>
+                            <EmptyTitle>{copy.knowledge.empty}</EmptyTitle>
+                            <EmptyDescription>{copy.knowledge.emptyHint}</EmptyDescription>
                         </EmptyHeader>
                         <EmptyContent>
                             <Button
@@ -453,7 +454,7 @@ function Knowledges() {
                                 variant="secondary"
                             >
                                 <Plus />
-                                New Knowledge
+                                {copy.knowledge.newKnowledge}
                             </Button>
                         </EmptyContent>
                     </Empty>
@@ -469,10 +470,10 @@ function Knowledges() {
                 <DataTable
                     columns={columns}
                     data={knowledges}
-                    empty={{ entityName: 'knowledge documents' }}
-                    filterPlaceholder="Filter knowledge documents..."
+                    empty={{ entityName: copy.knowledge.list }}
+                    filterPlaceholder={copy.knowledge.filter}
                     filterValue={filter}
-                    label="Knowledge Documents"
+                    label={copy.knowledge.list}
                     onFilterChange={setFilter}
                     onRowClick={(k) => {
                         if (editingKnowledgeId !== k.id) {
@@ -483,13 +484,13 @@ function Knowledges() {
                 />
 
                 <ConfirmationDialog
-                    cancelText="Cancel"
-                    confirmText="Delete"
+                    cancelText={copy.action.cancel}
+                    confirmText={copy.action.delete}
                     handleConfirm={handleDelete}
                     handleOpenChange={setIsDeleteDialogOpen}
                     isOpen={isDeleteDialogOpen}
                     itemName={deletingKnowledge?.question}
-                    itemType="knowledge document"
+                    itemType={copy.itemType.knowledgeDocument}
                 />
             </div>
         </>

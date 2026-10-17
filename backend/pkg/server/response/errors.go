@@ -198,4 +198,6 @@ var ErrGrowthLoginUnavailable = NewHttpError(503, "Growth.LoginUnavailable", "th
 var ErrGrowthLoginIncomplete = NewHttpError(409, "Growth.LoginIncomplete", "the browser is not signed in yet")
 var ErrGrowthLoginRejected = NewHttpError(400, "Growth.LoginRejected", "the code or password was rejected")
 var ErrGrowthRateLimited = NewHttpError(429, "Growth.RateLimited", "the platform asked to wait before trying again")
+var ErrGrowthUnreachable = NewHttpError(502, "Growth.Unreachable", "the platform could not be reached; check the proxy")
 var ErrGrowthEmailFailed = NewHttpError(502, "Growth.EmailFailed", "the email could not be sent")
+var ErrGrowthModelList = NewHttpError(502, "Growth.ModelList", "the model list could not be fetched; type the model name")

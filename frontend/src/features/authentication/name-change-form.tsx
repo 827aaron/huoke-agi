@@ -8,19 +8,16 @@ import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { useAppForm } from '@/hooks/use-app-form';
 import { api, resolveApiErrorMessage } from '@/lib/axios';
+import { copy } from '@/lib/copy';
 import { useUser } from '@/providers/user-provider';
 
 const nameChangeFormSchema = z.object({
-    name: z
-        .string()
-        .trim()
-        .min(1, { message: 'Name is required' })
-        .max(70, { message: 'Name must not exceed 70 characters' }),
+    name: z.string().trim().min(1, { message: copy.auth.nameRequired }).max(70, { message: copy.auth.nameTooLong }),
 });
 
 const ERROR_BY_CODE: Record<string, string> = {
-    'Users.ChangeNameCurrentUser.InvalidName': 'New name does not meet requirements',
-    'Users.NotFound': 'User not found',
+    'Users.ChangeNameCurrentUser.InvalidName': copy.auth.nameRejected,
+    'Users.NotFound': copy.auth.userNotFound,
 };
 
 interface NameChangeFormProps {
@@ -47,14 +44,14 @@ export function NameChangeForm({ onCancel, onSuccess }: NameChangeFormProps) {
         try {
             await api.put('/user/name', { name: values.name });
 
-            toast.success('Name successfully updated');
+            toast.success(copy.auth.nameUpdated);
 
             patchUser({ name: values.name });
             await refreshAuthInfo();
 
             onSuccess?.();
         } catch (err: unknown) {
-            setError(resolveApiErrorMessage(err, ERROR_BY_CODE, 'Failed to update name'));
+            setError(resolveApiErrorMessage(err, ERROR_BY_CODE, copy.auth.nameFailed));
         }
     };
 
@@ -70,11 +67,11 @@ export function NameChangeForm({ onCancel, onSuccess }: NameChangeFormProps) {
                     name="name"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Display name</FormLabel>
+                            <FormLabel>{copy.auth.displayName}</FormLabel>
                             <FormControl>
                                 <Input
                                     {...field}
-                                    placeholder="Enter your display name"
+                                    placeholder={copy.auth.displayNamePlaceholder}
                                 />
                             </FormControl>
                             <FormMessage />
@@ -92,11 +89,11 @@ export function NameChangeForm({ onCancel, onSuccess }: NameChangeFormProps) {
                             type="button"
                             variant="outline"
                         >
-                            Cancel
+                            {copy.action.cancel}
                         </Button>
                     )}
                     <FormSubmitButton size="sm">
-                        <span>Update Name</span>
+                        <span>{copy.auth.updateName}</span>
                     </FormSubmitButton>
                 </div>
             </form>

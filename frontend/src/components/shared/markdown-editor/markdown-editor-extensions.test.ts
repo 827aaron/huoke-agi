@@ -1338,15 +1338,15 @@ describe('a task checkbox is announced with its own text, not its subtree', () =
 
     it('a parent task does not absorb the text of its nested tasks', () => {
         expect(labelsFor('- [ ] task open\n- [x] task done\n    - [ ] nested open\n    - [x] nested done\n')).toEqual([
-            'Task item checkbox for task open',
-            'Task item checkbox for task done',
-            'Task item checkbox for nested open',
-            'Task item checkbox for nested done',
+            '任务项复选框：task open',
+            '任务项复选框：task done',
+            '任务项复选框：nested open',
+            '任务项复选框：nested done',
         ]);
     });
 
     it('an empty task still gets a name', () => {
-        expect(labelsFor('- [ ] \n')).toEqual(['Task item checkbox for empty task item']);
+        expect(labelsFor('- [ ] \n')).toEqual(['任务项复选框：空任务项']);
     });
 
     it.each([
@@ -1355,12 +1355,12 @@ describe('a task checkbox is announced with its own text, not its subtree', () =
             [{ text: 'foo', type: 'text' }, { type: 'hardBreak' }, { text: 'bar', type: 'text' }],
             'foo\nbar',
         ],
-        ['nothing but a hard break', [{ type: 'hardBreak' }], 'empty task item'],
+        ['nothing but a hard break', [{ type: 'hardBreak' }], '空任务项'],
     ])('a task holding %s is named by its text', (_name, inline, label) => {
         const task = { attrs: { checked: false }, content: [{ content: inline, type: 'paragraph' }], type: 'taskItem' };
 
         expect(labelsFor({ content: [{ content: [task], type: 'taskList' }], type: 'doc' })).toEqual([
-            `Task item checkbox for ${label}`,
+            `任务项复选框：${label}`,
         ]);
     });
 });

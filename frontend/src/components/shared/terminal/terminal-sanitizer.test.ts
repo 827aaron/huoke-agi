@@ -394,7 +394,7 @@ describe('sanitizeTerminalOutput', () => {
         });
 
         it('strips NUL via binary detection', () => {
-            expect(processLog('x\x00y')).toBe('[binary data]');
+            expect(processLog('x\x00y')).toBe('[二进制数据]');
         });
 
         it('strips BEL', () => {
@@ -474,34 +474,34 @@ describe('sanitizeTerminalOutput', () => {
 
     describe('binary content detection', () => {
         it('detects null byte as binary', () => {
-            expect(processLog('text\x00more')).toBe('[binary data]');
+            expect(processLog('text\x00more')).toBe('[二进制数据]');
         });
 
         it('detects lone surrogates as binary', () => {
             const input = 'A'.repeat(100) + '\uD800' + 'B'.repeat(100);
 
-            expect(processLog(input)).toBe('[binary data]');
+            expect(processLog(input)).toBe('[二进制数据]');
         });
 
         it('detects high control char density as binary', () => {
             const input = Array.from({ length: 100 }, (_, i) => String.fromCharCode(i < 15 ? 0x01 + i : 0x41)).join('');
 
-            expect(processLog(input)).toBe('[binary data]');
+            expect(processLog(input)).toBe('[二进制数据]');
         });
 
         it('does not false-positive on short strings with BEL', () => {
-            expect(processLog('\x1b]8;;\x07')).not.toBe('[binary data]');
+            expect(processLog('\x1b]8;;\x07')).not.toBe('[二进制数据]');
         });
 
         it('does not false-positive on short strings without null', () => {
-            expect(processLog('\x07\x08\x01')).not.toBe('[binary data]');
+            expect(processLog('\x07\x08\x01')).not.toBe('[二进制数据]');
         });
 
         it('passes through valid content after 512-byte sample window', () => {
             const input = 'A'.repeat(600) + '\x90';
             const out = processLog(input);
 
-            expect(out).not.toBe('[binary data]');
+            expect(out).not.toBe('[二进制数据]');
             expect(hasC1(out)).toBe(false);
         });
     });

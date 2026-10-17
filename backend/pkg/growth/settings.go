@@ -24,6 +24,7 @@ import (
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
 	"pentagi/pkg/growth/connectors"
+	"pentagi/pkg/growth/screening"
 	"pentagi/pkg/providers/embeddings"
 	"pentagi/pkg/system"
 
@@ -38,6 +39,7 @@ const (
 	SettingEmail     = "email"
 	SettingProxy     = "proxy"
 	SettingEmbedding = "embedding"
+	SettingScreening = "screening"
 
 	SettingStatusUntested  = "untested"
 	SettingStatusConnected = "connected"
@@ -62,11 +64,16 @@ type settingField struct {
 	list bool
 	// mask replaces maskSecret for a secret whose shape the page needs to show.
 	mask func(string) string
+	// def is what an empty field means; the page is shown it so it can be edited.
+	def string
 }
 
 type settingSpec struct {
 	providers []string
-	fields    []settingField
+	// defaultProvider is what an empty provider means, so rows saved before a kind had
+	// providers keep working.
+	defaultProvider string
+	fields          []settingField
 	// apply copies the stored values onto cfg; values hold every field, empty when unset.
 	apply func(cfg *config.Config, provider string, values map[string]string)
 }
@@ -154,10 +161,10 @@ var settingSpecs = map[string]settingSpec{
 		},
 	},
 	SettingTelegram: {
-		fields: []settingField{
+		fields: append([]settingField{
 			{name: "api_id", required: true},
 			{name: "api_hash", secret: true, required: true},
-		},
+		}, paceFields...),
 		apply: func(c *config.Config, _ string, v map[string]string) {
 			c.TGAPIID, _ = strconv.Atoi(v["api_id"])
 			c.TGAPIHash = v["api_hash"]
@@ -182,18 +189,22 @@ var settingSpecs = map[string]settingSpec{
 			}
 		},
 	},
-	// notify_emails is a comma-separated list; empty means the owner's login address.
+	// notify_emails is a comma-separated list; empty means the owner's login address. With
+	// no host the server is the platform's SMTP_* from .env, so a customer gives only that.
 	SettingEmail: {
 		fields: []settingField{
-			{name: "host", required: true},
+			{name: "host"},
 			{name: "port"},
 			{name: "username"},
 			{name: "password", secret: true},
-			{name: "from", required: true},
+			{name: "from"},
 			{name: "tls"},
 			{name: "notify_emails"},
 		},
 		apply: func(c *config.Config, _ string, v map[string]string) {
+			if v["host"] == "" {
+				return
+			}
 			c.SMTPHost = v["host"]
 			if port, err := strconv.Atoi(v["port"]); err == nil {
 				c.SMTPPort = port
@@ -203,6 +214,28 @@ var settingSpecs = map[string]settingSpec{
 			c.SMTPFrom = v["from"]
 			if v["tls"] != "" {
 				c.SMTPTLS = v["tls"]
+			}
+		},
+	},
+	// The Jev pre-screen of synced messages; threshold is the yes probability a message
+	// needs to reach scoring. api_key is a TypeSafe or an OpenRouter key by provider; an
+	// empty model is the newest Jev.
+	SettingScreening: {
+		providers:       []string{screeningCustom, screeningOpenRouter, screeningTypeSafe},
+		defaultProvider: screeningTypeSafe,
+		fields: []settingField{
+			{name: "api_key", secret: true, required: true},
+			{name: "threshold", def: "0.6"},
+			{name: "api_url"},
+			{name: "model"},
+		},
+		apply: func(c *config.Config, provider string, v map[string]string) {
+			if v["api_key"] != "" {
+				c.TypeSafeAPIKey = v["api_key"]
+			}
+			c.TypeSafeAPIURL, c.TypeSafeModel = v["api_url"], v["model"]
+			if provider == screeningOpenRouter && c.TypeSafeAPIURL == "" {
+				c.TypeSafeAPIURL = screening.OpenRouterURL
 			}
 		},
 	},
@@ -218,6 +251,7 @@ var settingSpecs = map[string]settingSpec{
 // settingKinds is also the order ConfigFor applies saved settings in.
 var settingKinds = []string{
 	SettingLLM, SettingEmbedding, SettingTelegram, SettingYouTube, SettingWebSearch, SettingEmail, SettingProxy,
+	SettingScreening,
 }
 
 // embeddingProviders are the EMBEDDING_PROVIDER values PentAGI's embedder implements.
@@ -251,8 +285,13 @@ type SettingView struct {
 	Source       string            `json:"source"`
 	Status       string            `json:"status"`
 	StatusReason string            `json:"status_reason,omitempty"`
-	TestedAt     *time.Time        `json:"tested_at,omitempty"`
-	UpdatedAt    *time.Time        `json:"updated_at,omitempty"`
+	// Configured is false while nothing, saved or in .env, sets this kind.
+	Configured bool `json:"configured"`
+	// PlatformSMTP, on the email kind only, says .env carries an SMTP server, so the
+	// customer needs to give only the recipients.
+	PlatformSMTP *bool      `json:"platform_smtp,omitempty"`
+	TestedAt     *time.Time `json:"tested_at,omitempty"`
+	UpdatedAt    *time.Time `json:"updated_at,omitempty"`
 }
 
 type storedSetting struct {
@@ -321,6 +360,9 @@ func (s *Service) open(row database.GrowthSetting) (storedSetting, error) {
 	if err := json.Unmarshal(plain, &v); err != nil {
 		return v, fmt.Errorf("stored %s credential is corrupt: %w", row.Kind, err)
 	}
+	if v.Provider == "" {
+		v.Provider = settingSpecs[row.Kind].defaultProvider
+	}
 	return v, nil
 }
 
@@ -337,6 +379,9 @@ func (s *Service) SaveSetting(
 		return SettingView{}, fmt.Errorf("%w: unknown kind %q", ErrInvalidSetting, kind)
 	}
 	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "" {
+		provider = spec.defaultProvider
+	}
 	if len(spec.providers) == 0 {
 		provider = ""
 	} else if !slices.Contains(spec.providers, provider) {
@@ -358,6 +403,14 @@ func (s *Service) SaveSetting(
 		return SettingView{}, fmt.Errorf("failed to load %s setting: %w", kind, err)
 	}
 
+	// An empty host is the one empty value that is not "keep": the customer goes back to
+	// the platform's server, so the fields of their own go with it.
+	if host, ok := values["host"]; ok && kind == SettingEmail && strings.TrimSpace(host) == "" {
+		for _, f := range []string{"host", "port", "username", "password", "from", "tls"} {
+			delete(merged, f)
+		}
+	}
+	prevCredential := merged["api_id"] + "\x00" + merged["api_hash"]
 	for name, value := range values {
 		if !slices.ContainsFunc(spec.fields, func(f settingField) bool { return f.name == name }) {
 			return SettingView{}, fmt.Errorf("%w: %s has no field %q", ErrInvalidSetting, kind, name)
@@ -389,10 +442,11 @@ func (s *Service) SaveSetting(
 	if err != nil {
 		return SettingView{}, fmt.Errorf("failed to store %s setting: %w", kind, err)
 	}
-	if kind == SettingTelegram || kind == SettingProxy {
+	// A pace change alone leaves the signed-in Telegram clients running.
+	if kind == SettingProxy || (kind == SettingTelegram && merged["api_id"]+"\x00"+merged["api_hash"] != prevCredential) {
 		s.dropUserConnectors(ctx, userID)
 	}
-	return settingView(row, spec, provider, merged), nil
+	return s.settingView(row, spec, provider, merged), nil
 }
 
 func validateSetting(kind, provider string, v map[string]string) error {
@@ -403,6 +457,9 @@ func validateSetting(kind, provider string, v map[string]string) error {
 		}
 		if !telegramHash.MatchString(v["api_hash"]) {
 			return fmt.Errorf("%w: api_hash must be the 32-character hex string from my.telegram.org", ErrInvalidSetting)
+		}
+		if _, err := parseTelegramPace(v); err != nil {
+			return err
 		}
 	case SettingWebSearch:
 		if provider == "google" && v["cx"] == "" {
@@ -417,7 +474,13 @@ func validateSetting(kind, provider string, v map[string]string) error {
 		if t := v["tls"]; t != "" && !slices.Contains([]string{smtpStartTLS, smtpImplicitTLS, smtpNoTLS}, t) {
 			return fmt.Errorf("%w: tls must be %s, %s or %s", ErrInvalidSetting, smtpStartTLS, smtpImplicitTLS, smtpNoTLS)
 		}
-		if _, err := mail.ParseAddress(v["from"]); err != nil {
+		if v["host"] == "" {
+			for _, f := range []string{"port", "username", "password", "from", "tls"} {
+				if v[f] != "" {
+					return fmt.Errorf("%w: %s applies only to your own server, which needs host", ErrInvalidSetting, f)
+				}
+			}
+		} else if _, err := mail.ParseAddress(v["from"]); err != nil {
 			return fmt.Errorf("%w: from is not an email address: %v", ErrInvalidSetting, err)
 		}
 		if _, err := parseRecipients(v["notify_emails"]); err != nil {
@@ -426,6 +489,13 @@ func validateSetting(kind, provider string, v map[string]string) error {
 	case SettingProxy:
 		if _, err := parseProxyURL(v["url"]); err != nil {
 			return err
+		}
+	case SettingScreening:
+		if _, err := parseScreening(v); err != nil {
+			return err
+		}
+		if provider == screeningCustom && v["api_url"] == "" {
+			return fmt.Errorf("%w: a custom Jev endpoint needs api_url", ErrInvalidSetting)
 		}
 	case SettingLLM:
 		if p := v["protocol"]; p != "" && (provider != "custom" || (p != llmProtocolOpenAI && p != llmProtocolAnthropic)) {
@@ -436,13 +506,17 @@ func validateSetting(kind, provider string, v map[string]string) error {
 			return fmt.Errorf("%w: a custom endpoint needs server_url", ErrInvalidSetting)
 		}
 	}
-	if raw := v["server_url"]; raw != "" {
-		u, err := url.Parse(raw)
-		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return fmt.Errorf("%w: server_url must be an http(s) URL", ErrInvalidSetting)
+	for _, name := range []string{"server_url", "api_url"} {
+		if raw := v[name]; raw != "" && !isHTTPURL(raw) {
+			return fmt.Errorf("%w: %s must be an http(s) URL", ErrInvalidSetting, name)
 		}
 	}
 	return nil
+}
+
+func isHTTPURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
 var telegramHash = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
@@ -492,29 +566,38 @@ func (s *Service) ListSettings(ctx context.Context, userID int64) ([]SettingView
 		}
 		stored, err := s.open(row)
 		if err != nil {
-			v := settingView(row, spec, row.Provider, nil)
+			v := s.settingView(row, spec, row.Provider, nil)
 			v.Status, v.StatusReason = SettingStatusInvalid, err.Error()
 			views = append(views, v)
 			continue
 		}
-		views = append(views, settingView(row, spec, stored.Provider, stored.Values))
+		views = append(views, s.settingView(row, spec, stored.Provider, stored.Values))
 	}
 	return views, nil
 }
 
-func settingView(row database.GrowthSetting, spec settingSpec, provider string, values map[string]string) SettingView {
+func (s *Service) settingView(row database.GrowthSetting, spec settingSpec, provider string, values map[string]string) SettingView {
 	v := SettingView{
 		Kind:         row.Kind,
 		Provider:     provider,
 		Providers:    spec.providers,
 		Fields:       maskFields(spec, values),
 		Source:       SettingSourceDatabase,
+		Configured:   true,
 		Status:       row.Status,
 		StatusReason: row.StatusReason,
 		TestedAt:     nullTime(row.TestedAt.Time, row.TestedAt.Valid),
 		UpdatedAt:    nullTime(row.UpdatedAt.Time, row.UpdatedAt.Valid),
 	}
+	s.markPlatformSMTP(&v)
 	return v
+}
+
+func (s *Service) markPlatformSMTP(v *SettingView) {
+	if v.Kind == SettingEmail {
+		platform := s.cfg.SMTPHost != ""
+		v.PlatformSMTP = &platform
+	}
 }
 
 func maskFields(spec settingSpec, values map[string]string) map[string]string {
@@ -522,7 +605,9 @@ func maskFields(spec settingSpec, values map[string]string) map[string]string {
 	for _, f := range spec.fields {
 		v := values[f.name]
 		switch {
-		case !f.secret || v == "":
+		case v == "":
+			v = f.def
+		case !f.secret:
 		case f.mask != nil:
 			v = f.mask(v)
 		case f.list:
@@ -554,8 +639,9 @@ func (s *Service) envView(kind string, spec settingSpec) SettingView {
 	v.Fields = maskFields(spec, values)
 	if values["api_key"] != "" || values["api_keys"] != "" || values["api_hash"] != "" ||
 		values["host"] != "" || values["url"] != "" || (kind == SettingEmbedding && provider != "") {
-		v.Source, v.Provider = SettingSourceEnv, provider
+		v.Source, v.Provider, v.Configured = SettingSourceEnv, provider, true
 	}
+	s.markPlatformSMTP(&v)
 	return v
 }
 
@@ -582,6 +668,10 @@ func envValues(cfg *config.Config, kind string) (string, map[string]string) {
 		return "", map[string]string{"api_keys": strings.Join(cfg.YouTubeAPIKeys(), ",")}
 	case SettingProxy:
 		return "", map[string]string{"url": cfg.GrowthProxyURL}
+	case SettingScreening:
+		return screeningProviderOf(cfg.TypeSafeAPIURL), map[string]string{
+			"api_key": cfg.TypeSafeAPIKey, "api_url": cfg.TypeSafeAPIURL, "model": cfg.TypeSafeModel,
+		}
 	case SettingEmbedding:
 		return cfg.EmbeddingProvider, map[string]string{
 			"api_key": cfg.EmbeddingKey, "model": cfg.EmbeddingModel, "server_url": cfg.EmbeddingURL,
@@ -718,7 +808,7 @@ func (s *Service) recordTest(
 	if provider == "" {
 		provider = row.Provider
 	}
-	return settingView(updated, spec, provider, values), nil
+	return s.settingView(updated, spec, provider, values), nil
 }
 
 func (s *Service) probe(ctx context.Context, cfg *config.Config, kind, provider string) (string, string) {
@@ -740,6 +830,9 @@ func (s *Service) probe(ctx context.Context, cfg *config.Config, kind, provider 
 	}
 	if kind == SettingEmbedding {
 		return probeEmbedding(ctx, cfg)
+	}
+	if kind == SettingScreening {
+		return probeScreening(ctx, cfg)
 	}
 	if kind == SettingProxy {
 		latency, err := checkProxy(ctx, cfg, cfg.GrowthProxyURL)

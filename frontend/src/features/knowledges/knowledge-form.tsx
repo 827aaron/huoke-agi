@@ -19,6 +19,7 @@ import { Form } from '@/components/ui/form';
 import { AnonymizeTextDocument, KnowledgeAnswerType, KnowledgeDocType, KnowledgeGuideType } from '@/graphql/types';
 import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { copy } from '@/lib/copy';
 import { Log } from '@/lib/log';
 import { useUser } from '@/providers/user-provider';
 
@@ -44,38 +45,38 @@ const optionalTrimmed = (max: number, label: string) =>
     z
         .string()
         .trim()
-        .refine(withinLimit(max), { message: `${label} must be ${max} characters or fewer` })
+        .refine(withinLimit(max), { message: copy.knowledge.tooLong(label, max) })
         .optional();
 
 export const formSchema = z
     .object({
         answerType: z.nativeEnum(KnowledgeAnswerType).optional(),
-        codeLang: optionalTrimmed(KNOWLEDGE_LIMITS.codeLang, 'Code language'),
+        codeLang: optionalTrimmed(KNOWLEDGE_LIMITS.codeLang, copy.knowledge.codeLang),
         // The body is a document: it is sent as it was written, the line break it ends with included, and the
         // limit counts all of it, as the endpoint does.
         content: z
             .string()
-            .refine((value) => value.trim() !== '', { message: 'Content is required' })
+            .refine((value) => value.trim() !== '', { message: copy.knowledge.contentRequired })
             .refine(withinLimit(KNOWLEDGE_LIMITS.content), {
-                message: `Content must be ${KNOWLEDGE_LIMITS.content} characters or fewer`,
+                message: copy.knowledge.tooLong(copy.knowledge.content, KNOWLEDGE_LIMITS.content),
             }),
-        description: optionalTrimmed(KNOWLEDGE_LIMITS.description, 'Description'),
+        description: optionalTrimmed(KNOWLEDGE_LIMITS.description, copy.knowledge.description),
         docType: z.nativeEnum(KnowledgeDocType),
         guideType: z.nativeEnum(KnowledgeGuideType).optional(),
         question: z
             .string()
             .trim()
-            .min(1, { message: 'Question is required' })
+            .min(1, { message: copy.knowledge.questionRequired })
             .refine(withinLimit(KNOWLEDGE_LIMITS.question), {
-                message: `Question must be ${KNOWLEDGE_LIMITS.question} characters or fewer`,
+                message: copy.knowledge.tooLong(copy.knowledge.question, KNOWLEDGE_LIMITS.question),
             }),
     })
     .superRefine((value, ctx) => {
         const requiredByDocType: Partial<Record<KnowledgeDocType, { field: FieldPath<FormValues>; message: string }>> =
             {
-                [KnowledgeDocType.Answer]: { field: 'answerType', message: 'Answer type is required' },
-                [KnowledgeDocType.Code]: { field: 'codeLang', message: 'Code language is required' },
-                [KnowledgeDocType.Guide]: { field: 'guideType', message: 'Guide type is required' },
+                [KnowledgeDocType.Answer]: { field: 'answerType', message: copy.knowledge.answerTypeRequired },
+                [KnowledgeDocType.Code]: { field: 'codeLang', message: copy.knowledge.codeLangRequired },
+                [KnowledgeDocType.Guide]: { field: 'guideType', message: copy.knowledge.guideTypeRequired },
             };
 
         const rule = requiredByDocType[value.docType];
@@ -323,7 +324,7 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
         <AppHeaderAction
             disabled={!canSubmit}
             icon={<Save aria-hidden="true" />}
-            label={isNew ? 'Create' : 'Save'}
+            label={isNew ? copy.action.create : copy.action.save}
             loading={isSaving}
             type="submit"
         />
@@ -343,22 +344,22 @@ export function KnowledgeForm({ initialValues, isNew, knowledge, onSubmit }: Kno
             const anonymizedContent = data?.anonymizeText;
 
             if (anonymizedContent == null) {
-                toast.error('Anonymizer returned no result');
+                toast.error(copy.knowledge.anonymizeNoResult);
 
                 return;
             }
 
             if (anonymizedContent === currentContent) {
-                toast.info('No sensitive data detected');
+                toast.info(copy.knowledge.noSensitive);
 
                 return;
             }
 
             form.setValue('content', anonymizedContent, { shouldDirty: true });
-            toast.success('Content anonymized');
+            toast.success(copy.knowledge.anonymized);
         } catch (error) {
             Log.error('Failed to anonymize content', error);
-            toast.error(error instanceof Error ? error.message : 'Failed to anonymize content');
+            toast.error(error instanceof Error ? error.message : copy.knowledge.anonymizeFailed);
         } finally {
             setIsAnonymizing(false);
         }

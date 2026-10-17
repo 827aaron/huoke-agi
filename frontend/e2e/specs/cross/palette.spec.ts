@@ -58,7 +58,7 @@ const SANCTIONED_VARIANTS = [
 const ACCEPTED: Record<string, string[]> = {
     // file-manager.tsx expand-all control, on /resources and embedded in the flow Files tab.
     '/resources': ['button: hover:text-blue-400'],
-    [`${routes.flow('5')} [Files]`]: ['button: hover:text-blue-400'],
+    [`${routes.flow('5')} [文件]`]: ['button: hover:text-blue-400'],
 };
 
 const scanOffenders = (page: Page) =>

@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import FlowAgentIcon from '@/features/flows/agents/flow-agent-icon';
 import { VectorStoreAction } from '@/graphql/types';
 import { copyMessageToClipboard } from '@/lib/clipboard';
+import { copy } from '@/lib/copy';
 import { matchesSearchTerm } from '@/lib/text-filter';
 import { formatDate } from '@/lib/utils/format';
 
@@ -23,35 +24,14 @@ const getDescription = (log: VectorStoreLogFragmentFragment) => {
         tool_name: toolName,
     } = JSON.parse(filter) || {};
 
-    let description = '';
-    const prefix = action === VectorStoreAction.Store ? 'Stored' : 'Retrieved';
-    const preposition = action === VectorStoreAction.Store ? 'in' : 'from';
-
-    if (docType) {
-        if (docType === 'memory') {
-            description += `${prefix} ${preposition} memory`;
-        } else {
-            description += `${prefix} ${docType}`;
-        }
-    }
-
-    if (codeLang) {
-        description += `${description ? ' on' : 'On'} ${codeLang} language`;
-    }
-
-    if (toolName) {
-        description += `${description ? ' by' : 'By'} ${toolName} tool`;
-    }
-
-    if (guideType) {
-        description += `${description ? ' about' : 'About'} ${guideType}`;
-    }
-
-    if (answerType) {
-        description += `${description ? ' as' : 'As'} a ${answerType}`;
-    }
-
-    return description;
+    return copy.flowLogs.vectorDescription({
+        answerType,
+        codeLang,
+        docType,
+        guideType,
+        stored: action === VectorStoreAction.Store,
+        toolName,
+    });
 };
 
 interface FlowVectorStoreProps {
@@ -127,7 +107,7 @@ function FlowVectorStore({ log, searchValue = '' }: FlowVectorStoreProps) {
                             className="cursor-pointer"
                             onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                         >
-                            {isDetailsVisible ? 'Hide details' : 'Show details'}
+                            {isDetailsVisible ? copy.message.hideDetails : copy.message.showDetails}
                         </div>
                         {isDetailsVisible && (
                             <>
@@ -162,19 +142,19 @@ function FlowVectorStore({ log, searchValue = '' }: FlowVectorStoreProps) {
                             onClick={handleCopy}
                         />
                     </TooltipTrigger>
-                    <TooltipContent>Copy</TooltipContent>
+                    <TooltipContent>{copy.action.copy}</TooltipContent>
                 </Tooltip>
                 <span className="text-muted-foreground/50">{formatDate(new Date(createdAt))}</span>
                 {taskId && (
                     <>
                         <span className="text-muted-foreground/50">|</span>
-                        <span className="text-muted-foreground/50">Task ID: {taskId}</span>
+                        <span className="text-muted-foreground/50">{copy.flowLogs.taskId(taskId)}</span>
                     </>
                 )}
                 {subtaskId && (
                     <>
                         <span className="text-muted-foreground/50">|</span>
-                        <span className="text-muted-foreground/50">Subtask ID: {subtaskId}</span>
+                        <span className="text-muted-foreground/50">{copy.flowLogs.subtaskId(subtaskId)}</span>
                     </>
                 )}
             </div>

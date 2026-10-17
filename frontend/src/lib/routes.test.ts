@@ -17,6 +17,7 @@ const builtUrlToPattern: [string, string][] = [
     [routes.newKnowledge, '/knowledges/:knowledgeId'],
     [routes.knowledge('k1'), '/knowledges/:knowledgeId'],
     [routes.resources, '/resources'],
+    [routes.help.keys, '/help/keys'],
     [routes.settings.root, '/settings'],
     [routes.settings.account, '/settings/account'],
     [routes.settings.providers, '/settings/providers'],

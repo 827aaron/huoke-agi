@@ -49,7 +49,7 @@ test.describe('session expiry', { tag: '@cross' }, () => {
             await page.goto('/resources');
 
             await expect(page).toHaveURL(/\/login\?returnUrl=%2Fresources/);
-            await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+            await expect(page.getByRole('button', { exact: true, name: '登录' })).toBeVisible();
             // The login page's own /info rewrites the key, so only the identity inside it matters.
             expect(await storedUser(page), 'the expired identity must not survive in storage').toBeNull();
 
@@ -81,7 +81,7 @@ test.describe('session expiry', { tag: '@cross' }, () => {
             await page.goto('/flows');
 
             await expect(page).toHaveURL(/\/login\?returnUrl=%2Fflows/);
-            await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+            await expect(page.getByRole('button', { exact: true, name: '登录' })).toBeVisible();
         });
     });
 
@@ -104,7 +104,7 @@ test.describe('session expiry', { tag: '@cross' }, () => {
             await page.goto('/flows');
 
             await expect(page).toHaveURL(/\/login\?returnUrl=%2Fflows/);
-            await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+            await expect(page.getByRole('button', { exact: true, name: '登录' })).toBeVisible();
         });
     });
 

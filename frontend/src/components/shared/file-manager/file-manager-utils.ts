@@ -15,6 +15,8 @@ import {
 } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 
+import { copy } from '@/lib/copy';
+
 import type {
     FileManagerInternalNode,
     FileManagerRootGroup,
@@ -64,30 +66,30 @@ export const formatModifiedRelative = (modifiedAt?: Date | string): string => {
     const years = differenceInYears(now, date);
 
     if (seconds < 60 || !minutes) {
-        return 'just now';
+        return copy.fileManager.ago.justNow;
     }
 
     if (minutes < 60 || !hours) {
-        return `${minutes}m ago`;
+        return copy.fileManager.ago.minutes(minutes);
     }
 
     if (hours < 24 || !days) {
-        return `${hours}h ago`;
+        return copy.fileManager.ago.hours(hours);
     }
 
     if (days < 7 || !weeks) {
-        return `${days}d ago`;
+        return copy.fileManager.ago.days(days);
     }
 
     if (weeks < 4 || !months) {
-        return `${weeks}w ago`;
+        return copy.fileManager.ago.weeks(weeks);
     }
 
     if (months < 12 || !years) {
-        return `${months}mo ago`;
+        return copy.fileManager.ago.months(months);
     }
 
-    return `${years}y ago`;
+    return copy.fileManager.ago.years(years);
 };
 
 /**

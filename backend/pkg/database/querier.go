@@ -15,13 +15,13 @@ type Querier interface {
 	CountActiveFlows(ctx context.Context) (int64, error)
 	CountAssistants(ctx context.Context) (int64, error)
 	CountContainers(ctx context.Context) (int64, error)
-	CountFlowLeads(ctx context.Context, arg CountFlowLeadsParams) (CountFlowLeadsRow, error)
 	CountFlowTemplates(ctx context.Context) (int64, error)
 	CountFlows(ctx context.Context) (int64, error)
 	CountPrompts(ctx context.Context) (int64, error)
 	CountSubtasks(ctx context.Context) (int64, error)
 	CountTasks(ctx context.Context) (int64, error)
 	CountToolcalls(ctx context.Context) (int64, error)
+	CountUserLeads(ctx context.Context, arg CountUserLeadsParams) (CountUserLeadsRow, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) (ApiToken, error)
 	CreateAgentLog(ctx context.Context, arg CreateAgentLogParams) (Agentlog, error)
@@ -150,6 +150,7 @@ type Querier interface {
 	GetKnowledgeDocument(ctx context.Context, uuid string) (GetKnowledgeDocumentRow, error)
 	GetLeadByPlatformUser(ctx context.Context, arg GetLeadByPlatformUserParams) (Lead, error)
 	GetLeadsEvidence(ctx context.Context, leadIds []int64) ([]LeadEvidence, error)
+	GetMessageScores(ctx context.Context, arg GetMessageScoresParams) ([]GrowthMessageScore, error)
 	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)
 	// Get all msgchains for a flow (including task and subtask level)
 	GetMsgchainsForFlow(ctx context.Context, flowID int64) ([]GetMsgchainsForFlowRow, error)
@@ -213,7 +214,8 @@ type Querier interface {
 	// Get toolcalls stats grouped by function name for a specific flow
 	GetToolcallsStatsByFunctionForFlow(ctx context.Context, flowID int64) ([]GetToolcallsStatsByFunctionForFlowRow, error)
 	// Accounts that may take a call now or after their rate limit ends; joined_source tells
-	// whether the account already joined source_id (0 matches none).
+	// whether the account already joined source_id (0 matches none). The join columns count
+	// the joins of the last 24 hours, all and through invite links.
 	GetUsableChannelAccounts(ctx context.Context, arg GetUsableChannelAccountsParams) ([]GetUsableChannelAccountsRow, error)
 	// One dense row per calendar day in the caller's timezone, zeros included.
 	GetUsageStatsByDay(ctx context.Context, arg GetUsageStatsByDayParams) ([]GetUsageStatsByDayRow, error)
@@ -226,6 +228,9 @@ type Querier interface {
 	GetUserAPIToken(ctx context.Context, arg GetUserAPITokenParams) (ApiToken, error)
 	GetUserAPITokenByTokenID(ctx context.Context, arg GetUserAPITokenByTokenIDParams) (ApiToken, error)
 	GetUserAPITokens(ctx context.Context, userID int64) ([]ApiToken, error)
+	// Per account: the sources joined or awaiting approval, and the joins of the last 24 hours,
+	// all and through invite links.
+	GetUserAccountJoinCounts(ctx context.Context, userID int64) ([]GetUserAccountJoinCountsRow, error)
 	GetUserAccountSources(ctx context.Context, userID int64) ([]AccountSource, error)
 	GetUserByHash(ctx context.Context, hash string) (GetUserByHashRow, error)
 	GetUserChannelAccount(ctx context.Context, arg GetUserChannelAccountParams) (ChannelAccount, error)
@@ -290,6 +295,7 @@ type Querier interface {
 	ListFlowKnowledgeDocuments(ctx context.Context, flowID sql.NullString) ([]ListFlowKnowledgeDocumentsRow, error)
 	// List all non-memory knowledge documents owned by a specific user (user-scoped view).
 	ListUserKnowledgeDocuments(ctx context.Context, userID sql.NullString) ([]ListUserKnowledgeDocumentsRow, error)
+	MarkChannelAccountSignedIn(ctx context.Context, id int64) (ChannelAccount, error)
 	MarkChannelAccountUsed(ctx context.Context, id int64) error
 	MarkLeadsDelivered(ctx context.Context, arg MarkLeadsDeliveredParams) ([]Lead, error)
 	RecordChannelAccountError(ctx context.Context, arg RecordChannelAccountErrorParams) error
@@ -301,6 +307,7 @@ type Querier interface {
 	ResolveGrowthSource(ctx context.Context, arg ResolveGrowthSourceParams) (GrowthSource, error)
 	SaveAssistantLog(ctx context.Context, arg SaveAssistantLogParams) error
 	SaveAssistantLogContent(ctx context.Context, arg SaveAssistantLogContentParams) error
+	ScheduleChannelAccountJoin(ctx context.Context, arg ScheduleChannelAccountJoinParams) error
 	// Vector similarity search over all knowledge documents (admin view, no user filter).
 	// Returns rows ordered by cosine similarity descending (highest score first).
 	// embedding    query vector as a PostgreSQL vector literal, e.g. '[0.1,0.2,...]'
@@ -399,6 +406,7 @@ type Querier interface {
 	UpsertGrowthSetting(ctx context.Context, arg UpsertGrowthSettingParams) (GrowthSetting, error)
 	UpsertGrowthSource(ctx context.Context, arg UpsertGrowthSourceParams) (UpsertGrowthSourceRow, error)
 	UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, error)
+	UpsertMessageScore(ctx context.Context, arg UpsertMessageScoreParams) error
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
 	UpsertUserResourceFile(ctx context.Context, arg UpsertUserResourceFileParams) (UserResource, error)
 }

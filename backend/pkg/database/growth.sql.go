@@ -15,29 +15,32 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
-const countFlowLeads = `-- name: CountFlowLeads :one
+const countUserLeads = `-- name: CountUserLeads :one
 SELECT
   COUNT(*) FILTER (WHERE tier = 'qualified' AND delivered_at IS NULL)::bigint AS deliverable,
   COUNT(*) FILTER (WHERE tier = 'watchlist' AND delivered_at IS NULL)::bigint AS watchlist,
   COUNT(*) FILTER (WHERE delivered_at IS NOT NULL)::bigint AS delivered
 FROM leads
-WHERE user_id = $1 AND last_flow_id = $2
+WHERE user_id = $1
+  AND ($2::bigint IS NULL OR last_flow_id = $2::bigint)
+  AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)
 `
 
-type CountFlowLeadsParams struct {
+type CountUserLeadsParams struct {
 	UserID int64         `json:"user_id"`
 	FlowID sql.NullInt64 `json:"flow_id"`
+	Since  sql.NullTime  `json:"since"`
 }
 
-type CountFlowLeadsRow struct {
+type CountUserLeadsRow struct {
 	Deliverable int64 `json:"deliverable"`
 	Watchlist   int64 `json:"watchlist"`
 	Delivered   int64 `json:"delivered"`
 }
 
-func (q *Queries) CountFlowLeads(ctx context.Context, arg CountFlowLeadsParams) (CountFlowLeadsRow, error) {
-	row := q.db.QueryRowContext(ctx, countFlowLeads, arg.UserID, arg.FlowID)
-	var i CountFlowLeadsRow
+func (q *Queries) CountUserLeads(ctx context.Context, arg CountUserLeadsParams) (CountUserLeadsRow, error) {
+	row := q.db.QueryRowContext(ctx, countUserLeads, arg.UserID, arg.FlowID, arg.Since)
+	var i CountUserLeadsRow
 	err := row.Scan(&i.Deliverable, &i.Watchlist, &i.Delivered)
 	return i, err
 }
@@ -160,7 +163,7 @@ func (q *Queries) EnsureGrowthRun(ctx context.Context, arg EnsureGrowthRunParams
 }
 
 const getAccountSource = `-- name: GetAccountSource :one
-SELECT id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at FROM account_sources WHERE account_id = $1 AND source_id = $2
+SELECT id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at, join_attempted_at, private_join FROM account_sources WHERE account_id = $1 AND source_id = $2
 `
 
 type GetAccountSourceParams struct {
@@ -186,12 +189,14 @@ func (q *Queries) GetAccountSource(ctx context.Context, arg GetAccountSourcePara
 		&i.SyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.JoinAttemptedAt,
+		&i.PrivateJoin,
 	)
 	return i, err
 }
 
 const getChannelAccount = `-- name: GetChannelAccount :one
-SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at FROM channel_accounts WHERE id = $1
+SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at FROM channel_accounts WHERE id = $1
 `
 
 func (q *Queries) GetChannelAccount(ctx context.Context, id int64) (ChannelAccount, error) {
@@ -218,6 +223,8 @@ func (q *Queries) GetChannelAccount(ctx context.Context, id int64) (ChannelAccou
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }
@@ -234,21 +241,28 @@ func (q *Queries) GetChannelAccountSession(ctx context.Context, id int64) ([]byt
 }
 
 const getDeliverableLeads = `-- name: GetDeliverableLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads
 WHERE user_id = $1 AND last_flow_id = $2
   AND tier = 'qualified' AND delivered_at IS NULL
+  AND (NOT $3::boolean OR jsonb_array_length(contacts) > 0)
 ORDER BY score DESC, id ASC
-LIMIT $3
+LIMIT $4
 `
 
 type GetDeliverableLeadsParams struct {
-	UserID int64         `json:"user_id"`
-	FlowID sql.NullInt64 `json:"flow_id"`
-	Lim    int64         `json:"lim"`
+	UserID     int64         `json:"user_id"`
+	FlowID     sql.NullInt64 `json:"flow_id"`
+	HasContact bool          `json:"has_contact"`
+	Lim        int64         `json:"lim"`
 }
 
 func (q *Queries) GetDeliverableLeads(ctx context.Context, arg GetDeliverableLeadsParams) ([]Lead, error) {
-	rows, err := q.db.QueryContext(ctx, getDeliverableLeads, arg.UserID, arg.FlowID, arg.Lim)
+	rows, err := q.db.QueryContext(ctx, getDeliverableLeads,
+		arg.UserID,
+		arg.FlowID,
+		arg.HasContact,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -275,6 +289,7 @@ func (q *Queries) GetDeliverableLeads(ctx context.Context, arg GetDeliverableLea
 			&i.DeliveredRunID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Contacts,
 		); err != nil {
 			return nil, err
 		}
@@ -439,7 +454,7 @@ func (q *Queries) GetGrowthSourceByKey(ctx context.Context, arg GetGrowthSourceB
 }
 
 const getLeadByPlatformUser = `-- name: GetLeadByPlatformUser :one
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads
 WHERE user_id = $1 AND platform = $2 AND platform_user_id = $3
 `
 
@@ -471,6 +486,7 @@ func (q *Queries) GetLeadByPlatformUser(ctx context.Context, arg GetLeadByPlatfo
 		&i.DeliveredRunID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Contacts,
 	)
 	return i, err
 }
@@ -517,8 +533,50 @@ func (q *Queries) GetLeadsEvidence(ctx context.Context, leadIds []int64) ([]Lead
 	return items, nil
 }
 
+const getMessageScores = `-- name: GetMessageScores :many
+SELECT id, user_id, source_id, message_id, score, signals, created_at FROM growth_message_scores
+WHERE user_id = $1 AND source_id = $2 AND message_id = ANY($3::text[])
+`
+
+type GetMessageScoresParams struct {
+	UserID     int64    `json:"user_id"`
+	SourceID   int64    `json:"source_id"`
+	MessageIds []string `json:"message_ids"`
+}
+
+func (q *Queries) GetMessageScores(ctx context.Context, arg GetMessageScoresParams) ([]GrowthMessageScore, error) {
+	rows, err := q.db.QueryContext(ctx, getMessageScores, arg.UserID, arg.SourceID, pq.Array(arg.MessageIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GrowthMessageScore
+	for rows.Next() {
+		var i GrowthMessageScore
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.SourceID,
+			&i.MessageID,
+			&i.Score,
+			&i.Signals,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRunDeliveredLeads = `-- name: GetRunDeliveredLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads WHERE delivered_run_id = $1 ORDER BY score DESC, id ASC
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads WHERE delivered_run_id = $1 ORDER BY score DESC, id ASC
 `
 
 func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64) ([]Lead, error) {
@@ -549,6 +607,7 @@ func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64)
 			&i.DeliveredRunID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Contacts,
 		); err != nil {
 			return nil, err
 		}
@@ -564,8 +623,15 @@ func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64)
 }
 
 const getUsableChannelAccounts = `-- name: GetUsableChannelAccounts :many
-SELECT ca.id, ca.user_id, ca.platform, ca.kind, ca.label, ca.external_id, ca.session, ca.profile_dir, ca.status, ca.last_used_at, ca.last_success_at, ca.last_rate_limited_at, ca.rate_limit_until, ca.consecutive_errors, ca.last_error, ca.proxy, ca.fingerprint, ca.external_browser_ws, ca.created_at, ca.updated_at, COALESCE(acs.join_status = 'joined', false)::boolean AS joined_source
+SELECT ca.id, ca.user_id, ca.platform, ca.kind, ca.label, ca.external_id, ca.session, ca.profile_dir, ca.status, ca.last_used_at, ca.last_success_at, ca.last_rate_limited_at, ca.rate_limit_until, ca.consecutive_errors, ca.last_error, ca.proxy, ca.fingerprint, ca.external_browser_ws, ca.created_at, ca.updated_at, ca.first_signed_in_at, ca.next_join_at, COALESCE(acs.join_status = 'joined', false)::boolean AS joined_source,
+  j.joins_24h, j.private_joins_24h
 FROM channel_accounts ca
+CROSS JOIN LATERAL (
+  SELECT count(*)::bigint AS joins_24h,
+    count(*) FILTER (WHERE a.private_join)::bigint AS private_joins_24h
+  FROM account_sources a
+  WHERE a.account_id = ca.id AND a.join_attempted_at > now() - interval '24 hours'
+) j
 LEFT JOIN account_sources acs ON acs.account_id = ca.id AND acs.source_id = $1
 WHERE ca.user_id = $2 AND ca.platform = $3
   AND ca.status IN ('active', 'rate_limited')
@@ -599,11 +665,16 @@ type GetUsableChannelAccountsRow struct {
 	ExternalBrowserWs []byte                `json:"external_browser_ws"`
 	CreatedAt         sql.NullTime          `json:"created_at"`
 	UpdatedAt         sql.NullTime          `json:"updated_at"`
+	FirstSignedInAt   sql.NullTime          `json:"first_signed_in_at"`
+	NextJoinAt        sql.NullTime          `json:"next_join_at"`
 	JoinedSource      bool                  `json:"joined_source"`
+	Joins24h          int64                 `json:"joins_24h"`
+	PrivateJoins24h   int64                 `json:"private_joins_24h"`
 }
 
 // Accounts that may take a call now or after their rate limit ends; joined_source tells
-// whether the account already joined source_id (0 matches none).
+// whether the account already joined source_id (0 matches none). The join columns count
+// the joins of the last 24 hours, all and through invite links.
 func (q *Queries) GetUsableChannelAccounts(ctx context.Context, arg GetUsableChannelAccountsParams) ([]GetUsableChannelAccountsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getUsableChannelAccounts, arg.SourceID, arg.UserID, arg.Platform)
 	if err != nil {
@@ -634,7 +705,65 @@ func (q *Queries) GetUsableChannelAccounts(ctx context.Context, arg GetUsableCha
 			&i.ExternalBrowserWs,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.FirstSignedInAt,
+			&i.NextJoinAt,
 			&i.JoinedSource,
+			&i.Joins24h,
+			&i.PrivateJoins24h,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserAccountJoinCounts = `-- name: GetUserAccountJoinCounts :many
+SELECT ca.id AS account_id, ca.platform, ca.label,
+  count(acs.id) FILTER (WHERE acs.join_status IN ('joined', 'pending'))::bigint AS joined,
+  count(acs.id) FILTER (WHERE acs.join_attempted_at > now() - interval '24 hours')::bigint AS joins_24h,
+  count(acs.id) FILTER (WHERE acs.join_attempted_at > now() - interval '24 hours' AND acs.private_join)::bigint
+    AS private_joins_24h
+FROM channel_accounts ca
+LEFT JOIN account_sources acs ON acs.account_id = ca.id
+WHERE ca.user_id = $1
+GROUP BY ca.id
+ORDER BY ca.id
+`
+
+type GetUserAccountJoinCountsRow struct {
+	AccountID       int64  `json:"account_id"`
+	Platform        string `json:"platform"`
+	Label           string `json:"label"`
+	Joined          int64  `json:"joined"`
+	Joins24h        int64  `json:"joins_24h"`
+	PrivateJoins24h int64  `json:"private_joins_24h"`
+}
+
+// Per account: the sources joined or awaiting approval, and the joins of the last 24 hours,
+// all and through invite links.
+func (q *Queries) GetUserAccountJoinCounts(ctx context.Context, userID int64) ([]GetUserAccountJoinCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserAccountJoinCounts, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserAccountJoinCountsRow
+	for rows.Next() {
+		var i GetUserAccountJoinCountsRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Platform,
+			&i.Label,
+			&i.Joined,
+			&i.Joins24h,
+			&i.PrivateJoins24h,
 		); err != nil {
 			return nil, err
 		}
@@ -650,7 +779,7 @@ func (q *Queries) GetUsableChannelAccounts(ctx context.Context, arg GetUsableCha
 }
 
 const getUserAccountSources = `-- name: GetUserAccountSources :many
-SELECT acs.id, acs.account_id, acs.source_id, acs.peer, acs.join_status, acs.join_error, acs.newest_message_id, acs.oldest_message_id, acs.history_exhausted, acs.messages_read, acs.joined_at, acs.synced_at, acs.created_at, acs.updated_at
+SELECT acs.id, acs.account_id, acs.source_id, acs.peer, acs.join_status, acs.join_error, acs.newest_message_id, acs.oldest_message_id, acs.history_exhausted, acs.messages_read, acs.joined_at, acs.synced_at, acs.created_at, acs.updated_at, acs.join_attempted_at, acs.private_join
 FROM account_sources acs
 JOIN channel_accounts ga ON ga.id = acs.account_id
 WHERE ga.user_id = $1
@@ -681,6 +810,8 @@ func (q *Queries) GetUserAccountSources(ctx context.Context, userID int64) ([]Ac
 			&i.SyncedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.JoinAttemptedAt,
+			&i.PrivateJoin,
 		); err != nil {
 			return nil, err
 		}
@@ -696,7 +827,7 @@ func (q *Queries) GetUserAccountSources(ctx context.Context, userID int64) ([]Ac
 }
 
 const getUserChannelAccount = `-- name: GetUserChannelAccount :one
-SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at FROM channel_accounts WHERE id = $1 AND user_id = $2
+SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at FROM channel_accounts WHERE id = $1 AND user_id = $2
 `
 
 type GetUserChannelAccountParams struct {
@@ -728,12 +859,14 @@ func (q *Queries) GetUserChannelAccount(ctx context.Context, arg GetUserChannelA
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }
 
 const getUserChannelAccounts = `-- name: GetUserChannelAccounts :many
-SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at FROM channel_accounts WHERE user_id = $1 ORDER BY id
+SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at FROM channel_accounts WHERE user_id = $1 ORDER BY id
 `
 
 func (q *Queries) GetUserChannelAccounts(ctx context.Context, userID int64) ([]ChannelAccount, error) {
@@ -766,6 +899,8 @@ func (q *Queries) GetUserChannelAccounts(ctx context.Context, userID int64) ([]C
 			&i.ExternalBrowserWs,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.FirstSignedInAt,
+			&i.NextJoinAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1024,7 +1159,7 @@ func (q *Queries) GetUserGrowthSources(ctx context.Context, userID int64) ([]Gro
 }
 
 const getUserLead = `-- name: GetUserLead :one
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads WHERE id = $1 AND user_id = $2
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads WHERE id = $1 AND user_id = $2
 `
 
 type GetUserLeadParams struct {
@@ -1054,31 +1189,36 @@ func (q *Queries) GetUserLead(ctx context.Context, arg GetUserLeadParams) (Lead,
 		&i.DeliveredRunID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Contacts,
 	)
 	return i, err
 }
 
 const getUserLeads = `-- name: GetUserLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts FROM leads
 WHERE user_id = $1
   AND ($2::bigint IS NULL OR last_flow_id = $2::bigint)
   AND ($3::bigint IS NULL OR last_task_id = $3::bigint)
   AND ($4::bigint IS NULL OR delivered_run_id = $4::bigint)
   AND ($5::text IS NULL OR tier = $5::text)
   AND ($6::boolean IS NULL OR (delivered_at IS NOT NULL) = $6::boolean)
+  AND ($7::timestamptz IS NULL OR created_at >= $7::timestamptz)
+  AND ($8::boolean IS NULL OR (jsonb_array_length(contacts) > 0) = $8::boolean)
 ORDER BY score DESC, updated_at DESC, id DESC
-LIMIT $8 OFFSET $7
+LIMIT $10 OFFSET $9
 `
 
 type GetUserLeadsParams struct {
-	UserID    int64          `json:"user_id"`
-	FlowID    sql.NullInt64  `json:"flow_id"`
-	TaskID    sql.NullInt64  `json:"task_id"`
-	RunID     sql.NullInt64  `json:"run_id"`
-	Tier      sql.NullString `json:"tier"`
-	Delivered sql.NullBool   `json:"delivered"`
-	Off       int64          `json:"off"`
-	Lim       int64          `json:"lim"`
+	UserID     int64          `json:"user_id"`
+	FlowID     sql.NullInt64  `json:"flow_id"`
+	TaskID     sql.NullInt64  `json:"task_id"`
+	RunID      sql.NullInt64  `json:"run_id"`
+	Tier       sql.NullString `json:"tier"`
+	Delivered  sql.NullBool   `json:"delivered"`
+	Since      sql.NullTime   `json:"since"`
+	HasContact sql.NullBool   `json:"has_contact"`
+	Off        int64          `json:"off"`
+	Lim        int64          `json:"lim"`
 }
 
 func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]Lead, error) {
@@ -1089,6 +1229,8 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 		arg.RunID,
 		arg.Tier,
 		arg.Delivered,
+		arg.Since,
+		arg.HasContact,
 		arg.Off,
 		arg.Lim,
 	)
@@ -1118,6 +1260,7 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 			&i.DeliveredRunID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Contacts,
 		); err != nil {
 			return nil, err
 		}
@@ -1253,6 +1396,43 @@ func (q *Queries) InsertLeadEvidence(ctx context.Context, arg InsertLeadEvidence
 	return result.RowsAffected()
 }
 
+const markChannelAccountSignedIn = `-- name: MarkChannelAccountSignedIn :one
+UPDATE channel_accounts
+SET status = 'active', first_signed_in_at = COALESCE(first_signed_in_at, now())
+WHERE id = $1
+RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at
+`
+
+func (q *Queries) MarkChannelAccountSignedIn(ctx context.Context, id int64) (ChannelAccount, error) {
+	row := q.db.QueryRowContext(ctx, markChannelAccountSignedIn, id)
+	var i ChannelAccount
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Platform,
+		&i.Kind,
+		&i.Label,
+		&i.ExternalID,
+		&i.Session,
+		&i.ProfileDir,
+		&i.Status,
+		&i.LastUsedAt,
+		&i.LastSuccessAt,
+		&i.LastRateLimitedAt,
+		&i.RateLimitUntil,
+		&i.ConsecutiveErrors,
+		&i.LastError,
+		&i.Proxy,
+		&i.Fingerprint,
+		&i.ExternalBrowserWs,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
+	)
+	return i, err
+}
+
 const markChannelAccountUsed = `-- name: MarkChannelAccountUsed :exec
 UPDATE channel_accounts SET last_used_at = now() WHERE id = $1
 `
@@ -1266,7 +1446,7 @@ const markLeadsDelivered = `-- name: MarkLeadsDelivered :many
 UPDATE leads
 SET delivered_at = CURRENT_TIMESTAMP, delivered_run_id = $1
 WHERE id = ANY($2::bigint[]) AND delivered_at IS NULL
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts
 `
 
 type MarkLeadsDeliveredParams struct {
@@ -1302,6 +1482,7 @@ func (q *Queries) MarkLeadsDelivered(ctx context.Context, arg MarkLeadsDelivered
 			&i.DeliveredRunID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Contacts,
 		); err != nil {
 			return nil, err
 		}
@@ -1353,6 +1534,7 @@ func (q *Queries) RecordChannelAccountRateLimit(ctx context.Context, arg RecordC
 const recordChannelAccountSuccess = `-- name: RecordChannelAccountSuccess :exec
 UPDATE channel_accounts
 SET last_success_at = now(),
+    first_signed_in_at = COALESCE(first_signed_in_at, now()),
     consecutive_errors = 0,
     last_error = '',
     rate_limit_until = NULL,
@@ -1528,23 +1710,45 @@ func (q *Queries) ResolveGrowthSource(ctx context.Context, arg ResolveGrowthSour
 	return i, err
 }
 
+const scheduleChannelAccountJoin = `-- name: ScheduleChannelAccountJoin :exec
+UPDATE channel_accounts SET next_join_at = $1 WHERE id = $2
+`
+
+type ScheduleChannelAccountJoinParams struct {
+	NextJoinAt sql.NullTime `json:"next_join_at"`
+	ID         int64        `json:"id"`
+}
+
+func (q *Queries) ScheduleChannelAccountJoin(ctx context.Context, arg ScheduleChannelAccountJoinParams) error {
+	_, err := q.db.ExecContext(ctx, scheduleChannelAccountJoin, arg.NextJoinAt, arg.ID)
+	return err
+}
+
 const updateAccountSourceJoin = `-- name: UpdateAccountSourceJoin :one
 UPDATE account_sources
 SET join_status = $1,
     join_error  = $2,
+    join_attempted_at = CURRENT_TIMESTAMP,
+    private_join = $3,
     joined_at   = CASE WHEN $1::text = 'joined' THEN COALESCE(joined_at, CURRENT_TIMESTAMP) ELSE joined_at END
-WHERE id = $3
-RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at
+WHERE id = $4
+RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at, join_attempted_at, private_join
 `
 
 type UpdateAccountSourceJoinParams struct {
-	JoinStatus string `json:"join_status"`
-	JoinError  string `json:"join_error"`
-	ID         int64  `json:"id"`
+	JoinStatus  string `json:"join_status"`
+	JoinError   string `json:"join_error"`
+	PrivateJoin bool   `json:"private_join"`
+	ID          int64  `json:"id"`
 }
 
 func (q *Queries) UpdateAccountSourceJoin(ctx context.Context, arg UpdateAccountSourceJoinParams) (AccountSource, error) {
-	row := q.db.QueryRowContext(ctx, updateAccountSourceJoin, arg.JoinStatus, arg.JoinError, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateAccountSourceJoin,
+		arg.JoinStatus,
+		arg.JoinError,
+		arg.PrivateJoin,
+		arg.ID,
+	)
 	var i AccountSource
 	err := row.Scan(
 		&i.ID,
@@ -1561,6 +1765,8 @@ func (q *Queries) UpdateAccountSourceJoin(ctx context.Context, arg UpdateAccount
 		&i.SyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.JoinAttemptedAt,
+		&i.PrivateJoin,
 	)
 	return i, err
 }
@@ -1577,7 +1783,7 @@ SET newest_message_id = GREATEST(newest_message_id, $1),
     messages_read     = messages_read + $4::bigint,
     synced_at         = CURRENT_TIMESTAMP
 WHERE id = $5
-RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at
+RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at, join_attempted_at, private_join
 `
 
 type UpdateAccountSourceSyncParams struct {
@@ -1612,6 +1818,8 @@ func (q *Queries) UpdateAccountSourceSync(ctx context.Context, arg UpdateAccount
 		&i.SyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.JoinAttemptedAt,
+		&i.PrivateJoin,
 	)
 	return i, err
 }
@@ -1631,7 +1839,7 @@ func (q *Queries) UpdateChannelAccountSession(ctx context.Context, arg UpdateCha
 }
 
 const updateChannelAccountStatus = `-- name: UpdateChannelAccountStatus :one
-UPDATE channel_accounts SET status = $1 WHERE id = $2 RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at
+UPDATE channel_accounts SET status = $1 WHERE id = $2 RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at
 `
 
 type UpdateChannelAccountStatusParams struct {
@@ -1663,6 +1871,8 @@ func (q *Queries) UpdateChannelAccountStatus(ctx context.Context, arg UpdateChan
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }
@@ -1825,7 +2035,7 @@ SET label               = $1,
     fingerprint         = $4,
     external_browser_ws = $5
 WHERE id = $6 AND user_id = $7
-RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at
+RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at
 `
 
 type UpdateUserChannelAccountParams struct {
@@ -1870,6 +2080,8 @@ func (q *Queries) UpdateUserChannelAccount(ctx context.Context, arg UpdateUserCh
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }
@@ -1879,7 +2091,7 @@ INSERT INTO account_sources (account_id, source_id, peer)
 VALUES ($1, $2, $3)
 ON CONFLICT (account_id, source_id) DO UPDATE
 SET peer = COALESCE(EXCLUDED.peer, account_sources.peer)
-RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at
+RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at, join_attempted_at, private_join
 `
 
 type UpsertAccountSourceParams struct {
@@ -1906,6 +2118,8 @@ func (q *Queries) UpsertAccountSource(ctx context.Context, arg UpsertAccountSour
 		&i.SyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.JoinAttemptedAt,
+		&i.PrivateJoin,
 	)
 	return i, err
 }
@@ -1921,7 +2135,7 @@ SET kind        = EXCLUDED.kind,
     external_id = COALESCE(NULLIF(EXCLUDED.external_id, ''), channel_accounts.external_id),
     profile_dir = COALESCE(NULLIF(EXCLUDED.profile_dir, ''), channel_accounts.profile_dir),
     status      = EXCLUDED.status
-RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at
+RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at
 `
 
 type UpsertChannelAccountParams struct {
@@ -1966,6 +2180,8 @@ func (q *Queries) UpsertChannelAccount(ctx context.Context, arg UpsertChannelAcc
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }
@@ -2169,12 +2385,12 @@ func (q *Queries) UpsertGrowthSource(ctx context.Context, arg UpsertGrowthSource
 const upsertLead = `-- name: UpsertLead :one
 INSERT INTO leads (
   user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason,
-  first_flow_id, first_task_id, last_flow_id, last_task_id
+  contacts, first_flow_id, first_task_id, last_flow_id, last_task_id
 ) VALUES (
   $1, $2, $3, $4,
   $5, $6,
-  $7, $8, $9,
-  $10, $11, $10, $11
+  $7, $8, $9, $10,
+  $11, $12, $11, $12
 )
 ON CONFLICT (user_id, platform, platform_user_id) DO UPDATE
 SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
@@ -2182,23 +2398,25 @@ SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
     score        = GREATEST(EXCLUDED.score, leads.score),
     tier         = CASE WHEN EXCLUDED.tier = 'qualified' OR leads.tier = 'qualified' THEN 'qualified' ELSE 'watchlist' END,
     match_reason = CASE WHEN EXCLUDED.score > leads.score THEN EXCLUDED.match_reason ELSE leads.match_reason END,
+    contacts     = EXCLUDED.contacts,
     last_flow_id = COALESCE(EXCLUDED.last_flow_id, leads.last_flow_id),
     last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id)
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts
 `
 
 type UpsertLeadParams struct {
-	UserID         int64         `json:"user_id"`
-	Platform       string        `json:"platform"`
-	PlatformUserID string        `json:"platform_user_id"`
-	IdentityKind   string        `json:"identity_kind"`
-	Username       string        `json:"username"`
-	DisplayName    string        `json:"display_name"`
-	Score          int32         `json:"score"`
-	Tier           string        `json:"tier"`
-	MatchReason    string        `json:"match_reason"`
-	FlowID         sql.NullInt64 `json:"flow_id"`
-	TaskID         sql.NullInt64 `json:"task_id"`
+	UserID         int64           `json:"user_id"`
+	Platform       string          `json:"platform"`
+	PlatformUserID string          `json:"platform_user_id"`
+	IdentityKind   string          `json:"identity_kind"`
+	Username       string          `json:"username"`
+	DisplayName    string          `json:"display_name"`
+	Score          int32           `json:"score"`
+	Tier           string          `json:"tier"`
+	MatchReason    string          `json:"match_reason"`
+	Contacts       json.RawMessage `json:"contacts"`
+	FlowID         sql.NullInt64   `json:"flow_id"`
+	TaskID         sql.NullInt64   `json:"task_id"`
 }
 
 func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, error) {
@@ -2212,6 +2430,7 @@ func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, e
 		arg.Score,
 		arg.Tier,
 		arg.MatchReason,
+		arg.Contacts,
 		arg.FlowID,
 		arg.TaskID,
 	)
@@ -2235,8 +2454,35 @@ func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, e
 		&i.DeliveredRunID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Contacts,
 	)
 	return i, err
+}
+
+const upsertMessageScore = `-- name: UpsertMessageScore :exec
+INSERT INTO growth_message_scores (user_id, source_id, message_id, score, signals)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (user_id, source_id, message_id) DO UPDATE
+SET score = EXCLUDED.score, signals = EXCLUDED.signals
+`
+
+type UpsertMessageScoreParams struct {
+	UserID    int64  `json:"user_id"`
+	SourceID  int64  `json:"source_id"`
+	MessageID string `json:"message_id"`
+	Score     int32  `json:"score"`
+	Signals   string `json:"signals"`
+}
+
+func (q *Queries) UpsertMessageScore(ctx context.Context, arg UpsertMessageScoreParams) error {
+	_, err := q.db.ExecContext(ctx, upsertMessageScore,
+		arg.UserID,
+		arg.SourceID,
+		arg.MessageID,
+		arg.Score,
+		arg.Signals,
+	)
+	return err
 }
 
 const upsertUserResourceFile = `-- name: UpsertUserResourceFile :one

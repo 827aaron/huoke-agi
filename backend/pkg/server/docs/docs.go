@@ -6060,6 +6060,81 @@ const docTemplate = `{
                 }
             }
         },
+        "/growth/settings/{kind}/models": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "For screening through OpenRouter only typesafe/ models are listed. A 502 means the list could not be fetched and the model is typed by name.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "List the models of a provider's endpoint, for a choice before saving",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "llm or screening",
+                        "name": "kind",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "provider, key and endpoint; empty fields are the saved ones",
+                        "name": "json",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/services.growthListModelsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "models received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.growthModels"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid provider, endpoint or missing key",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "listing models not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "502": {
+                        "description": "the endpoint did not return its models",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/growth/settings/{kind}/test": {
             "post": {
                 "security": [
@@ -9878,7 +9953,24 @@ const docTemplate = `{
                 "fingerprint": {
                     "type": "object"
                 },
+                "first_signed_in_at": {
+                    "description": "The join pace counts days from FirstSignedInAt; NextJoinAt is the earliest next join\nits interval allows. JoinedSources and JoinsToday (last 24 hours) are filled by ListAccounts.",
+                    "type": "string"
+                },
                 "id": {
+                    "type": "integer"
+                },
+                "join_advice": {
+                    "description": "JoinAdvice holds the reminder codes a next join would raise, plus joined_groups_high\nat the joined-groups reminder count; empty with reminders off.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "joined_sources": {
+                    "type": "integer"
+                },
+                "joins_today": {
                     "type": "integer"
                 },
                 "kind": {
@@ -9897,6 +9989,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "last_used_at": {
+                    "type": "string"
+                },
+                "next_join_at": {
                     "type": "string"
                 },
                 "platform": {
@@ -9934,6 +10029,17 @@ const docTemplate = `{
                 }
             }
         },
+        "growth.Contact": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
         "growth.EvidenceView": {
             "type": "object",
             "properties": {
@@ -9960,9 +10066,35 @@ const docTemplate = `{
                 }
             }
         },
+        "growth.JoinWarning": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "joined_sources": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "warn_at": {
+                    "type": "integer"
+                }
+            }
+        },
         "growth.LeadView": {
             "type": "object",
             "properties": {
+                "contacts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.Contact"
+                    }
+                },
                 "created_at": {
                     "type": "string"
                 },
@@ -10047,10 +10179,28 @@ const docTemplate = `{
                 }
             }
         },
+        "growth.ModelOption": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "growth.Profile": {
             "type": "object",
             "properties": {
                 "competitors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "contact_types": {
+                    "description": "ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty\nmeans the platform handle alone.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -10095,6 +10245,10 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "scoring": {
+                    "description": "Scoring turns the judgement model's answers into a lead score; nil is DefaultScoring.",
+                    "$ref": "#/definitions/growth.Scoring"
+                },
                 "signals": {
                     "type": "array",
                     "items": {
@@ -10107,6 +10261,13 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "competitors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "contact_types": {
+                    "description": "ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty\nmeans the platform handle alone.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -10157,6 +10318,10 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "scoring": {
+                    "description": "Scoring turns the judgement model's answers into a lead score; nil is DefaultScoring.",
+                    "$ref": "#/definitions/growth.Scoring"
+                },
                 "signals": {
                     "type": "array",
                     "items": {
@@ -10205,9 +10370,47 @@ const docTemplate = `{
                 }
             }
         },
+        "growth.Scoring": {
+            "type": "object",
+            "properties": {
+                "qualified": {
+                    "type": "integer"
+                },
+                "watchlist": {
+                    "type": "integer"
+                },
+                "weights": {
+                    "$ref": "#/definitions/growth.ScoringWeights"
+                }
+            }
+        },
+        "growth.ScoringWeights": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "integer"
+                },
+                "match": {
+                    "type": "integer"
+                },
+                "pain": {
+                    "type": "integer"
+                },
+                "paying": {
+                    "type": "integer"
+                },
+                "player": {
+                    "type": "integer"
+                }
+            }
+        },
         "growth.SettingView": {
             "type": "object",
             "properties": {
+                "configured": {
+                    "description": "Configured is false while nothing, saved or in .env, sets this kind.",
+                    "type": "boolean"
+                },
                 "fields": {
                     "type": "object",
                     "additionalProperties": {
@@ -10216,6 +10419,10 @@ const docTemplate = `{
                 },
                 "kind": {
                     "type": "string"
+                },
+                "platform_smtp": {
+                    "description": "PlatformSMTP, on the email kind only, says .env carries an SMTP server, so the\ncustomer needs to give only the recipients.",
+                    "type": "boolean"
                 },
                 "provider": {
                     "type": "string"
@@ -12936,6 +13143,37 @@ const docTemplate = `{
                 }
             }
         },
+        "services.growthListModelsRequest": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "type": "string"
+                },
+                "api_url": {
+                    "type": "string"
+                },
+                "protocol": {
+                    "type": "string"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "server_url": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.growthModels": {
+            "type": "object",
+            "properties": {
+                "models": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.ModelOption"
+                    }
+                }
+            }
+        },
         "services.growthPasswordRequest": {
             "type": "object",
             "required": [
@@ -13043,6 +13281,13 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                },
+                "warnings": {
+                    "description": "Warnings names the accounts nearing Telegram's cap on joined groups; joins go on.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.JoinWarning"
+                    }
                 }
             }
         },

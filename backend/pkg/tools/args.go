@@ -968,8 +968,10 @@ type GrowthJoinSourceAction struct {
 type GrowthSyncSourceAction struct {
 	Action         String   `json:"action" jsonschema:"required,type=string,enum=history,enum=user" jsonschema_description:"'history' reads the next page of a Telegram source's public messages (source_id). 'user' returns the public profile of a Telegram user (platform_user_id)."`
 	SourceID       Int64    `json:"source_id,omitempty" jsonschema:"type=integer" jsonschema_description:"history only: the pool source_id to read"`
-	Direction      String   `json:"direction,omitempty" jsonschema:"type=string,enum=older,enum=newer" jsonschema_description:"history only: 'older' (default) continues backwards from the oldest message read so far; 'newer' fetches messages posted after the newest one read. The position is kept between calls."`
+	SourceIDs      []Int64  `json:"source_ids,omitempty" jsonschema:"type=array" jsonschema_description:"history only: several pool source_ids to read in one call, instead of source_id. With neither, every source an account has joined is read in turn"`
+	Direction      String   `json:"direction,omitempty" jsonschema:"type=string,enum=older,enum=newer" jsonschema_description:"history only: 'older' (default) continues backwards from the oldest message read so far until the source's back-read is done; 'newer' reads what was posted after the newest message read, page by page until caught up. Once older reading is done, come back with 'newer' to monitor the source. The position is kept between calls."`
 	Limit          Int64    `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"history only: messages per page (1-200, default 100)"`
+	AllMessages    Bool     `json:"all_messages,omitempty" jsonschema:"type=boolean" jsonschema_description:"history only: true returns every message read; by default only the messages the judgement model (Jev) picks as worth a closer look are returned and the rest are counted in skipped_count"`
 	PlatformUserID IDString `json:"platform_user_id,omitempty" jsonschema:"type=string" jsonschema_description:"user only: the sender id from a history page"`
 	Message        string   `json:"message" jsonschema:"required,title=Sync source message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on what you are reading and why. Written in the engagement language declared by your system prompt."`
 }
@@ -981,7 +983,7 @@ type GrowthEvidenceArg struct {
 	MessageTime string   `json:"message_time,omitempty" jsonschema_description:"When it was posted, RFC 3339 (e.g. 2026-10-16T09:30:00Z), taken from the tool output or the page"`
 	CapturedAt  string   `json:"captured_at,omitempty" jsonschema_description:"Web only: when you read the page, RFC 3339; defaults to now"`
 	Excerpt     string   `json:"excerpt" jsonschema:"required" jsonschema_description:"The message text quoted verbatim in its original language; never translated or paraphrased"`
-	MatchReason string   `json:"match_reason,omitempty" jsonschema_description:"Technical-channel payload — which signal this message shows, in English"`
+	MatchReason string   `json:"match_reason,omitempty" jsonschema_description:"Which signal this message shows, in one short phrase. Written in the engagement language declared by your system prompt."`
 }
 
 type GrowthLeadArg struct {
@@ -989,10 +991,16 @@ type GrowthLeadArg struct {
 	PlatformUserID IDString            `json:"platform_user_id" jsonschema:"required,type=string" jsonschema_description:"Telegram: the stable numeric sender id from the tool output. Web: the author's profile URL, or 'host:username' (e.g. forum.example.com:alice) when no profile link exists."`
 	Username       string              `json:"username,omitempty" jsonschema_description:"Username exactly as the tool output or page shows it"`
 	DisplayName    string              `json:"display_name,omitempty" jsonschema_description:"Display name exactly as shown"`
-	Score          Int64               `json:"score" jsonschema:"required,type=integer" jsonschema_description:"Total signal score. 7 or more is qualified and counts toward the target; 4-6 is watchlist; 3 or less is not saved."`
-	Tier           String              `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist" jsonschema_description:"Your tier; the stored tier always follows from score"`
-	MatchReason    string              `json:"match_reason" jsonschema:"required" jsonschema_description:"Technical-channel payload — the score breakdown in English, e.g. 'player+3, wants similar game+3, 7d+2, genre match+3 = 11'"`
+	Score          Int64               `json:"score,omitempty" jsonschema:"type=integer" jsonschema_description:"Your total signal score, needed only when no evidence message carries a score from growth_sync_source (web pages read with the browser). A scored message's score is used instead. At the business profile's qualified line (7 by default) or above the lead counts toward the target; from its watchlist line (4) it is kept for review; below it is not saved."`
+	Tier           String              `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist" jsonschema_description:"Your tier; the stored tier always follows from the score"`
+	MatchReason    string              `json:"match_reason" jsonschema:"required" jsonschema_description:"One or two sentences on why this person may become a customer, citing the signals of the evidence. Written in the engagement language declared by your system prompt."`
+	Contacts       []GrowthContactArg  `json:"contacts,omitempty" jsonschema:"type=array" jsonschema_description:"Ways to reach this person beside the platform account, only of the types the business profile asks for and only as the person published them in the evidence or their public profile; never guessed"`
 	Evidence       []GrowthEvidenceArg `json:"evidence" jsonschema:"required" jsonschema_description:"One or more messages or posts by this person that show the signals"`
+}
+
+type GrowthContactArg struct {
+	Type  String `json:"type" jsonschema:"required,type=string,enum=phone,enum=email,enum=messenger,enum=other" jsonschema_description:"phone, email, messenger (an id on another messaging app, with the app's name) or other"`
+	Value string `json:"value" jsonschema:"required" jsonschema_description:"The contact exactly as published, e.g. 'WhatsApp +66 81 234 5678'"`
 }
 
 type GrowthUpsertLeadsAction struct {
@@ -1002,17 +1010,21 @@ type GrowthUpsertLeadsAction struct {
 
 type GrowthGetProgressAction struct {
 	Target  Int64  `json:"target,omitempty" jsonschema:"type=integer" jsonschema_description:"Set the round's target when the customer named a number (default 50); omit to only read progress"`
+	Since   string `json:"since,omitempty" jsonschema_description:"Outside a task: count only leads first found at or after this time, RFC 3339 with the user's offset (e.g. 2026-10-17T00:00:00+07:00 for today in Bangkok); a bare date counts from 00:00 UTC"`
 	Message string `json:"message" jsonschema:"required,title=Progress message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are checking progress. Written in the engagement language declared by your system prompt."`
 }
 
 type GrowthDeliverLeadsAction struct {
 	AllowPartial Bool   `json:"allow_partial,omitempty" jsonschema:"type=boolean" jsonschema_description:"Deliver fewer than the target. Set it only when every source is exhausted or blocked; otherwise a short round delivers nothing and says how many more are needed."`
+	HasContact   Bool   `json:"has_contact,omitempty" jsonschema:"type=boolean" jsonschema_description:"Deliver only leads with a contact beside their platform account; set it only when the user asked for that"`
 	Message      string `json:"message" jsonschema:"required,title=Deliver leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on closing the round. Written in the engagement language declared by your system prompt."`
 }
 
 type GrowthListLeadsAction struct {
-	Scope   String `json:"scope,omitempty" jsonschema:"type=string,enum=flow,enum=task,enum=delivered" jsonschema_description:"'flow' (default) leads seen in this flow; 'task' leads touched by the current task; 'delivered' leads already delivered from this flow"`
-	Tier    String `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist,enum=all" jsonschema_description:"Filter by tier (default all)"`
-	Limit   Int64  `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum leads (1-500, default 100)"`
-	Message string `json:"message" jsonschema:"required,title=List leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are listing leads. Written in the engagement language declared by your system prompt."`
+	Scope      String `json:"scope,omitempty" jsonschema:"type=string,enum=flow,enum=task,enum=delivered,enum=all" jsonschema_description:"'flow' (default) leads seen in this flow; 'task' leads touched by the current task; 'delivered' leads already delivered from this flow; 'all' every lead of the user"`
+	Since      string `json:"since,omitempty" jsonschema_description:"Only leads first found at or after this time, RFC 3339 with the user's offset (e.g. 2026-10-17T00:00:00+07:00); a bare date counts from 00:00 UTC"`
+	Tier       String `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist,enum=all" jsonschema_description:"Filter by tier (default all)"`
+	HasContact Bool   `json:"has_contact,omitempty" jsonschema:"type=boolean" jsonschema_description:"true lists only leads with a contact beside their platform account"`
+	Limit      Int64  `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum leads (1-500, default 100)"`
+	Message    string `json:"message" jsonschema:"required,title=List leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are listing leads. Written in the engagement language declared by your system prompt."`
 }

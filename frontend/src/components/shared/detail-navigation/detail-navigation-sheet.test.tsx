@@ -319,7 +319,7 @@ describe('DetailNavigationSheet — search input', () => {
         const user = userEvent.setup();
         renderSheet({ currentId: 'a', defaultSearchQuery: 'cha' });
 
-        const clearButton = await screen.findByRole('button', { name: 'Clear search' });
+        const clearButton = await screen.findByRole('button', { name: '清除搜索' });
         await user.click(clearButton);
 
         const input = await screen.findByRole('textbox');
@@ -352,7 +352,7 @@ describe('DetailNavigationSheet — search input', () => {
         renderSheet({ currentId: 'a', defaultSearchQuery: 'zzzzz' });
 
         await waitFor(() => {
-            expect(screen.getByText(/No items match "zzzzz"\./)).toBeInTheDocument();
+            expect(screen.getByText('没有与“zzzzz”匹配的条目。')).toBeInTheDocument();
         });
         expect(screen.queryByRole('listbox', { name: 'Items' })).not.toBeInTheDocument();
     });

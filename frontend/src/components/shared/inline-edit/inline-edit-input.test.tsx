@@ -19,7 +19,7 @@ const renderInput = (busy: boolean, defaultValue = 'Alpha') => {
     return { input: screen.getByRole('textbox'), onCancel, onSave };
 };
 
-const saveButton = () => screen.getByRole('button', { name: 'Save' });
+const saveButton = () => screen.getByRole('button', { name: '保存' });
 
 describe('InlineEditInput', () => {
     it('saves on Enter and cancels on Escape while idle', () => {
@@ -36,7 +36,7 @@ describe('InlineEditInput', () => {
     it('ignores Enter while busy, matching the disabled Save button', () => {
         const { input, onSave } = renderInput(true);
 
-        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
 
         fireEvent.keyDown(input, { key: 'Enter' });
         expect(onSave).not.toHaveBeenCalled();
@@ -45,7 +45,7 @@ describe('InlineEditInput', () => {
     it('ignores Escape while busy, matching the disabled Cancel button', () => {
         const { input, onCancel } = renderInput(true);
 
-        expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: '取消' })).toBeDisabled();
 
         fireEvent.keyDown(input, { key: 'Escape' });
         expect(onCancel).not.toHaveBeenCalled();

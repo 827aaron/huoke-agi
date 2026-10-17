@@ -374,6 +374,17 @@ func (fp *flowProvider) execToolCall(
 				return "", err
 			}
 
+			if role, ok := delegationRoles[funcName]; ok {
+				// A specialist that failed ran its own retries already; correcting the
+				// arguments reruns it whole and hides which specialist failed. The
+				// delegating agent gets the reason and decides what to tell the user.
+				if ctx.Err() != nil {
+					return "", err
+				}
+				logger.WithError(err).Warn("delegated specialist failed")
+				return fmt.Sprintf("the %s specialist failed and returned no result: %v", role, err), nil
+			}
+
 			logger.WithError(err).Warn("failed to exec function")
 
 			funcExecErr := err
@@ -436,6 +447,10 @@ func (fp *flowProvider) callWithRetries(
 		"msg_chain_id": chainID,
 		"agent_type":   optAgentType,
 	}))
+
+	// Specialists the assistant delegates to share its provider and so its stream; only
+	// the assistant's own text is its answer to the user.
+	streamAnswer := fp.streamCb != nil && optAgentType == pconfig.OptionsTypeAssistant
 
 	ticker := time.NewTicker(delayBetweenRetries)
 	defer ticker.Stop()
@@ -514,7 +529,7 @@ func (fp *flowProvider) callWithRetries(
 		}
 
 		var streamCb streaming.Callback
-		if fp.streamCb != nil {
+		if streamAnswer {
 			result.streamID = fp.callCounter.Add(1)
 			streamCb = func(ctx context.Context, chunk streaming.Chunk) error {
 				switch chunk.Type {
@@ -590,7 +605,7 @@ func (fp *flowProvider) callWithRetries(
 		}
 	}
 
-	if fp.streamCb != nil && result.streamID != 0 {
+	if streamAnswer && result.streamID != 0 {
 		_ = fp.streamCb(ctx, &StreamMessageChunk{
 			Type:     StreamMessageChunkTypeUpdate,
 			MsgType:  msgType,
@@ -1215,6 +1230,16 @@ func aiResponsePart(content string, thinking *reasoning.ContentReasoning) (llms.
 	}
 
 	return nil, false
+}
+
+// delegationRoles names each delegation tool's specialist as the agent prompts call it.
+var delegationRoles = map[string]string{
+	tools.SearchToolName:      "searcher",
+	tools.PentesterToolName:   "pentester",
+	tools.CoderToolName:       "developer",
+	tools.MaintenanceToolName: "installer",
+	tools.MemoristToolName:    "memorist",
+	tools.AdviceToolName:      "adviser",
 }
 
 func correctorFailure(ctx context.Context, correctorErr error, funcName string, funcExecErr error) error {

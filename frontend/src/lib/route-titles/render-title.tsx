@@ -1,4 +1,6 @@
-export const APP_NAME = 'PentAGI';
+import { copy } from '@/lib/copy';
+
+export const APP_NAME = copy.app.name;
 
 export type RouteParams = Record<string, string | undefined>;
 

@@ -64,15 +64,16 @@ func TestGrowth_Handle_MarksLinksFoundInASourceAsDiscovered(t *testing.T) {
 	assert.Nil(t, backend.lastFrom)
 }
 
-func TestGrowth_Handle_DeliverPassesAllowPartial(t *testing.T) {
+func TestGrowth_Handle_DeliverPassesAllowPartialAndHasContact(t *testing.T) {
 	task := int64(3)
 	backend := &fakeGrowthBackend{delivery: growth.Delivery{
 		Status: growth.DeliveryIncomplete, Gap: 8, Progress: growth.Progress{Target: 50, NewLeads: 42},
 	}}
 	out, err := newGrowthTools(backend, 1, 42, &task).Handle(t.Context(), GrowthDeliverLeadsToolName,
-		json.RawMessage(`{"allow_partial":"true"}`))
+		json.RawMessage(`{"allow_partial":"true","has_contact":true}`))
 	require.NoError(t, err)
 	assert.True(t, backend.lastAllowPartial)
+	assert.True(t, backend.lastHasContact)
 	assert.Contains(t, out, `"status":"incomplete"`)
 	assert.True(t, strings.HasSuffix(out, "PROGRESS: new_leads_this_task=42 target=50"))
 }
@@ -88,6 +89,7 @@ func TestGrowth_Handle_TurnsDomainErrorsIntoInstructions(t *testing.T) {
 		{connectors.ErrUnauthorized, "an operator has to log the account in"},
 		{connectors.ErrNoConnector, "not available in this deployment"},
 		{growth.ErrSourceNotFound, "Use a source_id returned by"},
+		{growth.ErrNoJudge, "fill in its key on the settings page. Retrying will not help"},
 		{errors.New("disk on fire"), "the growth tool failed: disk on fire"},
 	}
 	for _, tt := range tests {
@@ -98,6 +100,19 @@ func TestGrowth_Handle_TurnsDomainErrorsIntoInstructions(t *testing.T) {
 			assert.Contains(t, out, tt.want)
 		})
 	}
+}
+
+func TestGrowth_Handle_SyncWithoutIDsAsksForEveryJoinedSource(t *testing.T) {
+	backend := &fakeGrowthBackend{}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(`{"action":"history"}`))
+	require.NoError(t, err)
+	assert.Empty(t, backend.lastSyncIDs)
+	assert.JSONEq(t, `{"results":[]}`, out)
+
+	out, err = newGrowthTools(&fakeGrowthBackend{err: growth.ErrNoJoinedSource}, 1, 42, nil).
+		Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(`{}`))
+	require.NoError(t, err)
+	assert.Equal(t, "no source in the pool is joined yet. Join sources with growth_join_source first, or pass source_ids.", out)
 }
 
 func TestGrowth_Handle_ReturnsTheErrorOfACancelledCall(t *testing.T) {
@@ -123,12 +138,48 @@ func TestGrowth_Handle_ListLeadsScopesToTheFlow(t *testing.T) {
 
 	_, err := tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"scope":"delivered","tier":"QUALIFIED"}`))
 	require.NoError(t, err)
+	assert.Nil(t, backend.lastFilter.HasContact)
 	require.NotNil(t, backend.lastFilter.FlowID)
 	assert.Equal(t, int64(42), *backend.lastFilter.FlowID)
 	require.NotNil(t, backend.lastFilter.Delivered)
 	assert.True(t, *backend.lastFilter.Delivered)
 	assert.Equal(t, "qualified", backend.lastFilter.Tier)
 
+	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName,
+		json.RawMessage(`{"scope":"all","since":"2026-10-17T00:00:00+07:00"}`))
+	require.NoError(t, err)
+	assert.Nil(t, backend.lastFilter.FlowID, "all is every lead of the user")
+	assert.Nil(t, backend.lastFilter.TaskID)
+	assert.True(t, time.Date(2026, 10, 16, 17, 0, 0, 0, time.UTC).Equal(backend.lastFilter.Since), backend.lastFilter.Since)
+
+	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"has_contact":true}`))
+	require.NoError(t, err)
+	require.NotNil(t, backend.lastFilter.HasContact)
+	assert.True(t, *backend.lastFilter.HasContact)
+
 	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"scope":"everyone"}`))
 	assert.Error(t, err)
+	_, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"since":"today"}`))
+	assert.ErrorContains(t, err, "is not a time")
+}
+
+func TestGrowth_Handle_ProgressCountsFromSince(t *testing.T) {
+	backend := &fakeGrowthBackend{}
+	_, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthGetProgressToolName,
+		json.RawMessage(`{"since":"2026-10-17"}`))
+	require.NoError(t, err)
+	assert.True(t, time.Date(2026, 10, 17, 0, 0, 0, 0, time.UTC).Equal(backend.lastSince), backend.lastSince)
+}
+
+func TestGrowth_Handle_UpsertPassesTheContactsAndAnOmittedScore(t *testing.T) {
+	task := int64(3)
+	backend := &fakeGrowthBackend{}
+	_, err := newGrowthTools(backend, 1, 42, &task).Handle(t.Context(), GrowthUpsertLeadsToolName, json.RawMessage(`{"leads":[{
+		"platform_user_id":"31","match_reason":"wants a new game and tops up often",
+		"contacts":[{"type":"email","value":"ann@example.test"}],
+		"evidence":[{"source_id":7,"message_id":"1","excerpt":"bored of my RPG"}]}]}`))
+	require.NoError(t, err)
+	require.Len(t, backend.upserted, 1)
+	assert.Equal(t, 0, backend.upserted[0].Score)
+	assert.Equal(t, []growth.Contact{{Type: "email", Value: "ann@example.test"}}, backend.upserted[0].Contacts)
 }

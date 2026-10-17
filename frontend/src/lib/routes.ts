@@ -23,6 +23,8 @@ export const routes = {
     flowReport: (id: number | string) => `/flows/${id}/report`,
     flows: '/flows',
 
+    help: { keys: '/help/keys' },
+
     knowledge: (id: number | string) => `/knowledges/${id}`,
     knowledges: '/knowledges',
     login: (fromPath?: string) => `/login${fromPath ? getReturnUrlParam(fromPath) : ''}`,
@@ -36,7 +38,10 @@ export const routes = {
     root: '/',
     settings: {
         account: '/settings/account',
+        accounts: '/settings/accounts',
         apiTokens: '/settings/api-tokens',
+        credentials: '/settings/credentials',
+        growthProfile: '/settings/business-profile',
         newProvider: ({ id, type }: { id?: string; type?: string } = {}) =>
             withQuery('/settings/providers/new', { id, type }),
         prompt: (name: string) => `/settings/prompts/${name}`,

@@ -17,6 +17,7 @@ test.describe('themes', { tag: '@cross' }, () => {
 
         await expect(page.locator('html')).toHaveClass(/dark/);
         await expect(page.locator(MESSAGE_ID_SELECTOR).first()).toBeVisible();
+        await page.getByRole('tab', { name: '终端' }).click();
         await expect(page.locator('.xterm')).toBeVisible();
         expectCleanPage(pageErrorLog);
     });
@@ -30,7 +31,7 @@ test.describe('themes', { tag: '@cross' }, () => {
         await expect(page.locator('html')).toHaveClass(/light/);
 
         await page.getByRole('button', { name: /admin@pentagi\.com/ }).click();
-        await page.getByRole('tab', { name: 'Dark theme' }).click();
+        await page.getByRole('tab', { name: '深色主题' }).click();
         await expect(page.locator('html')).toHaveClass(/dark/);
         expect(await storedTheme(page), 'the pick is written, not only applied to the live document').toBe('dark');
 
@@ -38,7 +39,7 @@ test.describe('themes', { tag: '@cross' }, () => {
         await expect(page.locator('html'), 'the reloaded page starts dark').toHaveClass(/dark/);
 
         await page.getByRole('button', { name: /admin@pentagi\.com/ }).click();
-        await page.getByRole('tab', { name: 'Light theme' }).click();
+        await page.getByRole('tab', { name: '浅色主题' }).click();
         await expect(page.locator('html')).toHaveClass(/light/);
         expect(await storedTheme(page)).toBe('light');
 

@@ -27,7 +27,7 @@ const renderTree = (onSelect: (files: FileNode[]) => void, onMoveItems?: (source
         />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+    fireEvent.click(screen.getByRole('button', { name: '全部展开' }));
 };
 
 const rowFor = (path: string): HTMLElement =>
@@ -49,7 +49,7 @@ const stubDataTransfer = () => {
     };
 };
 
-const barText = () => screen.getByText(/selected/).textContent;
+const barText = () => screen.getByText(/已选/).textContent;
 
 describe('bulk actions on a partially selected directory', () => {
     it('hands the action the ticked descendants instead of the directory', () => {
@@ -57,10 +57,10 @@ describe('bulk actions on a partially selected directory', () => {
 
         renderTree(onSelect);
 
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select docs' }));
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select a.txt' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: '选择 docs' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: '选择 a.txt' }));
 
-        expect(barText()).toMatch(/^1 selected/);
+        expect(barText()).toMatch(/^已选 1 项/);
 
         fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
@@ -73,9 +73,9 @@ describe('bulk actions on a partially selected directory', () => {
 
         renderTree(onSelect);
 
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select docs' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: '选择 docs' }));
 
-        expect(barText()).toMatch(/^3 selected/);
+        expect(barText()).toMatch(/^已选 3 项/);
 
         fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
@@ -87,12 +87,12 @@ describe('bulk actions on a partially selected directory', () => {
 
         renderTree(onSelect);
 
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select docs' }));
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select a.txt' }));
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select b.txt' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: '选择 docs' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: '选择 a.txt' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: '选择 b.txt' }));
 
-        expect(barText()).toMatch(/^0 selected/);
-        expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+        expect(barText()).toMatch(/^已选 0 项/);
+        expect(screen.getByRole('button', { name: '取消' })).toBeEnabled();
         expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
     });
 });
@@ -103,8 +103,8 @@ describe('dragging a partially selected directory', () => {
 
         renderTree(vi.fn(), onMoveItems);
 
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select docs' }));
-        fireEvent.click(screen.getByRole('checkbox', { name: 'Select a.txt' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: '选择 docs' }));
+        fireEvent.click(screen.getByRole('checkbox', { name: '选择 a.txt' }));
 
         const dataTransfer = stubDataTransfer();
 

@@ -17,6 +17,7 @@ import {
     UsageStatsByFlowDocument,
     UsageStatsByModelAgentsForFlowDocument,
 } from '@/graphql/types';
+import { agentLabel, copy, toolLabel } from '@/lib/copy';
 import { formatCost, formatDuration, formatNumber, formatTokenCount } from '@/lib/utils/format';
 
 export function FlowDashboardOverview({ flowId }: { flowId: string }) {
@@ -72,7 +73,7 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
                 return true;
             })
             .map((item) => ({
-                label: item.agentType,
+                label: agentLabel(item.agentType),
                 stats: item.stats,
             }));
     }, [usageByAgentData]);
@@ -116,35 +117,40 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
         <div className="flex flex-col gap-6">
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 <MetricCard
-                    description={`Subtasks: ${flowStats?.totalSubtasksCount ?? 0} · Assistants: ${flowStats?.totalAssistantsCount ?? 0}`}
+                    description={copy.dashboard.subtasksAssistantsLine(
+                        flowStats?.totalSubtasksCount ?? 0,
+                        flowStats?.totalAssistantsCount ?? 0,
+                    )}
                     error={!!flowStatsError && !flowStatsData}
                     icon={<GitFork className="text-muted-foreground size-4" />}
                     loading={anyLoading}
-                    title="Tasks"
+                    title={copy.dashboard.tasks}
                     value={flowStats ? formatNumber(flowStats.totalTasksCount) : '0'}
                 />
                 <MetricCard
-                    description={`Duration: ${toolcalls ? formatDuration(toolcalls.totalDurationSeconds) : '—'}`}
+                    description={copy.dashboard.durationLine(
+                        toolcalls ? formatDuration(toolcalls.totalDurationSeconds) : '—',
+                    )}
                     error={!!toolcallsError && !toolcallsData}
                     icon={<Activity className="text-muted-foreground size-4" />}
                     loading={anyLoading}
-                    title="Tool Calls"
+                    title={copy.dashboard.toolCalls}
                     value={toolcalls ? formatNumber(toolcalls.totalCount) : '0'}
                 />
                 <MetricCard
-                    description="Input + Output tokens"
+                    description={copy.dashboard.totalTokensHint}
                     error={!!usageError && !usageData}
                     icon={<Cpu className="text-muted-foreground size-4" />}
                     loading={anyLoading}
-                    title="Tokens"
+                    title={copy.dashboard.tokens}
                     value={formatTokenCount(totalTokens)}
                 />
                 <MetricCard
-                    description="LLM spending for this flow"
+                    description={copy.dashboard.flowCostHint}
                     error={!!usageError && !usageData}
                     icon={<CircleDollarSign className="text-muted-foreground size-4" />}
                     loading={anyLoading}
-                    title="Cost"
+                    title={copy.dashboard.cost}
                     value={formatCost(totalCost)}
                 />
             </div>
@@ -152,25 +158,37 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
             {!!modelAgentRows.length && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>Usage by Model &amp; Provider</CardTitle>
-                        <CardDescription>
-                            LLM token usage and costs grouped by model and provider, with agent types used
-                        </CardDescription>
+                        <CardTitle>{copy.dashboard.byModelAndProvider}</CardTitle>
+                        <CardDescription>{copy.dashboard.byModelAndProviderHint}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Table aria-label="Usage by Model & Provider">
+                        <Table aria-label={copy.dashboard.byModelAndProvider}>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead className="w-40 whitespace-nowrap">Model</TableHead>
-                                    <TableHead className="whitespace-nowrap">Provider</TableHead>
-                                    <TableHead className="w-36 whitespace-nowrap">Agents</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Tokens In</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Tokens Out</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Cache In</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Cache Out</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Cost In</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Cost Out</TableHead>
-                                    <TableHead className="text-right whitespace-nowrap">Total Cost</TableHead>
+                                    <TableHead className="w-40 whitespace-nowrap">{copy.dashboard.model}</TableHead>
+                                    <TableHead className="whitespace-nowrap">{copy.dashboard.provider}</TableHead>
+                                    <TableHead className="w-36 whitespace-nowrap">{copy.dashboard.agents}</TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {copy.dashboard.tokensIn}
+                                    </TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {copy.dashboard.tokensOut}
+                                    </TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {copy.dashboard.cacheIn}
+                                    </TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {copy.dashboard.cacheOut}
+                                    </TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {copy.dashboard.costIn}
+                                    </TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {copy.dashboard.costOut}
+                                    </TableHead>
+                                    <TableHead className="text-right whitespace-nowrap">
+                                        {copy.dashboard.totalCost}
+                                    </TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -191,7 +209,7 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
                                                     <FlowAgentIcon
                                                         className="size-3.5"
                                                         key={agentType}
-                                                        tooltip={agentType}
+                                                        tooltip={agentLabel(agentType)}
                                                         type={agentType as AgentType}
                                                     />
                                                 ))}
@@ -229,21 +247,21 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
             {!!agentTypeRows.length && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>Usage by Agent Type</CardTitle>
-                        <CardDescription>LLM token usage and costs per agent type in this flow</CardDescription>
+                        <CardTitle>{copy.dashboard.byAgent}</CardTitle>
+                        <CardDescription>{copy.dashboard.byAgentFlowHint}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Table aria-label="Usage by Agent Type">
+                        <Table aria-label={copy.dashboard.byAgent}>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Agent Type</TableHead>
-                                    <TableHead className="text-right">Tokens In</TableHead>
-                                    <TableHead className="text-right">Tokens Out</TableHead>
-                                    <TableHead className="text-right">Cache In</TableHead>
-                                    <TableHead className="text-right">Cache Out</TableHead>
-                                    <TableHead className="text-right">Cost In</TableHead>
-                                    <TableHead className="text-right">Cost Out</TableHead>
-                                    <TableHead className="text-right">Total Cost</TableHead>
+                                    <TableHead>{copy.dashboard.agentType}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.tokensIn}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.tokensOut}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.cacheIn}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.cacheOut}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.costIn}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.costOut}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.totalCost}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -263,27 +281,27 @@ export function FlowDashboardOverview({ flowId }: { flowId: string }) {
             {!!toolcallsByFunction.length && (
                 <Card>
                     <CardHeader>
-                        <CardTitle>Tool Calls by Function</CardTitle>
-                        <CardDescription>Execution statistics per tool function in this flow</CardDescription>
+                        <CardTitle>{copy.dashboard.byFunction}</CardTitle>
+                        <CardDescription>{copy.dashboard.byFunctionFlowHint}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <Table aria-label="Tool Calls by Function">
+                        <Table aria-label={copy.dashboard.byFunction}>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Function</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead className="text-right">Count</TableHead>
-                                    <TableHead className="text-right">Total Duration</TableHead>
-                                    <TableHead className="text-right">Avg Duration</TableHead>
+                                    <TableHead>{copy.dashboard.function}</TableHead>
+                                    <TableHead>{copy.dashboard.type}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.count}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.totalDuration}</TableHead>
+                                    <TableHead className="text-right">{copy.dashboard.avgDuration}</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {toolcallsByFunction.map((item) => (
                                     <TableRow key={item.functionName}>
-                                        <TableCell className="font-medium">{item.functionName}</TableCell>
+                                        <TableCell className="font-medium">{toolLabel(item.functionName)}</TableCell>
                                         <TableCell>
                                             <Badge variant={item.isAgent ? 'secondary' : 'outline'}>
-                                                {item.isAgent ? 'Agent' : 'Tool'}
+                                                {item.isAgent ? copy.dashboard.agent : copy.dashboard.tool}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">{formatNumber(item.totalCount)}</TableCell>

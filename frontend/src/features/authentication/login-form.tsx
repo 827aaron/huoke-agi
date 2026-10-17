@@ -12,6 +12,7 @@ import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { Input } from '@/components/ui/input';
 import { InputPassword } from '@/components/ui/input-password';
 import { useAppForm } from '@/hooks/use-app-form';
+import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { useUser } from '@/providers/user-provider';
 
@@ -21,21 +22,21 @@ const formSchema = z.object({
     mail: z
         .string()
         .min(1, {
-            message: 'Login is required',
+            message: copy.auth.loginRequired,
         })
         .refine(
             (value) => z.string().email().safeParse(value).success || ['admin', 'demo'].includes(value.toLowerCase()),
             {
-                message: 'Invalid login',
+                message: copy.auth.invalidLogin,
             },
         ),
     password: z.string().min(1, {
-        message: 'Password is required',
+        message: copy.auth.passwordRequired,
     }),
 });
 
-const errorMessage = 'Invalid login or password';
-const errorProviderMessage = 'Authentication failed';
+const errorMessage = copy.auth.loginFailed;
+const errorProviderMessage = copy.auth.providerFailed;
 
 interface AuthProviderAction {
     icon: React.ReactNode;
@@ -47,12 +48,12 @@ const providerActions: AuthProviderAction[] = [
     {
         icon: <Google className="size-5" />,
         id: 'google',
-        name: 'Continue with Google',
+        name: copy.auth.continueWithGoogle,
     },
     {
         icon: <Github className="size-5" />,
         id: 'github',
-        name: 'Continue with GitHub',
+        name: copy.auth.continueWithGithub,
     },
 ];
 
@@ -154,10 +155,8 @@ function LoginForm({ providers, returnUrl = routes.newFlow }: LoginFormProps) {
     if (shouldShowPasswordChange) {
         return (
             <div className="mx-auto flex w-[350px] flex-col gap-6">
-                <h1 className="text-center text-3xl font-bold">Update Password</h1>
-                <p className="text-muted-foreground text-center text-sm">
-                    You need to change your password before continuing.
-                </p>
+                <h1 className="text-center text-3xl font-bold">{copy.auth.updatePassword}</h1>
+                <p className="text-muted-foreground text-center text-sm">{copy.auth.changePasswordHint}</p>
                 <PasswordChangeForm
                     layout="vertical"
                     onSkip={handleSkipPasswordChange}
@@ -174,7 +173,7 @@ function LoginForm({ providers, returnUrl = routes.newFlow }: LoginFormProps) {
                 noValidate
                 onSubmit={form.handleSubmit(handleSubmit)}
             >
-                <h1 className="text-center text-3xl font-bold">PentAGI</h1>
+                <h1 className="text-center text-3xl font-bold">{copy.app.name}</h1>
 
                 {providers?.length > 0 && (
                     <>
@@ -200,7 +199,7 @@ function LoginForm({ providers, returnUrl = routes.newFlow }: LoginFormProps) {
                                 <div className="w-full border-t border-gray-300" />
                             </div>
                             <div className="relative flex justify-center text-sm">
-                                <span className="bg-background px-2">or</span>
+                                <span className="bg-background px-2">{copy.auth.or}</span>
                             </div>
                         </div>
                     </>
@@ -212,12 +211,12 @@ function LoginForm({ providers, returnUrl = routes.newFlow }: LoginFormProps) {
                         name="mail"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Login</FormLabel>
+                                <FormLabel>{copy.auth.login}</FormLabel>
                                 <FormControl>
                                     <Input
                                         {...field}
                                         autoFocus
-                                        placeholder="Enter your email"
+                                        placeholder={copy.auth.loginPlaceholder}
                                     />
                                 </FormControl>
                                 <FormMessage />
@@ -230,11 +229,11 @@ function LoginForm({ providers, returnUrl = routes.newFlow }: LoginFormProps) {
                         name="password"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Password</FormLabel>
+                                <FormLabel>{copy.auth.password}</FormLabel>
                                 <FormControl>
                                     <InputPassword
                                         {...field}
-                                        placeholder="Enter your password"
+                                        placeholder={copy.auth.passwordPlaceholder}
                                     />
                                 </FormControl>
                                 <FormMessage />
@@ -243,7 +242,7 @@ function LoginForm({ providers, returnUrl = routes.newFlow }: LoginFormProps) {
                     />
 
                     <FormSubmitButton className="w-full">
-                        <span>Sign in</span>
+                        <span>{copy.auth.signIn}</span>
                     </FormSubmitButton>
 
                     {error && <FormMessage>{error}</FormMessage>}

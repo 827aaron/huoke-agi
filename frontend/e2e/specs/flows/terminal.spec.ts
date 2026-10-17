@@ -9,6 +9,7 @@ test.describe('flow terminal', { tag: '@flows' }, () => {
     test('renders sandbox output readable through the xterm buffer', async ({ page, pageErrorLog }) => {
         await page.goto('/flows');
         await page.getByRole('row', { name: /E2E Alpha/ }).click();
+        await page.getByRole('tab', { name: '终端' }).click();
 
         await expect(page.locator('.xterm')).toBeVisible();
         await expect(async () => {

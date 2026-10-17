@@ -1,19 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { StatusType } from '@/graphql/types';
 import { useSearchParamTab } from '@/hooks/use-search-param-tab';
 import { getLatestSearchParams } from '@/lib/url-params';
 import { useFlow } from '@/providers/flow-provider';
 
 export const CENTRAL_TAB_VALUES = ['automation', 'assistant', 'dashboard'];
 
-export const SIDE_TAB_VALUES = ['terminal', 'tasks', 'agents', 'tools', 'vectorStores', 'files', 'screenshots'];
+export const SIDE_TAB_VALUES = [
+    'leads',
+    'sources',
+    'terminal',
+    'tasks',
+    'agents',
+    'tools',
+    'vectorStores',
+    'files',
+    'screenshots',
+];
 
 export const FLOW_TAB_VALUES = [...CENTRAL_TAB_VALUES, ...SIDE_TAB_VALUES];
 
 export const SIDE_TAB_PARAM = 'side';
-
-const DEFAULT_SIDE_TAB = 'terminal';
 
 const readParam = (snapshot: URLSearchParams, key: string, values: readonly string[]): null | string => {
     const value = getLatestSearchParams(snapshot).get(key);
@@ -31,12 +40,16 @@ const writeParam = (key: string, value: string) => (previous: URLSearchParams) =
 
 export function useFlowSideTab() {
     const [searchParams] = useSearchParams();
+    const { flowStatus } = useFlow();
+
+    // A running round shows what the agent is doing; a finished or historical one shows its prospects.
+    const defaultTab = flowStatus === StatusType.Running || flowStatus === StatusType.Created ? 'tasks' : 'leads';
 
     const linked = readParam(searchParams, 'tab', SIDE_TAB_VALUES);
     const named = readParam(searchParams, SIDE_TAB_PARAM, SIDE_TAB_VALUES);
 
     const [resolvedTab, handleTabChange] = useSearchParamTab({
-        fallback: linked ?? DEFAULT_SIDE_TAB,
+        fallback: linked ?? defaultTab,
         key: SIDE_TAB_PARAM,
         values: SIDE_TAB_VALUES,
     });

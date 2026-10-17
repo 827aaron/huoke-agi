@@ -164,7 +164,7 @@ These settings control basic application behavior and are foundational for the s
 | InstallationID   | `INSTALLATION_ID`           | *(none)*                                                                     | Unique installation identifier for PentAGI Cloud API communication       |
 | LicenseKey       | `LICENSE_KEY`               | *(none)*                                                                     | License key for PentAGI Cloud API authentication and feature activation  |
 | UpdateStrategy   | `UPDATE_STRATEGY`         | `preview`                                                                    | Which builds this installation is offered: `nightly`, `preview` or `stable`. An unrecognised value falls back to `preview`. See [PentAGI Cloud API Settings](#pentagi-cloud-api-settings). |
-| UpdateCheckInterval | `UPDATE_CHECK_INTERVAL` | `3h`                                                                         | How often the running server reports its own state to the Cloud API. `0` disables the report. See [PentAGI Cloud API Settings](#pentagi-cloud-api-settings). |
+| UpdateCheckInterval | `UPDATE_CHECK_INTERVAL` | `0`                                                                          | How often the running server reports its own state to the Cloud API. `0`, the default, disables the report. See [PentAGI Cloud API Settings](#pentagi-cloud-api-settings). |
 | UpdateServerHost | `UPDATE_SERVER_HOST`      | `update.pentagi.com`                                                         | PentAGI Cloud API endpoint as `host[:port]`, **without a scheme** — the connection is always HTTPS. See [PentAGI Cloud API Settings](#pentagi-cloud-api-settings). |
 | SupportServerHost | `SUPPORT_SERVER_HOST`    | `support.pentagi.com`                                                        | PentAGI Support API endpoint as `host[:port]`, same shape as `UPDATE_SERVER_HOST`. See [PentAGI Cloud API Settings](#pentagi-cloud-api-settings). |
 
@@ -297,7 +297,7 @@ The strategy is sent with each update check and applies to every stack in the an
 
 #### `UPDATE_CHECK_INTERVAL`
 
-How often the **running server** reports its own state to the Cloud API, as a Go duration (`3h` by default, `90m` and `1h30m` are the same value). `0`, or any negative value, disables the report entirely.
+How often the **running server** reports its own state to the Cloud API, as a Go duration (`90m` and `1h30m` are the same value). `0`, the default, or any negative value disables the report entirely, and the server then sends nothing to the Cloud API on its own; set `3h` to turn it on.
 
 This is the other half of the picture the update check cannot see. An installer's check describes the artefacts on the machine and says nothing about the server itself, so an installation deployed once and never started looks exactly like one in daily use. The report closes that gap: on each tick it sends the build that is running, the platform it was compiled for, the sha256 of that binary, and a summary of how the server is configured — quantities and closed vocabularies produced by `GetInstanceSummary`, nothing that identifies a person and nothing anybody wrote. Those first three are read off this process and travel **inside** the summary as well as beside it, because the same summary is what `-info` prints for a caller that will forward it: whoever carries a description cannot produce the platform of the process that wrote it, and the executable's digest is not something an image digest can stand in for.
 
@@ -1431,13 +1431,15 @@ These settings control the behavior of the AI assistant functionality, including
 
 | Option                            | Environment Variable                    | Default Value | Description                                                             |
 | --------------------------------- | --------------------------------------- | ------------- | ----------------------------------------------------------------------- |
-| AssistantUseAgents                | `ASSISTANT_USE_AGENTS`                  | `false`       | Controls the default value for agent usage when creating new assistants |
+| AssistantUseAgents                | `ASSISTANT_USE_AGENTS`                  | `false`       | Controls the default value for agent usage when creating new assistants. The shipped `docker-compose.yml` sets `true`: only the specialist agents hold the growth tools |
 | AssistantSummarizerPreserveLast   | `ASSISTANT_SUMMARIZER_PRESERVE_LAST`    | `true`        | Whether to preserve all messages in the assistant's last section        |
 | AssistantSummarizerLastSecBytes   | `ASSISTANT_SUMMARIZER_LAST_SEC_BYTES`   | `76800`       | Maximum byte size for assistant's last section (75KB)                   |
 | AssistantSummarizerMaxBPBytes     | `ASSISTANT_SUMMARIZER_MAX_BP_BYTES`     | `16384`       | Maximum byte size for a single body pair in assistant context (16KB)    |
 | AssistantSummarizerMaxQASections  | `ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS`  | `7`           | Maximum QA sections to preserve in assistant context                    |
 | AssistantSummarizerMaxQABytes     | `ASSISTANT_SUMMARIZER_MAX_QA_BYTES`     | `76800`       | Maximum byte size for assistant's QA sections (75KB)                    |
 | AssistantSummarizerKeepQASections | `ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS` | `3`           | Number of recent QA sections to preserve without summarization          |
+| AssistantDelegationTimeout        | `ASSISTANT_DELEGATION_TIMEOUT`          | `15m`         | Longest one delegation from the assistant to a specialist may run; the assistant is then told the specialist timed out. `0` means no limit |
+| AssistantResearcherTimeout        | `ASSISTANT_RESEARCHER_TIMEOUT`          | `20m`         | The same limit for the researcher (`pentester`), which reads groups     |
 
 ### Usage Details
 
@@ -1861,7 +1863,7 @@ These settings control HTTP proxy, SSL configuration, and network timeouts for o
 | ProxyURL            | `PROXY_URL`             | *(none)*      | URL for HTTP proxy (e.g., `http://user:pass@proxy:8080`)         |
 | ExternalSSLCAPath   | `EXTERNAL_SSL_CA_PATH`  | *(none)*      | Path to trusted CA certificate for external LLM SSL connections  |
 | ExternalSSLInsecure | `EXTERNAL_SSL_INSECURE` | `false`       | Skip SSL certificate verification for external connections       |
-| HTTPClientTimeout   | `HTTP_CLIENT_TIMEOUT`   | `600`         | Timeout in seconds for external API calls (0 = no timeout)       |
+| HTTPClientTimeout   | `HTTP_CLIENT_TIMEOUT`   | `600`         | Timeout in seconds for external API calls (0 = no timeout). The shipped `docker-compose.yml` sets `300` |
 
 ### Usage Details
 

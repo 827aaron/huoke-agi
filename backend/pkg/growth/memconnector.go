@@ -152,6 +152,15 @@ func (m *MemoryConnector) ReadHistory(
 	}
 
 	var page []connectors.Message
+	if req.MinID > 0 && req.OffsetID == 0 {
+		for _, msg := range all {
+			if msg.ID > req.MinID && len(page) < req.Limit {
+				page = append(page, msg)
+			}
+		}
+		slices.Reverse(page)
+		return connectors.HistoryPage{Messages: page}, nil
+	}
 	for i := len(all) - 1; i >= 0 && len(page) < req.Limit; i-- {
 		msg := all[i]
 		if req.OffsetID != 0 && msg.ID >= req.OffsetID {

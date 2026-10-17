@@ -2,6 +2,7 @@ import { Slot } from '@radix-ui/react-slot';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import * as React from 'react';
 
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 function Breadcrumb({
@@ -28,7 +29,7 @@ function BreadcrumbEllipsis({ className, ...props }: React.ComponentProps<'span'
             {...props}
         >
             <MoreHorizontal className="h-4 w-4" />
-            <span className="sr-only">More</span>
+            <span className="sr-only">{copy.ui.breadcrumbMore}</span>
         </span>
     );
 }

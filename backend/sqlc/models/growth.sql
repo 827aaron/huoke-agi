@@ -19,9 +19,17 @@ SELECT * FROM channel_accounts WHERE user_id = sqlc.arg(user_id) ORDER BY id;
 
 -- name: GetUsableChannelAccounts :many
 -- Accounts that may take a call now or after their rate limit ends; joined_source tells
--- whether the account already joined source_id (0 matches none).
-SELECT ca.*, COALESCE(acs.join_status = 'joined', false)::boolean AS joined_source
+-- whether the account already joined source_id (0 matches none). The join columns count
+-- the joins of the last 24 hours, all and through invite links.
+SELECT ca.*, COALESCE(acs.join_status = 'joined', false)::boolean AS joined_source,
+  j.joins_24h, j.private_joins_24h
 FROM channel_accounts ca
+CROSS JOIN LATERAL (
+  SELECT count(*)::bigint AS joins_24h,
+    count(*) FILTER (WHERE a.private_join)::bigint AS private_joins_24h
+  FROM account_sources a
+  WHERE a.account_id = ca.id AND a.join_attempted_at > now() - interval '24 hours'
+) j
 LEFT JOIN account_sources acs ON acs.account_id = ca.id AND acs.source_id = sqlc.arg(source_id)
 WHERE ca.user_id = sqlc.arg(user_id) AND ca.platform = sqlc.arg(platform)
   AND ca.status IN ('active', 'rate_limited')
@@ -33,6 +41,7 @@ UPDATE channel_accounts SET last_used_at = now() WHERE id = sqlc.arg(id);
 -- name: RecordChannelAccountSuccess :exec
 UPDATE channel_accounts
 SET last_success_at = now(),
+    first_signed_in_at = COALESCE(first_signed_in_at, now()),
     consecutive_errors = 0,
     last_error = '',
     rate_limit_until = NULL,
@@ -56,6 +65,29 @@ SELECT session FROM channel_accounts WHERE id = sqlc.arg(id);
 
 -- name: UpdateChannelAccountSession :exec
 UPDATE channel_accounts SET session = sqlc.arg(session) WHERE id = sqlc.arg(id);
+
+-- name: MarkChannelAccountSignedIn :one
+UPDATE channel_accounts
+SET status = 'active', first_signed_in_at = COALESCE(first_signed_in_at, now())
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: ScheduleChannelAccountJoin :exec
+UPDATE channel_accounts SET next_join_at = sqlc.arg(next_join_at) WHERE id = sqlc.arg(id);
+
+-- name: GetUserAccountJoinCounts :many
+-- Per account: the sources joined or awaiting approval, and the joins of the last 24 hours,
+-- all and through invite links.
+SELECT ca.id AS account_id, ca.platform, ca.label,
+  count(acs.id) FILTER (WHERE acs.join_status IN ('joined', 'pending'))::bigint AS joined,
+  count(acs.id) FILTER (WHERE acs.join_attempted_at > now() - interval '24 hours')::bigint AS joins_24h,
+  count(acs.id) FILTER (WHERE acs.join_attempted_at > now() - interval '24 hours' AND acs.private_join)::bigint
+    AS private_joins_24h
+FROM channel_accounts ca
+LEFT JOIN account_sources acs ON acs.account_id = ca.id
+WHERE ca.user_id = sqlc.arg(user_id)
+GROUP BY ca.id
+ORDER BY ca.id;
 
 -- name: UpdateChannelAccountStatus :one
 UPDATE channel_accounts SET status = sqlc.arg(status) WHERE id = sqlc.arg(id) RETURNING *;
@@ -188,6 +220,8 @@ ORDER BY acs.source_id, acs.account_id;
 UPDATE account_sources
 SET join_status = sqlc.arg(join_status),
     join_error  = sqlc.arg(join_error),
+    join_attempted_at = CURRENT_TIMESTAMP,
+    private_join = sqlc.arg(private_join),
     joined_at   = CASE WHEN sqlc.arg(join_status)::text = 'joined' THEN COALESCE(joined_at, CURRENT_TIMESTAMP) ELSE joined_at END
 WHERE id = sqlc.arg(id)
 RETURNING *;
@@ -237,11 +271,11 @@ WHERE user_id = sqlc.arg(user_id) AND platform = sqlc.arg(platform) AND platform
 -- name: UpsertLead :one
 INSERT INTO leads (
   user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason,
-  first_flow_id, first_task_id, last_flow_id, last_task_id
+  contacts, first_flow_id, first_task_id, last_flow_id, last_task_id
 ) VALUES (
   sqlc.arg(user_id), sqlc.arg(platform), sqlc.arg(platform_user_id), sqlc.arg(identity_kind),
   sqlc.arg(username), sqlc.arg(display_name),
-  sqlc.arg(score), sqlc.arg(tier), sqlc.arg(match_reason),
+  sqlc.arg(score), sqlc.arg(tier), sqlc.arg(match_reason), sqlc.arg(contacts),
   sqlc.narg(flow_id), sqlc.narg(task_id), sqlc.narg(flow_id), sqlc.narg(task_id)
 )
 ON CONFLICT (user_id, platform, platform_user_id) DO UPDATE
@@ -250,6 +284,7 @@ SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
     score        = GREATEST(EXCLUDED.score, leads.score),
     tier         = CASE WHEN EXCLUDED.tier = 'qualified' OR leads.tier = 'qualified' THEN 'qualified' ELSE 'watchlist' END,
     match_reason = CASE WHEN EXCLUDED.score > leads.score THEN EXCLUDED.match_reason ELSE leads.match_reason END,
+    contacts     = EXCLUDED.contacts,
     last_flow_id = COALESCE(EXCLUDED.last_flow_id, leads.last_flow_id),
     last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id)
 RETURNING *;
@@ -272,18 +307,21 @@ ORDER BY lead_id, message_time DESC NULLS LAST, id DESC;
 -- name: GetUserLead :one
 SELECT * FROM leads WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
--- name: CountFlowLeads :one
+-- name: CountUserLeads :one
 SELECT
   COUNT(*) FILTER (WHERE tier = 'qualified' AND delivered_at IS NULL)::bigint AS deliverable,
   COUNT(*) FILTER (WHERE tier = 'watchlist' AND delivered_at IS NULL)::bigint AS watchlist,
   COUNT(*) FILTER (WHERE delivered_at IS NOT NULL)::bigint AS delivered
 FROM leads
-WHERE user_id = sqlc.arg(user_id) AND last_flow_id = sqlc.arg(flow_id);
+WHERE user_id = sqlc.arg(user_id)
+  AND (sqlc.narg(flow_id)::bigint IS NULL OR last_flow_id = sqlc.narg(flow_id)::bigint)
+  AND (sqlc.narg(since)::timestamptz IS NULL OR created_at >= sqlc.narg(since)::timestamptz);
 
 -- name: GetDeliverableLeads :many
 SELECT * FROM leads
 WHERE user_id = sqlc.arg(user_id) AND last_flow_id = sqlc.arg(flow_id)
   AND tier = 'qualified' AND delivered_at IS NULL
+  AND (NOT sqlc.arg(has_contact)::boolean OR jsonb_array_length(contacts) > 0)
 ORDER BY score DESC, id ASC
 LIMIT sqlc.arg(lim);
 
@@ -304,6 +342,8 @@ WHERE user_id = sqlc.arg(user_id)
   AND (sqlc.narg(run_id)::bigint IS NULL OR delivered_run_id = sqlc.narg(run_id)::bigint)
   AND (sqlc.narg(tier)::text IS NULL OR tier = sqlc.narg(tier)::text)
   AND (sqlc.narg(delivered)::boolean IS NULL OR (delivered_at IS NOT NULL) = sqlc.narg(delivered)::boolean)
+  AND (sqlc.narg(since)::timestamptz IS NULL OR created_at >= sqlc.narg(since)::timestamptz)
+  AND (sqlc.narg(has_contact)::boolean IS NULL OR (jsonb_array_length(contacts) > 0) = sqlc.narg(has_contact)::boolean)
 ORDER BY score DESC, updated_at DESC, id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
@@ -387,3 +427,13 @@ RETURNING *;
 
 -- name: GetUserResourceByPath :one
 SELECT * FROM user_resources WHERE user_id = sqlc.arg(user_id) AND path = sqlc.arg(path);
+
+-- name: UpsertMessageScore :exec
+INSERT INTO growth_message_scores (user_id, source_id, message_id, score, signals)
+VALUES (sqlc.arg(user_id), sqlc.arg(source_id), sqlc.arg(message_id), sqlc.arg(score), sqlc.arg(signals))
+ON CONFLICT (user_id, source_id, message_id) DO UPDATE
+SET score = EXCLUDED.score, signals = EXCLUDED.signals;
+
+-- name: GetMessageScores :many
+SELECT * FROM growth_message_scores
+WHERE user_id = sqlc.arg(user_id) AND source_id = sqlc.arg(source_id) AND message_id = ANY(sqlc.arg(message_ids)::text[]);

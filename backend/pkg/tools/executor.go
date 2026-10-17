@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -17,6 +18,7 @@ import (
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/observability/langfuse"
 	"pentagi/pkg/schema"
+	"pentagi/pkg/templates"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vxcontrol/cloud/anonymizer"
@@ -394,6 +396,23 @@ func (ce *customExecutor) Execute(
 	result, resultFormat, err := wrapHandler(ctx, name, args)
 	if err != nil {
 		obsWrapper.end(result, err, time.Since(startTime).Seconds())
+		if msgID != 0 {
+			// Without a result the message reads as still running, a stopped or failed
+			// delegation included.
+			msgCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), closingWriteTimeout)
+			defer cancel()
+			lang := ""
+			if flow, err := ce.db.GetFlow(msgCtx, ce.flowID); err == nil {
+				lang = flow.Language
+			}
+			outcome := fmt.Sprintf(templates.NoticeText(templates.NoticeToolFailed, lang), err)
+			if errors.Is(err, context.Canceled) {
+				outcome = templates.NoticeText(templates.NoticeToolStopped, lang)
+			}
+			if err := ce.mlp.UpdateMsgResult(msgCtx, msgID, streamID, outcome, database.MsglogResultFormatPlain); err != nil {
+				obs.LogErrorOrCancel(logger, err, "failed to update tool call message result")
+			}
+		}
 		return "", err
 	}
 

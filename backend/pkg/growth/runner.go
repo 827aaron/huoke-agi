@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"pentagi/pkg/database"
 )
@@ -34,15 +35,21 @@ type SourceStats struct {
 // new_leads_this_task: leads this round delivered plus qualified, undelivered leads
 // seen in this flow, so it never drops when the round delivers.
 type Progress struct {
-	RunID            int64       `json:"run_id,omitempty"`
-	TaskID           int64       `json:"task_id,omitempty"`
-	Status           string      `json:"status,omitempty"`
-	Target           int         `json:"target"`
-	NewLeads         int         `json:"new_leads_this_task"`
-	Watchlist        int         `json:"watchlist"`
-	DeliveredThisRun int         `json:"delivered_this_round"`
-	Remaining        int         `json:"remaining"`
-	Sources          SourceStats `json:"sources"`
+	RunID            int64  `json:"run_id,omitempty"`
+	TaskID           int64  `json:"task_id,omitempty"`
+	Status           string `json:"status,omitempty"`
+	Target           int    `json:"target"`
+	NewLeads         int    `json:"new_leads_this_task"`
+	Watchlist        int    `json:"watchlist"`
+	DeliveredThisRun int    `json:"delivered_this_round"`
+	Remaining        int    `json:"remaining"`
+	// Qualified and Delivered count the owner's leads outside a task, from Since when set.
+	Qualified int         `json:"qualified,omitempty"`
+	Delivered int         `json:"delivered,omitempty"`
+	Since     string      `json:"since,omitempty"`
+	Sources   SourceStats `json:"sources"`
+	// Warning names a blocker only the customer can clear, such as a missing Jev key.
+	Warning string `json:"warning,omitempty"`
 }
 
 // Line is the one line every lead-collecting agent copies into its result; the
@@ -98,9 +105,15 @@ func (s *Service) SetTarget(ctx context.Context, scope Scope, target int) (Progr
 	return s.Progress(ctx, scope)
 }
 
-// Progress reports the round of the calling task. Without a task it reports the flow's
-// lead counts and the pool, with no target.
+// Progress reports the round of the calling task. Without a task it reports every lead
+// of the owner and the pool, with no target.
 func (s *Service) Progress(ctx context.Context, scope Scope) (Progress, error) {
+	return s.ProgressSince(ctx, scope, time.Time{})
+}
+
+// ProgressSince is Progress counting only leads first found at or after since; the zero
+// time counts them all.
+func (s *Service) ProgressSince(ctx context.Context, scope Scope, since time.Time) (Progress, error) {
 	var p Progress
 	if scope.TaskID != nil {
 		run, err := s.EnsureRun(ctx, scope)
@@ -116,21 +129,39 @@ func (s *Service) Progress(ctx context.Context, scope Scope) (Progress, error) {
 		p.DeliveredThisRun = len(delivered)
 	}
 
-	counts, err := s.db.CountFlowLeads(ctx, database.CountFlowLeadsParams{
-		UserID: scope.UserID,
-		FlowID: scope.flowID(),
-	})
+	params := database.CountUserLeadsParams{UserID: scope.UserID}
+	if scope.TaskID != nil {
+		params.FlowID = scope.flowID()
+	}
+	if !since.IsZero() {
+		params.Since = sql.NullTime{Time: since, Valid: true}
+		p.Since = since.Format(time.RFC3339)
+	}
+	counts, err := s.db.CountUserLeads(ctx, params)
 	if err != nil {
-		return p, fmt.Errorf("failed to count leads of flow %d: %w", scope.FlowID, err)
+		return p, fmt.Errorf("failed to count leads: %w", err)
 	}
 	p.NewLeads = p.DeliveredThisRun + int(counts.Deliverable)
 	p.Watchlist = int(counts.Watchlist)
 	p.Remaining = max(p.Target-p.NewLeads, 0)
+	if scope.TaskID == nil {
+		p.Qualified, p.Delivered = int(counts.Deliverable+counts.Delivered), int(counts.Delivered)
+	}
+	if cfg, _ := s.ConfigFor(ctx, scope.UserID); cfg.TypeSafeAPIKey == "" {
+		p.Warning = ErrNoJudge.Error()
+	}
 
 	if p.Sources, err = s.sourceStats(ctx, scope.UserID); err != nil {
 		return p, err
 	}
 	return p, nil
+}
+
+// DeliverOptions: HasContact delivers only leads with a contact beside their platform
+// account, so the target counts those alone.
+type DeliverOptions struct {
+	AllowPartial bool
+	HasContact   bool
 }
 
 func (s *Service) sourceStats(ctx context.Context, userID int64) (SourceStats, error) {
@@ -155,7 +186,8 @@ func (s *Service) sourceStats(ctx context.Context, userID int64) (SourceStats, e
 // tells the caller how many more to collect, unless allowPartial is set (the sources are
 // exhausted), in which case it delivers what there is. Calling it again tops a partial
 // round up and returns a completed round's delivery unchanged.
-func (s *Service) Deliver(ctx context.Context, scope Scope, allowPartial bool) (Delivery, error) {
+func (s *Service) Deliver(ctx context.Context, scope Scope, opt DeliverOptions) (Delivery, error) {
+	allowPartial := opt.AllowPartial
 	run, err := s.EnsureRun(ctx, scope)
 	if err != nil {
 		return Delivery{}, err
@@ -173,8 +205,9 @@ func (s *Service) Deliver(ctx context.Context, scope Scope, allowPartial bool) (
 	if need > 0 {
 		candidates, err := s.db.GetDeliverableLeads(ctx, database.GetDeliverableLeadsParams{
 			UserID: scope.UserID,
-			FlowID: scope.flowID(),
-			Lim:    int64(need),
+			FlowID:     scope.flowID(),
+			HasContact: opt.HasContact,
+			Lim:        int64(need),
 		})
 		if err != nil {
 			return Delivery{}, fmt.Errorf("failed to select leads for round %d: %w", run.ID, err)

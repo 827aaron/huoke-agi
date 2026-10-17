@@ -49,18 +49,18 @@ test.describe('flow interrupt', { tag: '@flows' }, () => {
         test('stops a running flow from the composer and hands the input back', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
 
-            const stop = page.getByRole('button', { name: 'Stop' });
+            const stop = page.getByRole('button', { name: '停止' });
 
             await expect(stop, 'a running flow offers Stop, not Submit').toBeVisible();
-            await expect(page.getByRole('button', { name: 'Submit' })).toBeHidden();
+            await expect(page.getByRole('button', { exact: true, name: '发送' })).toBeHidden();
 
             const request = operationRequest(page, 'stopFlow');
 
             await stop.click();
             expect((await request).postDataJSON().variables).toEqual({ flowId: '5' });
 
-            await expect(page.getByRole('button', { name: 'Submit' })).toBeVisible();
-            await expect(page.getByPlaceholder('Provide additional context or instructions...')).toBeVisible();
+            await expect(page.getByRole('button', { exact: true, name: '发送' })).toBeVisible();
+            await expect(page.getByPlaceholder('补充背景或新的要求…')).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });
@@ -98,13 +98,13 @@ test.describe('flow interrupt', { tag: '@flows' }, () => {
         test('sends the typed message to the waiting flow', async ({ page, pageErrorLog }) => {
             await openFlowA(page);
 
-            const composer = page.getByPlaceholder('Provide additional context or instructions...');
+            const composer = page.getByPlaceholder('补充背景或新的要求…');
 
             await composer.fill('follow up on the open port');
 
             const request = operationRequest(page, 'putUserInput');
 
-            await page.getByRole('button', { name: 'Submit' }).click();
+            await page.getByRole('button', { exact: true, name: '发送' }).click();
 
             expect((await request).postDataJSON().variables).toEqual({
                 flowId: '5',

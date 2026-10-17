@@ -3,16 +3,18 @@ import { useState, useTransition } from 'react';
 
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import GrowthOnboarding from '@/features/growth/growth-onboarding';
 import { UsageStatsPeriod } from '@/graphql/types';
 import { usePageStorageKeys } from '@/hooks/use-page-storage-keys';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { DashboardAnalytics } from '@/pages/dashboard/dashboard-analytics';
 import { DashboardOverview } from '@/pages/dashboard/dashboard-overview';
 
 const periodOptions: { label: string; value: UsageStatsPeriod }[] = [
-    { label: 'Week', value: UsageStatsPeriod.Week },
-    { label: 'Month', value: UsageStatsPeriod.Month },
-    { label: 'Quarter', value: UsageStatsPeriod.Quarter },
+    { label: copy.dashboard.week, value: UsageStatsPeriod.Week },
+    { label: copy.dashboard.month, value: UsageStatsPeriod.Month },
+    { label: copy.dashboard.quarter, value: UsageStatsPeriod.Quarter },
 ];
 
 const VALID_PERIODS = new Set<string>(Object.values(UsageStatsPeriod));
@@ -74,11 +76,14 @@ function Dashboard() {
         <>
             <AppHeader>
                 <AppHeaderContent>
-                    <AppHeaderTitle icon={<LayoutDashboard className="size-4 shrink-0" />}>Dashboard</AppHeaderTitle>
+                    <AppHeaderTitle icon={<LayoutDashboard className="size-4 shrink-0" />}>
+                        {copy.nav.dashboard}
+                    </AppHeaderTitle>
                 </AppHeaderContent>
             </AppHeader>
 
             <div className="flex flex-col gap-6 p-4">
+                <GrowthOnboarding />
                 <Tabs
                     className="w-full"
                     onValueChange={handleTabChange}
@@ -86,8 +91,8 @@ function Dashboard() {
                 >
                     <div className="flex items-center justify-between">
                         <TabsList>
-                            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                            <TabsTrigger value="overview">Overview</TabsTrigger>
+                            <TabsTrigger value="analytics">{copy.dashboard.analytics}</TabsTrigger>
+                            <TabsTrigger value="overview">{copy.dashboard.overview}</TabsTrigger>
                         </TabsList>
 
                         {activeTab === 'analytics' && (

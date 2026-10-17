@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -59,6 +60,56 @@ type Profile struct {
 	Signals       []string `json:"signals"`
 	Excludes      []string `json:"excludes"`
 	Notes         string   `json:"notes"`
+	// Scoring turns the judgement model's answers into a lead score; nil is DefaultScoring.
+	Scoring *Scoring `json:"scoring,omitempty"`
+	// ContactTypes are the contacts a lead is looked for with, from ContactTypes; empty
+	// means the platform handle alone.
+	ContactTypes []string `json:"contact_types"`
+}
+
+// Scoring weighs the signals of a message: each signal the judgement model sees adds its
+// weight, and Active adds its weight for a message of the last 7 days and half of it for
+// one of the last 30. A score of Qualified or more counts toward the target; from
+// Watchlist up a lead is kept for review; below it is dropped.
+type Scoring struct {
+	Weights   ScoringWeights `json:"weights"`
+	Qualified int            `json:"qualified"`
+	Watchlist int            `json:"watchlist"`
+}
+
+type ScoringWeights struct {
+	Player int `json:"player"`
+	Pain   int `json:"pain"`
+	Paying int `json:"paying"`
+	Active int `json:"active"`
+	Match  int `json:"match"`
+}
+
+// DefaultScoring is the weighting of a game company looking for players.
+var DefaultScoring = Scoring{
+	Weights:   ScoringWeights{Player: 3, Pain: 3, Paying: 2, Active: 2, Match: 3},
+	Qualified: QualifiedMinScore,
+	Watchlist: WatchlistMinScore,
+}
+
+// The contact types a lead can carry. A platform handle is the lead's own account, which
+// every lead has.
+const (
+	ContactPlatformHandle = "platform_handle"
+	ContactPhone          = "phone"
+	ContactEmail          = "email"
+	ContactMessenger      = "messenger"
+	ContactOther          = "other"
+)
+
+var ContactTypes = []string{ContactPlatformHandle, ContactPhone, ContactEmail, ContactMessenger, ContactOther}
+
+// ScoringOrDefault is the profile's scoring, or DefaultScoring when it sets none.
+func (p Profile) ScoringOrDefault() Scoring {
+	if p.Scoring == nil {
+		return DefaultScoring
+	}
+	return *p.Scoring
 }
 
 // ProfileView is a stored profile. A customer has one profile, so ID is the owner's id.
@@ -100,6 +151,16 @@ func (p *Profile) normalize() {
 	p.Games, p.Competitors = trim(p.Games), trim(p.Competitors)
 	p.Regions, p.Languages = trim(p.Regions), trim(p.Languages)
 	p.Signals, p.Excludes = trim(p.Signals), trim(p.Excludes)
+	types := make([]string, 0, len(p.ContactTypes))
+	for _, t := range trim(p.ContactTypes) {
+		if t = strings.ToLower(t); !slices.Contains(types, t) {
+			types = append(types, t)
+		}
+	}
+	if len(types) == 0 {
+		types = []string{ContactPlatformHandle}
+	}
+	p.ContactTypes = types
 }
 
 func (p Profile) validate() error {
@@ -108,6 +169,25 @@ func (p Profile) validate() error {
 		return fmt.Errorf("%w: name, pitch or a game is required", ErrInvalidProfile)
 	case p.DefaultTarget < 0:
 		return fmt.Errorf("%w: default_target cannot be negative", ErrInvalidProfile)
+	}
+	for _, t := range p.ContactTypes {
+		if !slices.Contains(ContactTypes, t) {
+			return fmt.Errorf("%w: contact type %q is not one of %s", ErrInvalidProfile, t, strings.Join(ContactTypes, ", "))
+		}
+	}
+	if sc := p.Scoring; sc != nil {
+		w := sc.Weights
+		for _, v := range []int{w.Player, w.Pain, w.Paying, w.Active, w.Match} {
+			if v < 0 || v > 10 {
+				return fmt.Errorf("%w: a scoring weight is between 0 and 10", ErrInvalidProfile)
+			}
+		}
+		if sc.Watchlist < 1 || sc.Qualified <= sc.Watchlist {
+			return fmt.Errorf("%w: scoring needs 1 <= watchlist < qualified", ErrInvalidProfile)
+		}
+		if w.Player+w.Pain+w.Paying+w.Active+w.Match < sc.Qualified {
+			return fmt.Errorf("%w: the weights add up to less than qualified, so no lead could qualify", ErrInvalidProfile)
+		}
 	}
 	return nil
 }
@@ -305,6 +385,9 @@ func (p Profile) Compact() string {
 	list("Competitors (reject)", p.Competitors, ", ")
 	list("Exclude", p.Excludes, "; ")
 	text("Notes", p.Notes)
+	if !slices.Equal(p.ContactTypes, []string{ContactPlatformHandle}) {
+		line("Contacts to find", strings.Join(p.ContactTypes, ", "))
+	}
 	fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, ProfileResourcePath)
 	if cut {
 		b.WriteString(" (the lines above are cut; read the file, or search_guide \"business profile\")")
@@ -334,6 +417,7 @@ func (p Profile) Markdown() string {
 	if p.DefaultTarget > 0 {
 		field("Lead target", fmt.Sprint(p.DefaultTarget))
 	}
+	field("Contacts to find", strings.Join(p.ContactTypes, ", "))
 	if p.Pitch != "" {
 		fmt.Fprintf(&b, "\n## Offer\n\n%s\n", p.Pitch)
 	}

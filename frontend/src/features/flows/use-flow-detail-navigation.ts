@@ -1,8 +1,9 @@
 import { useDetailNavigation } from '@/components/shared/detail-navigation';
+import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { type Flow, useFlows } from '@/providers/flows-provider';
 
-const getLabel = (item: Flow) => item.title || `Flow #${item.id}`;
+const getLabel = (item: Flow) => item.title || copy.flows.flowNumber(item.id);
 const getSearchableText = (item: Flow) => item.title;
 const getId = (item: Flow) => String(item.id);
 const getHref = (item: Flow) => routes.flow(item.id);

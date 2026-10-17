@@ -651,7 +651,7 @@ describe('DataTable — controlled pageIndex reconciliation', () => {
         // Open the rows-per-page select and pick "All".
         const trigger = screen.getByRole('combobox');
         await user.click(trigger);
-        const option = await screen.findByRole('option', { name: 'All' });
+        const option = await screen.findByRole('option', { name: '全部' });
         await user.click(option);
 
         // "All" collapses the dataset to a single page; the parent has to
@@ -722,7 +722,7 @@ describe('DataTable — controlled pageIndex reconciliation', () => {
 });
 
 describe('DataTable — empty results', () => {
-    it('does not render "Page 1 of 0" when there are no rows', () => {
+    it('does not render "第 1 / 0 页" when there are no rows', () => {
         render(
             <DataTable<Row>
                 columns={COLUMNS}
@@ -732,11 +732,12 @@ describe('DataTable — empty results', () => {
             { wrapper: Wrapper },
         );
 
-        expect(screen.queryByText(/Page 1 of 0/)).not.toBeInTheDocument();
-        expect(screen.getByText('No results')).toBeInTheDocument();
+        expect(screen.queryByText(/第 1 \/ 0 页/)).not.toBeInTheDocument();
+        // One in the empty cell, one in the footer.
+        expect(screen.getAllByText('没有结果')).toHaveLength(2);
     });
 
-    it('renders the bare "No results." cell when `empty.entityName` is omitted (legacy fallback)', () => {
+    it('renders the bare "没有结果" cell when `empty.entityName` is omitted', () => {
         render(
             <DataTable<Row>
                 columns={COLUMNS}
@@ -746,36 +747,36 @@ describe('DataTable — empty results', () => {
             { wrapper: Wrapper },
         );
 
-        expect(screen.getByText('No results.')).toBeInTheDocument();
+        expect(within(screen.getByRole('table')).getByText('没有结果')).toBeInTheDocument();
         // The shadcn Empty title is NOT rendered without `entityName`.
-        expect(screen.queryByText('No matches')).not.toBeInTheDocument();
+        expect(screen.queryByText('没有匹配结果')).not.toBeInTheDocument();
     });
 
-    it('renders a data-empty Empty block ("No <entity> yet") when `entityName` is set and no filter is active', () => {
+    it('renders a data-empty Empty block ("还没有<entity>") when `entityName` is set and no filter is active', () => {
         render(
             <DataTable<Row>
                 columns={COLUMNS}
                 data={[]}
-                empty={{ entityName: 'flows' }}
+                empty={{ entityName: '项目' }}
                 label="Rows"
             />,
             { wrapper: Wrapper },
         );
 
-        expect(screen.getByText('No flows yet')).toBeInTheDocument();
+        expect(screen.getByText('还没有项目')).toBeInTheDocument();
         // No filter ⇒ no "match" description.
-        expect(screen.queryByText(/Try a different query/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/换个关键词试试/)).not.toBeInTheDocument();
         // Pagination footer also uses the entity copy.
-        expect(screen.getByText('No flows')).toBeInTheDocument();
+        expect(screen.getByText('没有项目')).toBeInTheDocument();
     });
 
-    it('renders a filter-empty Empty block ("No <entity> match …") when `entityName` is set and a filter is active', async () => {
+    it('renders a filter-empty Empty block ("没有匹配…的<entity>") when `entityName` is set and a filter is active', async () => {
         const user = userEvent.setup();
         render(
             <DataTable<Row>
                 columns={COLUMNS}
                 data={ROWS}
-                empty={{ entityName: 'flows' }}
+                empty={{ entityName: '项目' }}
                 filterColumn="name"
                 filterPlaceholder="Filter..."
                 label="Rows"
@@ -787,11 +788,11 @@ describe('DataTable — empty results', () => {
         // No row in ROWS has the substring "ZZZZZZ" — guarantees an empty subset.
         await user.type(input, 'ZZZZZZ');
 
-        expect(await screen.findByText('No matches')).toBeInTheDocument();
+        expect(await screen.findByText('没有匹配结果')).toBeInTheDocument();
         // Description cites the query and offers the next-step hint.
-        const description = await screen.findByText(/Try a different query/);
+        const description = await screen.findByText(/换个关键词试试/);
         expect(description).toHaveTextContent('ZZZZZZ');
-        expect(description.textContent).toMatch(/^No flows match/);
+        expect(description.textContent).toMatch(/^没有匹配“.*”的项目/);
     });
 
     it('assigns a non-empty unique id and matching name to the filter field', () => {
@@ -944,7 +945,7 @@ describe('DataTable — multi-column search', () => {
             { wrapper: Wrapper },
         );
 
-        await user.click(screen.getByRole('button', { name: /Search in/ }));
+        await user.click(screen.getByRole('button', { name: '搜索范围' }));
         // Uncheck the `Role` column so "reader" can no longer match Charlie.
         await user.click(await screen.findByRole('menuitemcheckbox', { name: /role/i }));
 
@@ -955,7 +956,7 @@ describe('DataTable — multi-column search', () => {
         const input = screen.getByPlaceholderText('Filter...');
         await user.type(input, 'reader');
 
-        expect(await screen.findByText('No results.')).toBeInTheDocument();
+        expect(await within(screen.getByRole('table')).findByText('没有结果')).toBeInTheDocument();
     });
 
     it('persists the narrowed search column set to the unified storage slot', async () => {
@@ -969,7 +970,7 @@ describe('DataTable — multi-column search', () => {
             { wrapper: Wrapper },
         );
 
-        await user.click(screen.getByRole('button', { name: /Search in/ }));
+        await user.click(screen.getByRole('button', { name: '搜索范围' }));
         await user.click(await screen.findByRole('menuitemcheckbox', { name: /role/i }));
 
         const stored = JSON.parse(localStorage.getItem('table_4_/flows') ?? '{}');
@@ -998,7 +999,7 @@ describe('DataTable — multi-column search', () => {
         // TanStack short-circuited the filter pipeline. The composite-value
         // implementation produces a new `globalFilter` object reference, so
         // the pipeline re-runs and Alpha must disappear without retyping.
-        await user.click(screen.getByRole('button', { name: /Search in/ }));
+        await user.click(screen.getByRole('button', { name: '搜索范围' }));
         await user.click(await screen.findByRole('menuitemcheckbox', { name: /role/i }));
 
         await waitFor(() => {
@@ -1045,7 +1046,7 @@ describe('DataTable — multi-column search', () => {
         );
 
         // Picker is visible — confirms multi-mode activation via the array prop.
-        expect(screen.getByRole('button', { name: /Search in/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '搜索范围' })).toBeInTheDocument();
 
         const input = screen.getByPlaceholderText('Filter...');
         await user.type(input, 'user');
@@ -1077,7 +1078,7 @@ describe('DataTable — multi-column search', () => {
         );
 
         expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /Search in/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: '搜索范围' })).not.toBeInTheDocument();
     });
 
     it('does not render the picker in legacy single-column mode', () => {
@@ -1092,9 +1093,9 @@ describe('DataTable — multi-column search', () => {
         );
 
         expect(screen.getByRole('textbox')).toBeInTheDocument();
-        expect(screen.queryByRole('button', { name: /Search in/ })).not.toBeInTheDocument();
-        // The "Columns" trigger still renders.
-        expect(screen.getByRole('button', { name: /Columns/ })).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: '搜索范围' })).not.toBeInTheDocument();
+        // The column-visibility trigger still renders.
+        expect(screen.getByRole('button', { name: '显示列' })).toBeInTheDocument();
     });
 });
 

@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { addDays, differenceInCalendarMonths, format, startOfDay } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -143,15 +144,15 @@ describe('the create row date picker', () => {
             </MemoryRouter>,
         );
 
-        fireEvent.click(screen.getByRole('button', { name: 'Create Token' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Pick date' }));
+        fireEvent.click(screen.getByRole('button', { name: '新建令牌' }));
+        fireEvent.click(screen.getByRole('button', { name: '选择日期' }));
     };
 
     let shownMonth = new Date();
 
     const dayButton = (date: Date) => {
         const step = differenceInCalendarMonths(date, shownMonth);
-        const label = step < 0 ? 'Go to the Previous Month' : 'Go to the Next Month';
+        const label = step < 0 ? '前往上个月' : '前往下个月';
 
         for (let months = Math.abs(step); months > 0; months--) {
             fireEvent.click(screen.getByRole('button', { name: label }));
@@ -159,10 +160,10 @@ describe('the create row date picker', () => {
 
         shownMonth = date;
 
-        return within(screen.getByRole('grid')).getByRole('button', { name: format(date, 'PPPP') });
+        return within(screen.getByRole('grid')).getByRole('button', { name: format(date, 'PPPP', { locale: zhCN }) });
     };
 
-    const submitButton = () => screen.getByRole('button', { name: 'Submit' });
+    const submitButton = () => screen.getByRole('button', { name: '提交' });
 
     it('offers the last day the endpoint accepts and no day past it', async () => {
         const lastAllowed = getLastSelectableExpiry();
@@ -175,10 +176,10 @@ describe('the create row date picker', () => {
         expect(refused).toBeDisabled();
 
         fireEvent.click(refused);
-        expect(screen.getByRole('button', { name: 'Pick date' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '选择日期' })).toBeInTheDocument();
 
         fireEvent.click(dayButton(lastAllowed));
-        expect(screen.getByRole('button', { name: format(lastAllowed, 'd MMM yyyy') })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: format(lastAllowed, 'yyyy-MM-dd') })).toBeInTheDocument();
         await waitFor(() => expect(submitButton()).toBeEnabled());
     }, 30_000);
 });
@@ -239,8 +240,8 @@ describe('a revoked token that also outlived its ttl', () => {
             </MemoryRouter>,
         );
 
-        expect(screen.getByText('revoked')).toBeInTheDocument();
-        expect(screen.queryByText('expired')).not.toBeInTheDocument();
+        expect(screen.getByText('已吊销')).toBeInTheDocument();
+        expect(screen.queryByText('已过期')).not.toBeInTheDocument();
     });
 });
 
@@ -298,22 +299,22 @@ describe('creating the very first token', () => {
             </MemoryRouter>,
         );
 
-        fireEvent.click(screen.getAllByRole('button', { name: 'Create Token' })[0]!);
-        fireEvent.click(screen.getByRole('button', { name: 'Pick date' }));
+        fireEvent.click(screen.getAllByRole('button', { name: '新建令牌' })[0]!);
+        fireEvent.click(screen.getByRole('button', { name: '选择日期' }));
         fireEvent.click(
             within(screen.getByRole('grid')).getByRole('button', {
-                name: format(addDays(new Date('2026-09-01T12:00:00'), 7), 'PPPP'),
+                name: format(addDays(new Date('2026-09-01T12:00:00'), 7), 'PPPP', { locale: zhCN }),
             }),
         );
 
-        const submit = screen.getByRole('button', { name: 'Submit' });
+        const submit = screen.getByRole('button', { name: '提交' });
 
         await waitFor(() => expect(submit).toBeEnabled());
         fireEvent.click(submit);
 
         await waitFor(() => expect(mutationSpy).toHaveBeenCalled());
-        expect(await screen.findByText('API Token Created')).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: 'Copy Token' })).toBeInTheDocument();
+        expect(await screen.findByText('令牌已创建')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: '复制令牌' })).toBeInTheDocument();
     }, 30_000);
 });
 
@@ -348,14 +349,14 @@ describe('renaming an expired token', () => {
         );
 
         fireEvent.pointerDown(
-            screen.getByRole('button', { name: 'Open menu' }),
+            screen.getByRole('button', { name: '打开菜单' }),
             new MouseEvent('pointerdown', { bubbles: true, cancelable: true }),
         );
-        fireEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: '编辑' }));
 
-        fireEvent.change(screen.getByPlaceholderText('Token name (optional)'), { target: { value: 'renamed' } });
+        fireEvent.change(screen.getByPlaceholderText('令牌名称（可选）'), { target: { value: 'renamed' } });
 
-        const submit = screen.getByRole('button', { name: 'Submit' });
+        const submit = screen.getByRole('button', { name: '提交' });
 
         await waitFor(() => expect(submit).toBeEnabled());
         fireEvent.click(submit);

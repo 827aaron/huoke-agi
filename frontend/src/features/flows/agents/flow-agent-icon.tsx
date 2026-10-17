@@ -14,14 +14,14 @@ import {
     Search,
     Settings,
     Sigma,
-    Skull,
+    UserSearch,
     Wrench,
 } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AgentType } from '@/graphql/types';
+import { agentLabel } from '@/lib/copy';
 import { cn } from '@/lib/utils';
-import { formatName } from '@/lib/utils/format';
 
 interface FlowAgentIconProps {
     className?: string;
@@ -37,7 +37,7 @@ const icons: Record<AgentType, LucideIcon> = {
     [AgentType.Generator]: LayoutList,
     [AgentType.Installer]: Settings,
     [AgentType.Memorist]: HardDrive,
-    [AgentType.Pentester]: Skull,
+    [AgentType.Pentester]: UserSearch,
     [AgentType.PrimaryAgent]: Brain,
     [AgentType.Refiner]: RefreshCw,
     [AgentType.Reflector]: MessagesSquare,
@@ -59,7 +59,7 @@ function FlowAgentIcon({ className, type, tooltip = type }: FlowAgentIconProps) 
     return (
         <Tooltip>
             <TooltipTrigger asChild>{iconElement}</TooltipTrigger>
-            <TooltipContent>{formatName(tooltip)}</TooltipContent>
+            <TooltipContent>{agentLabel(tooltip)}</TooltipContent>
         </Tooltip>
     );
 }

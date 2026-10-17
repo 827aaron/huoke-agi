@@ -8,18 +8,19 @@ import { FormSubmitButton } from '@/components/ui/form-submit-button';
 import { InputPassword } from '@/components/ui/input-password';
 import { useAppForm } from '@/hooks/use-app-form';
 import { api, resolveApiErrorMessage } from '@/lib/axios';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 const passwordChangeFormSchema = z
     .object({
-        confirmPassword: z.string().min(1, { message: 'Confirm your password' }),
-        currentPassword: z.string().min(1, { message: 'Current password is required' }),
+        confirmPassword: z.string().min(1, { message: copy.auth.confirmPasswordRequired }),
+        currentPassword: z.string().min(1, { message: copy.auth.currentPasswordRequired }),
         newPassword: z
             .string()
-            .min(8, { message: 'Password must be at least 8 characters' })
+            .min(8, { message: copy.auth.passwordTooShort })
             // bcrypt, which hashes it server-side, refuses anything longer than 72 bytes.
             .refine((password) => new TextEncoder().encode(password).length <= 72, {
-                message: 'Password must not exceed 72 characters',
+                message: copy.auth.passwordTooLong,
             })
             .refine(
                 (password) => {
@@ -37,26 +38,23 @@ const passwordChangeFormSchema = z
                         /[!@#$&*]/.test(password)
                     );
                 },
-                {
-                    message:
-                        'Password must be either longer than 15 characters, or at least 8 characters with a number, lowercase, uppercase, and special character (!@#$&*)',
-                },
+                { message: copy.auth.passwordPolicy },
             ),
     })
     .refine((data) => data.newPassword === data.confirmPassword, {
-        message: "Passwords don't match",
+        message: copy.auth.passwordMismatch,
         path: ['confirmPassword'],
     })
     .refine((data) => data.currentPassword !== data.newPassword, {
-        message: 'New password must be different from current password',
+        message: copy.auth.passwordSame,
         path: ['newPassword'],
     });
 
 const ERROR_BY_CODE: Record<string, string> = {
-    'Users.ChangePasswordCurrentUser.InvalidCurrentPassword': 'Current password is incorrect',
-    'Users.ChangePasswordCurrentUser.InvalidNewPassword': 'New password does not meet requirements',
-    'Users.ChangePasswordCurrentUser.InvalidPassword': 'Password validation failed',
-    'Users.NotFound': 'User not found',
+    'Users.ChangePasswordCurrentUser.InvalidCurrentPassword': copy.auth.currentPasswordIncorrect,
+    'Users.ChangePasswordCurrentUser.InvalidNewPassword': copy.auth.newPasswordRejected,
+    'Users.ChangePasswordCurrentUser.InvalidPassword': copy.auth.passwordValidationFailed,
+    'Users.NotFound': copy.auth.userNotFound,
 };
 
 interface PasswordChangeFormProps {
@@ -98,11 +96,11 @@ export function PasswordChangeForm({
             });
 
             form.reset();
-            toast.success('Password successfully changed');
+            toast.success(copy.auth.passwordUpdated);
 
             onSuccess?.();
         } catch (err: unknown) {
-            setError(resolveApiErrorMessage(err, ERROR_BY_CODE, 'Failed to change password'));
+            setError(resolveApiErrorMessage(err, ERROR_BY_CODE, copy.auth.passwordFailed));
         }
     };
 
@@ -116,7 +114,7 @@ export function PasswordChangeForm({
             type="button"
             variant="ghost"
         >
-            Skip for now
+            {copy.auth.skip}
         </Button>
     );
     const cancelButton = onCancel && (
@@ -127,7 +125,7 @@ export function PasswordChangeForm({
             type="button"
             variant="outline"
         >
-            Cancel
+            {copy.action.cancel}
         </Button>
     );
     const submitButton = (
@@ -135,7 +133,7 @@ export function PasswordChangeForm({
             className={cn(isVertical && 'w-full')}
             size={buttonSize}
         >
-            <span>Update Password</span>
+            <span>{copy.auth.updatePassword}</span>
         </FormSubmitButton>
     );
 
@@ -151,11 +149,11 @@ export function PasswordChangeForm({
                     name="currentPassword"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Current Password</FormLabel>
+                            <FormLabel>{copy.auth.currentPassword}</FormLabel>
                             <FormControl>
                                 <InputPassword
                                     {...field}
-                                    placeholder="Enter your current password"
+                                    placeholder={copy.auth.currentPasswordPlaceholder}
                                 />
                             </FormControl>
                             <FormMessage />
@@ -168,17 +166,14 @@ export function PasswordChangeForm({
                     name="newPassword"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>New Password</FormLabel>
+                            <FormLabel>{copy.auth.newPassword}</FormLabel>
                             <FormControl>
                                 <InputPassword
                                     {...field}
-                                    placeholder="Enter your new password"
+                                    placeholder={copy.auth.newPasswordPlaceholder}
                                 />
                             </FormControl>
-                            <FormDescription className="text-xs">
-                                Must be 16+ characters, or 8+ with number, lowercase, uppercase, and special character
-                                (!@#$&*)
-                            </FormDescription>
+                            <FormDescription className="text-xs">{copy.auth.passwordHint}</FormDescription>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -189,11 +184,11 @@ export function PasswordChangeForm({
                     name="confirmPassword"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Confirm New Password</FormLabel>
+                            <FormLabel>{copy.auth.confirmNewPassword}</FormLabel>
                             <FormControl>
                                 <InputPassword
                                     {...field}
-                                    placeholder="Confirm your new password"
+                                    placeholder={copy.auth.confirmNewPasswordPlaceholder}
                                 />
                             </FormControl>
                             <FormMessage />

@@ -31,7 +31,7 @@ test.describe('the flows list when its query fails', { tag: ['@flows', '@cross']
             await page.goto('/flows');
 
             await expect(page.getByText(SERVICE_DOWN)).toBeVisible();
-            await expect(page.getByRole('button', { name: /try again/i })).toBeVisible();
+            await expect(page.getByRole('button', { name: /重试/ })).toBeVisible();
             expect(infoCalls, 'a storage failure is not an auth question').toHaveLength(0);
         });
     });

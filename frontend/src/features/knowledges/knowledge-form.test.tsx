@@ -127,7 +127,7 @@ describe('KnowledgeForm — create', () => {
 
         await user.type(screen.getByLabelText('content'), 'hello world');
         await user.type(screen.getByLabelText('question'), 'why');
-        await user.click(screen.getByRole('button', { name: 'Create' }));
+        await user.click(screen.getByRole('button', { name: '创建' }));
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
         const [values, dirty] = onSubmit.mock.lastCall!;
@@ -157,7 +157,7 @@ describe('KnowledgeForm — update', () => {
         const question = screen.getByLabelText('question');
         await user.clear(question);
         await user.type(question, 'updated question');
-        await user.click(screen.getByRole('button', { name: 'Save' }));
+        await user.click(screen.getByRole('button', { name: '保存' }));
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
         const [values, dirty] = onSubmit.mock.lastCall!;
@@ -167,7 +167,7 @@ describe('KnowledgeForm — update', () => {
 
         // Save re-disables once the post-save reset clears isDirty — a deterministic
         // anchor for the negative navigate assertion below.
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled());
+        await waitFor(() => expect(screen.getByRole('button', { name: '保存' })).toBeDisabled());
         expect(navigate).not.toHaveBeenCalled();
     });
 
@@ -207,14 +207,14 @@ describe('KnowledgeForm — update', () => {
         const question = screen.getByLabelText('question');
         await user.clear(question);
         await user.type(question, 'updated question');
-        await user.click(screen.getByRole('button', { name: 'Save' }));
+        await user.click(screen.getByRole('button', { name: '保存' }));
 
         await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
 
         // editValues.content is 'existing content\n'; reaching the server value proves the
         // form took `documentToFormValues(result.document)`, not the local `values` fallback.
         await waitFor(() => expect(screen.getByLabelText('content')).toHaveValue('server normalized content'));
-        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
     });
 
     it('keeps Save disabled until the form is dirty', async () => {
@@ -229,10 +229,10 @@ describe('KnowledgeForm — update', () => {
             />,
         );
 
-        expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: '保存' })).toBeDisabled();
 
         await user.type(screen.getByLabelText('question'), '!');
-        await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled());
+        await waitFor(() => expect(screen.getByRole('button', { name: '保存' })).toBeEnabled());
     });
 });
 

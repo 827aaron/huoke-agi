@@ -1,8 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { formatDistance } from 'date-fns';
-import { ChevronsUpDown, CircleArrowDown, CircleCheck, CircleQuestionMark, ExternalLink } from 'lucide-react';
+import { ChevronsUpDown, CircleArrowDown, CircleCheck, CircleQuestionMark } from 'lucide-react';
 
 import type { VersionInfoFragmentFragment } from '@/graphql/types';
 
@@ -10,7 +9,6 @@ import { Badge } from '@/components/ui/badge';
 import {
     DropdownMenu,
     DropdownMenuContent,
-    DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuSeparator,
     DropdownMenuTrigger,
@@ -19,13 +17,11 @@ import { SidebarMenuButton } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { UpdateState } from '@/graphql/types';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { useVersionInfo } from '@/providers/version-info-provider';
 
-export const PENTAGI_RELEASES_URL = 'https://github.com/vxcontrol/pentagi/releases';
-
-export const UPDATE_INSTRUCTION =
-    'Run the installer tool on the host where PentAGI is deployed and choose Maintenance → Update PentAGI.';
+export const UPDATE_INSTRUCTION = copy.version.instruction;
 
 export interface VersionFact {
     isAccented?: boolean;
@@ -52,10 +48,6 @@ export interface VersionPresentation {
 // captured group is the bare hash the panel shows.
 const REVISION_SUFFIX = /^(.+)[-.]h?([0-9a-f]{7,40})$/i;
 
-// The edition is a prerelease marker on the build, not part of the release it
-// names, so it is stripped before anything looks the release up.
-const EDITION_SUFFIX = /-(?:ce|ee)$/i;
-
 interface VersionPanelProps {
     icon: ReactNode;
     title: string;
@@ -65,13 +57,13 @@ export function describeTiming(info: VersionInfoFragmentFragment, now: Date = ne
     const facts: VersionFact[] = [];
 
     if (info.checkedAt) {
-        facts.push({ label: 'Checked', value: formatDistance(new Date(info.checkedAt), now, { addSuffix: true }) });
+        facts.push({ label: copy.version.checked, value: copy.version.distance(new Date(info.checkedAt), now) });
     }
 
     if (info.failedAt) {
         facts.push({
-            label: 'Last check failed',
-            value: formatDistance(new Date(info.failedAt), now, { addSuffix: true }),
+            label: copy.version.lastCheckFailed,
+            value: copy.version.distance(new Date(info.failedAt), now),
         });
     }
 
@@ -88,36 +80,36 @@ export function describeVersion(info: VersionInfoFragmentFragment): VersionPrese
         case UpdateState.Disabled:
             return {
                 ...base,
-                detail: 'Automatic update checks are switched off in the server configuration.',
-                headline: 'Update checks are disabled',
+                detail: copy.version.disabledDetail,
+                headline: copy.version.disabled,
                 indicator: 'question',
-                tooltip: 'Update checks are disabled in the server configuration.',
+                tooltip: copy.version.disabledTooltip,
             };
         case UpdateState.Pending:
             return {
                 ...base,
-                detail: 'The first update check has not completed yet. It runs shortly after the server starts.',
-                headline: 'Checking for updates',
+                detail: copy.version.checkingDetail,
+                headline: copy.version.checking,
                 indicator: 'question',
-                tooltip: 'Checking for updates…',
+                tooltip: copy.version.checkingTooltip,
             };
         case UpdateState.Unreachable:
             return {
                 ...base,
-                detail: 'The update service could not be reached, so it is unknown whether a newer version exists.',
-                headline: 'Update status unknown',
+                detail: copy.version.unreachableDetail,
+                headline: copy.version.unknown,
                 indicator: 'question',
-                tooltip: 'Update status unknown: the update service could not be reached.',
+                tooltip: copy.version.unreachableTooltip,
             };
         case UpdateState.UpdateAvailable:
             if (latest) {
                 return {
                     ...base,
                     action: UPDATE_INSTRUCTION,
-                    detail: 'Update to get the latest fixes and features.',
-                    headline: `New version ${latest} is available`,
+                    detail: copy.version.newVersionDetail,
+                    headline: copy.version.newVersion(latest),
                     indicator: 'update',
-                    tooltip: `New version ${latest} is available. Run the installer tool to update.`,
+                    tooltip: copy.version.newVersionTooltip(latest),
                 };
             }
 
@@ -125,10 +117,10 @@ export function describeVersion(info: VersionInfoFragmentFragment): VersionPrese
         case UpdateState.UpToDate:
             return {
                 ...base,
-                detail: `${label} is the newest version on the ${info.strategy} channel.`,
-                headline: 'PentAGI is up to date',
+                detail: copy.version.newestOnChannel(label, info.strategy),
+                headline: copy.app.upToDate,
                 indicator: 'none',
-                tooltip: `PentAGI ${label} is up to date.`,
+                tooltip: copy.app.upToDateTooltip(label),
             };
         case UpdateState.Unknown:
         default:
@@ -138,18 +130,6 @@ export function describeVersion(info: VersionInfoFragmentFragment): VersionPrese
 
 export function formatVersionLabel(version: string): string {
     return /^\d/.test(version) ? `v${version}` : version;
-}
-
-export function releaseNotesUrl(version: string): null | string {
-    if (!isVersionNumber(version)) {
-        return null;
-    }
-
-    // The tag is the release, not the build: v2.1.0-ce is not a tag that exists.
-    const release = version.replace(EDITION_SUFFIX, '');
-    const tag = release.startsWith('v') ? release : `v${release}`;
-
-    return `${PENTAGI_RELEASES_URL}/tag/${encodeURIComponent(tag)}`;
 }
 
 export function splitVersion(current: string): { revision: null | string; version: string } {
@@ -165,14 +145,14 @@ export function splitVersion(current: string): { revision: null | string; versio
 }
 
 function describeUnknown(base: Pick<VersionPresentation, 'action' | 'label' | 'latest'>) {
-    const newest = base.latest ? ` The newest published version is ${base.latest}.` : '';
+    const newest = base.latest ? copy.version.newestPublished(base.latest) : '';
 
     return {
         ...base,
-        detail: `The update service could not tell whether a newer version exists for this build.${newest}`,
-        headline: 'Update status unknown',
+        detail: copy.version.unknownDetail(newest),
+        headline: copy.version.unknown,
         indicator: 'question' as const,
-        tooltip: 'Update status unknown: the update service could not tell whether a newer version exists.',
+        tooltip: copy.version.unknownTooltip,
     };
 }
 
@@ -264,24 +244,6 @@ export function VersionPanel({ icon, title }: VersionPanelProps) {
     );
 }
 
-function ExternalLinkRow({ children, href }: { children: React.ReactNode; href: string }) {
-    return (
-        <DropdownMenuItem asChild>
-            <a
-                href={href}
-                rel="noreferrer"
-                target="_blank"
-            >
-                <span className="truncate">{children}</span>
-                <ExternalLink
-                    aria-hidden
-                    className="text-muted-foreground ml-auto shrink-0"
-                />
-            </a>
-        </DropdownMenuItem>
-    );
-}
-
 function VersionDetails({
     presentation,
     versionInfo,
@@ -291,30 +253,30 @@ function VersionDetails({
 }) {
     const { className: statusClass, icon: StatusIcon } = indicatorIcons[presentation.indicator];
     const facts: VersionFact[] = [
-        { isMono: true, label: 'Installed', value: presentation.label },
+        { isMono: true, label: copy.version.installed, value: presentation.label },
         ...(presentation.indicator === 'update' && presentation.latest
-            ? [{ isAccented: true, isMono: true, label: 'Available', value: presentation.latest }]
+            ? [{ isAccented: true, isMono: true, label: copy.version.available, value: presentation.latest }]
             : []),
         ...describeTiming(versionInfo),
     ];
-    const releaseNotes =
-        presentation.indicator === 'update' && versionInfo.latest ? releaseNotesUrl(versionInfo.latest) : null;
 
     return (
         <>
             <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-start justify-between gap-2 px-1 py-1.5">
                     <div className="min-w-0">
-                        <div className="truncate font-semibold">PentAGI {presentation.label}</div>
+                        <div className="truncate font-semibold">
+                            {copy.app.name} {presentation.label}
+                        </div>
                         <div className="text-muted-foreground truncate font-mono text-xs">
-                            build {versionInfo.build}
+                            {copy.version.build(versionInfo.build)}
                         </div>
                     </div>
                     {versionInfo.strategy && (
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Badge
-                                    aria-label={`Update channel: ${versionInfo.strategy}`}
+                                    aria-label={copy.version.channel(versionInfo.strategy)}
                                     className="shrink-0 cursor-help capitalize"
                                     variant="secondary"
                                 >
@@ -322,8 +284,7 @@ function VersionDetails({
                                 </Badge>
                             </TooltipTrigger>
                             <TooltipContent className="max-w-64">
-                                Updates are offered from the {versionInfo.strategy} channel, and the installer pulls its
-                                images from the same one. UPDATE_STRATEGY on the host sets which channel that is.
+                                {copy.version.channelHint(versionInfo.strategy)}
                             </TooltipContent>
                         </Tooltip>
                     )}
@@ -361,13 +322,6 @@ function VersionDetails({
                     ))}
                 </dl>
             </div>
-
-            <DropdownMenuSeparator />
-
-            {releaseNotes && (
-                <ExternalLinkRow href={releaseNotes}>Release notes for {presentation.latest}</ExternalLinkRow>
-            )}
-            <ExternalLinkRow href={PENTAGI_RELEASES_URL}>All releases</ExternalLinkRow>
         </>
     );
 }

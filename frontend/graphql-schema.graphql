@@ -89,6 +89,7 @@ fragment messageLogFragment on MessageLog {
     flowId
     taskId
     subtaskId
+    agent
     createdAt
 }
 

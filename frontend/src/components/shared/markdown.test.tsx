@@ -38,7 +38,7 @@ describe('Markdown', () => {
         const region = container.querySelector('table')?.parentElement;
         expect(region).toHaveAttribute('tabindex', '0');
         expect(region).toHaveAttribute('role', 'region');
-        expect(region).toHaveAccessibleName('Table');
+        expect(region).toHaveAccessibleName('表格');
     });
 
     it('stays out of the tab order when the whole table fits', () => {

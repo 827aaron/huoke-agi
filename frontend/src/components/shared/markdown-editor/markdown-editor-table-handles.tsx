@@ -27,6 +27,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
+import { copy } from '@/lib/copy';
 
 import { returnFocusToEditor } from './markdown-editor-focus';
 import { getEditorScrollParent } from './markdown-editor-styles';
@@ -75,7 +76,7 @@ export function TableHandles({ editor }: { editor: Editor }) {
             >
                 <DropdownMenuTrigger asChild>
                     <button
-                        aria-label="Column actions"
+                        aria-label={copy.editor.columnActions}
                         className={GRIP_CLASS}
                         data-table-grip=""
                         style={{
@@ -98,16 +99,16 @@ export function TableHandles({ editor }: { editor: Editor }) {
                 >
                     <DropdownMenuItem onSelect={() => focusTarget().addColumnBefore().run()}>
                         <ArrowLeft className="text-muted-foreground size-4 shrink-0" />
-                        Insert left
+                        {copy.editor.insertLeft}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => focusTarget().addColumnAfter().run()}>
                         <ArrowRight className="text-muted-foreground size-4 shrink-0" />
-                        Insert right
+                        {copy.editor.insertRight}
                     </DropdownMenuItem>
                     <DropdownMenuSub>
                         <DropdownMenuSubTrigger>
                             <AlignLeft className="text-muted-foreground size-4 shrink-0" />
-                            Align column
+                            {copy.editor.alignColumn}
                         </DropdownMenuSubTrigger>
                         <DropdownMenuSubContent>
                             {ALIGN_OPTIONS.map((option) => (
@@ -131,12 +132,12 @@ export function TableHandles({ editor }: { editor: Editor }) {
                         }}
                     >
                         <Eraser className="text-muted-foreground size-4 shrink-0" />
-                        Clear contents
+                        {copy.editor.clearContents}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => focusTarget().deleteColumn().run()}>
                         <Delete className="text-muted-foreground size-4 shrink-0" />
-                        Delete column
+                        {copy.editor.deleteColumn}
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
@@ -147,7 +148,7 @@ export function TableHandles({ editor }: { editor: Editor }) {
             >
                 <DropdownMenuTrigger asChild>
                     <button
-                        aria-label="Row actions"
+                        aria-label={copy.editor.rowActions}
                         className={GRIP_CLASS}
                         data-table-grip=""
                         style={{
@@ -175,11 +176,11 @@ export function TableHandles({ editor }: { editor: Editor }) {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => focusTarget().addRowBefore().run()}>
                         <ArrowUp className="text-muted-foreground size-4 shrink-0" />
-                        Insert above
+                        {copy.editor.insertAbove}
                     </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => focusTarget().addRowAfter().run()}>
                         <ArrowDown className="text-muted-foreground size-4 shrink-0" />
-                        Insert below
+                        {copy.editor.insertBelow}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                         onSelect={() => {
@@ -188,12 +189,12 @@ export function TableHandles({ editor }: { editor: Editor }) {
                         }}
                     >
                         <Eraser className="text-muted-foreground size-4 shrink-0" />
-                        Clear contents
+                        {copy.editor.clearContents}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={() => focusTarget().deleteRow().run()}>
                         <Delete className="text-muted-foreground size-4 shrink-0 -rotate-90" />
-                        Delete row
+                        {copy.editor.deleteRow}
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
@@ -223,7 +224,7 @@ function RowHeaderToggleItem({ cellPos, editor }: { cellPos: number; editor: Edi
             role="menuitemcheckbox"
         >
             <PanelTop className="text-muted-foreground size-4 shrink-0" />
-            <span>Header row</span>
+            <span>{copy.editor.headerRow}</span>
             <Switch
                 checked={isHeaderRow}
                 className="pointer-events-none ml-auto"

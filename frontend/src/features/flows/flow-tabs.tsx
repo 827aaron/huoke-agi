@@ -12,7 +12,10 @@ import FlowTasks from '@/features/flows/tasks/flow-tasks';
 import FlowTerminal from '@/features/flows/terminal/flow-terminal';
 import FlowTools from '@/features/flows/tools/flow-tools';
 import FlowVectorStores from '@/features/flows/vector-stores/flow-vector-stores';
+import FlowLeads from '@/features/growth/leads/flow-leads';
+import FlowSources from '@/features/growth/sources/flow-sources';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { copy } from '@/lib/copy';
 
 interface FlowTabsProps {
     activeTab: string;
@@ -41,16 +44,18 @@ function FlowTabs({ activeTab, onTabChange }: FlowTabsProps) {
             <div className="max-w-full pr-4">
                 <ScrollArea className="w-full pb-3">
                     <TabsList className="flex w-fit">
-                        {!isDesktop && <TabsTrigger value="automation">Automation</TabsTrigger>}
-                        {!isDesktop && <TabsTrigger value="assistant">Assistant</TabsTrigger>}
-                        {!isDesktop && <TabsTrigger value="dashboard">Dashboard</TabsTrigger>}
-                        <TabsTrigger value="terminal">Terminal</TabsTrigger>
-                        <TabsTrigger value="tasks">Tasks</TabsTrigger>
-                        <TabsTrigger value="agents">Agents</TabsTrigger>
-                        <TabsTrigger value="tools">Searches</TabsTrigger>
-                        <TabsTrigger value="vectorStores">Vector Store</TabsTrigger>
-                        <TabsTrigger value="files">Files</TabsTrigger>
-                        <TabsTrigger value="screenshots">Screenshots</TabsTrigger>
+                        {!isDesktop && <TabsTrigger value="automation">{copy.flowTabs.automation}</TabsTrigger>}
+                        {!isDesktop && <TabsTrigger value="assistant">{copy.flowTabs.assistant}</TabsTrigger>}
+                        {!isDesktop && <TabsTrigger value="dashboard">{copy.flowTabs.dashboard}</TabsTrigger>}
+                        <TabsTrigger value="leads">{copy.flowTabs.leads}</TabsTrigger>
+                        <TabsTrigger value="sources">{copy.flowTabs.sources}</TabsTrigger>
+                        <TabsTrigger value="terminal">{copy.flowTabs.terminal}</TabsTrigger>
+                        <TabsTrigger value="tasks">{copy.flowTabs.tasks}</TabsTrigger>
+                        <TabsTrigger value="agents">{copy.flowTabs.agents}</TabsTrigger>
+                        <TabsTrigger value="tools">{copy.flowTabs.tools}</TabsTrigger>
+                        <TabsTrigger value="vectorStores">{copy.flowTabs.vectorStores}</TabsTrigger>
+                        <TabsTrigger value="files">{copy.flowTabs.files}</TabsTrigger>
+                        <TabsTrigger value="screenshots">{copy.flowTabs.screenshots}</TabsTrigger>
                     </TabsList>
                     <ScrollBar orientation="horizontal" />
                 </ScrollArea>
@@ -80,6 +85,20 @@ function FlowTabs({ activeTab, onTabChange }: FlowTabsProps) {
                     <FlowDashboard />
                 </TabsContent>
             )}
+
+            <TabsContent
+                className="mt-1 flex-1 overflow-auto pr-4"
+                value="leads"
+            >
+                <FlowLeads />
+            </TabsContent>
+
+            <TabsContent
+                className="mt-1 flex-1 overflow-auto pr-4"
+                value="sources"
+            >
+                <FlowSources />
+            </TabsContent>
 
             <TabsContent
                 className="mt-1 flex-1 overflow-auto"

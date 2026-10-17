@@ -10,7 +10,7 @@ const REPORT_PDF = /^report_flow_5_e2e_alpha_2026\d{10}\.pdf$/;
 
 const openReportMenu = async (page: Page) => {
     await page.goto('/flows/5');
-    await page.getByRole('button', { name: 'Report' }).click();
+    await page.getByRole('button', { name: '汇报' }).click();
 };
 
 test.describe('flow report', { tag: '@flows' }, () => {
@@ -33,7 +33,7 @@ test.describe('flow report', { tag: '@flows' }, () => {
 
         const popup = page.waitForEvent('popup');
 
-        await page.getByRole('menuitem', { name: 'Open web view' }).click();
+        await page.getByRole('menuitem', { name: '在网页中查看' }).click();
 
         const opened = await popup;
 
@@ -50,7 +50,7 @@ test.describe('flow report', { tag: '@flows' }, () => {
 
         const popup = page.waitForEvent('popup');
 
-        await page.getByRole('menuitem', { name: 'Download PDF' }).click();
+        await page.getByRole('menuitem', { name: '下载 PDF' }).click();
 
         const opened = await popup;
         const url = new URL(opened.url());
@@ -68,7 +68,7 @@ test.describe('flow report', { tag: '@flows' }, () => {
 
         const download = page.waitForEvent('download');
 
-        await page.getByRole('menuitem', { name: 'Download MD' }).click();
+        await page.getByRole('menuitem', { name: '下载 Markdown' }).click();
 
         const file = await download;
 
@@ -85,9 +85,9 @@ test.describe('flow report', { tag: '@flows' }, () => {
     test('"Copy to clipboard" puts the same report on the clipboard', async ({ context, page, pageErrorLog }) => {
         await context.grantPermissions(['clipboard-read', 'clipboard-write']);
         await openReportMenu(page);
-        await page.getByRole('menuitem', { name: 'Copy to clipboard' }).click();
+        await page.getByRole('menuitem', { name: '复制到剪贴板' }).click();
 
-        await expect(page.getByText('Report copied to clipboard')).toBeVisible();
+        await expect(page.getByText('汇报已复制到剪贴板')).toBeVisible();
         expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('E2E Task Alpha');
         expectCleanPage(pageErrorLog);
     });

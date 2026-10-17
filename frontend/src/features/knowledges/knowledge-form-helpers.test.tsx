@@ -154,7 +154,7 @@ describe('formSchema', () => {
         const result = formSchema.safeParse({ ...valid, content: '' });
 
         expect(result.success).toBe(false);
-        expect(result.error?.issues.find((i) => i.path[0] === 'content')?.message).toBe('Content is required');
+        expect(result.error?.issues.find((i) => i.path[0] === 'content')?.message).toBe('请填写内容');
     });
 
     it.each([
@@ -163,7 +163,7 @@ describe('formSchema', () => {
     ])('refuses a content of nothing but %s', (_name, content) => {
         const result = formSchema.safeParse({ ...valid, content });
 
-        expect(result.error?.issues.find((i) => i.path[0] === 'content')?.message).toBe('Content is required');
+        expect(result.error?.issues.find((i) => i.path[0] === 'content')?.message).toBe('请填写内容');
     });
 
     it('hands the content on as it was written and trims the one-line fields', () => {
@@ -191,7 +191,7 @@ describe('formSchema', () => {
         const result = formSchema.safeParse({ ...valid, question: '' });
 
         expect(result.success).toBe(false);
-        expect(result.error?.issues.find((i) => i.path[0] === 'question')?.message).toBe('Question is required');
+        expect(result.error?.issues.find((i) => i.path[0] === 'question')?.message).toBe('请填写问题');
     });
 
     it.each([
@@ -206,24 +206,20 @@ describe('formSchema', () => {
         const result = formSchema.safeParse({ ...valid, question: 'x'.repeat(2049) });
 
         expect(result.success).toBe(false);
-        expect(result.error?.issues.find((i) => i.path[0] === 'question')?.message).toBe(
-            'Question must be 2048 characters or fewer',
-        );
+        expect(result.error?.issues.find((i) => i.path[0] === 'question')?.message).toBe('问题不能超过 2048 个字符');
     });
 
     it('enforces the description max-length message', () => {
         const result = formSchema.safeParse({ ...valid, description: 'x'.repeat(1001) });
 
         expect(result.success).toBe(false);
-        expect(result.error?.issues.find((i) => i.path[0] === 'description')?.message).toBe(
-            'Description must be 1000 characters or fewer',
-        );
+        expect(result.error?.issues.find((i) => i.path[0] === 'description')?.message).toBe('描述不能超过 1000 个字符');
     });
 
     it.each<[KnowledgeDocType, keyof FormValues, string]>([
-        [KnowledgeDocType.Answer, 'answerType', 'Answer type is required'],
-        [KnowledgeDocType.Code, 'codeLang', 'Code language is required'],
-        [KnowledgeDocType.Guide, 'guideType', 'Guide type is required'],
+        [KnowledgeDocType.Answer, 'answerType', '请选择回答类型'],
+        [KnowledgeDocType.Code, 'codeLang', '请填写代码语言'],
+        [KnowledgeDocType.Guide, 'guideType', '请选择指南类型'],
     ])('requires the %s subtype field', (docType, field, message) => {
         const result = formSchema.safeParse({
             ...valid,

@@ -11,6 +11,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 import { returnFocusToEditor } from './markdown-editor-focus';
@@ -24,9 +25,9 @@ interface ListOption {
 }
 
 const OPTIONS: ListOption[] = [
-    { icon: List, label: 'Bullet list', value: 'bullet' },
-    { icon: ListOrdered, label: 'Ordered list', value: 'ordered' },
-    { icon: ListTodo, label: 'Task list', value: 'task' },
+    { icon: List, label: copy.editor.bulletList, value: 'bullet' },
+    { icon: ListOrdered, label: copy.editor.orderedList, value: 'ordered' },
+    { icon: ListTodo, label: copy.editor.taskList, value: 'task' },
 ];
 
 interface ListMenuProps {
@@ -48,7 +49,7 @@ export function ListMenu({ activeType, disabled, editor, isInTableCell }: ListMe
                 <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
                         <Button
-                            aria-label={`List: ${active?.label ?? 'None'}`}
+                            aria-label={copy.editor.listLabel(active?.label ?? copy.editor.none)}
                             className={cn('gap-0.5 px-1.5', active && 'bg-accent text-accent-foreground')}
                             data-toolbar-item=""
                             disabled={disabled}
@@ -61,7 +62,7 @@ export function ListMenu({ activeType, disabled, editor, isInTableCell }: ListMe
                         </Button>
                     </DropdownMenuTrigger>
                 </TooltipTrigger>
-                <TooltipContent>Lists</TooltipContent>
+                <TooltipContent>{copy.editor.lists}</TooltipContent>
             </Tooltip>
             <DropdownMenuContent
                 align="start"

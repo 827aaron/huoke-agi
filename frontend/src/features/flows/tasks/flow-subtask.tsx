@@ -5,6 +5,7 @@ import type { SubtaskFragmentFragment } from '@/graphql/types';
 
 import Markdown from '@/components/shared/markdown';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { copy } from '@/lib/copy';
 import { matchesSearchTerm } from '@/lib/text-filter';
 
 import FlowTaskStatusIcon from './flow-task-status-icon';
@@ -57,7 +58,7 @@ function FlowSubtask({ searchValue = '', subtask }: FlowSubtaskProps) {
             <FlowTaskStatusIcon
                 className="bg-background ring-border ring-background relative z-1 mt-px rounded-full ring-3"
                 status={status}
-                tooltip={`Subtask ID: ${id}`}
+                tooltip={copy.flowLogs.subtaskId(id)}
             />
             <div className="flex flex-1 flex-col gap-2">
                 <div className="text-sm">
@@ -75,7 +76,7 @@ function FlowSubtask({ searchValue = '', subtask }: FlowSubtaskProps) {
                             className="cursor-pointer hover:underline"
                             onClick={() => setIsDetailsVisible(!isDetailsVisible)}
                         >
-                            {isDetailsVisible ? 'Hide details' : 'Show details'}
+                            {isDetailsVisible ? copy.message.hideDetails : copy.message.showDetails}
                         </div>
                         {isDetailsVisible && (
                             <div className="mt-4 flex flex-col gap-4">
@@ -83,7 +84,7 @@ function FlowSubtask({ searchValue = '', subtask }: FlowSubtaskProps) {
                                     <Card>
                                         <CardHeader className="p-3">
                                             <CardTitle className="flex items-center gap-2">
-                                                <ListTodo className="size-4 shrink-0" /> Description
+                                                <ListTodo className="size-4 shrink-0" /> {copy.flowLogs.description}
                                             </CardTitle>
                                         </CardHeader>
                                         <CardContent className="p-3 pt-0">
@@ -101,7 +102,7 @@ function FlowSubtask({ searchValue = '', subtask }: FlowSubtaskProps) {
                                     <Card>
                                         <CardHeader className="p-3">
                                             <CardTitle className="flex items-center gap-2">
-                                                <ListCheck className="size-4 shrink-0" /> Result
+                                                <ListCheck className="size-4 shrink-0" /> {copy.flowLogs.result}
                                             </CardTitle>
                                         </CardHeader>
                                         <CardContent className="p-3 pt-0">

@@ -5,8 +5,8 @@ import { expect, test } from '@playwright/test';
 // uncaught error. No seeded data and no agent run — safe against a shared stand.
 const ROUTES = [
     { emptyTitle: 'No flows found', path: '/flows', title: 'Flows' },
-    { emptyTitle: 'No templates yet', path: '/templates', title: 'Templates' },
-    { emptyTitle: 'No knowledge documents yet', path: '/knowledges', title: 'Knowledges' },
+    { emptyTitle: '还没有模板', path: '/templates', title: 'Templates' },
+    { emptyTitle: '还没有知识文档', path: '/knowledges', title: 'Knowledges' },
     { emptyTitle: 'No prompts available', path: '/settings/prompts', title: 'Prompts' },
     { emptyTitle: 'No API tokens configured', path: '/settings/api-tokens', title: 'API Tokens' },
 ];

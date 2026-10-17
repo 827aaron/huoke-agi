@@ -67,6 +67,10 @@ type Service struct {
 	knowledge ProfileKnowledge
 
 	logins loginRegistry
+
+	readMu sync.Mutex
+	// lastRead is each account's latest source read: which source, and when it started or is scheduled to.
+	lastRead map[int64]sourceRead
 }
 
 func NewService(db database.Querier, cfg *config.Config) *Service {

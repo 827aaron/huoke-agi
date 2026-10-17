@@ -21,6 +21,7 @@ import { DocumentTitle } from '@/components/shared/document-title';
 import PageLoader from '@/components/shared/page-loader';
 import RouteErrorBoundary from '@/components/shared/route-error-boundary';
 import { Toaster } from '@/components/ui/sonner';
+import { GrowthFlowProvider } from '@/features/growth/growth-flow-provider';
 import client from '@/lib/apollo';
 import { routeTitles } from '@/lib/route-titles';
 import { routes } from '@/lib/routes';
@@ -45,12 +46,16 @@ const NewFlow = lazy(() => import('@/pages/flows/new-flow'));
 const Login = lazy(() => import('@/pages/login'));
 const Knowledge = lazy(() => import('@/pages/knowledges/knowledge'));
 const Knowledges = lazy(() => import('@/pages/knowledges/knowledges'));
+const HelpKeys = lazy(() => import('@/pages/help/help-keys'));
 const Resources = lazy(() => import('@/pages/resources/resources'));
 const Template = lazy(() => import('@/pages/templates/template'));
 const Templates = lazy(() => import('@/pages/templates/templates'));
 const OAuthResult = lazy(() => import('@/pages/oauth-result'));
 const SettingsAccount = lazy(() => import('@/pages/settings/settings-account'));
 const SettingsAPITokens = lazy(() => import('@/pages/settings/settings-api-tokens'));
+const SettingsCredentials = lazy(() => import('@/pages/settings/settings-credentials'));
+const SettingsGrowthProfile = lazy(() => import('@/pages/settings/settings-growth-profile'));
+const SettingsAccounts = lazy(() => import('@/pages/settings/settings-accounts'));
 const SettingsPrompt = lazy(() => import('@/pages/settings/settings-prompt'));
 const SettingsPrompts = lazy(() => import('@/pages/settings/settings-prompts'));
 const SettingsProvider = lazy(() => import('@/pages/settings/settings-provider'));
@@ -59,7 +64,9 @@ const SettingsProviders = lazy(() => import('@/pages/settings/settings-providers
 function FlowWithProvider() {
     return (
         <FlowProvider>
-            <Flow />
+            <GrowthFlowProvider>
+                <Flow />
+            </GrowthFlowProvider>
         </FlowProvider>
     );
 }
@@ -191,6 +198,11 @@ const router = createBrowserRouter(
                         handle={routeTitles.resources}
                         path="resources"
                     />
+                    <Route
+                        element={<HelpKeys />}
+                        handle={routeTitles.helpKeys}
+                        path="help/keys"
+                    />
                 </Route>
 
                 <Route
@@ -210,6 +222,21 @@ const router = createBrowserRouter(
                         element={<SettingsAccount />}
                         handle={routeTitles.account}
                         path="account"
+                    />
+                    <Route
+                        element={<SettingsGrowthProfile />}
+                        handle={routeTitles.growthProfile}
+                        path="business-profile"
+                    />
+                    <Route
+                        element={<SettingsAccounts />}
+                        handle={routeTitles.accounts}
+                        path="accounts"
+                    />
+                    <Route
+                        element={<SettingsCredentials />}
+                        handle={routeTitles.credentials}
+                        path="credentials"
                     />
                     <Route
                         element={<SettingsProviders />}

@@ -1,0 +1,102 @@
+import { api, unwrapApiResponse } from '@/lib/axios';
+
+import type {
+    GrowthAccount,
+    GrowthAccountsResponse,
+    GrowthEmailResult,
+    GrowthLead,
+    GrowthProfile,
+    GrowthProfileInput,
+    GrowthProxyTestResult,
+    GrowthRemoteLogin,
+    GrowthRun,
+    GrowthSetting,
+    GrowthSettingInput,
+    GrowthSettingKind,
+    GrowthSettingsResponse,
+    GrowthSource,
+    GrowthSourcesAddResponse,
+    GrowthTelegramLoginStep,
+} from './growth-types';
+
+import { growthMock } from './growth-mock';
+
+const isMock = import.meta.env.VITE_GROWTH_API
+    ? import.meta.env.VITE_GROWTH_API === 'mock'
+    : import.meta.env.DEV && import.meta.env.MODE !== 'test';
+
+export interface RemoteLoginInput extends StartLoginInput {
+    external_browser_ws: null | string;
+    platform: 'facebook' | 'instagram' | 'tiktok';
+}
+
+// `account_id` signs an existing account in again; without it a new account is added.
+export interface StartLoginInput {
+    account_id?: number;
+    proxy_url: null | string;
+}
+
+const live = {
+    addSources: async (links: string[]) =>
+        unwrapApiResponse(await api.post<GrowthSourcesAddResponse>('/growth/sources/', { links })),
+    // Leaves the account as it was (`needs_login` for a re-login, nothing for a new one).
+    cancelRemoteLogin: async (sessionId: string) => {
+        await api.delete(`/growth/accounts/remote-login/${sessionId}`);
+    },
+    clearSetting: async (kind: GrowthSettingKind) => {
+        await api.delete(`/growth/settings/${kind}`);
+    },
+    createProfile: async (input: GrowthProfileInput) =>
+        unwrapApiResponse(await api.post<GrowthProfile>('/growth/profiles', input)),
+    finishRemoteLogin: async (sessionId: string) =>
+        unwrapApiResponse(await api.post<GrowthAccount>(`/growth/accounts/remote-login/${sessionId}/finish`)),
+    listAccounts: async () => unwrapApiResponse(await api.get<GrowthAccountsResponse>('/growth/accounts/')).accounts,
+    listLeads: async (flowId: number | string) =>
+        unwrapApiResponse(await api.get<{ leads: GrowthLead[] }>('/growth/leads/', { params: { flow_id: flowId } }))
+            .leads,
+    listProfiles: async () => unwrapApiResponse(await api.get<GrowthProfile[]>('/growth/profiles')),
+    listRuns: async (flowId: number | string) =>
+        unwrapApiResponse(await api.get<{ runs: GrowthRun[] }>('/growth/runs/', { params: { flow_id: flowId } })).runs,
+    listSettings: async () => unwrapApiResponse(await api.get<GrowthSettingsResponse>('/growth/settings/')).settings,
+    listSources: async () => unwrapApiResponse(await api.get<{ sources: GrowthSource[] }>('/growth/sources/')).sources,
+    // Answers 503 Growth.NoSecretKey while the server has no key to encrypt secrets with.
+    saveSetting: async (kind: GrowthSettingKind, input: GrowthSettingInput) =>
+        unwrapApiResponse(await api.put<GrowthSetting>(`/growth/settings/${kind}`, input)),
+    // Mails the lead list of one round to the notification addresses, the same email a finished round sends.
+    sendLeadsEmail: async (flowId: number | string, taskId: number) =>
+        unwrapApiResponse(
+            await api.post<GrowthEmailResult>('/growth/leads/email', { flow_id: Number(flowId), task_id: taskId }),
+        ),
+    // Re-enabling returns the account to `needs_login` or `active`, whichever its session allows.
+    setAccountDisabled: async (id: number, isDisabled: boolean) =>
+        unwrapApiResponse(
+            await api.put<GrowthAccount>(`/growth/accounts/${id}`, { status: isDisabled ? 'disabled' : 'active' }),
+        ),
+    // An empty string clears the account's own proxy, so it falls back to the default one.
+    setAccountProxy: async (id: number, proxyUrl: null | string) =>
+        unwrapApiResponse(await api.put<GrowthAccount>(`/growth/accounts/${id}`, { proxy_url: proxyUrl ?? '' })),
+    startRemoteLogin: async (input: RemoteLoginInput) =>
+        unwrapApiResponse(await api.post<GrowthRemoteLogin>('/growth/accounts/remote-login', input)),
+    startTelegramLogin: async (input: StartLoginInput & { phone: string }) =>
+        unwrapApiResponse(await api.post<GrowthTelegramLoginStep>('/growth/accounts/telegram/login', input)),
+    submitTelegramCode: async (loginId: string, code: string) =>
+        unwrapApiResponse(
+            await api.post<GrowthTelegramLoginStep>(`/growth/accounts/telegram/login/${loginId}/code`, { code }),
+        ),
+    submitTelegramPassword: async (loginId: string, password: string) =>
+        unwrapApiResponse(
+            await api.post<GrowthTelegramLoginStep>(`/growth/accounts/telegram/login/${loginId}/password`, {
+                password,
+            }),
+        ),
+    testAccountProxy: async (id: number) =>
+        unwrapApiResponse(await api.post<GrowthProxyTestResult>(`/growth/accounts/${id}/test-proxy`)),
+    // Without `to` the server mails the notification addresses.
+    testEmail: async () => unwrapApiResponse(await api.post<GrowthEmailResult>('/growth/settings/test-email', {})),
+    testSetting: async (kind: GrowthSettingKind) =>
+        unwrapApiResponse(await api.post<GrowthSetting>(`/growth/settings/${kind}/test`)),
+    updateProfile: async (id: number, input: GrowthProfileInput) =>
+        unwrapApiResponse(await api.put<GrowthProfile>(`/growth/profiles/${id}`, input)),
+};
+
+export const growthApi: typeof live = isMock ? growthMock : live;

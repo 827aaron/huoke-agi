@@ -84,16 +84,17 @@ import {
 import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
 import { composeRefs } from '@/lib/compose-refs';
+import { copy } from '@/lib/copy';
 import { formatPromptId } from '@/lib/route-titles/format-prompt-id';
 
-const VARIABLES_TITLE = 'Available variables';
+const VARIABLES_TITLE = copy.prompt.variables;
 
 const systemFormSchema = z.object({
-    template: z.string().min(1, 'System template is required'),
+    template: z.string().min(1, copy.prompt.systemRequired),
 });
 
 const humanFormSchema = z.object({
-    template: z.string().min(1, 'Human template is required'),
+    template: z.string().min(1, copy.prompt.humanRequired),
 });
 
 interface FormMarkdownItemProps<T extends FieldValues> {
@@ -358,7 +359,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
             setResetDialogOpen(false);
         } catch (error) {
             console.error('Reset error:', error);
-            setSubmitError(error instanceof Error ? error.message : 'An error occurred while resetting');
+            setSubmitError(error instanceof Error ? error.message : copy.prompt.resetFailed);
             setResetDialogOpen(false);
         }
     };
@@ -402,7 +403,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
             setValidationDialogOpen(true);
         } catch (error) {
             console.error('Validation error:', error);
-            setSubmitError(error instanceof Error ? error.message : 'An error occurred while validating');
+            setSubmitError(error instanceof Error ? error.message : copy.prompt.validateFailed);
         }
     };
 
@@ -570,7 +571,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
             return true;
         } catch (error) {
             console.error('Submit error:', error);
-            setSubmitError(error instanceof Error ? error.message : 'An error occurred while saving');
+            setSubmitError(error instanceof Error ? error.message : copy.prompt.saveFailed);
 
             return false;
         }
@@ -595,7 +596,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
             const humanPromptType = agentData.human?.type;
 
             if (!humanPromptType) {
-                setSubmitError('Human prompt type not found');
+                setSubmitError(copy.prompt.humanTypeMissing);
 
                 return false;
             }
@@ -621,7 +622,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
             return true;
         } catch (error) {
             console.error('Submit error:', error);
-            setSubmitError(error instanceof Error ? error.message : 'An error occurred while saving');
+            setSubmitError(error instanceof Error ? error.message : copy.prompt.saveFailed);
 
             return false;
         }
@@ -671,14 +672,14 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
     const pageHeader = (
         <AppHeader>
             <AppHeaderContent>
-                <AppHeaderTitle icon={<FileText className="size-4 shrink-0" />}>Edit Prompt</AppHeaderTitle>
+                <AppHeaderTitle icon={<FileText className="size-4 shrink-0" />}>{copy.prompt.editTitle}</AppHeaderTitle>
             </AppHeaderContent>
             {promptInfo && (
                 <AppHeaderActions>
                     <AppHeaderAction
                         disabled={isLoading}
                         icon={isValidateLoading ? <Spinner variant="circle" /> : <CheckCircle />}
-                        label={isValidateLoading ? 'Validating...' : 'Validate'}
+                        label={isValidateLoading ? copy.prompt.validating : copy.prompt.validate}
                         onClick={handleValidate}
                         type="button"
                         variant="outline"
@@ -686,14 +687,14 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                     <AppHeaderAction
                         form={activeFormId}
                         icon={<Save />}
-                        label="Save"
+                        label={copy.action.save}
                         loading={isLoading}
                         type="submit"
                     />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button
-                                aria-label="Prompt actions"
+                                aria-label={copy.prompt.promptActions}
                                 className="size-8 p-0"
                                 type="button"
                                 variant="ghost"
@@ -709,14 +710,14 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                                 <>
                                     <DropdownMenuItem onClick={() => setIsDiffDialogOpen(true)}>
                                         <FileDiff />
-                                        Diff
+                                        {copy.prompt.diff}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         disabled={isLoading}
                                         onClick={handleReset}
                                     >
                                         {isDeleteLoading ? <Spinner variant="circle" /> : <RotateCcw />}
-                                        {isDeleteLoading ? 'Resetting...' : 'Reset'}
+                                        {isDeleteLoading ? copy.action.resetting : copy.action.reset}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                 </>
@@ -725,12 +726,12 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                                 className="cursor-default gap-4 hover:bg-transparent focus:bg-transparent"
                                 onSelect={(event) => event.preventDefault()}
                             >
-                                View
+                                {copy.prompt.view}
                                 <EditorViewModeToggle
                                     className="-my-1.5 -mr-2 ml-auto"
                                     mode={viewMode}
                                     onModeChange={setViewMode}
-                                    rawTooltip="Edit the raw prompt template"
+                                    rawTooltip={copy.prompt.editRaw}
                                 />
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -746,8 +747,8 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                 {pageHeader}
                 <div className="flex flex-1 items-center justify-center p-4">
                     <LoadingState
-                        description="Please wait while we fetch prompt information"
-                        title="Loading prompt data..."
+                        description={copy.prompt.loadingHint}
+                        title={copy.prompt.loading}
                     />
                 </div>
             </>
@@ -762,7 +763,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                     <ErrorState
                         message={error.message}
                         onRetry={refetch}
-                        title="Error loading prompt data"
+                        title={copy.prompt.loadFailed}
                     />
                 </div>
             </>
@@ -779,8 +780,8 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                             <EmptyMedia>
                                 <AlertCircle className="text-destructive size-12" />
                             </EmptyMedia>
-                            <EmptyTitle>Prompt not found</EmptyTitle>
-                            <EmptyDescription>{`The prompt "${promptId}" could not be found or is not supported for editing.`}</EmptyDescription>
+                            <EmptyTitle>{copy.prompt.notFound}</EmptyTitle>
+                            <EmptyDescription>{copy.prompt.notFoundHint(promptId ?? '')}</EmptyDescription>
                         </EmptyHeader>
                     </Empty>
                 </div>
@@ -794,11 +795,9 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
     const promptPanel = (
         <>
             <div className="flex flex-col gap-2 text-center">
-                <h2 className="text-2xl font-semibold">Edit prompt</h2>
+                <h2 className="text-2xl font-semibold">{copy.prompt.edit}</h2>
                 <p className="text-muted-foreground">
-                    {promptInfo.type === 'agent'
-                        ? 'Customize the templates this agent uses'
-                        : 'Customize the template this tool uses'}
+                    {promptInfo.type === 'agent' ? copy.prompt.agentSubtitle : copy.prompt.toolSubtitle}
                 </p>
             </div>
 
@@ -812,9 +811,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                     {promptInfo.displayName}
                 </h3>
                 <p className="text-muted-foreground text-sm">
-                    {promptInfo.type === 'agent'
-                        ? 'Configure prompts for this AI agent'
-                        : 'Configure the prompt for this tool'}
+                    {promptInfo.type === 'agent' ? copy.prompt.agentHint : copy.prompt.toolHint}
                 </p>
             </div>
 
@@ -824,7 +821,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                     value="system"
                 >
                     <Code className="size-4" />
-                    System Prompt
+                    {copy.prompts.systemPrompt}
                 </TabsTrigger>
                 <TabsTrigger
                     className="xl:dark:data-[state=active]:bg-card flex-1"
@@ -832,7 +829,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                     value="human"
                 >
                     <User className="size-4" />
-                    Human Prompt
+                    {copy.prompts.humanPrompt}
                 </TabsTrigger>
             </TabsList>
 
@@ -846,8 +843,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
         </>
     );
 
-    const systemPlaceholder =
-        promptInfo.type === 'tool' ? 'Enter the tool template...' : 'Enter the system prompt template...';
+    const systemPlaceholder = promptInfo.type === 'tool' ? copy.prompt.toolPlaceholder : copy.prompt.systemPlaceholder;
 
     const promptEditor = (
         <>
@@ -863,7 +859,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                         onSubmit={systemForm.handleSubmit(handleSystemSubmit)}
                     >
                         <FormMarkdownItem
-                            aria-label="System prompt template"
+                            aria-label={copy.prompt.systemTemplate}
                             control={systemForm.control}
                             disabled={isLoading}
                             editorRef={editorRef}
@@ -888,13 +884,13 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                             onSubmit={humanForm.handleSubmit(handleHumanSubmit)}
                         >
                             <FormMarkdownItem
-                                aria-label="Human prompt template"
+                                aria-label={copy.prompt.humanTemplate}
                                 control={humanForm.control}
                                 disabled={isLoading}
                                 editorRef={editorRef}
                                 mode={viewMode}
                                 name="template"
-                                placeholder="Enter the human prompt template..."
+                                placeholder={copy.prompt.humanPlaceholder}
                             />
                         </form>
                     </Form>
@@ -925,18 +921,18 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
             </Tabs>
 
             <ConfirmationDialog
-                cancelText="Cancel"
+                cancelText={copy.action.cancel}
                 cancelVariant="outline"
                 confirmIcon={<RotateCcw />}
-                confirmText="Reset"
+                confirmText={copy.action.reset}
                 confirmVariant="destructive"
-                description="Are you sure you want to reset this prompt to its default value? This action cannot be undone."
+                description={copy.prompt.resetConfirm}
                 handleConfirm={handleConfirmReset}
                 handleOpenChange={setResetDialogOpen}
                 isOpen={resetDialogOpen}
-                itemName={`${activeTab} prompt`}
-                itemType="template"
-                title="Reset Prompt"
+                itemName={activeTab === 'system' ? copy.prompts.systemPrompt : copy.prompts.humanPrompt}
+                itemType={copy.itemType.prompt}
+                title={copy.prompt.resetTitle}
             />
 
             <UnsavedChangesDialog
@@ -957,10 +953,12 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertCircle className="size-5" />
-                            Validation Results
+                            {copy.prompt.validationResults}
                         </DialogTitle>
                         <DialogDescription>
-                            The validation result for the {activeTab} prompt template.
+                            {copy.prompt.validationHint(
+                                activeTab === 'system' ? copy.prompts.systemPrompt : copy.prompts.humanPrompt,
+                            )}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -973,19 +971,21 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                                     <XCircle className="size-4 text-red-500!" />
                                 )}
                                 <AlertTitle>
-                                    {validationResult.result === 'success' ? 'Valid Template' : 'Validation Error'}
+                                    {validationResult.result === 'success'
+                                        ? copy.prompt.valid
+                                        : copy.prompt.validationError}
                                 </AlertTitle>
                                 <AlertDescription>
                                     <div className="whitespace-pre-line">
                                         {validationResult.message}
                                         {validationResult.details && (
                                             <div className="mt-2">
-                                                <strong>Details:</strong> {validationResult.details}
+                                                <strong>{copy.prompt.details}</strong> {validationResult.details}
                                             </div>
                                         )}
                                         {validationResult.line && (
                                             <div className="mt-1">
-                                                <strong>Line:</strong> {validationResult.line}
+                                                <strong>{copy.prompt.line}</strong> {validationResult.line}
                                             </div>
                                         )}
                                     </div>
@@ -993,7 +993,7 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                             </Alert>
 
                             <div className="flex justify-end">
-                                <Button onClick={() => setValidationDialogOpen(false)}>Close</Button>
+                                <Button onClick={() => setValidationDialogOpen(false)}>{copy.action.close}</Button>
                             </div>
                         </div>
                     )}
@@ -1008,9 +1008,9 @@ function SettingsPromptEditor({ promptId }: { promptId?: string }) {
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileDiff className="size-5" />
-                            Diff
+                            {copy.prompt.diff}
                         </DialogTitle>
-                        <DialogDescription>Changes between current value and default template.</DialogDescription>
+                        <DialogDescription>{copy.prompt.diffHint}</DialogDescription>
                     </DialogHeader>
                     <div className="max-h-[70vh] overflow-auto">
                         <DiffContent
@@ -1053,9 +1053,7 @@ function Variables({ currentTemplate, onVariableClick, variables }: VariablesPro
                             {variables.length}
                         </Badge>
                     </h4>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                        Click to insert at the cursor, or cycle through existing uses.
-                    </p>
+                    <p className="text-muted-foreground mt-1 text-xs">{copy.prompt.variablesHint}</p>
                 </div>
                 <div className="bg-background">{content}</div>
             </div>
@@ -1100,9 +1098,7 @@ function VariablesContent({ currentTemplate, onVariableClick, variables }: Varia
             {variables.map((variable) => {
                 const count = counts[variable] ?? 0;
                 const isUsed = count > 0;
-                const action = isUsed
-                    ? `Go to next {{.${variable}}} in the template${count > 1 ? ` (${count} uses)` : ''}`
-                    : `Insert {{.${variable}}} at the cursor`;
+                const action = isUsed ? copy.prompt.goToNext(variable, count) : copy.prompt.insert(variable);
 
                 return (
                     // className stays on Badge: Slot only concatenates, so `font-normal` would race

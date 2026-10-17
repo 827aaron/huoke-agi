@@ -1,8 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { useMutation, useQuery, useSubscription } from '@apollo/client/react';
-import { addDays, addSeconds, differenceInSeconds, format, isPast, startOfDay } from 'date-fns';
-import { enUS } from 'date-fns/locale';
+import { addDays, addSeconds, differenceInSeconds, isPast, startOfDay } from 'date-fns';
 import { CalendarIcon, Check, Copy, Ellipsis, ExternalLink, Key, Pencil, Plus, Trash, X } from 'lucide-react';
 import { useCallback, useId, useMemo, useState } from 'react';
 import { type Control, Controller, useFormState } from 'react-hook-form';
@@ -52,6 +51,7 @@ import {
 import { useAppForm } from '@/hooks/use-app-form';
 import { useTableState } from '@/hooks/use-table-state';
 import { copyToClipboard } from '@/lib/clipboard';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { formatTableDate } from '@/lib/utils/format';
 import { baseUrl } from '@/models/api';
@@ -62,7 +62,7 @@ type APIToken = ApiTokenFragmentFragment;
 export const tokenNameSchema = z
     .string()
     .trim()
-    .refine((value) => [...value].length <= 100, 'Token name must be 100 characters or less')
+    .refine((value) => [...value].length <= 100, copy.apiTokens.nameTooLong)
     .default('');
 
 const createTokenFormSchema = z.object({
@@ -71,7 +71,7 @@ const createTokenFormSchema = z.object({
     expiresAt: z
         .date()
         .nullable()
-        .refine((value) => value !== null, { message: 'Expiration date is required' }),
+        .refine((value) => value !== null, { message: copy.apiTokens.expirationRequired }),
     name: tokenNameSchema,
 });
 
@@ -165,7 +165,7 @@ function CreateRowActions({
     return (
         <div className="flex justify-end">
             <Button
-                aria-label={isLoading ? 'Submitting…' : 'Submit'}
+                aria-label={isLoading ? copy.apiTokens.submitting : copy.apiTokens.submit}
                 className="shrink-0"
                 disabled={isLoading || !isValid}
                 onClick={onSubmit}
@@ -175,7 +175,7 @@ function CreateRowActions({
                 {isLoading ? <Spinner variant="circle" /> : <Check />}
             </Button>
             <Button
-                aria-label="Cancel"
+                aria-label={copy.action.cancel}
                 className="shrink-0"
                 onClick={onCancel}
                 size="icon-sm"
@@ -203,7 +203,7 @@ function EditRowActions({
     return (
         <div className="flex justify-end">
             <Button
-                aria-label={isLoading ? 'Submitting…' : 'Submit'}
+                aria-label={isLoading ? copy.apiTokens.submitting : copy.apiTokens.submit}
                 className="shrink-0"
                 disabled={isLoading || !isValid}
                 onClick={onSubmit}
@@ -213,7 +213,7 @@ function EditRowActions({
                 {isLoading ? <Spinner variant="circle" /> : <Check />}
             </Button>
             <Button
-                aria-label="Cancel"
+                aria-label={copy.action.cancel}
                 className="shrink-0"
                 onClick={onCancel}
                 size="icon-sm"
@@ -310,7 +310,7 @@ function SettingsAPITokens() {
                 setEditingTokenId(null);
                 editForm.reset(EDIT_TOKEN_DEFAULTS);
             } catch (error) {
-                toast.error('Failed to update token', {
+                toast.error(copy.apiTokens.updateFailed, {
                     description: error instanceof Error ? error.message : undefined,
                 });
             }
@@ -364,7 +364,7 @@ function SettingsAPITokens() {
             setCreatingToken(false);
             createForm.reset(CREATE_TOKEN_DEFAULTS);
         } catch (error) {
-            toast.error('Failed to create token', {
+            toast.error(copy.apiTokens.createFailed, {
                 description: error instanceof Error ? error.message : undefined,
             });
         }
@@ -389,7 +389,7 @@ function SettingsAPITokens() {
 
                 setDeletingToken(null);
             } catch (error) {
-                toast.error('Failed to delete token', {
+                toast.error(copy.apiTokens.deleteFailed, {
                     description: error instanceof Error ? error.message : undefined,
                 });
             }
@@ -401,12 +401,12 @@ function SettingsAPITokens() {
         const success = await copyToClipboard(tokenId);
 
         if (success) {
-            toast.success('Token ID copied to clipboard');
+            toast.success(copy.apiTokens.idCopied);
 
             return;
         }
 
-        toast.error('Failed to copy token ID to clipboard');
+        toast.error(copy.apiTokens.copyIdFailed);
     }, []);
 
     const columns: ColumnDef<APIToken>[] = useMemo(
@@ -430,7 +430,7 @@ function SettingsAPITokens() {
                                         autoFocus
                                         className="h-8"
                                         id={createNameFieldId}
-                                        placeholder="Token name (optional)"
+                                        placeholder={copy.apiTokens.nameOptional}
                                     />
                                 )}
                             />
@@ -449,7 +449,7 @@ function SettingsAPITokens() {
                                         autoFocus
                                         className="h-8"
                                         id={editNameFieldId}
-                                        placeholder="Token name (optional)"
+                                        placeholder={copy.apiTokens.nameOptional}
                                     />
                                 )}
                             />
@@ -469,10 +469,10 @@ function SettingsAPITokens() {
                 header: ({ column }) => (
                     <DataTableColumnHeader
                         column={column}
-                        title="Name"
+                        title={copy.provider.name}
                     />
                 ),
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.provider.name, searchable: true },
                 size: 300,
             },
             {
@@ -491,7 +491,7 @@ function SettingsAPITokens() {
                         <div className="flex items-center gap-2">
                             <code className="text-sm">{tokenId}</code>
                             <Button
-                                aria-label="Copy token ID"
+                                aria-label={copy.apiTokens.copyId}
                                 className="size-6 p-0"
                                 onClick={() => handleCopyTokenId(tokenId)}
                                 variant="ghost"
@@ -505,10 +505,10 @@ function SettingsAPITokens() {
                 header: ({ column }) => (
                     <DataTableColumnHeader
                         column={column}
-                        title="Token ID"
+                        title={copy.apiTokens.tokenId}
                     />
                 ),
-                meta: { columnMenuLabel: 'Token ID', searchable: true },
+                meta: { columnMenuLabel: copy.apiTokens.tokenId, searchable: true },
                 size: 200,
             },
             {
@@ -527,7 +527,11 @@ function SettingsAPITokens() {
 
                     if (isEditing) {
                         if (expired) {
-                            return <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>;
+                            return (
+                                <Badge variant={statusDisplay.variant}>
+                                    {copy.apiTokens.statusLabel[statusDisplay.label] ?? statusDisplay.label}
+                                </Badge>
+                            );
                         }
 
                         return (
@@ -540,15 +544,19 @@ function SettingsAPITokens() {
                                         value={field.value}
                                     >
                                         <SelectTrigger
-                                            aria-label="Token status"
+                                            aria-label={copy.apiTokens.statusSelect}
                                             className="h-8 w-32"
                                         >
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectGroup>
-                                                <SelectItem value={TokenStatusEnum.Active}>active</SelectItem>
-                                                <SelectItem value={TokenStatusEnum.Revoked}>revoked</SelectItem>
+                                                <SelectItem value={TokenStatusEnum.Active}>
+                                                    {copy.apiTokens.statusLabel.active}
+                                                </SelectItem>
+                                                <SelectItem value={TokenStatusEnum.Revoked}>
+                                                    {copy.apiTokens.statusLabel.revoked}
+                                                </SelectItem>
                                             </SelectGroup>
                                         </SelectContent>
                                     </Select>
@@ -557,15 +565,19 @@ function SettingsAPITokens() {
                         );
                     }
 
-                    return <Badge variant={statusDisplay.variant}>{statusDisplay.label}</Badge>;
+                    return (
+                        <Badge variant={statusDisplay.variant}>
+                            {copy.apiTokens.statusLabel[statusDisplay.label] ?? statusDisplay.label}
+                        </Badge>
+                    );
                 },
                 header: ({ column }) => (
                     <DataTableColumnHeader
                         column={column}
-                        title="Status"
+                        title={copy.apiTokens.status}
                     />
                 ),
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.apiTokens.status, searchable: true },
                 size: 120,
             },
             {
@@ -594,9 +606,9 @@ function SettingsAPITokens() {
                                             >
                                                 <CalendarIcon className="mr-2 size-4" />
                                                 {field.value ? (
-                                                    format(field.value, 'd MMM yyyy', { locale: enUS })
+                                                    copy.apiTokens.pickedDate(field.value)
                                                 ) : (
-                                                    <span>Pick date</span>
+                                                    <span>{copy.apiTokens.pickDate}</span>
                                                 )}
                                             </Button>
                                         </PopoverTrigger>
@@ -626,9 +638,10 @@ function SettingsAPITokens() {
                 header: ({ column }) => (
                     <DataTableColumnHeader
                         column={column}
-                        title="Expires"
+                        title={copy.apiTokens.expires}
                     />
                 ),
+                meta: { columnMenuLabel: copy.apiTokens.expires },
                 size: 150,
                 sortingFn: (rowA, rowB) => {
                     const expiresA = getTokenExpirationDate(rowA.original);
@@ -654,10 +667,10 @@ function SettingsAPITokens() {
                 header: ({ column }) => (
                     <DataTableColumnHeader
                         column={column}
-                        title="Created"
+                        title={copy.providers.created}
                     />
                 ),
-                meta: { columnMenuLabel: 'Created' },
+                meta: { columnMenuLabel: copy.providers.created },
                 size: 120,
                 sortingFn: (rowA, rowB) => {
                     const dateA = new Date(rowA.getValue('createdAt') as string);
@@ -699,7 +712,7 @@ function SettingsAPITokens() {
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
-                                        aria-label="Open menu"
+                                        aria-label={copy.providers.openMenu}
                                         className="shrink-0"
                                         size="icon-sm"
                                         variant="ghost"
@@ -713,11 +726,11 @@ function SettingsAPITokens() {
                                 >
                                     <DropdownMenuItem onClick={() => handleEdit(token)}>
                                         <Pencil />
-                                        Edit
+                                        {copy.action.edit}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleCopyTokenId(token.tokenId)}>
                                         <Copy />
-                                        Copy Token ID
+                                        {copy.apiTokens.copyId}
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
@@ -727,12 +740,12 @@ function SettingsAPITokens() {
                                         {isDeleteLoading && deletingToken?.tokenId === token.tokenId ? (
                                             <>
                                                 <Spinner variant="circle" />
-                                                Deleting...
+                                                {copy.action.deleting}
                                             </>
                                         ) : (
                                             <>
                                                 <Trash />
-                                                Delete
+                                                {copy.action.delete}
                                             </>
                                         )}
                                     </DropdownMenuItem>
@@ -778,11 +791,11 @@ function SettingsAPITokens() {
                 <>
                     <ContextMenuItem onClick={() => handleEdit(token)}>
                         <Pencil />
-                        Edit
+                        {copy.action.edit}
                     </ContextMenuItem>
                     <ContextMenuItem onClick={() => handleCopyTokenId(token.tokenId)}>
                         <Copy />
-                        Copy Token ID
+                        {copy.apiTokens.copyId}
                     </ContextMenuItem>
                     <ContextMenuSeparator />
                     <ContextMenuItem
@@ -790,7 +803,9 @@ function SettingsAPITokens() {
                         onClick={() => handleDeleteDialogOpen(token)}
                     >
                         <Trash />
-                        {isDeleteLoading && deletingToken?.tokenId === token.tokenId ? 'Deleting...' : 'Delete'}
+                        {isDeleteLoading && deletingToken?.tokenId === token.tokenId
+                            ? copy.action.deleting
+                            : copy.action.delete}
                     </ContextMenuItem>
                 </>
             );
@@ -801,19 +816,19 @@ function SettingsAPITokens() {
     const pageHeader = (
         <AppHeader>
             <AppHeaderContent>
-                <AppHeaderTitle icon={<Key className="size-4 shrink-0" />}>API Tokens</AppHeaderTitle>
+                <AppHeaderTitle icon={<Key className="size-4 shrink-0" />}>{copy.apiTokens.title}</AppHeaderTitle>
             </AppHeaderContent>
             <AppHeaderActions>
                 <AppHeaderAction
                     icon={<Plus />}
-                    label="Create Token"
+                    label={copy.apiTokens.create}
                     onClick={handleCreateNew}
                     variant="secondary"
                 />
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button
-                            aria-label="Developer tools"
+                            aria-label={copy.apiTokens.devTools}
                             className="size-8 p-0"
                             size="sm"
                             variant="ghost"
@@ -856,8 +871,8 @@ function SettingsAPITokens() {
             return (
                 <div className="flex flex-1 flex-col gap-4 p-4">
                     <LoadingState
-                        description="Please wait while we fetch your API tokens"
-                        title="Loading tokens..."
+                        description={copy.apiTokens.loadingHint}
+                        title={copy.apiTokens.loading}
                     />
                 </div>
             );
@@ -870,7 +885,7 @@ function SettingsAPITokens() {
                     <ErrorState
                         message={error.message}
                         onRetry={refetch}
-                        title="Error loading tokens"
+                        title={copy.apiTokens.loadFailed}
                     />
                 </div>
             );
@@ -886,10 +901,8 @@ function SettingsAPITokens() {
                             <EmptyMedia variant="icon">
                                 <Key />
                             </EmptyMedia>
-                            <EmptyTitle>No API tokens configured</EmptyTitle>
-                            <EmptyDescription>
-                                Create your first API token to access PentAGI programmatically
-                            </EmptyDescription>
+                            <EmptyTitle>{copy.apiTokens.empty}</EmptyTitle>
+                            <EmptyDescription>{copy.apiTokens.emptyHint}</EmptyDescription>
                         </EmptyHeader>
                         <EmptyContent>
                             <Button
@@ -897,7 +910,7 @@ function SettingsAPITokens() {
                                 variant="secondary"
                             >
                                 <Plus />
-                                Create Token
+                                {copy.apiTokens.create}
                             </Button>
                         </EmptyContent>
                     </Empty>
@@ -910,10 +923,10 @@ function SettingsAPITokens() {
                 <DataTable<APIToken>
                     columns={columns}
                     data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
-                    empty={{ entityName: 'API tokens' }}
-                    filterPlaceholder="Filter tokens..."
+                    empty={{ entityName: copy.apiTokens.title }}
+                    filterPlaceholder={copy.apiTokens.filter}
                     filterValue={filter}
-                    label="API Tokens"
+                    label={copy.apiTokens.title}
                     onFilterChange={setFilter}
                     onPageChange={handlePageChange}
                     pageIndex={currentPage}
@@ -933,10 +946,8 @@ function SettingsAPITokens() {
             >
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>API Token Created</DialogTitle>
-                        <DialogDescription>
-                            Copy this token now. You won't be able to see it again for security reasons.
-                        </DialogDescription>
+                        <DialogTitle>{copy.apiTokens.created}</DialogTitle>
+                        <DialogDescription>{copy.apiTokens.createdHint}</DialogDescription>
                     </DialogHeader>
                     <div className="bg-muted rounded p-4">
                         <code className="text-sm break-all">{tokenSecret}</code>
@@ -949,16 +960,16 @@ function SettingsAPITokens() {
                                     const success = await copyToClipboard(tokenSecret);
 
                                     if (success) {
-                                        toast.success('Token copied to clipboard');
+                                        toast.success(copy.apiTokens.copied);
                                     } else {
-                                        toast.error('Failed to copy token to clipboard');
+                                        toast.error(copy.apiTokens.copyFailed);
                                     }
                                 }
                             }}
                             variant="secondary"
                         >
                             <Copy />
-                            Copy Token
+                            {copy.apiTokens.copyToken}
                         </Button>
                         <Button
                             className="flex-1"
@@ -968,20 +979,20 @@ function SettingsAPITokens() {
                             }}
                             variant="outline"
                         >
-                            Close
+                            {copy.action.close}
                         </Button>
                     </div>
                 </DialogContent>
             </Dialog>
 
             <ConfirmationDialog
-                cancelText="Cancel"
-                confirmText="Delete"
+                cancelText={copy.action.cancel}
+                confirmText={copy.action.delete}
                 handleConfirm={() => handleDelete(deletingToken?.tokenId)}
                 handleOpenChange={setIsDeleteDialogOpen}
                 isOpen={isDeleteDialogOpen}
                 itemName={deletingToken?.name || deletingToken?.tokenId}
-                itemType="token"
+                itemType={copy.itemType.token}
             />
         </>
     );

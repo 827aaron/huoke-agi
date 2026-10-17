@@ -22,10 +22,10 @@ import {
 
 const openNewKnowledgeForm = async (page: Page) => {
     await page.goto('/knowledges');
-    await page.getByRole('button', { name: 'New Knowledge' }).click();
+    await page.getByRole('button', { name: '新建知识' }).click();
 
     await expect(page).toHaveURL(/\/knowledges\/new$/);
-    await expect(page.getByRole('combobox', { name: 'Answer type' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: '回答类型' })).toBeVisible();
 };
 
 test.describe('knowledges crud', { tag: '@crud' }, () => {
@@ -34,11 +34,11 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
 
         test('blocks submit until the answer type is picked', async ({ page, pageErrorLog }) => {
             await openNewKnowledgeForm(page);
-            await page.getByRole('textbox', { name: 'Question' }).fill('What is the E2E answer?');
-            await typeIntoEditor(page, 'Content', 'E2E knowledge content');
-            await page.getByRole('button', { name: 'Create' }).click();
+            await page.getByRole('textbox', { name: '问题' }).fill('What is the E2E answer?');
+            await typeIntoEditor(page, '内容', 'E2E knowledge content');
+            await page.getByRole('button', { name: '创建' }).click();
 
-            await expect(page.getByText('Answer type is required')).toBeVisible();
+            await expect(page.getByText('请选择回答类型')).toBeVisible();
             await expect(page).toHaveURL(/\/knowledges\/new$/);
             expectCleanPage(pageErrorLog);
         });
@@ -72,14 +72,14 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
 
         test('creates a document and lands on its detail page', async ({ page, pageErrorLog }) => {
             await openNewKnowledgeForm(page);
-            await page.getByRole('textbox', { name: 'Question' }).fill('What is the E2E answer?');
-            await typeIntoEditor(page, 'Content', 'E2E knowledge content');
-            await page.getByRole('combobox', { name: 'Answer type' }).click();
-            await page.getByRole('option', { name: 'other' }).click();
-            await page.getByRole('button', { name: 'Create' }).click();
+            await page.getByRole('textbox', { name: '问题' }).fill('What is the E2E answer?');
+            await typeIntoEditor(page, '内容', 'E2E knowledge content');
+            await page.getByRole('combobox', { name: '回答类型' }).click();
+            await page.getByRole('option', { name: '其他' }).click();
+            await page.getByRole('button', { name: '创建' }).click();
 
             await expect(page).toHaveURL(/\/knowledges\/301$/);
-            await expect(page.getByRole('textbox', { name: 'Question' })).toHaveValue('What is the E2E answer?');
+            await expect(page.getByRole('textbox', { name: '问题' })).toHaveValue('What is the E2E answer?');
             expectCleanPage(pageErrorLog);
         });
     });
@@ -97,17 +97,17 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
 
             test('replaces the body with what the server returned', async ({ page, pageErrorLog }) => {
                 await openNewKnowledgeForm(page);
-                await typeIntoEditor(page, 'Content', RAW);
+                await typeIntoEditor(page, '内容', RAW);
 
                 const request = page.waitForRequest(
                     (candidate) =>
                         candidate.method() === 'POST' && candidate.postDataJSON()?.operationName === 'anonymizeText',
                 );
 
-                await page.getByRole('button', { name: 'Anonymize' }).click();
+                await page.getByRole('button', { name: '脱敏' }).click();
 
                 expect((await request).postDataJSON().variables.text).toContain('admin@example.com');
-                await expect(page.getByRole('textbox', { name: 'Content' })).toContainText(SCRUBBED);
+                await expect(page.getByRole('textbox', { name: '内容' })).toContainText(SCRUBBED);
                 expectCleanPage(pageErrorLog);
             });
         });
@@ -123,11 +123,11 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
 
             test('leaves the body alone and says so', async ({ page }) => {
                 await openNewKnowledgeForm(page);
-                await typeIntoEditor(page, 'Content', PLAIN);
-                await page.getByRole('button', { name: 'Anonymize' }).click();
+                await typeIntoEditor(page, '内容', PLAIN);
+                await page.getByRole('button', { name: '脱敏' }).click();
 
-                await expect(page.getByText('No sensitive data detected')).toBeVisible();
-                await expect(page.getByRole('textbox', { name: 'Content' })).toContainText(PLAIN);
+                await expect(page.getByText('没有发现敏感信息')).toBeVisible();
+                await expect(page.getByRole('textbox', { name: '内容' })).toContainText(PLAIN);
             });
         });
     });
@@ -172,8 +172,8 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
             const row = page.getByRole('row', { name: /E2E Seed Question/ });
 
             await row.hover();
-            await row.getByRole('button', { name: 'Open menu' }).click();
-            await page.getByRole('menuitem', { name: 'Rename' }).click();
+            await row.getByRole('button', { name: '打开菜单' }).click();
+            await page.getByRole('menuitem', { name: '重命名' }).click();
 
             const editor = page.getByRole('row').getByRole('textbox');
 
@@ -218,16 +218,16 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
             const row = page.getByRole('row', { name: /E2E Seed Question/ });
 
             await row.hover();
-            await row.getByRole('button', { name: 'Open menu' }).click();
-            await page.getByRole('menuitem', { name: 'Delete' }).click();
+            await row.getByRole('button', { name: '打开菜单' }).click();
+            await page.getByRole('menuitem', { name: '删除' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByRole('heading', { name: 'Delete knowledge document' })).toBeVisible();
-            await dialog.getByRole('button', { name: 'Delete' }).click();
+            await expect(dialog.getByRole('heading', { name: '删除知识文档' })).toBeVisible();
+            await dialog.getByRole('button', { name: '删除' }).click();
 
             await expect(page.getByRole('row', { name: /E2E Seed Question/ })).toBeHidden();
-            await expect(page.getByText('No knowledge documents yet')).toBeVisible();
+            await expect(page.getByText('还没有知识文档')).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });
@@ -244,7 +244,7 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
         test('shows an in-page error with Retry, not a bounce to the list', async ({ page }) => {
             await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
 
-            await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+            await expect(page.getByRole('button', { name: '重试' })).toBeVisible();
             await expect(page).toHaveURL(new RegExp(`/knowledges/${KNOWLEDGE_DOC.id}$`));
         });
     });
@@ -262,7 +262,7 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
         test('says the document is gone and returns to the list', async ({ page }) => {
             await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
 
-            await expect(page.getByText('Knowledge document not found')).toBeVisible();
+            await expect(page.getByText('找不到知识文档')).toBeVisible();
             await expect(page).toHaveURL(/\/knowledges$/);
         });
     });
@@ -280,7 +280,7 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
         test('does not bounce a permission denial to the list', async ({ page }) => {
             await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
 
-            await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+            await expect(page.getByRole('button', { name: '重试' })).toBeVisible();
             await expect(page).toHaveURL(new RegExp(`/knowledges/${KNOWLEDGE_DOC.id}$`));
         });
     });
@@ -304,7 +304,7 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
         test('Save sends the edited content and keeps the document id', async ({ page, pageErrorLog }) => {
             await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
 
-            await typeIntoEditor(page, 'Content', 'E2E-SAVE-MARK');
+            await typeIntoEditor(page, '内容', 'E2E-SAVE-MARK');
 
             const request = page.waitForRequest(
                 (candidate) =>
@@ -312,7 +312,7 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
                     candidate.postDataJSON()?.operationName === 'updateKnowledgeDocument',
             );
 
-            await page.getByRole('button', { exact: true, name: 'Save' }).click();
+            await page.getByRole('button', { exact: true, name: '保存' }).click();
 
             const { variables } = (await request).postDataJSON();
 
@@ -327,7 +327,7 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
 
         test('keeps the pager left of save and the actions menu', async ({ page }) => {
             await page.goto(`/knowledges/${KNOWLEDGE_DOC.id}`);
-            await expect(page.getByRole('button', { name: 'Knowledge actions' })).toBeVisible();
+            await expect(page.getByRole('button', { name: '知识操作' })).toBeVisible();
 
             const labels = await page
                 .locator('header button')
@@ -338,13 +338,13 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
 
             // findIndex returns -1 for an absent label, and -1 < any real index, so the ordering below
             // passes vacuously when a button is missing. Require presence first.
-            for (const label of ['Save', 'Previous', 'Next', 'Knowledge actions']) {
+            for (const label of ['保存', '上一个', '下一个', '知识操作']) {
                 expect(positionOf(label), `header is missing the "${label}" button`).toBeGreaterThanOrEqual(0);
             }
 
-            expect(positionOf('Previous')).toBeLessThan(positionOf('Save'));
-            expect(positionOf('Next')).toBeLessThan(positionOf('Save'));
-            expect(positionOf('Save')).toBeLessThan(positionOf('Knowledge actions'));
+            expect(positionOf('上一个')).toBeLessThan(positionOf('保存'));
+            expect(positionOf('下一个')).toBeLessThan(positionOf('保存'));
+            expect(positionOf('保存')).toBeLessThan(positionOf('知识操作'));
         });
     });
 });

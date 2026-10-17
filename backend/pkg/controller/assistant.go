@@ -589,7 +589,7 @@ func (aw *assistantWorker) reportFailure(err error) {
 		return
 	}
 
-	msg := fmt.Sprintf("The assistant could not answer: %s", err)
+	msg := fmt.Sprintf(templates.NoticeText(templates.NoticeAssistantFailed, aw.ap.Language()), err)
 	if _, putErr := aw.aslw.PutFlowAssistantMsg(aw.ctx, database.MsglogTypeReport, "", msg); putErr != nil {
 		aw.logger.WithError(putErr).Warn("failed to report why the assistant did not answer")
 	}

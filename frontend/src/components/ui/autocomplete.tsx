@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor } from '@/components/ui/popover';
 import { useControllable } from '@/hooks/use-controllable';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 interface AutocompleteContextValue {
@@ -226,7 +227,7 @@ function Autocomplete({
             >
                 <Command
                     filter={filter ?? substringFilter}
-                    label="Suggestions"
+                    label={copy.ui.suggestions}
                     shouldFilter={shouldFilter}
                 >
                     {children}

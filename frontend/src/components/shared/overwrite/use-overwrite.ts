@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { copy } from '@/lib/copy';
+
 import type { OverwriteConflict } from './overwrite-dialog';
 
 /**
@@ -27,7 +29,7 @@ export type OverwriteOutcome =
  */
 const ANONYMOUS_FALLBACK_CONFLICT: OverwriteConflict = {
     destination: '',
-    destinationName: 'an item',
+    destinationName: copy.overwrite.unnamed,
 };
 
 interface UseOverwriteOptions<TPlan> {

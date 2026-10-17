@@ -5,6 +5,7 @@ import { Toaster as Sonner, type ToasterProps } from 'sonner';
 
 import { Spinner } from '@/components/ui/spinner';
 import { useTheme } from '@/hooks/use-theme';
+import { copy } from '@/lib/copy';
 
 function Toaster({ ...props }: ToasterProps) {
     const { theme } = useTheme();
@@ -12,6 +13,7 @@ function Toaster({ ...props }: ToasterProps) {
     return (
         <Sonner
             className="toaster group"
+            containerAriaLabel={copy.ui.notifications}
             icons={{
                 error: <OctagonXIcon className="size-4" />,
                 info: <InfoIcon className="size-4" />,

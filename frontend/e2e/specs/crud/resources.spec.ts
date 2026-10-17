@@ -30,9 +30,9 @@ const BULK_SELECTION = [FILE_RESOURCE.path, NESTED_RESOURCE.path];
 // A nested entry on purpose: for a top-level row the name and the path are the same string, and
 // every payload that should carry the path would read the same with the name in its place.
 const selectBoth = async (page: Page) => {
-    await page.getByRole('button', { name: 'Expand all' }).click();
-    await page.getByRole('checkbox', { name: `Select ${NESTED_RESOURCE.name}` }).click();
-    await page.getByRole('checkbox', { name: `Select ${FILE_RESOURCE.name}` }).click();
+    await page.getByRole('button', { name: '全部展开' }).click();
+    await page.getByRole('checkbox', { name: `选择 ${NESTED_RESOURCE.name}` }).click();
+    await page.getByRole('checkbox', { name: `选择 ${FILE_RESOURCE.name}` }).click();
 };
 
 test.describe('resources', { tag: '@coverage' }, () => {
@@ -44,9 +44,9 @@ test.describe('resources', { tag: '@coverage' }, () => {
 
             await expect(page.getByRole('treeitem', { name: /reports/ })).toBeVisible();
             await expect(page.getByRole('treeitem', { name: /notes\.txt/ })).toBeVisible();
-            await expect(page.getByRole('button', { name: 'Sort by name (ascending)' })).toBeVisible();
-            await expect(page.getByRole('button', { name: 'Sort by size (ascending)' })).toBeVisible();
-            await expect(page.getByRole('button', { name: 'Sort by modified date (ascending)' })).toBeVisible();
+            await expect(page.getByRole('button', { name: '按名称升序排列' })).toBeVisible();
+            await expect(page.getByRole('button', { name: '按大小升序排列' })).toBeVisible();
+            await expect(page.getByRole('button', { name: '按修改时间升序排列' })).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });
@@ -79,16 +79,16 @@ test.describe('resources', { tag: '@coverage' }, () => {
 
         test('creates a directory and the new row arrives via subscription', async ({ page, pageErrorLog }) => {
             await page.goto('/resources');
-            await page.getByRole('button', { name: 'New folder' }).click();
+            await page.getByRole('button', { name: '新建文件夹' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByRole('heading', { name: 'Create directory' })).toBeVisible();
-            await expect(dialog.getByLabel('Path')).toHaveValue('new-folder');
-            await dialog.getByLabel('Path').fill(TYPED_PATH);
-            await dialog.getByRole('button', { name: 'Create' }).click();
+            await expect(dialog.getByRole('heading', { name: '新建文件夹' })).toBeVisible();
+            await expect(dialog.getByLabel('路径')).toHaveValue('new-folder');
+            await dialog.getByLabel('路径').fill(TYPED_PATH);
+            await dialog.getByRole('button', { name: '创建' }).click();
 
-            await expect(page.getByText('Directory created')).toBeVisible();
+            await expect(page.getByText('文件夹已创建')).toBeVisible();
             await expect(page.getByRole('treeitem', { name: new RegExp(TYPED_PATH) })).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
@@ -100,10 +100,10 @@ test.describe('resources', { tag: '@coverage' }, () => {
         test('shows the upload call to action', async ({ page, pageErrorLog }) => {
             await page.goto('/resources');
 
-            await expect(page.getByText('No resources yet')).toBeVisible();
+            await expect(page.getByText('还没有资源')).toBeVisible();
             const dropZone = page.locator('[data-slot="file-drop-zone"]');
 
-            await expect(dropZone.getByRole('button', { name: 'Upload files' })).toBeVisible();
+            await expect(dropZone.getByRole('button', { name: '上传文件' })).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });
@@ -142,53 +142,53 @@ test.describe('resources', { tag: '@coverage' }, () => {
         test('move sends one destination directory for the whole selection', async ({ page, pageErrorLog }) => {
             await page.goto('/resources');
             await selectBoth(page);
-            await page.getByRole('button', { exact: true, name: 'Move to…' }).click();
+            await page.getByRole('button', { exact: true, name: '移动到…' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByRole('heading', { name: 'Move 2 items' })).toBeVisible();
-            await dialog.getByLabel('Destination directory').fill(BULK_MOVE_DIRECTORY);
+            await expect(dialog.getByRole('heading', { name: '移动 2 项' })).toBeVisible();
+            await dialog.getByLabel('目标文件夹').fill(BULK_MOVE_DIRECTORY);
 
             const request = page.waitForRequest(
                 (candidate) =>
                     candidate.method() === 'PUT' && new URL(candidate.url()).pathname === '/api/v1/resources/move',
             );
 
-            await dialog.getByRole('button', { exact: true, name: 'Move' }).click();
+            await dialog.getByRole('button', { exact: true, name: '移动' }).click();
 
             expect((await request).postDataJSON()).toMatchObject({
                 destination: BULK_MOVE_DIRECTORY,
                 force: false,
                 sources: BULK_SELECTION,
             });
-            await expect(page.getByText(`Moved 2 items into /${BULK_MOVE_DIRECTORY}`)).toBeVisible();
+            await expect(page.getByText(`已把 2 项移动到 /${BULK_MOVE_DIRECTORY}`)).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
 
         test('copy sends the same selection to its own destination', async ({ page, pageErrorLog }) => {
             await page.goto('/resources');
             await selectBoth(page);
-            await page.getByRole('button', { name: 'More actions' }).click();
-            await page.getByRole('menuitem', { name: 'Copy to…' }).click();
+            await page.getByRole('button', { name: '更多操作' }).click();
+            await page.getByRole('menuitem', { name: '复制到…' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByRole('heading', { name: 'Copy 2 items' })).toBeVisible();
-            await dialog.getByLabel('Destination directory').fill(BULK_COPY_DIRECTORY);
+            await expect(dialog.getByRole('heading', { name: '复制 2 项' })).toBeVisible();
+            await dialog.getByLabel('目标文件夹').fill(BULK_COPY_DIRECTORY);
 
             const request = page.waitForRequest(
                 (candidate) =>
                     candidate.method() === 'POST' && new URL(candidate.url()).pathname === '/api/v1/resources/copy',
             );
 
-            await dialog.getByRole('button', { exact: true, name: 'Copy' }).click();
+            await dialog.getByRole('button', { exact: true, name: '复制' }).click();
 
             expect((await request).postDataJSON()).toMatchObject({
                 destination: BULK_COPY_DIRECTORY,
                 force: false,
                 sources: BULK_SELECTION,
             });
-            await expect(page.getByText(`Copied 2 items into /${BULK_COPY_DIRECTORY}`)).toBeVisible();
+            await expect(page.getByText(`已把 2 项复制到 /${BULK_COPY_DIRECTORY}`)).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
 
@@ -201,8 +201,8 @@ test.describe('resources', { tag: '@coverage' }, () => {
                     candidate.method() === 'DELETE' && new URL(candidate.url()).pathname === '/api/v1/resources/',
             );
 
-            await page.getByRole('button', { name: 'Delete' }).click();
-            await page.getByRole('dialog').getByRole('button', { exact: true, name: 'Delete' }).click();
+            await page.getByRole('button', { name: '删除' }).click();
+            await page.getByRole('dialog').getByRole('button', { exact: true, name: '删除' }).click();
 
             const sent = new URL((await request).url()).searchParams.getAll('paths[]');
 
@@ -231,7 +231,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
 
         test('moves the dragged row into the folder it was dropped on', async ({ page, pageErrorLog }) => {
             await page.goto('/resources');
-            await page.getByRole('button', { name: 'Expand all' }).click();
+            await page.getByRole('button', { name: '全部展开' }).click();
 
             const request = page.waitForRequest(
                 (candidate) =>
@@ -247,7 +247,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
                 force: false,
                 sources: [NESTED_RESOURCE.path],
             });
-            await expect(page.getByText(`Moved to /${NESTED_FOLDER.path}`)).toBeVisible();
+            await expect(page.getByText(`已移动到 /${NESTED_FOLDER.path}`)).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });
@@ -259,14 +259,14 @@ test.describe('resources', { tag: '@coverage' }, () => {
             await recordClipboardWrites(page);
             await page.goto('/resources');
 
-            await page.getByRole('button', { name: 'Expand all' }).click();
+            await page.getByRole('button', { name: '全部展开' }).click();
             await page
                 .getByRole('treeitem', { name: new RegExp(NESTED_RESOURCE.name) })
-                .getByRole('button', { name: 'Row actions' })
+                .getByRole('button', { name: '行操作' })
                 .click();
-            await page.getByRole('menuitem', { name: 'Copy path' }).click();
+            await page.getByRole('menuitem', { name: '复制路径' }).click();
 
-            await expect(page.getByText('Path copied to clipboard')).toBeVisible();
+            await expect(page.getByText('路径已复制到剪贴板')).toBeVisible();
             expect(await clipboardWrites(page)).toEqual([NESTED_RESOURCE.path]);
             expectCleanPage(pageErrorLog);
         });
@@ -276,10 +276,10 @@ test.describe('resources', { tag: '@coverage' }, () => {
         test.use({ cassette: nestedResourcesCassette({ rest: resourceWrites() }) });
 
         const rowActions = (page: Page, name: string) =>
-            page.getByRole('treeitem', { name: new RegExp(name) }).getByRole('button', { name: 'Row actions' });
+            page.getByRole('treeitem', { name: new RegExp(name) }).getByRole('button', { name: '行操作' });
 
         const openNestedRowActions = async (page: Page) => {
-            await page.getByRole('button', { name: 'Expand all' }).click();
+            await page.getByRole('button', { name: '全部展开' }).click();
             await rowActions(page, NESTED_RESOURCE.name).click();
         };
 
@@ -295,12 +295,12 @@ test.describe('resources', { tag: '@coverage' }, () => {
             );
 
             await openNestedRowActions(page);
-            await page.getByRole('menuitem', { name: 'Rename or move' }).click();
+            await page.getByRole('menuitem', { name: '重命名或移动' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await dialog.getByLabel('New path').fill(RENAMED_PATH);
-            await dialog.getByRole('button', { exact: true, name: 'Move' }).click();
+            await dialog.getByLabel('新路径').fill(RENAMED_PATH);
+            await dialog.getByRole('button', { exact: true, name: '移动' }).click();
 
             expect((await request).postDataJSON()).toMatchObject({
                 destination: RENAMED_PATH,
@@ -318,12 +318,12 @@ test.describe('resources', { tag: '@coverage' }, () => {
             );
 
             await openNestedRowActions(page);
-            await page.getByRole('menuitem', { name: 'Copy to…' }).click();
+            await page.getByRole('menuitem', { name: '复制到…' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await dialog.getByLabel('Destination path').fill(COPY_DESTINATION);
-            await dialog.getByRole('button', { exact: true, name: 'Copy' }).click();
+            await dialog.getByLabel('目标路径').fill(COPY_DESTINATION);
+            await dialog.getByRole('button', { exact: true, name: '复制' }).click();
 
             expect((await request).postDataJSON()).toMatchObject({
                 destination: COPY_DESTINATION,
@@ -346,14 +346,14 @@ test.describe('resources', { tag: '@coverage' }, () => {
             });
 
             await rowActions(page, FILE_RESOURCE.name).click();
-            await page.getByRole('menuitem', { name: 'Copy to…' }).click();
-            await page.getByRole('dialog').getByLabel('Destination path').fill(FOLDER_RESOURCE.name);
-            await page.getByRole('dialog').getByRole('button', { exact: true, name: 'Copy' }).click();
+            await page.getByRole('menuitem', { name: '复制到…' }).click();
+            await page.getByRole('dialog').getByLabel('目标路径').fill(FOLDER_RESOURCE.name);
+            await page.getByRole('dialog').getByRole('button', { exact: true, name: '复制' }).click();
 
-            await expect(page.getByRole('dialog', { name: 'Replace existing item?' })).toBeVisible();
+            await expect(page.getByRole('dialog', { name: '替换已有项目？' })).toBeVisible();
             expect(copyRequests, 'nothing is sent while the guard is open').toBe(0);
 
-            await page.getByRole('button', { name: 'Cancel' }).click();
+            await page.getByRole('button', { name: '取消' }).click();
             expect(copyRequests, 'cancelling the guard sends nothing at all').toBe(0);
         });
 
@@ -366,8 +366,8 @@ test.describe('resources', { tag: '@coverage' }, () => {
             );
 
             await openNestedRowActions(page);
-            await page.getByRole('menuitem', { name: 'Delete' }).click();
-            await page.getByRole('dialog').getByRole('button', { exact: true, name: 'Delete' }).click();
+            await page.getByRole('menuitem', { name: '删除' }).click();
+            await page.getByRole('dialog').getByRole('button', { exact: true, name: '删除' }).click();
 
             expect(new URL((await request).url()).searchParams.getAll('paths[]')).toEqual([NESTED_RESOURCE.path]);
             expectCleanPage(pageErrorLog);
@@ -380,7 +380,7 @@ test.describe('resources', { tag: '@coverage' }, () => {
             await page.goto('/resources');
             await openNestedRowActions(page);
 
-            const link = page.getByRole('menuitem', { name: 'Download' });
+            const link = page.getByRole('menuitem', { name: '下载' });
 
             await expect(link).toHaveAttribute('download', NESTED_RESOURCE.name);
 
@@ -415,8 +415,8 @@ test.describe('resources', { tag: '@coverage' }, () => {
             });
             await page.goto('/resources');
             await selectBoth(page);
-            await page.getByRole('checkbox', { name: `Select ${NESTED_FOLDER.name}` }).click();
-            await page.getByRole('button', { exact: true, name: 'Download' }).click();
+            await page.getByRole('checkbox', { name: `选择 ${NESTED_FOLDER.name}` }).click();
+            await page.getByRole('button', { exact: true, name: '下载' }).click();
 
             const clicks = await page.evaluate(
                 () => (window as unknown as { e2eDownloads: DownloadClick[] }).e2eDownloads,

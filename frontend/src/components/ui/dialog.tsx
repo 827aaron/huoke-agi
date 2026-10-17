@@ -2,6 +2,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import * as React from 'react';
 
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -45,7 +46,7 @@ function DialogContent({ children, className, ...props }: React.ComponentProps<t
                 >
                     <X className="h-4 w-4" />
                     {/* not "Close": pages render visible Close buttons, and duplicate accessible names break role-based locators */}
-                    <span className="sr-only">Dismiss dialog</span>
+                    <span className="sr-only">{copy.ui.dismissDialog}</span>
                 </DialogPrimitive.Close>
             </DialogPrimitive.Content>
         </DialogPortal>

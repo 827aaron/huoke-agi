@@ -18,13 +18,13 @@ import { PROVIDER } from '../../mocks/cassettes/flows.ts';
 
 const openAssistantTab = async (page: Page) => {
     await page.goto('/flows/5');
-    await page.getByRole('tab', { name: 'Assistant' }).click();
-    await expect(page.getByPlaceholder('Search messages...')).toBeVisible();
+    await page.getByRole('tab', { name: '助手' }).click();
+    await expect(page.getByPlaceholder('搜索消息…')).toBeVisible();
 };
 
 const openPicker = async (page: Page) => {
-    await page.getByRole('button', { name: 'Select assistant' }).click();
-    await expect(page.getByPlaceholder('Search assistants...')).toBeVisible();
+    await page.getByRole('button', { name: '选择助手对话' }).click();
+    await expect(page.getByPlaceholder('搜索助手对话…')).toBeVisible();
 };
 
 const operationRequest = (page: Page, operationName: string) =>
@@ -68,20 +68,20 @@ test.describe('flow assistants', { tag: '@flows' }, () => {
         test('creates an assistant from the empty composer and selects it', async ({ page, pageErrorLog }) => {
             await openAssistantTab(page);
             await openPicker(page);
-            await page.getByRole('option', { name: 'Create new assistant' }).click();
+            await page.getByRole('option', { name: '新建助手对话' }).click();
 
-            const composer = page.getByPlaceholder('Type a message to create a new assistant...');
-            const picker = page.getByRole('button', { name: 'Select assistant' });
+            const composer = page.getByPlaceholder('输入消息即可新建助手对话…');
+            const picker = page.getByRole('button', { name: '选择助手对话' });
 
             await expect(composer).toBeVisible();
-            await expect(picker).toHaveText('New');
+            await expect(picker).toHaveText('新建');
             await composer.fill('plan the recon');
 
             await expect(page.getByRole('button', { name: PROVIDER.name })).toBeVisible();
 
             const request = operationRequest(page, 'createAssistant');
 
-            await page.getByRole('button', { name: 'Submit' }).click();
+            await page.getByRole('button', { exact: true, name: '发送' }).click();
 
             expect((await request).postDataJSON().variables).toEqual({
                 flowId: '5',
@@ -119,13 +119,13 @@ test.describe('flow assistants', { tag: '@flows' }, () => {
         test('sends a follow-up to the assistant the picker already selected', async ({ page, pageErrorLog }) => {
             await openAssistantTab(page);
 
-            const composer = page.getByPlaceholder('Continue the conversation...');
+            const composer = page.getByPlaceholder('继续对话…');
 
             await composer.fill('and the other ports?');
 
             const request = operationRequest(page, 'callAssistant');
 
-            await page.getByRole('button', { name: 'Submit' }).click();
+            await page.getByRole('button', { exact: true, name: '发送' }).click();
 
             expect((await request).postDataJSON().variables).toEqual({
                 assistantId: WAITING_ASSISTANT.id,
@@ -184,7 +184,7 @@ test.describe('flow assistants', { tag: '@flows' }, () => {
             await openPicker(page);
             await page.getByRole('option', { name: new RegExp(RUNNING_ASSISTANT.title) }).click();
 
-            const stop = page.getByRole('button', { name: 'Stop' });
+            const stop = page.getByRole('button', { name: '停止' });
 
             await expect(stop).toBeVisible();
 
@@ -196,7 +196,7 @@ test.describe('flow assistants', { tag: '@flows' }, () => {
                 assistantId: RUNNING_ASSISTANT.id,
                 flowId: '5',
             });
-            await expect(page.getByPlaceholder('Continue the conversation...')).toBeVisible();
+            await expect(page.getByPlaceholder('继续对话…')).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });
@@ -241,11 +241,11 @@ test.describe('flow assistants', { tag: '@flows' }, () => {
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByText('Delete Assistant')).toBeVisible();
+            await expect(dialog.getByRole('heading', { name: '删除助手对话' })).toBeVisible();
 
             const request = operationRequest(page, 'deleteAssistant');
 
-            await dialog.getByRole('button', { name: 'Delete' }).click();
+            await dialog.getByRole('button', { name: '删除' }).click();
 
             expect((await request).postDataJSON().variables).toEqual({
                 assistantId: RUNNING_ASSISTANT.id,

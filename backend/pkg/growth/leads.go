@@ -3,9 +3,11 @@ package growth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,11 +44,21 @@ type LeadInput struct {
 	PlatformUserID string
 	Username       string
 	DisplayName    string
-	Score          int
-	// Tier is what the agent concluded; the stored tier always follows from Score.
+	// Score is the agent's; a lead whose evidence the judgement model scored takes the
+	// model's score instead.
+	Score int
+	// Tier is what the agent concluded; the stored tier always follows from the score.
 	Tier        string
 	MatchReason string
+	Contacts    []Contact
 	Evidence    []EvidenceInput
+}
+
+// Contact is a way to reach a lead beside its platform account; Type is one of
+// ContactTypes other than the platform handle.
+type Contact struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
 }
 
 type LeadResult struct {
@@ -87,6 +99,7 @@ type LeadView struct {
 	DeliveredAt    *time.Time     `json:"delivered_at,omitempty"`
 	DeliveredRunID *int64         `json:"delivered_run_id,omitempty"`
 	CreatedAt      time.Time      `json:"created_at"`
+	Contacts       []Contact      `json:"contacts"`
 	Evidence       []EvidenceView `json:"evidence"`
 }
 
@@ -96,8 +109,12 @@ type LeadFilter struct {
 	RunID     *int64
 	Tier      string
 	Delivered *bool
-	Limit     int
-	Offset    int
+	// Since keeps leads first found at or after it; the zero time keeps all.
+	Since time.Time
+	// HasContact keeps leads with (true) or without (false) a contact beside the platform account.
+	HasContact *bool
+	Limit  int
+	Offset int
 }
 
 // UpsertLeads stores candidates with their evidence. A person is one lead per customer
@@ -106,9 +123,13 @@ type LeadFilter struct {
 func (s *Service) UpsertLeads(ctx context.Context, scope Scope, inputs []LeadInput) ([]LeadResult, error) {
 	sources := map[int64]database.GrowthSource{}
 	results := make([]LeadResult, 0, len(inputs))
+	scoring := DefaultScoring
+	if v, err := s.GetProfile(ctx, scope.UserID); err == nil {
+		scoring = v.ScoringOrDefault()
+	}
 
 	for i, in := range inputs {
-		res, err := s.upsertLead(ctx, scope, in, sources)
+		res, err := s.upsertLead(ctx, scope, in, sources, scoring)
 		res.Index = i
 		if err != nil {
 			return results, err
@@ -133,6 +154,7 @@ func (s *Service) upsertLead(
 	scope Scope,
 	in LeadInput,
 	sources map[int64]database.GrowthSource,
+	scoring Scoring,
 ) (LeadResult, error) {
 	res := LeadResult{PlatformUserID: in.PlatformUserID, Score: in.Score}
 	reject := func(reason string) (LeadResult, error) {
@@ -173,13 +195,27 @@ func (s *Service) upsertLead(
 	}
 	res.PlatformUserID = userID
 
-	tier := TierForScore(in.Score)
+	score, judged, err := s.judgedScore(ctx, scope.UserID, in.Evidence)
+	if err != nil {
+		return res, err
+	}
+	if !judged {
+		score = in.Score
+	} else if in.Score != 0 && in.Score != score {
+		res.Reason = fmt.Sprintf("score %d is the judgement model's for this evidence, not %d", score, in.Score)
+	}
+	res.Score = score
+	tier := scoring.tier(score)
 	if tier == "" {
 		return reject(fmt.Sprintf("score %d is below the watchlist threshold %d; such candidates are not saved",
-			in.Score, WatchlistMinScore))
+			score, scoring.Watchlist))
 	}
 	if in.Tier != "" && in.Tier != tier {
-		res.Reason = fmt.Sprintf("tier %q follows from score %d, not %q", tier, in.Score, in.Tier)
+		res.Reason = joinReason(res.Reason, fmt.Sprintf("tier %q follows from score %d, not %q", tier, score, in.Tier))
+	}
+	contacts, badContacts := cleanContacts(in.Contacts)
+	if badContacts != "" {
+		res.Reason = joinReason(res.Reason, badContacts)
 	}
 
 	prev, err := s.db.GetLeadByPlatformUser(ctx, database.GetLeadByPlatformUserParams{
@@ -189,6 +225,13 @@ func (s *Service) upsertLead(
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return res, fmt.Errorf("failed to look up lead %s: %w", userID, err)
 	}
+	if existed {
+		contacts = mergeContacts(storedContacts(prev.Contacts), contacts)
+	}
+	contactsJSON, err := json.Marshal(contacts)
+	if err != nil {
+		return res, err
+	}
 
 	lead, err := s.db.UpsertLead(ctx, database.UpsertLeadParams{
 		UserID:         scope.UserID,
@@ -197,9 +240,10 @@ func (s *Service) upsertLead(
 		IdentityKind:   identity,
 		Username:       strings.TrimPrefix(strings.TrimSpace(in.Username), "@"),
 		DisplayName:    strings.TrimSpace(in.DisplayName),
-		Score:          int32(in.Score),
+		Score:          int32(score),
 		Tier:           tier,
 		MatchReason:    strings.TrimSpace(in.MatchReason),
+		Contacts:       contactsJSON,
 		FlowID:         scope.flowID(),
 		TaskID:         scope.taskID(),
 	})
@@ -232,6 +276,62 @@ func (s *Service) upsertLead(
 	}
 
 	return res, nil
+}
+
+// judgedScore is the highest score the judgement model gave a message of the evidence,
+// and false when it scored none of them.
+func (s *Service) judgedScore(ctx context.Context, userID int64, evidence []EvidenceInput) (int, bool, error) {
+	bySource := map[int64][]string{}
+	for _, ev := range evidence {
+		if id := strings.TrimSpace(ev.MessageID); id != "" {
+			bySource[ev.SourceID] = append(bySource[ev.SourceID], id)
+		}
+	}
+	best, judged := 0, false
+	for sourceID, ids := range bySource {
+		rows, err := s.db.GetMessageScores(ctx, database.GetMessageScoresParams{UserID: userID, SourceID: sourceID, MessageIds: ids})
+		if err != nil {
+			return 0, false, fmt.Errorf("failed to load message scores: %w", err)
+		}
+		for _, r := range rows {
+			best, judged = max(best, int(r.Score)), true
+		}
+	}
+	return best, judged, nil
+}
+
+// cleanContacts keeps the contacts of a known type with a value, once each, and says
+// what it left out.
+func cleanContacts(in []Contact) ([]Contact, string) {
+	out := make([]Contact, 0, len(in))
+	var dropped []string
+	for _, c := range in {
+		c.Type, c.Value = strings.ToLower(strings.TrimSpace(c.Type)), strings.TrimSpace(c.Value)
+		switch {
+		case c.Value == "" || c.Type == ContactPlatformHandle:
+			continue
+		case !slices.Contains(ContactTypes, c.Type):
+			dropped = append(dropped, fmt.Sprintf("contact type %q is not one of %s", c.Type, strings.Join(ContactTypes[1:], ", ")))
+			continue
+		}
+		out = mergeContacts(out, []Contact{c})
+	}
+	return out, strings.Join(dropped, "; ")
+}
+
+func mergeContacts(have, add []Contact) []Contact {
+	for _, c := range add {
+		if !slices.ContainsFunc(have, func(h Contact) bool { return h.Type == c.Type && strings.EqualFold(h.Value, c.Value) }) {
+			have = append(have, c)
+		}
+	}
+	return have
+}
+
+func storedContacts(raw json.RawMessage) []Contact {
+	out := []Contact{}
+	_ = json.Unmarshal(raw, &out)
+	return out
 }
 
 // normaliseIdentity returns the lead key. Telegram keys on the platform user id. A web
@@ -341,6 +441,12 @@ func (s *Service) ListLeads(ctx context.Context, userID int64, f LeadFilter) ([]
 	if f.Delivered != nil {
 		params.Delivered = sql.NullBool{Bool: *f.Delivered, Valid: true}
 	}
+	if !f.Since.IsZero() {
+		params.Since = sql.NullTime{Time: f.Since, Valid: true}
+	}
+	if f.HasContact != nil {
+		params.HasContact = sql.NullBool{Bool: *f.HasContact, Valid: true}
+	}
 
 	leads, err := s.db.GetUserLeads(ctx, params)
 	if err != nil {
@@ -406,6 +512,7 @@ func (s *Service) leadViews(ctx context.Context, leads []database.Lead) ([]LeadV
 			FlowID:         nullInt(l.LastFlowID),
 			TaskID:         nullInt(l.LastTaskID),
 			DeliveredRunID: nullInt(l.DeliveredRunID),
+			Contacts:       storedContacts(l.Contacts),
 			Evidence:       byLead[l.ID],
 		}
 		if v.Evidence == nil {

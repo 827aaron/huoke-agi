@@ -51,13 +51,13 @@ test.describe('templates crud', { tag: '@crud' }, () => {
 
             await expect(page.getByRole('row', { name: /E2E Seed Template/ })).toBeVisible();
 
-            await page.getByRole('button', { name: 'New Template' }).click();
+            await page.getByRole('button', { name: '新建模板' }).click();
 
             await expect(page).toHaveURL(/\/templates\/new$/);
 
-            await page.getByLabel('Title').fill(NEW_TITLE);
-            await typeIntoEditor(page, 'Template content', NEW_TEXT);
-            await page.getByRole('button', { name: 'Create' }).click();
+            await page.getByLabel('标题').fill(NEW_TITLE);
+            await typeIntoEditor(page, '模板内容', NEW_TEXT);
+            await page.getByRole('button', { name: '创建' }).click();
 
             await expect(page).toHaveURL(/\/templates$/);
             await expect(page.getByRole('row', { name: /E2E Created Template/ })).toBeVisible();
@@ -93,12 +93,12 @@ test.describe('templates crud', { tag: '@crud' }, () => {
             const row = page.getByRole('row', { name: /E2E Seed Template/ });
 
             await row.hover();
-            await row.getByRole('button', { name: 'Open menu' }).click();
-            await page.getByRole('menuitem', { name: 'Rename' }).click();
-            await page.getByPlaceholder('Template title').fill('E2E Renamed Template');
-            await page.getByPlaceholder('Template title').press('Enter');
+            await row.getByRole('button', { name: '打开菜单' }).click();
+            await page.getByRole('menuitem', { name: '重命名' }).click();
+            await page.getByPlaceholder('模板标题').fill('E2E Renamed Template');
+            await page.getByPlaceholder('模板标题').press('Enter');
 
-            await expect(page.getByText('Template renamed successfully')).toBeVisible();
+            await expect(page.getByText('模板已重命名')).toBeVisible();
             await expect(page.getByRole('row', { name: /E2E Renamed Template/ })).toBeVisible();
             await expect(page.getByRole('row', { name: /E2E Seed Template/ })).toBeHidden();
             expectCleanPage(pageErrorLog);
@@ -140,16 +140,16 @@ test.describe('templates crud', { tag: '@crud' }, () => {
             const row = page.getByRole('row', { name: /E2E Seed Template/ });
 
             await row.hover();
-            await row.getByRole('button', { name: 'Open menu' }).click();
-            await page.getByRole('menuitem', { name: 'Delete' }).click();
+            await row.getByRole('button', { name: '打开菜单' }).click();
+            await page.getByRole('menuitem', { name: '删除' }).click();
 
             const dialog = page.getByRole('dialog');
 
-            await expect(dialog.getByText('Delete template')).toBeVisible();
-            await dialog.getByRole('button', { name: 'Delete' }).click();
+            await expect(dialog.getByRole('heading', { name: '删除模板' })).toBeVisible();
+            await dialog.getByRole('button', { name: '删除' }).click();
 
             await expect(page.getByRole('row', { name: /E2E Seed Template/ })).toBeHidden();
-            await expect(page.getByText('No templates yet')).toBeVisible();
+            await expect(page.getByText('还没有模板')).toBeVisible();
             expectCleanPage(pageErrorLog);
         });
     });

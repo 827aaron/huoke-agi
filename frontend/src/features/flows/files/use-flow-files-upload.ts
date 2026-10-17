@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { api, getApiErrorMessage, unwrapApiResponse } from '@/lib/axios';
+import { copy } from '@/lib/copy';
 import { validateUploadBatch } from '@/lib/upload-validation';
 
 import {
@@ -31,14 +32,14 @@ interface UseFlowFilesUploadResult {
 const buildUploadSuccessMessage = (uploadedCount: number, firstFileName?: string) => {
     if (uploadedCount === 1) {
         return {
-            description: `Available at ${UPLOADS_TARGET_DIRECTORY}/${firstFileName ?? ''}`,
-            title: 'File uploaded',
+            description: copy.flowFiles.uploadedAt(`${UPLOADS_TARGET_DIRECTORY}/${firstFileName ?? ''}`),
+            title: copy.flowFiles.fileUploaded,
         };
     }
 
     return {
-        description: `${uploadedCount} files are now available under ${UPLOADS_TARGET_DIRECTORY}`,
-        title: `${uploadedCount} files uploaded`,
+        description: copy.flowFiles.filesUploadedHint(uploadedCount, UPLOADS_TARGET_DIRECTORY),
+        title: copy.flowFiles.filesUploaded(uploadedCount),
     };
 };
 
@@ -77,7 +78,7 @@ export function useFlowFilesUpload({ flowId }: UseFlowFilesUploadParams): UseFlo
             });
 
             if (validationError) {
-                toast.error('Upload failed', { description: validationError });
+                toast.error(copy.resources.uploadFailed, { description: validationError });
 
                 return;
             }
@@ -101,9 +102,9 @@ export function useFlowFilesUpload({ flowId }: UseFlowFilesUploadParams): UseFlo
 
                 toast.success(successMessage.title, { description: successMessage.description });
             } catch (error) {
-                const description = getApiErrorMessage(error, 'Failed to upload files');
+                const description = getApiErrorMessage(error, copy.resources.uploadFailedHint);
 
-                toast.error('Upload failed', { description });
+                toast.error(copy.resources.uploadFailed, { description });
             } finally {
                 setIsUploading(false);
             }

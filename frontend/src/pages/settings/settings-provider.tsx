@@ -74,6 +74,7 @@ import {
 } from '@/graphql/types';
 import { useAppForm } from '@/hooks/use-app-form';
 import { useBreakpoint } from '@/hooks/use-breakpoint';
+import { agentLabel, copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 
@@ -240,13 +241,13 @@ function FormComboboxItem<T extends FieldValues = FieldValues>({
                             <CommandInput
                                 className="h-9"
                                 onValueChange={setSearch}
-                                placeholder={`Search ${label.toLowerCase()}...`}
+                                placeholder={copy.provider.search(label)}
                                 value={search}
                             />
                             <CommandList>
                                 <CommandEmpty>
                                     <div className="py-2 text-center">
-                                        <p className="text-muted-foreground text-sm">No {label.toLowerCase()} found.</p>
+                                        <p className="text-muted-foreground text-sm">{copy.provider.notFound(label)}</p>
                                         {search.trim() && allowCustom && (
                                             <Button
                                                 className="mt-2"
@@ -258,7 +259,7 @@ function FormComboboxItem<T extends FieldValues = FieldValues>({
                                                 size="sm"
                                                 variant="ghost"
                                             >
-                                                Use "{search}" as custom {label.toLowerCase()}
+                                                {copy.provider.useCustom(search, label)}
                                             </Button>
                                         )}
                                     </div>
@@ -413,7 +414,7 @@ function FormModelComboboxItem<T extends FieldValues = FieldValues>({
         price?: null | { cacheRead: number; cacheWrite: number; input: number; output: number },
     ): string => {
         if (!price || ((!price.input || price.input === 0) && (!price.output || price.output === 0))) {
-            return 'free';
+            return copy.provider.free;
         }
 
         const formatValue = (value: number): string => {
@@ -467,7 +468,7 @@ function FormModelComboboxItem<T extends FieldValues = FieldValues>({
                         <InputGroupAddon align="inline-end">
                             <PopoverTrigger asChild>
                                 <InputGroupButton
-                                    aria-label={`Open ${label.toLowerCase()} list`}
+                                    aria-label={copy.provider.openList(label)}
                                     disabled={disabled}
                                     size="icon-sm"
                                 >
@@ -484,13 +485,13 @@ function FormModelComboboxItem<T extends FieldValues = FieldValues>({
                             <CommandInput
                                 className="h-9"
                                 onValueChange={setSearch}
-                                placeholder={`Search ${label.toLowerCase()}...`}
+                                placeholder={copy.provider.search(label)}
                                 value={search}
                             />
                             <CommandList>
                                 <CommandEmpty>
                                     <div className="py-2 text-center">
-                                        <p className="text-muted-foreground text-sm">No {label.toLowerCase()} found.</p>
+                                        <p className="text-muted-foreground text-sm">{copy.provider.notFound(label)}</p>
                                         {search.trim() && allowCustom && (
                                             <Button
                                                 className="mt-2"
@@ -503,7 +504,7 @@ function FormModelComboboxItem<T extends FieldValues = FieldValues>({
                                                 size="sm"
                                                 variant="ghost"
                                             >
-                                                Use "{search}" as custom {label.toLowerCase()}
+                                                {copy.provider.useCustom(search, label)}
                                             </Button>
                                         )}
                                     </div>
@@ -601,7 +602,7 @@ export const optionalJsonObject = z
                 return false;
             }
         },
-        { message: 'Must be a valid JSON object' },
+        { message: copy.provider.invalidJson },
     );
 
 const requiredString = (message: string) =>
@@ -623,8 +624,8 @@ export const agentConfigSchema = z
         maxTokens: optionalNumber,
         minLength: optionalNumber,
         minP: optionalNumber,
-        model: requiredString('Model is required').pipe(
-            z.string().refine((value) => value.trim().length > 0, 'Model is required'),
+        model: requiredString(copy.provider.modelRequired).pipe(
+            z.string().refine((value) => value.trim().length > 0, copy.provider.modelRequired),
         ),
         n: optionalNumber,
         presencePenalty: optionalNumber,
@@ -652,11 +653,11 @@ export const agentConfigSchema = z
         topP: optionalNumber,
     })
     .refine((data) => data.minLength == null || data.maxLength == null || data.minLength <= data.maxLength, {
-        message: 'Min length must not exceed max length',
+        message: copy.provider.minOverMax,
         path: ['minLength'],
     })
     .refine((data) => data.reasoning?.maxTokens == null || data.reasoning.maxTokens <= MAX_REASONING_TOKENS, {
-        message: `Maximum ${MAX_REASONING_TOKENS} tokens`,
+        message: copy.provider.maxTokensLimit(MAX_REASONING_TOKENS),
         path: ['reasoning', 'maxTokens'],
     })
     .refine(
@@ -664,7 +665,7 @@ export const agentConfigSchema = z
             data.reasoning?.mode !== ReasoningMode.Budget ||
             (data.reasoning.maxTokens != null && data.reasoning.maxTokens > 0),
         {
-            message: 'Budget mode requires a token budget',
+            message: copy.provider.budgetRequired,
             path: ['reasoning', 'maxTokens'],
         },
     )
@@ -672,13 +673,13 @@ export const agentConfigSchema = z
 
 const formSchema = z.object({
     agents: z.record(z.string(), agentConfigSchema).optional(),
-    name: requiredString('Provider name is required').pipe(
+    name: requiredString(copy.provider.nameRequired).pipe(
         z
             .string()
-            .refine((value) => value.trim().length > 0, 'Provider name is required')
-            .refine((value) => [...value.trim()].length <= 50, 'Maximum 50 characters allowed'),
+            .refine((value) => value.trim().length > 0, copy.provider.nameRequired)
+            .refine((value) => [...value.trim()].length <= 50, copy.provider.nameTooLong),
     ),
-    type: requiredString('Provider type is required'),
+    type: requiredString(copy.provider.typeRequired),
 });
 
 type FormAgents = FormInput['agents'];
@@ -755,12 +756,12 @@ const refusesLevel = (agentKey: string, capability: ModelOption['reasoning'] | u
     capability?.rejectsEffortWithTools === true && !agentsCallingWithoutTools.has(agentKey);
 
 const reasoningEffortLabel: Record<ReasoningEffort, string> = {
-    [ReasoningEffort.High]: 'High',
-    [ReasoningEffort.Low]: 'Low',
-    [ReasoningEffort.Max]: 'Max',
-    [ReasoningEffort.Medium]: 'Medium',
-    [ReasoningEffort.Minimal]: 'Minimal',
-    [ReasoningEffort.Xhigh]: 'Extra High',
+    [ReasoningEffort.High]: copy.provider.effort.High,
+    [ReasoningEffort.Low]: copy.provider.effort.Low,
+    [ReasoningEffort.Max]: copy.provider.effort.Max,
+    [ReasoningEffort.Medium]: copy.provider.effort.Medium,
+    [ReasoningEffort.Minimal]: copy.provider.effort.Minimal,
+    [ReasoningEffort.Xhigh]: copy.provider.effort.Xhigh,
 };
 
 const isJsonObject = (value: unknown): value is Record<string, unknown> =>
@@ -808,9 +809,9 @@ function MaxTokensField({
     return (
         <FormInputNumberItem
             control={control}
-            description={ceiling == null ? undefined : `Model ceiling: ${ceiling.toLocaleString('en-US')} tokens`}
+            description={ceiling == null ? undefined : copy.provider.modelCeiling(ceiling.toLocaleString('en-US'))}
             disabled={isLoading}
-            label="Max Tokens"
+            label={copy.provider.maxTokens}
             max={ceiling == null ? undefined : String(ceiling)}
             min="1"
             name={`agents.${agentKey}.maxTokens`}
@@ -923,9 +924,9 @@ function ReasoningFields({
         savedReasoning?.mode === ReasoningMode.Off
             ? null
             : savedEffort != null
-              ? `Reasoning Effort was ${reasoningEffortLabel[savedEffort]}`
+              ? copy.provider.reasoningEffortWas(reasoningEffortLabel[savedEffort])
               : savedReasoning?.maxTokens != null
-                ? `Reasoning Max Tokens was ${savedReasoning.maxTokens}`
+                ? copy.provider.reasoningMaxTokensWas(savedReasoning.maxTokens)
                 : null;
     const droppedLevel = isLevelRefused && reasoningEffort == null && reasoningMaxTokens == null ? savedLevel : null;
     const droppedBudget =
@@ -936,15 +937,15 @@ function ReasoningFields({
     return (
         <div className="col-span-full p-px">
             <div className="mt-6 flex flex-col gap-4">
-                <h4 className="text-sm font-medium">Reasoning Configuration</h4>
+                <h4 className="text-sm font-medium">{copy.provider.reasoningConfig}</h4>
                 {isSavedOffDropped && (
                     <p
                         className="text-muted-foreground text-sm"
                         role="status"
                     >
                         {isNonReasoning
-                            ? `Reasoning Mode was Off, but ${selectedModel} does not reason, so it was reset. Save to keep the change.`
-                            : `Reasoning Mode was Off, which ${selectedModel} cannot disable, so it was reset. Save to keep the change.`}
+                            ? copy.provider.savedOffNoReasoning(selectedModel ?? '')
+                            : copy.provider.savedOffCannotDisable(selectedModel ?? '')}
                     </p>
                 )}
                 {droppedLevel && (
@@ -952,7 +953,7 @@ function ReasoningFields({
                         className="text-muted-foreground text-sm"
                         role="status"
                     >
-                        {`${droppedLevel}, which ${selectedModel} refuses on requests with function tools, so it was reset. Save to keep the change.`}
+                        {copy.provider.droppedLevel(droppedLevel, selectedModel ?? '')}
                     </p>
                 )}
                 {droppedBudget != null && (
@@ -960,13 +961,11 @@ function ReasoningFields({
                         className="text-muted-foreground text-sm"
                         role="status"
                     >
-                        {`Reasoning Max Tokens was ${droppedBudget}, which ${selectedModel} does not take, so it was reset. Save to keep the change.`}
+                        {copy.provider.droppedBudget(droppedBudget, selectedModel ?? '')}
                     </p>
                 )}
                 {isNonReasoning && (
-                    <p className="text-muted-foreground text-sm">
-                        {`${selectedModel} does not reason, so it has no reasoning settings.`}
-                    </p>
+                    <p className="text-muted-foreground text-sm">{copy.provider.noReasoning(selectedModel ?? '')}</p>
                 )}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {(supportsAdaptive || canDisable || isBudgetOffered) && (
@@ -975,7 +974,7 @@ function ReasoningFields({
                             name={`agents.${agentKey}.reasoning.mode`}
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Reasoning Mode</FormLabel>
+                                    <FormLabel>{copy.provider.reasoningMode}</FormLabel>
                                     <Select
                                         disabled={isLoading || (isAdaptiveOnly && !canDisable)}
                                         onValueChange={(value) => {
@@ -990,32 +989,38 @@ function ReasoningFields({
                                     >
                                         <FormControl>
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Select reasoning mode" />
+                                                <SelectValue placeholder={copy.provider.selectMode} />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            {!isAdaptiveOnly && <SelectItem value="none">Not selected</SelectItem>}
+                                            {!isAdaptiveOnly && (
+                                                <SelectItem value="none">{copy.provider.notSelected}</SelectItem>
+                                            )}
                                             {supportsAdaptive && (
-                                                <SelectItem value={ReasoningMode.Adaptive}>Adaptive</SelectItem>
+                                                <SelectItem value={ReasoningMode.Adaptive}>
+                                                    {copy.provider.adaptive}
+                                                </SelectItem>
                                             )}
                                             {isBudgetOffered && (
-                                                <SelectItem value={ReasoningMode.Budget}>Budget</SelectItem>
+                                                <SelectItem value={ReasoningMode.Budget}>
+                                                    {copy.provider.budget}
+                                                </SelectItem>
                                             )}
                                             {canDisable && (
-                                                <SelectItem value={ReasoningMode.Off}>Off (no thinking)</SelectItem>
+                                                <SelectItem value={ReasoningMode.Off}>{copy.provider.off}</SelectItem>
                                             )}
                                         </SelectContent>
                                     </Select>
                                     <FormDescription>
                                         {pinnedThinking
-                                            ? `Extra Body sets "${pinnedThinking}" for this agent, which overwrites this choice in the request.`
+                                            ? copy.provider.pinnedThinking(pinnedThinking)
                                             : isLevelRefused
-                                              ? `${selectedModel} refuses a reasoning effort or budget on requests with function tools, which this agent sends: leave the mode unset or choose Off.`
+                                              ? copy.provider.refusesLevel(selectedModel ?? '')
                                               : isAdaptiveOnly
                                                 ? canDisable
-                                                    ? 'This model thinks adaptively; choose Off to disable thinking.'
-                                                    : 'This model supports only adaptive thinking and cannot be disabled.'
-                                                : 'Adaptive lets the model decide how much to think; budget uses a fixed token budget; off disables thinking.'}
+                                                    ? copy.provider.thinksAdaptively
+                                                    : copy.provider.thinksAdaptivelyOnly
+                                                : copy.provider.reasoningModeHint}
                                     </FormDescription>
                                     <FormMessage />
                                 </FormItem>
@@ -1029,7 +1034,7 @@ function ReasoningFields({
                             name={`agents.${agentKey}.reasoning.effort`}
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Reasoning Effort</FormLabel>
+                                    <FormLabel>{copy.provider.reasoningEffort}</FormLabel>
                                     <Select
                                         disabled={isLoading || isOff}
                                         onValueChange={(value) => {
@@ -1058,11 +1063,11 @@ function ReasoningFields({
                                     >
                                         <FormControl>
                                             <SelectTrigger>
-                                                <SelectValue placeholder="Select effort level (optional)" />
+                                                <SelectValue placeholder={copy.provider.selectEffort} />
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="none">Not selected</SelectItem>
+                                            <SelectItem value="none">{copy.provider.notSelected}</SelectItem>
                                             {allowedEfforts.map((effort) => (
                                                 <SelectItem
                                                     key={effort}
@@ -1083,7 +1088,7 @@ function ReasoningFields({
                         <FormInputNumberItem
                             control={control}
                             disabled={isLoading || shownMode !== ReasoningMode.Budget}
-                            label="Reasoning Max Tokens"
+                            label={copy.provider.reasoningMaxTokens}
                             min="1"
                             name={`agents.${agentKey}.reasoning.maxTokens`}
                             placeholder="1000"
@@ -1234,7 +1239,7 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                     className="shrink-0"
                     variant="green"
                 >
-                    Success
+                    {copy.provider.success}
                 </Badge>
             );
         }
@@ -1245,7 +1250,7 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                     className="shrink-0"
                     variant="destructive"
                 >
-                    Failed
+                    {copy.provider.failed}
                 </Badge>
             );
         }
@@ -1255,7 +1260,7 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                 className="shrink-0"
                 variant="secondary"
             >
-                Unknown
+                {copy.provider.unknown}
             </Badge>
         );
     };
@@ -1267,7 +1272,7 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
         >
             <DialogContent className="flex max-h-[80vh] flex-col sm:max-w-3xl">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle>Provider Test Results</DialogTitle>
+                    <DialogTitle>{copy.provider.testResults}</DialogTitle>
                 </DialogHeader>
                 <div className="flex flex-1 flex-col overflow-y-auto">
                     <Accordion
@@ -1288,7 +1293,7 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                                     <AccordionTrigger className="group text-left hover:no-underline">
                                         <div className="mr-3 flex w-full items-center justify-between gap-3">
                                             <span className="font-semibold group-hover:underline">
-                                                {getName(agentType)}
+                                                {agentLabel(agentType, getName(agentType))}
                                             </span>
                                             <Badge
                                                 className="shrink-0"
@@ -1296,7 +1301,7 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                                                     isNonePassed ? 'destructive' : isAllPassed ? 'green' : 'secondary'
                                                 }
                                             >
-                                                {successTestsCount}/{testsCount} passed
+                                                {copy.provider.passed(successTestsCount, testsCount)}
                                             </Badge>
                                         </div>
                                     </AccordionTrigger>
@@ -1329,12 +1334,20 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                                                         <div className="mt-2 flex flex-wrap gap-1.5">
                                                             {test.reasoning !== undefined && (
                                                                 <Badge variant="outline">
-                                                                    Reasoning: {test.reasoning ? 'Yes' : 'No'}
+                                                                    {copy.provider.reasoning(
+                                                                        test.reasoning
+                                                                            ? copy.provider.yes
+                                                                            : copy.provider.no,
+                                                                    )}
                                                                 </Badge>
                                                             )}
                                                             {test.streaming !== undefined && (
                                                                 <Badge variant="outline">
-                                                                    Streaming: {test.streaming ? 'Yes' : 'No'}
+                                                                    {copy.provider.streaming(
+                                                                        test.streaming
+                                                                            ? copy.provider.yes
+                                                                            : copy.provider.no,
+                                                                    )}
                                                                 </Badge>
                                                             )}
                                                             {Boolean(test.latency) && (
@@ -1353,7 +1366,7 @@ function TestResultsDialog({ handleOpenChange, isOpen, results }: TestResultsDia
                                             ))}
                                             {tests.length === 0 && (
                                                 <div className="text-muted-foreground py-4 text-center text-sm">
-                                                    No tests available for this agent
+                                                    {copy.provider.noTests}
                                                 </div>
                                             )}
                                         </div>
@@ -1410,13 +1423,13 @@ function DeleteProviderDialog({ control, handleConfirm, handleOpenChange, isOpen
 
     return (
         <ConfirmationDialog
-            cancelText="Cancel"
-            confirmText="Delete"
+            cancelText={copy.action.cancel}
+            confirmText={copy.action.delete}
             handleConfirm={handleConfirm}
             handleOpenChange={handleOpenChange}
             isOpen={isOpen}
             itemName={providerName}
-            itemType="provider"
+            itemType={copy.itemType.provider}
         />
     );
 }
@@ -1622,7 +1635,7 @@ function SettingsProvider() {
             // unknown or disabled type would otherwise create a dead provider or dump a raw
             // zod error on submit. Bounce it to the list. (Clone-by-id is gated separately below.)
             if (!queryId && queryType && !providers.enabled[queryType as keyof typeof providers.enabled]) {
-                toast.error(`Provider type "${queryType}" is not available`);
+                toast.error(copy.provider.typeUnavailable(queryType));
                 navigate(routes.settings.providers, { replace: true });
 
                 return;
@@ -1637,7 +1650,7 @@ function SettingsProvider() {
                     // Cloning a provider whose type is now disabled would only make
                     // another dead one — gate it the same as the ?type= path.
                     if (sourceType && !providers.enabled[sourceType as keyof typeof providers.enabled]) {
-                        toast.error(`Provider type "${sourceType}" is not available`);
+                        toast.error(copy.provider.typeUnavailable(sourceType));
                         navigate(routes.settings.providers, { replace: true });
 
                         return;
@@ -1645,7 +1658,7 @@ function SettingsProvider() {
 
                     reset({
                         agents: agents ? (normalizeGraphQLData(agents) as FormAgents) : {},
-                        name: `${name} (Copy)`,
+                        name: copy.provider.copyName(name),
                         type: sourceType ?? undefined,
                     });
 
@@ -1720,16 +1733,14 @@ function SettingsProvider() {
             return true;
         } catch (error) {
             console.error('Submit error:', error);
-            setSubmitError(error instanceof Error ? error.message : 'An error occurred while saving');
+            setSubmitError(error instanceof Error ? error.message : copy.provider.saveFailed);
 
             return false;
         }
     };
 
     const reportInvalid = (errors: FieldErrors<FormInput>) => {
-        setSubmitError(
-            `Please fix the following validation errors:\n\n${formatFormErrors(errors as Record<string, unknown>)}`,
-        );
+        setSubmitError(copy.provider.validationErrors(formatFormErrors(errors as Record<string, unknown>)));
     };
 
     const validateAndReport = async (): Promise<boolean> => {
@@ -1821,7 +1832,7 @@ function SettingsProvider() {
             navigate(routes.settings.providers);
         } catch (error) {
             console.error('Delete error:', error);
-            setSubmitError(error instanceof Error ? error.message : 'An error occurred while deleting');
+            setSubmitError(error instanceof Error ? error.message : copy.provider.deleteFailed);
         }
     };
 
@@ -1848,7 +1859,7 @@ function SettingsProvider() {
             setIsTestDialogOpen(true);
         } catch (error) {
             console.error('Test error:', error);
-            setSubmitError(error instanceof Error ? error.message : 'An error occurred while testing');
+            setSubmitError(error instanceof Error ? error.message : copy.provider.testFailed);
         }
     };
 
@@ -1883,7 +1894,7 @@ function SettingsProvider() {
             return;
         } catch (error) {
             console.error('Test error:', error);
-            setSubmitError(error instanceof Error ? error.message : 'An error occurred while testing');
+            setSubmitError(error instanceof Error ? error.message : copy.provider.testFailed);
             setCurrentAgentKey(null);
         }
     };
@@ -1894,14 +1905,14 @@ function SettingsProvider() {
                 <AppHeader>
                     <AppHeaderContent>
                         <AppHeaderTitle icon={<Plug className="size-4 shrink-0" />}>
-                            {isNew ? 'Create Provider' : 'Edit Provider'}
+                            {isNew ? copy.provider.create : copy.provider.edit}
                         </AppHeaderTitle>
                     </AppHeaderContent>
                 </AppHeader>
                 <div className="flex flex-1 items-center justify-center p-4">
                     <LoadingState
-                        description="Please wait while we fetch provider configuration"
-                        title="Loading provider data..."
+                        description={copy.provider.loadingHint}
+                        title={copy.provider.loading}
                     />
                 </div>
             </>
@@ -1914,7 +1925,7 @@ function SettingsProvider() {
                 <AppHeader>
                     <AppHeaderContent>
                         <AppHeaderTitle icon={<Plug className="size-4 shrink-0" />}>
-                            {isNew ? 'Create Provider' : 'Edit Provider'}
+                            {isNew ? copy.provider.create : copy.provider.edit}
                         </AppHeaderTitle>
                     </AppHeaderContent>
                 </AppHeader>
@@ -1922,7 +1933,7 @@ function SettingsProvider() {
                     <ErrorState
                         message={error.message}
                         onRetry={refetch}
-                        title="Error loading provider data"
+                        title={copy.provider.loadFailed}
                     />
                 </div>
             </>
@@ -1936,30 +1947,32 @@ function SettingsProvider() {
     const metaFields = (
         <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2 text-center">
-                <h2 className="text-2xl font-semibold">{isNew ? 'Create a new provider' : 'Edit provider'}</h2>
+                <h2 className="text-2xl font-semibold">
+                    {isNew ? copy.provider.createTitle : copy.provider.editTitle}
+                </h2>
                 <p className="text-muted-foreground">
-                    {isNew ? 'Configure a new language model provider' : 'Update provider settings and configuration'}
+                    {isNew ? copy.provider.createSubtitle : copy.provider.editSubtitle}
                 </p>
             </div>
 
             <FormComboboxItem
                 allowCustom={false}
                 control={control}
-                description="The type of language model provider"
+                description={copy.provider.typeHint}
                 disabled={isLoading || !!selectedType}
-                label="Type"
+                label={copy.provider.type}
                 name="type"
                 options={providers}
-                placeholder="Select provider"
+                placeholder={copy.provider.selectProvider}
             />
 
             <FormInputStringItem
                 control={control}
-                description="A unique name for your provider configuration"
+                description={copy.provider.nameHint}
                 disabled={isLoading}
-                label="Name"
+                label={copy.provider.name}
                 name="name"
-                placeholder="Enter provider name"
+                placeholder={copy.provider.namePlaceholder}
             />
         </div>
     );
@@ -1976,7 +1989,7 @@ function SettingsProvider() {
                 >
                     <AccordionTrigger className="group text-left hover:no-underline">
                         <div className="flex w-full items-center justify-between gap-2">
-                            <span className="group-hover:underline">{getName(agentKey)}</span>
+                            <span className="group-hover:underline">{agentLabel(agentKey, getName(agentKey))}</span>
                             <Button
                                 asChild
                                 className={cn(
@@ -2018,7 +2031,9 @@ function SettingsProvider() {
                                         <Play />
                                     )}
                                     <span className="no-underline! hover:no-underline!">
-                                        {isAgentTestLoading && currentAgentKey === agentKey ? 'Testing...' : 'Test'}
+                                        {isAgentTestLoading && currentAgentKey === agentKey
+                                            ? copy.action.testing
+                                            : copy.action.test}
                                     </span>
                                 </span>
                             </Button>
@@ -2029,7 +2044,7 @@ function SettingsProvider() {
                             <FormModelComboboxItem
                                 control={control}
                                 disabled={isLoading}
-                                label="Model"
+                                label={copy.provider.model}
                                 name={`agents.${agentKey}.model`}
                                 onOptionSelect={(option) => {
                                     const price = option?.price;
@@ -2063,13 +2078,13 @@ function SettingsProvider() {
                                     }
                                 }}
                                 options={availableModels}
-                                placeholder="Select or enter model name"
+                                placeholder={copy.provider.modelPlaceholder}
                             />
 
                             <FormInputNumberItem
                                 control={control}
                                 disabled={isLoading}
-                                label="Temperature"
+                                label={copy.provider.temperature}
                                 max="2"
                                 min="0"
                                 name={`agents.${agentKey}.temperature`}
@@ -2108,7 +2123,7 @@ function SettingsProvider() {
                             <FormInputNumberItem
                                 control={control}
                                 disabled={isLoading}
-                                label="Min Length"
+                                label={copy.provider.minLength}
                                 min="0"
                                 name={`agents.${agentKey}.minLength`}
                                 placeholder="0"
@@ -2118,7 +2133,7 @@ function SettingsProvider() {
                             <FormInputNumberItem
                                 control={control}
                                 disabled={isLoading}
-                                label="Max Length"
+                                label={copy.provider.maxLength}
                                 min="1"
                                 name={`agents.${agentKey}.maxLength`}
                                 placeholder="2000"
@@ -2128,7 +2143,7 @@ function SettingsProvider() {
                             <FormInputNumberItem
                                 control={control}
                                 disabled={isLoading}
-                                label="Repetition Penalty"
+                                label={copy.provider.repetitionPenalty}
                                 max="2"
                                 min="0"
                                 name={`agents.${agentKey}.repetitionPenalty`}
@@ -2139,7 +2154,7 @@ function SettingsProvider() {
                             <FormInputNumberItem
                                 control={control}
                                 disabled={isLoading}
-                                label="Frequency Penalty"
+                                label={copy.provider.frequencyPenalty}
                                 max="2"
                                 min="0"
                                 name={`agents.${agentKey}.frequencyPenalty`}
@@ -2150,7 +2165,7 @@ function SettingsProvider() {
                             <FormInputNumberItem
                                 control={control}
                                 disabled={isLoading}
-                                label="Presence Penalty"
+                                label={copy.provider.presencePenalty}
                                 max="2"
                                 min="0"
                                 name={`agents.${agentKey}.presencePenalty`}
@@ -2169,13 +2184,13 @@ function SettingsProvider() {
 
                         <div className="col-span-full p-px">
                             <div className="mt-6 flex flex-col gap-4">
-                                <h4 className="text-sm font-medium">Price Configuration</h4>
+                                <h4 className="text-sm font-medium">{copy.provider.priceConfig}</h4>
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                     <FormInputNumberItem
                                         control={control}
-                                        description="Price per 1M input tokens"
+                                        description={copy.provider.inputPriceHint}
                                         disabled={isLoading}
-                                        label="Input Price"
+                                        label={copy.provider.inputPrice}
                                         min="0"
                                         name={`agents.${agentKey}.price.input`}
                                         placeholder="0.001"
@@ -2184,9 +2199,9 @@ function SettingsProvider() {
 
                                     <FormInputNumberItem
                                         control={control}
-                                        description="Price per 1M output tokens"
+                                        description={copy.provider.outputPriceHint}
                                         disabled={isLoading}
-                                        label="Output Price"
+                                        label={copy.provider.outputPrice}
                                         min="0"
                                         name={`agents.${agentKey}.price.output`}
                                         placeholder="0.002"
@@ -2195,9 +2210,9 @@ function SettingsProvider() {
 
                                     <FormInputNumberItem
                                         control={control}
-                                        description="Price per 1M cached read tokens"
+                                        description={copy.provider.cacheReadPriceHint}
                                         disabled={isLoading}
-                                        label="Cache Read Price"
+                                        label={copy.provider.cacheReadPrice}
                                         min="0"
                                         name={`agents.${agentKey}.price.cacheRead`}
                                         placeholder="0.0001"
@@ -2206,9 +2221,9 @@ function SettingsProvider() {
 
                                     <FormInputNumberItem
                                         control={control}
-                                        description="Price per 1M cache write tokens"
+                                        description={copy.provider.cacheWritePriceHint}
                                         disabled={isLoading}
-                                        label="Cache Write Price"
+                                        label={copy.provider.cacheWritePrice}
                                         min="0"
                                         name={`agents.${agentKey}.price.cacheWrite`}
                                         placeholder="0.00015"
@@ -2220,12 +2235,12 @@ function SettingsProvider() {
 
                         <div className="col-span-full p-px">
                             <div className="mt-6 flex flex-col gap-4">
-                                <h4 className="text-sm font-medium">Extra Body</h4>
+                                <h4 className="text-sm font-medium">{copy.provider.extraBody}</h4>
                                 <FormTextareaItem
                                     control={control}
-                                    description="Provider-specific request body fields as a JSON object, merged into every call (e.g. vLLM chat_template_kwargs)."
+                                    description={copy.provider.extraBodyHint}
                                     disabled={isLoading}
-                                    label="Extra Body (JSON)"
+                                    label={copy.provider.extraBodyLabel}
                                     name={`agents.${agentKey}.extraBody`}
                                     placeholder={'{\n    "chat_template_kwargs": { "enable_thinking": false }\n}'}
                                 />
@@ -2242,14 +2257,14 @@ function SettingsProvider() {
             <AppHeader>
                 <AppHeaderContent>
                     <AppHeaderTitle icon={<Plug className="size-4 shrink-0" />}>
-                        {isNew ? 'Create Provider' : 'Edit Provider'}
+                        {isNew ? copy.provider.create : copy.provider.edit}
                     </AppHeaderTitle>
                 </AppHeaderContent>
                 <AppHeaderActions>
                     <AppHeaderAction
                         disabled={isLoading || isTestLoading || isAgentTestLoading}
                         icon={isTestLoading ? <Spinner variant="circle" /> : <Play />}
-                        label={isTestLoading ? 'Testing...' : 'Test'}
+                        label={isTestLoading ? copy.action.testing : copy.action.test}
                         onClick={() => handleTest()}
                         type="button"
                         variant="outline"
@@ -2257,7 +2272,7 @@ function SettingsProvider() {
                     <AppHeaderAction
                         form="provider-form"
                         icon={<Save />}
-                        label={isNew ? 'Create' : 'Save'}
+                        label={isNew ? copy.action.create : copy.action.save}
                         loading={isLoading}
                         type="submit"
                     />
@@ -2265,7 +2280,7 @@ function SettingsProvider() {
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button
-                                    aria-label="Provider actions"
+                                    aria-label={copy.provider.actions}
                                     className="size-8 p-0"
                                     type="button"
                                     variant="ghost"
@@ -2282,7 +2297,7 @@ function SettingsProvider() {
                                     onClick={handleDelete}
                                 >
                                     {isDeleteLoading ? <Spinner variant="circle" /> : <Trash2 />}
-                                    {isDeleteLoading ? 'Deleting...' : 'Delete'}
+                                    {isDeleteLoading ? copy.action.deleting : copy.action.delete}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
