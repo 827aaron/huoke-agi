@@ -132,7 +132,8 @@ func TestJev_Judge_AsksForTheNewestJevUnderTheEndpointsNaming(t *testing.T) {
 		name, url, model, want string
 	}{
 		{"typesafe", "", "", "jev-latest"},
-		{"openrouter", "https://openrouter.ai/api", "", "typesafe/jev-latest"},
+		{"openrouter", "https://openrouter.ai/api", "", "~typesafe/jev-latest"},
+		{"a saved untilded latest on openrouter", "https://openrouter.ai/api", "typesafe/jev-latest", "~typesafe/jev-latest"},
 		{"another endpoint", "https://jev.example.test", "", "jev-latest"},
 		{"a pinned version", "https://openrouter.ai/api", "typesafe/jev-1.13", "typesafe/jev-1.13"},
 	}

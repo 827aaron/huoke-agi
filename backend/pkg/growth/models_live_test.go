@@ -30,7 +30,7 @@ func startModelsStub(t *testing.T) *modelsStub {
 		status := m.status
 		m.mu.Unlock()
 		w.WriteHeader(status)
-		_, _ = w.Write([]byte(`{"data":[{"id":"typesafe/jev-latest","name":"Jev"},{"id":"openai/gpt-5"},` +
+		_, _ = w.Write([]byte(`{"data":[{"id":"typesafe/jev-router","name":"Jev Router"},{"id":"openai/gpt-5"},` +
 			`{"id":"claude-x","display_name":"Claude X"},{"id":"typesafe/jev-1.13","name":"Jev 1.13"}]}`))
 	}))
 	t.Cleanup(m.Close)
@@ -50,7 +50,7 @@ func TestModels_ListModels_KeepsOnlyJevOnOpenRouterAndReusesTheSavedKey(t *testi
 
 	got, err := w.svc.ListModels(ctx, w.user, SettingScreening, screeningOpenRouter, map[string]string{"api_key": "or-typed", "api_url": stub.URL})
 	require.NoError(t, err)
-	assert.Equal(t, []ModelOption{{ID: "typesafe/jev-1.13", Name: "Jev 1.13"}, {ID: "typesafe/jev-latest", Name: "Jev"}}, got)
+	assert.Equal(t, []ModelOption{{ID: "~typesafe/jev-latest", Name: "Jev (latest)"}, {ID: "typesafe/jev-1.13", Name: "Jev 1.13"}}, got)
 	path, header := stub.last()
 	assert.Equal(t, "/v1/models", path)
 	assert.Equal(t, "Bearer or-typed", header.Get("Authorization"))

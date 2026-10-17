@@ -27,6 +27,10 @@ func TestSources_CanonicalLink_OneSpellingPerSource(t *testing.T) {
 		{in: "forum.example.com:8080/t/42", platform: connectors.PlatformWeb, want: "forum.example.com:8080/t/42"},
 		{in: "ftp://forum.example.com/t/42", platform: connectors.PlatformWeb, wantErr: true},
 		{in: "localhost/x", platform: connectors.PlatformWeb, wantErr: true},
+		{in: "https://www.facebook.com/groups/thaigamers/?ref=share", platform: connectors.PlatformFacebook, want: "facebook.com/groups/thaigamers"},
+		{in: "https://m.facebook.com/groups/thaigamers/", platform: connectors.PlatformFacebook, want: "facebook.com/groups/thaigamers"},
+		{in: "https://www.facebook.com/somepage", platform: connectors.PlatformWeb, want: "facebook.com/somepage"},
+		{in: "facebook.com/groups/", platform: connectors.PlatformWeb, want: "facebook.com/groups"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {

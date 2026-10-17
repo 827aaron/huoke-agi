@@ -264,7 +264,8 @@ Back up first. Database changes apply by themselves when the application starts,
 | Facebook, Instagram or TikTok login link does not open | Run `docker compose ps browser`. On a server, `BROWSER_PUBLIC_URL` must be the server address, not `localhost`, and port 7070 must be open |
 | `browser` stays in a waiting state | It waits until `pentagi` has written the token on its first start. Check that `pentagi` is running |
 | Saving a key on the settings page fails | The data volume is not writable, so the encryption key could not be stored. See `docker compose logs pentagi` |
-| Memory and knowledge base never show up | No embedding key. Set `EMBEDDING_KEY` or choose OpenAI as the language model |
+| Memory and knowledge base never show up | No embedding model. Fill in the embedding model under the language model card on the settings page, set `EMBEDDING_KEY`, or choose OpenAI or OpenRouter as the language model |
+| A forum such as Pantip shows "not allowed to access this page" and the researcher skips it | The site blocks data-centre IP addresses. The proxy on the Accounts page covers platform accounts, not the researcher's own browsing, so run the server on a residential connection or route the host's outbound traffic through a residential proxy or VPN |
 | A task cannot start its sandbox | The worker image is missing: run `docker compose build growth-worker`. `pentagi` needs `/var/run/docker.sock`, mounted by the compose file |
 | A specialist hangs for minutes | A model call waits at most `HTTP_CLIENT_TIMEOUT` seconds, 300 by default. Check the model provider's status and key |
 | Port 8443 is taken | Set `PENTAGI_LISTEN_PORT` to another port and update `PUBLIC_URL` |

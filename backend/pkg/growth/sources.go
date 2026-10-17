@@ -128,10 +128,10 @@ type SyncResult struct {
 	Err      error         `json:"-"`
 }
 
-// DetectPlatform tells a Telegram reference from a web page; anything that is not
-// a Telegram link, @username or bare username is treated as a web page.
-// DetectPlatform treats anything on a Telegram host, or an @username, as Telegram even
-// when it is malformed, so a broken t.me link is reported invalid rather than kept as a web page.
+// DetectPlatform tells a Telegram reference and a Facebook group from a web page;
+// anything else is treated as a web page. Anything on a Telegram host, or an @username,
+// is Telegram even when it is malformed, so a broken t.me link is reported invalid
+// rather than kept as a web page. A Facebook group is read through a signed-in account.
 func DetectPlatform(raw string) connectors.Platform {
 	raw = strings.TrimSpace(raw)
 	if _, err := canonicalTelegramLink(raw); err == nil || strings.HasPrefix(raw, "@") {
@@ -141,12 +141,16 @@ func DetectPlatform(raw string) connectors.Platform {
 	if i := strings.Index(host, "://"); i >= 0 {
 		host = host[i+3:]
 	}
+	var path string
 	if i := strings.IndexAny(host, "/?#"); i >= 0 {
-		host = host[:i]
+		host, path = host[:i], host[i:]
 	}
-	switch strings.TrimPrefix(host, "www.") {
-	case "t.me", "telegram.me", "telegram.dog":
+	switch host = strings.TrimPrefix(host, "www."); {
+	case host == "t.me", host == "telegram.me", host == "telegram.dog":
 		return connectors.PlatformTelegram
+	case (host == "facebook.com" || host == "m.facebook.com" || host == "web.facebook.com") &&
+		strings.HasPrefix(path, "/groups/") && len(path) > len("/groups/"):
+		return connectors.PlatformFacebook
 	}
 	return connectors.PlatformWeb
 }
@@ -161,7 +165,15 @@ func CanonicalLink(platform connectors.Platform, raw string) (string, error) {
 	if platform == connectors.PlatformTelegram {
 		return canonicalTelegramLink(raw)
 	}
-	return canonicalWebURL(raw)
+	link, err := canonicalWebURL(raw)
+	if err == nil && platform == connectors.PlatformFacebook {
+		for _, mirror := range []string{"m.facebook.com/", "web.facebook.com/"} {
+			if rest, ok := strings.CutPrefix(link, mirror); ok {
+				link = "facebook.com/" + rest
+			}
+		}
+	}
+	return link, err
 }
 
 // canonicalWebURL drops the scheme, a leading www., the fragment, tracking parameters

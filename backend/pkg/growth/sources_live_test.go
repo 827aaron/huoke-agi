@@ -178,6 +178,20 @@ func TestSources_SyncSource_SendsAWebSourceToTheBrowser(t *testing.T) {
 	assert.ErrorIs(t, err, ErrBrowserSource)
 }
 
+func TestSources_AddSources_KeepsAFacebookGroupForASignedInAccount(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	res, err := w.svc.AddSources(ctx, scope, []string{"https://m.facebook.com/groups/thaigamers/?ref=share"}, OriginManual, nil)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	assert.Equal(t, AddResultUnresolved, res[0].Result)
+	assert.Equal(t, "facebook", res[0].Source.Platform)
+	assert.Equal(t, "facebook.com/groups/thaigamers", res[0].Source.Link)
+	assert.Contains(t, res[0].Reason, "kept unresolved: ")
+	t.Log(res[0].Reason)
+}
+
 func TestSources_AddSources_RecordsWhichSourceMentionedTheLink(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()

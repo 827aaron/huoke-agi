@@ -173,7 +173,8 @@ func NewRouter(
 			logrus.WithError(err).Warn("failed to initialise pgvector store for knowledge API; embedding operations will be unavailable")
 		}
 	}
-	var knowledgeStore = knowledge.NewKnowledgeStore(db, pgStore, embedder, subscriptions.NewKnowledgePublisher, cfg.EmbeddingMaxTextBytes)
+	var knowledgeStore = knowledge.NewKnowledgeStore(db, pgStore, embedder, subscriptions.NewKnowledgePublisher, cfg.EmbeddingMaxTextBytes,
+		knowledge.WithUserEmbedders(providers.EmbedderFor))
 
 	// ---- Anonymizer replacer ------------------------------------------------
 	// Shared singleton used by the GraphQL anonymizeText mutation.

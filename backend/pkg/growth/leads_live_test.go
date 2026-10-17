@@ -4,6 +4,9 @@ package growth
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,29 +45,68 @@ func TestLeads_UpsertLeads_TierFollowsTheScore(t *testing.T) {
 	ctx := context.Background()
 	scope := w.seedTask(t)
 	src := w.mustAddTelegramGroup(t, scope, tgGroup("901", "card_games", "Cards"))
+	w.svc.cfg.TypeSafeAPIURL = signalJev(t).URL
+	says := func(messageID, excerpt string, score int) LeadInput {
+		in := qualified("7", src, messageID)
+		in.Score, in.Evidence[0].Excerpt = score, excerpt
+		return in
+	}
 
-	watch := qualified("7", src, "w1")
-	watch.Score, watch.Tier = 5, TierQualified
-	low := qualified("8", src, "w2")
-	low.Score = 3
+	watch := says("w1", "I play and top up", 5)
+	low := says("w2", "I play", 3)
+	low.PlatformUserID = "8"
 	res, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{watch, low})
 	require.NoError(t, err)
+	assert.Equal(t, 5, res[0].Score)
 	assert.Equal(t, TierWatchlist, res[0].Tier)
 	assert.Contains(t, res[0].Reason, `tier "watchlist" follows from score 5`)
 	assert.Equal(t, LeadStatusRejected, res[1].Status)
 
-	up := qualified("7", src, "w3")
-	up.Score = 8
-	res, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{up})
+	res, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{says("w3", "bored, so I play and top up", 8)})
 	require.NoError(t, err)
 	assert.Equal(t, LeadStatusUpgraded, res[0].Status)
 
-	down := qualified("7", src, "w4")
-	down.Score = 4
-	res, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{down})
+	res, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{says("w4", "I play and top up", 5)})
 	require.NoError(t, err)
 	assert.Equal(t, TierQualified, res[0].Tier, "a weaker sighting does not demote")
 	assert.Equal(t, 8, res[0].Score)
+}
+
+func TestLeads_UpsertLeads_JudgesTheExcerptsOfAWebLeadOnce(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	jev := signalJev(t)
+	var calls atomic.Int32
+	counted := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		jev.Config.Handler.ServeHTTP(rw, r)
+	}))
+	t.Cleanup(counted.Close)
+	w.svc.cfg.TypeSafeAPIURL = counted.URL
+	added, err := w.svc.AddSources(ctx, scope, []string{"https://forum.example.com/t/42"}, OriginManual, nil)
+	require.NoError(t, err)
+	page := added[0].Source.ID
+	lead := func(user, messageID, excerpt string) LeadInput {
+		return LeadInput{PlatformUserID: user, Score: 3, Evidence: []EvidenceInput{{SourceID: page, MessageID: messageID, Excerpt: excerpt}}}
+	}
+
+	res, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{
+		lead("gamer1", "p1", "bored of my RPG, I play daily and top up"),
+		lead("chef", "p2", "lol I play cooking games"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, LeadStatusNew, res[0].Status)
+	assert.Equal(t, 11, res[0].Score)
+	assert.Equal(t, TierQualified, res[0].Tier)
+	assert.Contains(t, res[0].Reason, "score 11 is the judgement model's for this evidence, not 3")
+	assert.Equal(t, LeadStatusRejected, res[1].Status, "Jev says the sender is no customer")
+	assert.Equal(t, int32(2), calls.Load())
+
+	res, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{lead("gamer1", "p1", "bored of my RPG, I play daily and top up")})
+	require.NoError(t, err)
+	assert.Equal(t, 11, res[0].Score)
+	assert.Equal(t, int32(2), calls.Load(), "the stored score is reused")
 }
 
 func TestLeads_UpsertLeads_RejectsEvidenceOutsideThePool(t *testing.T) {

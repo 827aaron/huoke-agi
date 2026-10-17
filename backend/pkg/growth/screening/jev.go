@@ -19,12 +19,16 @@ import (
 
 // Jev is served by TypeSafe and, under the same System One API, by OpenRouter, which
 // names its models with a "typesafe/" prefix. The default models track the newest Jev.
+// OpenRouter serves that as the tilde alias "~typesafe/jev-latest", which its model list
+// does not carry; "typesafe/jev-latest" is answered with "model not found".
 const (
 	DefaultURL             = "https://api.typesafe.ai"
 	DefaultModel           = "jev-latest"
 	OpenRouterURL          = "https://openrouter.ai/api"
-	OpenRouterDefaultModel = "typesafe/jev-latest"
+	OpenRouterDefaultModel = "~typesafe/jev-latest"
 	OpenRouterModelPrefix  = "typesafe/"
+
+	openRouterUntildedLatest = "typesafe/jev-latest"
 )
 
 // maxRetryAfter caps the wait a server asks for, so one read is not held for minutes.
@@ -309,20 +313,30 @@ func (c *Client) ResolvedURL() string {
 }
 
 // ResolvedModel is the model asked for: the set one, else the newest Jev under the
-// naming of the endpoint.
+// naming of the endpoint. A saved "typesafe/jev-latest" on OpenRouter means its alias.
 func (c *Client) ResolvedModel() string {
-	if c.Model != "" {
-		return c.Model
+	if c.Model == "" || (c.Model == openRouterUntildedLatest && isOpenRouter(c.ResolvedURL())) {
+		return DefaultModelFor(c.ResolvedURL())
 	}
-	return DefaultModelFor(c.ResolvedURL())
+	return c.Model
 }
 
 // DefaultModelFor is the newest Jev as the endpoint at rawURL names it.
 func DefaultModelFor(rawURL string) string {
-	if u, err := url.Parse(rawURL); err == nil && (u.Hostname() == "openrouter.ai" || strings.HasSuffix(u.Hostname(), ".openrouter.ai")) {
+	if isOpenRouter(rawURL) {
 		return OpenRouterDefaultModel
 	}
 	return DefaultModel
+}
+
+// IsOpenRouterModel tells a Jev model as OpenRouter lists or aliases it.
+func IsOpenRouterModel(id string) bool {
+	return strings.HasPrefix(strings.TrimPrefix(id, "~"), OpenRouterModelPrefix)
+}
+
+func isOpenRouter(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	return err == nil && (u.Hostname() == "openrouter.ai" || strings.HasSuffix(u.Hostname(), ".openrouter.ai"))
 }
 
 func (c *Client) client() *http.Client {

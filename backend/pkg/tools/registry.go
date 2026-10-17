@@ -494,7 +494,8 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 	},
 	GrowthUpsertLeadsToolName: {
 		Name: GrowthUpsertLeadsToolName,
-		Description: "Save scored leads with their evidence and contacts. A lead whose evidence growth_sync_source scored takes that score. " +
+		Description: "Save scored leads with their evidence and contacts. A lead whose evidence growth_sync_source scored takes that score; " +
+			"the excerpts of any other lead are scored by the judgement model (Jev), whose score replaces the one given. " +
 			"A person is stored once per customer however often they are saved: a repeat adds evidence and contacts and may raise the score. " +
 			"Returns per lead NEW, EXISTING, UPGRADED (watchlist to qualified) or REJECTED with the reason, and the progress line. " +
 			"Only qualified leads (at the business profile's qualified line, 7 by default) count toward the target.",
