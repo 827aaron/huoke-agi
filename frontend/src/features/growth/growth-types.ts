@@ -98,7 +98,8 @@ export interface GrowthLead {
 }
 
 export interface GrowthLeadContact {
-    type: Exclude<GrowthContactType, 'platform_handle'>;
+    // Leads delivered before the split keep 'messenger'.
+    type: 'messenger' | Exclude<GrowthContactType, 'platform_handle'>;
     value: string;
 }
 

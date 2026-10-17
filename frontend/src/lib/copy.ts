@@ -298,7 +298,6 @@ const zh = {
             read_interval_seconds: { label: '读群间隔（秒）', placeholder: '5-15' },
             risk_reminders: { label: '风控提醒', placeholder: '' },
             server_url: { label: '接口地址', placeholder: 'https://api.example.com/v1' },
-            threshold: { label: '意向判断线', placeholder: '0.6' },
             tls: { label: '加密方式', placeholder: '' },
             url: { label: '代理地址', placeholder: 'http://user:pass@host:port 或 socks5://host:port' },
             username: { label: '登录用户名', placeholder: '一般就是邮箱地址' },
@@ -314,8 +313,6 @@ const zh = {
             'screening.openrouter.api_key': { label: 'OpenRouter 密钥', placeholder: '粘贴 OpenRouter 的密钥' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
-            'screening.threshold':
-                '消息有购买意向的把握达到这个值才进入打分，0 到 1 之间，默认 0.6。调高更严、漏掉的多；调低更宽、要看的多。',
             'telegram.join_ramp': '从账号首次登录那天算起，每天最多加几个群，逗号分隔；排完后按“每天加群上限”。',
             'telegram.risk_reminders': '关闭后不再显示加群节奏的黄色提醒。',
             'web_search.api_keys': '可填多个，用完一个自动换下一个。',
@@ -337,7 +334,6 @@ const zh = {
             port: '端口是 1 到 65535 之间的数字',
             private_joins_per_day: '请填写 0 或正整数',
             read_interval_seconds: '请填写一个数字或范围，例如 5-15',
-            threshold: '请填写 0 到 1 之间的小数，例如 0.6',
             url: '代理地址格式应为 http://host:port 或 socks5://host:port',
         } as Record<string, string>,
         fieldRequired: (field: string) => `请填写 ${field}`,
@@ -2306,7 +2302,6 @@ const en: Copy = {
             read_interval_seconds: { label: 'Seconds between group reads', placeholder: '5-15' },
             risk_reminders: { label: 'Pace reminders', placeholder: '' },
             server_url: { label: 'Endpoint', placeholder: 'https://api.example.com/v1' },
-            threshold: { label: 'Intent threshold', placeholder: '0.6' },
             tls: { label: 'Encryption', placeholder: '' },
             url: { label: 'Proxy URL', placeholder: 'http://user:pass@host:port or socks5://host:port' },
             username: { label: 'Username', placeholder: 'Usually the email address' },
@@ -2322,8 +2317,6 @@ const en: Copy = {
             'screening.openrouter.api_key': { label: 'OpenRouter key', placeholder: 'Paste your OpenRouter key' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
-            'screening.threshold':
-                'How sure the model must be that a message shows buying intent before it is scored, between 0 and 1; 0.6 by default. Higher misses more, lower shows more.',
             'telegram.join_ramp':
                 'Most joins on each day from the account’s first sign-in, comma separated; after that, Joins per day applies.',
             'telegram.risk_reminders': 'Off hides the yellow join-pace reminders.',
@@ -2346,7 +2339,6 @@ const en: Copy = {
             port: 'The port is a number from 1 to 65535',
             private_joins_per_day: 'Enter 0 or a whole number',
             read_interval_seconds: 'Enter a number or a range such as 5-15',
-            threshold: 'Enter a decimal between 0 and 1, such as 0.6',
             url: 'Use http://host:port or socks5://host:port',
         },
         fieldRequired: (field) => `Please enter ${field}`,
