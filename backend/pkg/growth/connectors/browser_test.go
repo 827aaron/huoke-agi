@@ -234,7 +234,7 @@ func TestBrowser_RemoteLogin_StartFinishCancelDriveTheAccountsBrowser(t *testing
 		switch r.URL.Path {
 		case "/sessions/instagram-7/login/start":
 			startBody = body
-			_, _ = w.Write([]byte(`{"account_id":"instagram-7","state":"new","login_url":"/login/instagram-7?ticket=t","expires_at":"2026-10-17T01:00:00Z","fingerprint":{"platform":"MacIntel"}}`))
+			_, _ = w.Write([]byte(`{"account_id":"instagram-7","state":"new","login_url":"http://localhost:7070/login/instagram-7?ticket=t","expires_at":"2026-10-17T01:00:00Z","fingerprint":{"platform":"MacIntel"}}`))
 		case "/sessions/instagram-7/login/confirm":
 			if signedIn {
 				_, _ = w.Write([]byte(`{"account_id":"instagram-7","state":"ok"}`))
@@ -257,7 +257,7 @@ func TestBrowser_RemoteLogin_StartFinishCancelDriveTheAccountsBrowser(t *testing
 
 	view, err := login.Start(context.Background(), nil, acc)
 	require.NoError(t, err)
-	assert.Equal(t, "/login/instagram-7?ticket=t", view.ViewURL)
+	assert.Equal(t, "/browser/login/instagram-7?ticket=t", view.ViewURL, "the window opens on the UI's own origin")
 	assert.Equal(t, time.Date(2026, 10, 17, 1, 0, 0, 0, time.UTC), view.ExpiresAt.UTC())
 	assert.JSONEq(t, `{"platform":"MacIntel"}`, string(view.Fingerprint))
 	assert.Equal(t, "socks5://10.0.0.1:1080", startBody["proxy"])

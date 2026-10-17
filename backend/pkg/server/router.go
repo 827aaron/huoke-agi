@@ -349,6 +349,12 @@ func NewRouter(
 		vecstorelog:  vecstorelogService,
 	})
 
+	if cfg.BrowserServiceURL != "" {
+		if err := registerBrowserView(router, cfg.BrowserServiceURL); err != nil {
+			logrus.WithError(err).Error("the browser login window is not served")
+		}
+	}
+
 	if cfg.StaticURL != nil && cfg.StaticURL.Scheme != "" && cfg.StaticURL.Host != "" {
 		router.NoRoute(func() gin.HandlerFunc {
 			return func(c *gin.Context) {
