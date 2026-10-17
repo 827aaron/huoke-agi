@@ -798,7 +798,7 @@ func TestProviders_TestAgent_RunsTheSimpleAgentOnTheFormsModel(t *testing.T) {
 	var coder pconfig.AgentConfig
 	require.NoError(t, json.Unmarshal([]byte(`{"model":"`+formModel+`"}`), &coder))
 
-	_, err = pc.TestAgent(context.Background(), provider.ProviderCustom, pconfig.OptionsTypeCoder, &coder, &coder)
+	_, err = pc.TestAgent(context.Background(), 1, provider.ProviderCustom, pconfig.OptionsTypeCoder, &coder, &coder)
 	require.NoError(t, err)
 
 	mu.Lock()
@@ -866,6 +866,60 @@ func TestProviders_GetProviders_AddsWhatTheUsersOwnCredentialsEnable(t *testing.
 	theirs, err := pc.GetProviders(context.Background(), 2)
 	require.NoError(t, err)
 	assert.Empty(t, theirs)
+
+	assert.Equal(t, provider.ProvidersListNames{provider.DefaultProviderNameMiniMax},
+		pc.DefaultProviders(context.Background(), 1).ListNames())
+	assert.Empty(t, pc.DefaultProviders(context.Background(), 2))
+}
+
+func TestProviders_TestAgent_BuildsWithTheUsersOwnCredentials(t *testing.T) {
+	var (
+		mu      sync.Mutex
+		bearers = map[string]int{}
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		bearers[r.Header.Get("Authorization")]++
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":"x","object":"chat.completion","choices":[{"index":0,`+
+			`"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	base := &config.Config{DeepSeekServerURL: srv.URL}
+	withKey := *base
+	withKey.DeepSeekAPIKey = "user-key"
+	defaultConfigs, _, err := buildDefaultConfigs(base)
+	require.NoError(t, err)
+	pc := &providerController{
+		cfg:            base,
+		defaultConfigs: defaultConfigs,
+		db:             &recordingProvidersQuerier{},
+		userConfigFn: func(_ context.Context, userID int64) (*config.Config, error) {
+			if userID == 1 {
+				return &withKey, nil
+			}
+			return base, nil
+		},
+	}
+	coder := pconfig.AgentConfig{Model: "deepseek-chat"}
+
+	_, err = pc.TestAgent(context.Background(), 1, provider.ProviderDeepSeek, pconfig.OptionsTypeCoder, &coder, nil)
+	require.NoError(t, err)
+	mu.Lock()
+	assert.NotZero(t, bearers["Bearer user-key"], "requests per Authorization header: %v", bearers)
+	mu.Unlock()
+
+	_, err = pc.TestAgent(context.Background(), 2, provider.ProviderDeepSeek, pconfig.OptionsTypeCoder, &coder, nil)
+	require.ErrorContains(t, err, `missing API key for provider "deepseek"`)
+	_, err = pc.TestProvider(context.Background(), 2, provider.ProviderDeepSeek, nil)
+	require.ErrorContains(t, err, `missing API key for provider "deepseek"`)
+
+	_, err = pc.CreateProvider(context.Background(), 1, "my-deepseek", provider.ProviderDeepSeek, nil)
+	require.NoError(t, err, "a type only the user's own key enables")
+	_, err = pc.CreateProvider(context.Background(), 2, "my-deepseek", provider.ProviderDeepSeek, nil)
+	require.ErrorContains(t, err, "provider type 'deepseek' is not available")
 }
 
 func TestProviders_LoadFlowProvider_EmbedsWithTheUsersOwnEmbeddingSettings(t *testing.T) {

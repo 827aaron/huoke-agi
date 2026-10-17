@@ -495,7 +495,7 @@ func (r *mutationResolver) TestAgent(ctx context.Context, typeArg model.Provider
 	cfg := converter.ConvertAgentConfigFromGqlModel(&agent)
 	prvtype := provider.ProviderType(typeArg)
 	atype := pconfig.ProviderOptionsType(agentType)
-	result, err := r.ProvidersCtrl.TestAgent(ctx, prvtype, atype, cfg, converter.ConvertAgentConfigFromGqlModel(simple))
+	result, err := r.ProvidersCtrl.TestAgent(ctx, uid, prvtype, atype, cfg, converter.ConvertAgentConfigFromGqlModel(simple))
 	if err != nil {
 		return nil, err
 	}
@@ -517,7 +517,7 @@ func (r *mutationResolver) TestProvider(ctx context.Context, typeArg model.Provi
 
 	cfg := converter.ConvertAgentsConfigFromGqlModel(&agents)
 	prvtype := provider.ProviderType(typeArg)
-	result, err := r.ProvidersCtrl.TestProvider(ctx, prvtype, cfg)
+	result, err := r.ProvidersCtrl.TestProvider(ctx, uid, prvtype, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -2222,7 +2222,7 @@ func (r *queryResolver) SettingsProviders(ctx context.Context) (*model.Providers
 		}
 	}
 
-	defaultProviders := r.ProvidersCtrl.DefaultProviders()
+	defaultProviders := r.ProvidersCtrl.DefaultProviders(ctx, uid)
 	for _, prvtype := range defaultProviders.ListTypes() {
 		prefix := providers.ModelPrefix(r.Config, prvtype)
 		switch prvtype {

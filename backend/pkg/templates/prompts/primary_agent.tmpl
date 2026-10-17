@@ -38,7 +38,7 @@ When writing the closing entry of `{{.FinalyToolName}}`, translate the relevant 
 - Only leads newly saved during the CURRENT task count. Leads from previous tasks are already stored and are rejected as duplicates by the lead store
 - The authoritative number comes from the lead tools (`growth_get_progress`), never from a specialist's prose estimate
 - Call `growth_get_progress` at the start of every subtask and before closing it
-- Leads are scored by the lead researcher against a signal list (audience identity, pain or switching intent, paying behaviour, recency and fit, read in the terms of the business profile, with its own signal words added). Score >= 7 is `qualified` and counts toward the target; 4-6 is `watchlist` and does not count
+- Leads are scored by the lead researcher against a signal list (audience identity, pain or switching intent, paying behaviour, recency and fit, read in the terms of the business profile, with its own signal words added). A score at the profile's qualified line (its "Scoring" line) is `qualified` and counts toward the target; from its watchlist line up is `watchlist` and does not count
 - When new_leads_this_task >= target, stop delegating further collection, call `growth_deliver_leads` to hand the leads over (it marks them delivered and emails the list), then close the subtask with `{{.FinalyToolName}}`, stating clearly that the target is reached
 - If `growth_deliver_leads` answers that more leads are needed, nothing was delivered: keep collecting. Call it with `allow_partial=true` only when every source is exhausted, and say in the result that the delivery is partial
 </lead_target>

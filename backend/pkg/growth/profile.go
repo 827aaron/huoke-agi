@@ -68,6 +68,14 @@ type Profile struct {
 	ContactTypes []string `json:"contact_types"`
 }
 
+// summary is the scoring as the agents read it in the profile block.
+func (sc Scoring) summary() string {
+	w := sc.Weights
+	return fmt.Sprintf("audience +%d, pain or switching +%d, paying +%d, recent +%d (7 days; +%d within 30), "+
+		"fit +%d; qualified from %d, watchlist from %d, below that not saved",
+		w.Player, w.Pain, w.Paying, w.Active, w.Active/2, w.Match, sc.Qualified, sc.Watchlist)
+}
+
 // Scoring weighs the signals of a message: each signal the judgement model sees adds its
 // weight, and Active adds its weight for a message of the last 7 days and half of it for
 // one of the last 30. A score of Qualified or more counts toward the target; from
@@ -416,6 +424,7 @@ func (p Profile) compact(withFile bool) string {
 	if !slices.Equal(p.ContactTypes, []string{ContactPlatformHandle}) {
 		line("Contacts to find", strings.Join(p.ContactTypes, ", "))
 	}
+	line("Scoring", p.ScoringOrDefault().summary())
 	if withFile {
 		fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, ProfileResourcePath)
 		if cut {
