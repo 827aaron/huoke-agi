@@ -1,6 +1,9 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -275,8 +278,9 @@ type Config struct {
 	// === PentAGI Cloud API ===
 	// UpdateStrategy is the strategy to use for updates. It can be "preview", "stable" or "nightly".
 	UpdateStrategy string `env:"UPDATE_STRATEGY" envDefault:"preview"`
-	// UpdateCheckInterval is how often this server reports its own state. Zero disables it.
-	UpdateCheckInterval time.Duration `env:"UPDATE_CHECK_INTERVAL" envDefault:"3h"`
+	// UpdateCheckInterval is how often this server reports its own state to UpdateServerHost.
+	// Zero, the default, disables it: a customer deployment sends nothing out on its own.
+	UpdateCheckInterval time.Duration `env:"UPDATE_CHECK_INTERVAL" envDefault:"0"`
 	// UpdateServerHost is the endpoint as host[:port]; empty means the default.
 	UpdateServerHost string `env:"UPDATE_SERVER_HOST" envDefault:"update.pentagi.com"`
 	// SupportServerHost is the endpoint as host[:port]; empty means the default.
@@ -309,7 +313,8 @@ type Config struct {
 	// it carries the server's own outbound calls.
 	GrowthProxyURL string `env:"GROWTH_PROXY_URL"`
 	// BrowserServiceURL is the browser service that keeps a logged-in browser per Facebook
-	// and Instagram account; BrowserToken authorises the backend to it.
+	// and Instagram account; BrowserToken authorises the backend to it. Left empty while the
+	// URL is set, a generated token is kept in DataDir/browser/token for the service to read.
 	BrowserServiceURL string `env:"BROWSER_SERVICE_URL"`
 	BrowserToken      string `env:"BROWSER_TOKEN"`
 
@@ -323,7 +328,8 @@ type Config struct {
 	SMTPTLS string `env:"SMTP_TLS" envDefault:"starttls"`
 
 	// GrowthSecretKey encrypts the credentials customers save on the settings page;
-	// changing it makes every saved credential unreadable.
+	// changing it makes every saved credential unreadable. Left empty, a generated key is
+	// kept in DataDir/growth_secret_key, so the settings page works out of the box.
 	GrowthSecretKey string `env:"GROWTH_SECRET_KEY"`
 
 	// === Observability: Langfuse LLM Analytics ===
@@ -392,6 +398,8 @@ func NewConfig() (*Config, error) {
 
 	ensureInstallationID(&config)
 	ensureLicenseKey(&config)
+	ensureGrowthSecretKey(&config)
+	ensureBrowserToken(&config)
 
 	return &config, nil
 }
@@ -419,6 +427,55 @@ func ensureInstallationID(config *Config) {
 	if err := os.WriteFile(installationIDPath, []byte(config.InstallationID), 0644); err != nil {
 		logrus.WithError(err).Warn("failed to store the installation id; it will change on every start")
 	}
+}
+
+// ensureGrowthSecretKey fills an empty GROWTH_SECRET_KEY from DataDir/growth_secret_key,
+// generating it on first start.
+func ensureGrowthSecretKey(config *Config) {
+	if strings.TrimSpace(config.GrowthSecretKey) == "" {
+		config.GrowthSecretKey = storedSecret(filepath.Join(config.DataDir, "growth_secret_key"), 0600, "growth secret key")
+	}
+}
+
+// ensureBrowserToken fills an empty BROWSER_TOKEN from DataDir/browser/token. The file is
+// world-readable because the browser service, another container and user, reads it from a
+// volume that holds nothing else.
+func ensureBrowserToken(config *Config) {
+	if strings.TrimSpace(config.BrowserToken) == "" && config.BrowserServiceURL != "" {
+		config.BrowserToken = storedSecret(filepath.Join(config.DataDir, "browser", "token"), 0644, "browser service token")
+	}
+}
+
+// storedSecret reads a generated secret back from path, or generates and stores one. It
+// returns "" rather than a secret it cannot store: one that changes on restart would lock
+// every saved credential away.
+func storedSecret(path string, perm os.FileMode, what string) string {
+	stored, err := os.ReadFile(path)
+	switch {
+	case err == nil && strings.TrimSpace(string(stored)) != "":
+		return strings.TrimSpace(string(stored))
+	case err != nil && !errors.Is(err, os.ErrNotExist):
+		logrus.WithError(err).Warnf("failed to read the stored %s; leaving it unset", what)
+		return ""
+	}
+
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		logrus.WithError(err).Warnf("failed to generate a %s; leaving it unset", what)
+		return ""
+	}
+	secret := hex.EncodeToString(raw)
+
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		logrus.WithError(err).Warnf("failed to create the directory of the %s; leaving it unset", what)
+		return ""
+	}
+	if err := os.WriteFile(path, []byte(secret), perm); err != nil {
+		logrus.WithError(err).Warnf("failed to store the %s; leaving it unset", what)
+		return ""
+	}
+	logrus.WithField("path", path).Infof("generated the %s; back it up with the data volume", what)
+	return secret
 }
 
 func ensureLicenseKey(config *Config) {

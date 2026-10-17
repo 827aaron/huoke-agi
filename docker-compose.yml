@@ -9,6 +9,10 @@ volumes:
     driver: local
   pentagi-postgres-data:
     driver: local
+  browser-profiles:
+    driver: local
+  browser-token:
+    driver: local
 
 networks:
   pentagi-network:
@@ -22,19 +26,22 @@ networks:
     name: langfuse-network
 
 services:
-  # Worker image for agent sandboxes. Build only: docker compose --profile build build growth-worker
+  # Worker image for agent sandboxes. The server starts one container of it per task and cannot
+  # pull it from a registry, so `up` builds it when missing; this service itself only exits.
   growth-worker:
     image: ${DOCKER_DEFAULT_IMAGE:-kelai-growth-worker:latest}
     build:
       context: .
       dockerfile: docker/growth-worker.Dockerfile
-    profiles:
-      - build
     entrypoint: ["true"]
     restart: "no"
 
   pentagi:
-    image: ${PENTAGI_IMAGE:-vxcontrol/pentagi:latest}
+    # Built from this checkout when missing: the upstream vxcontrol/pentagi image has no lead-generation layer.
+    image: ${PENTAGI_IMAGE:-kelai-agi:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
     restart: unless-stopped
     container_name: pentagi
     hostname: pentagi
@@ -212,7 +219,7 @@ services:
       - TG_SESSION_DIR=${TG_SESSION_DIR:-}
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
       - GROWTH_PROXY_URL=${GROWTH_PROXY_URL:-}
-      - BROWSER_SERVICE_URL=${BROWSER_SERVICE_URL:-}
+      - BROWSER_SERVICE_URL=${BROWSER_SERVICE_URL:-http://browser:7070}
       - BROWSER_TOKEN=${BROWSER_TOKEN:-}
       - GROWTH_SECRET_KEY=${GROWTH_SECRET_KEY:-}
       - SMTP_HOST=${SMTP_HOST:-}
@@ -251,6 +258,8 @@ services:
         max-file: "7"
     volumes:
       - ${PENTAGI_DATA_DIR:-pentagi-data}:/opt/pentagi/data
+      # Only the generated browser token, shared with the browser service.
+      - browser-token:/opt/pentagi/data/browser
       - ${PENTAGI_SSL_DIR:-pentagi-ssl}:/opt/pentagi/ssl
       - ${PENTAGI_OLLAMA_DIR:-pentagi-ollama}:/root/.ollama
       - ${PENTAGI_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
@@ -263,6 +272,42 @@ services:
       - pentagi-network
       - observability-network
       - langfuse-network
+
+  # One logged-in browser per Facebook and Instagram account. Operators sign accounts in through
+  # BROWSER_PUBLIC_URL, so that address must be reachable from their own browser.
+  browser:
+    image: ${BROWSER_IMAGE:-kelai-browser:latest}
+    build:
+      context: ./services/browser
+    restart: unless-stopped
+    container_name: browser
+    hostname: browser
+    expose:
+      - 7070/tcp
+    ports:
+      - ${BROWSER_LISTEN_IP:-127.0.0.1}:${BROWSER_LISTEN_PORT:-7070}:7070
+    environment:
+      - BROWSER_TOKEN=${BROWSER_TOKEN:-}
+      - BROWSER_PUBLIC_URL=${BROWSER_PUBLIC_URL:-http://localhost:7070}
+      - BROWSER_PROXY=${BROWSER_PROXY:-}
+    # An empty BROWSER_TOKEN means the one the backend generated; the service must never start
+    # without a token, since an empty one accepts every request.
+    entrypoint:
+      - sh
+      - -c
+      - |
+        until [ -n "$${BROWSER_TOKEN}" ] || [ -s /run/browser-token/token ]; do sleep 1; done
+        BROWSER_TOKEN="$${BROWSER_TOKEN:-$$(cat /run/browser-token/token)}" exec node src/main.js
+    logging:
+      options:
+        max-size: 50m
+        max-file: "7"
+    volumes:
+      - browser-profiles:/data/profiles
+      - browser-token:/run/browser-token:ro
+    shm_size: 1g
+    networks:
+      - pentagi-network
 
   pgvector:
     image: ${PGVECTOR_IMAGE:-vxcontrol/pgvector:latest}
@@ -292,7 +337,10 @@ services:
     networks:
       - pentagi-network
 
+  # Database metrics for the optional observability stack: `--profile monitoring` starts it.
   pgexporter:
+    profiles:
+      - monitoring
     image: ${PGEXPORTER_IMAGE:-quay.io/prometheuscommunity/postgres-exporter:v0.16.0}
     restart: unless-stopped
     depends_on:
