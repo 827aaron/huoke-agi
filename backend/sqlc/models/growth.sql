@@ -222,6 +222,14 @@ JOIN channel_accounts ga ON ga.id = acs.account_id
 WHERE ga.user_id = sqlc.arg(user_id)
 ORDER BY acs.source_id, acs.account_id;
 
+-- name: GetAccountJoinedSources :many
+SELECT gs.id AS source_id, gs.title, gs.link, gs.member_count, acs.joined_at, acs.synced_at
+FROM account_sources acs
+JOIN growth_sources gs ON gs.id = acs.source_id
+JOIN channel_accounts ca ON ca.id = acs.account_id
+WHERE ca.user_id = sqlc.arg(user_id) AND acs.account_id = sqlc.arg(account_id) AND acs.join_status = 'joined'
+ORDER BY acs.joined_at DESC NULLS LAST, gs.id DESC;
+
 -- name: UpdateAccountSourceJoin :one
 UPDATE account_sources
 SET join_status = sqlc.arg(join_status),

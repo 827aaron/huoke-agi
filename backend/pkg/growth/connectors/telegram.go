@@ -99,6 +99,7 @@ type telegramAPI interface {
 	MessagesImportChatInvite(ctx context.Context, hash string) (tg.MessagesChatInviteJoinResultClass, error)
 	MessagesGetHistory(ctx context.Context, request *tg.MessagesGetHistoryRequest) (tg.MessagesMessagesClass, error)
 	MessagesGetChats(ctx context.Context, id []int64) (tg.MessagesChatsClass, error)
+	MessagesGetDialogs(ctx context.Context, request *tg.MessagesGetDialogsRequest) (tg.MessagesDialogsClass, error)
 }
 
 const (
@@ -851,6 +852,27 @@ func profileOf(u *tg.User) UserProfile {
 // call runs fn against the live API, sleeping through flood waits no longer
 // than MaxInlineFloodWait. Telegram counts a flood wait per method, so the
 // retry repeats only the call that was refused.
+// CountDialogs asks for one dialog and reads the total Telegram reports beside it.
+func (t *Telegram) CountDialogs(ctx context.Context) (int, error) {
+	var count int
+	err := t.call(ctx, "messages.getDialogs", func(ctx context.Context, api telegramAPI) error {
+		res, err := api.MessagesGetDialogs(ctx, &tg.MessagesGetDialogsRequest{OffsetPeer: &tg.InputPeerEmpty{}, Limit: 1})
+		if err != nil {
+			return errorOf(err)
+		}
+		switch d := res.(type) {
+		case *tg.MessagesDialogs:
+			count = len(d.Dialogs)
+		case *tg.MessagesDialogsSlice:
+			count = d.Count
+		case *tg.MessagesDialogsNotModified:
+			count = d.Count
+		}
+		return nil
+	})
+	return count, err
+}
+
 func (t *Telegram) call(ctx context.Context, method string, fn func(ctx context.Context, api telegramAPI) error) error {
 	t.mu.RLock()
 	api := t.api

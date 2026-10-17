@@ -81,6 +81,32 @@ definitions:
         items: {}
         type: array
     type: object
+  growth.AccountDetail:
+    properties:
+      dialogs_count:
+        type: integer
+      groups:
+        items:
+          $ref: '#/definitions/growth.AccountJoinedGroup'
+        type: array
+      joined_groups_count:
+        type: integer
+    type: object
+  growth.AccountJoinedGroup:
+    properties:
+      joined_at:
+        type: string
+      last_synced_at:
+        type: string
+      link:
+        type: string
+      member_count:
+        type: integer
+      source_id:
+        type: integer
+      title:
+        type: string
+    type: object
   growth.AccountUpdate:
     properties:
       external_browser_ws:
@@ -5930,6 +5956,50 @@ paths:
       - BearerAuth: []
       summary: Change the label, status (active or disabled), proxy, fingerprint or
         external browser of an account
+      tags:
+      - Growth
+  /growth/accounts/{accountID}/detail:
+    get:
+      description: dialogs_count is counted live and left out when the account cannot
+        be asked.
+      parameters:
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: account detail received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.AccountDetail'
+              type: object
+        "400":
+          description: invalid account id
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: account not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting the account
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the groups an account has joined and, for Telegram, how many
+        chats it is in
       tags:
       - Growth
   /growth/accounts/{accountID}/disable:

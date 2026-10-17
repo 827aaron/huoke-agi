@@ -33,6 +33,17 @@ type fakeTelegramAPI struct {
 	importInvite    func(hash string) (tg.MessagesChatInviteJoinResultClass, error)
 	getHistory      func(req *tg.MessagesGetHistoryRequest) (tg.MessagesMessagesClass, error)
 	getChats        func(id []int64) (tg.MessagesChatsClass, error)
+	getDialogs      func(req *tg.MessagesGetDialogsRequest) (tg.MessagesDialogsClass, error)
+}
+
+func (f *fakeTelegramAPI) MessagesGetDialogs(ctx context.Context, req *tg.MessagesGetDialogsRequest) (tg.MessagesDialogsClass, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if f.getDialogs == nil {
+		return nil, f.unexpected("MessagesGetDialogs")
+	}
+	return f.getDialogs(req)
 }
 
 func (f *fakeTelegramAPI) unexpected(method string) error {
@@ -831,4 +842,25 @@ func TestTelegram_Start_GivesUpAtTheConnectTimeoutWhenTelegramIsUnreachable(t *t
 	err = conn.Start(t.Context())
 	assert.ErrorIs(t, err, ErrUnreachable)
 	assert.Less(t, time.Since(start), 5*time.Second)
+}
+
+func TestTelegram_CountDialogs_ReadsTheTotalBesideOneDialog(t *testing.T) {
+	var asked []int
+	reply := tg.MessagesDialogsClass(&tg.MessagesDialogsSlice{Count: 137, Dialogs: []tg.DialogClass{&tg.Dialog{}}})
+	tgc, _ := newTestTelegram(t, &fakeTelegramAPI{
+		getDialogs: func(req *tg.MessagesGetDialogsRequest) (tg.MessagesDialogsClass, error) {
+			asked = append(asked, req.Limit)
+			return reply, nil
+		},
+	})
+
+	n, err := tgc.CountDialogs(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 137, n)
+	assert.Equal(t, []int{1}, asked)
+
+	reply = &tg.MessagesDialogs{Dialogs: []tg.DialogClass{&tg.Dialog{}, &tg.Dialog{}}}
+	n, err = tgc.CountDialogs(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 2, n, "a list that fits in one page carries no total")
 }

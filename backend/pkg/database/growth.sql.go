@@ -418,6 +418,59 @@ func (q *Queries) EnsureGrowthRun(ctx context.Context, arg EnsureGrowthRunParams
 	return i, err
 }
 
+const getAccountJoinedSources = `-- name: GetAccountJoinedSources :many
+SELECT gs.id AS source_id, gs.title, gs.link, gs.member_count, acs.joined_at, acs.synced_at
+FROM account_sources acs
+JOIN growth_sources gs ON gs.id = acs.source_id
+JOIN channel_accounts ca ON ca.id = acs.account_id
+WHERE ca.user_id = $1 AND acs.account_id = $2 AND acs.join_status = 'joined'
+ORDER BY acs.joined_at DESC NULLS LAST, gs.id DESC
+`
+
+type GetAccountJoinedSourcesParams struct {
+	UserID    int64 `json:"user_id"`
+	AccountID int64 `json:"account_id"`
+}
+
+type GetAccountJoinedSourcesRow struct {
+	SourceID    int64        `json:"source_id"`
+	Title       string       `json:"title"`
+	Link        string       `json:"link"`
+	MemberCount int64        `json:"member_count"`
+	JoinedAt    sql.NullTime `json:"joined_at"`
+	SyncedAt    sql.NullTime `json:"synced_at"`
+}
+
+func (q *Queries) GetAccountJoinedSources(ctx context.Context, arg GetAccountJoinedSourcesParams) ([]GetAccountJoinedSourcesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAccountJoinedSources, arg.UserID, arg.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAccountJoinedSourcesRow
+	for rows.Next() {
+		var i GetAccountJoinedSourcesRow
+		if err := rows.Scan(
+			&i.SourceID,
+			&i.Title,
+			&i.Link,
+			&i.MemberCount,
+			&i.JoinedAt,
+			&i.SyncedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getAccountSource = `-- name: GetAccountSource :one
 SELECT id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at, join_attempted_at, private_join FROM account_sources WHERE account_id = $1 AND source_id = $2
 `
