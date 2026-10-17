@@ -26,6 +26,8 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/docker"
 	"pentagi/pkg/graph/model"
+	"pentagi/pkg/growth"
+	"pentagi/pkg/growth/connectors"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/providers/embeddings"
 
@@ -903,4 +905,82 @@ func fakeScraper(t *testing.T, target string, pages map[string]scraperAnswer) *h
 	t.Cleanup(ts.Close)
 
 	return ts
+}
+
+// fakeGrowthBackend records the calls the growth tools make and answers from its fields.
+type fakeGrowthBackend struct {
+	err      error
+	progress growth.Progress
+	delivery growth.Delivery
+	upserted []growth.LeadInput
+	added    []growth.AddSourceResult
+
+	lastScope        growth.Scope
+	lastOrigin       string
+	lastFrom         *int64
+	lastAllowPartial bool
+	lastFilter       growth.LeadFilter
+}
+
+func (f *fakeGrowthBackend) SearchSources(_ context.Context, scope growth.Scope, _ connectors.Platform, _ string, _ int) ([]growth.SourceView, error) {
+	f.lastScope = scope
+	return []growth.SourceView{}, f.err
+}
+
+func (f *fakeGrowthBackend) RecommendSources(_ context.Context, scope growth.Scope, _ int64, _ int) ([]growth.SourceView, error) {
+	f.lastScope = scope
+	return []growth.SourceView{}, f.err
+}
+
+func (f *fakeGrowthBackend) AddSources(_ context.Context, scope growth.Scope, _ []string, origin string, from *int64) ([]growth.AddSourceResult, error) {
+	f.lastScope, f.lastOrigin, f.lastFrom = scope, origin, from
+	return f.added, f.err
+}
+
+func (f *fakeGrowthBackend) JoinSources(_ context.Context, scope growth.Scope, ids []int64) ([]growth.JoinOutcome, error) {
+	f.lastScope = scope
+	if f.err != nil {
+		return []growth.JoinOutcome{{SourceID: ids[0], JoinStatus: "joined"}}, f.err
+	}
+	return []growth.JoinOutcome{}, nil
+}
+
+func (f *fakeGrowthBackend) SyncSource(_ context.Context, scope growth.Scope, _ int64, _ string, _ int) (growth.SyncResult, error) {
+	f.lastScope = scope
+	return growth.SyncResult{}, f.err
+}
+
+func (f *fakeGrowthBackend) GetUser(_ context.Context, scope growth.Scope, _ connectors.Platform, _ string) (connectors.UserProfile, error) {
+	f.lastScope = scope
+	return connectors.UserProfile{}, f.err
+}
+
+func (f *fakeGrowthBackend) UpsertLeads(_ context.Context, scope growth.Scope, leads []growth.LeadInput) ([]growth.LeadResult, error) {
+	f.lastScope, f.upserted = scope, leads
+	results := make([]growth.LeadResult, len(leads))
+	for i := range leads {
+		results[i] = growth.LeadResult{Index: i, Status: growth.LeadStatusNew}
+	}
+	return results, f.err
+}
+
+func (f *fakeGrowthBackend) Progress(_ context.Context, scope growth.Scope) (growth.Progress, error) {
+	f.lastScope = scope
+	return f.progress, nil
+}
+
+func (f *fakeGrowthBackend) SetTarget(_ context.Context, scope growth.Scope, target int) (growth.Progress, error) {
+	f.lastScope = scope
+	f.progress.Target = target
+	return f.progress, f.err
+}
+
+func (f *fakeGrowthBackend) Deliver(_ context.Context, scope growth.Scope, allowPartial bool) (growth.Delivery, error) {
+	f.lastScope, f.lastAllowPartial = scope, allowPartial
+	return f.delivery, f.err
+}
+
+func (f *fakeGrowthBackend) ListLeads(_ context.Context, _ int64, filter growth.LeadFilter) ([]growth.LeadView, error) {
+	f.lastFilter = filter
+	return []growth.LeadView{}, f.err
 }

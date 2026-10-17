@@ -227,7 +227,7 @@ type SploitusAction struct {
 // retries transient failures, and falls back across providers automatically.
 type WebSearchAction struct {
 	Query       string `json:"query" jsonschema:"required" jsonschema_description:"Technical-channel payload — the search query. ALWAYS written in English regardless of the engagement language: internet sources and the underlying engines are indexed in English and non-English queries return poor or empty results. Keep it short and keyword-focused."`
-	Mode        String `json:"mode,omitempty" jsonschema:"type=string,enum=links,enum=answer,enum=research,enum=exploit" jsonschema_description:"What you need back (default 'answer'). 'links' — a list of source links with snippets (fastest/cheapest). 'answer' — a synthesized answer over live sources. 'research' — deep multi-source analysis with reasoning (most thorough). 'exploit' — exploit code, PoCs, and offensive tools. web_search picks the concrete engine for you and falls back automatically; you do NOT name an engine."`
+	Mode        String `json:"mode,omitempty" jsonschema:"type=string,enum=links,enum=answer,enum=research" jsonschema_description:"What you need back (default 'answer'). 'links' — a list of source links with snippets (fastest/cheapest). 'answer' — a synthesized answer over live sources. 'research' — deep multi-source analysis with reasoning (most thorough). web_search picks the concrete engine for you and falls back automatically; you do NOT name an engine."`
 	MaxResults  Int64  `json:"max_results,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum number of results to return (1–25; default 5). Ignored by answer/research engines that return a single synthesized answer."`
 	ExploitType String `json:"exploit_type,omitempty" jsonschema:"type=string,enum=exploits,enum=tools" jsonschema_description:"exploit mode only: 'exploits' (default) for exploit code and PoCs, 'tools' for offensive-security tools."`
 	Sort        String `json:"sort,omitempty" jsonschema:"type=string,enum=default,enum=date,enum=score" jsonschema_description:"exploit mode only: result ordering — 'default' (relevance), 'date' (newest first), 'score' (highest CVSS first)."`
@@ -336,12 +336,12 @@ type CodeResult struct {
 }
 
 type PentesterAction struct {
-	Question string `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — task description for the pentester team member to perform a penetration test on the local environment and find vulnerabilities and weaknesses in the remote target. Always written in English; never translated."`
+	Question string `json:"question" jsonschema:"required" jsonschema_description:"Technical-channel payload — task description for the lead research specialist: the business profile, the sources to read, the remaining gap to the target, and the expected output. Always written in English; never translated."`
 	Message  string `json:"message" jsonschema:"required,title=Pentester action message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary summarizing the question and the task. Written in the engagement language declared by your system prompt."`
 }
 
 type HackResult struct {
-	Result  string `json:"result" jsonschema:"required,title=Hack result description" jsonschema_description:"Technical-channel payload — fully detailed penetration-test report (or error explanation) returned to the calling agent, with usage instructions for the result. Always written in English; never translated."`
+	Result  string `json:"result" jsonschema:"required,title=Lead research result description" jsonschema_description:"Technical-channel payload — fully detailed lead research report (or error explanation) returned to the calling agent, with usage instructions for the result. Always written in English; never translated."`
 	Message string `json:"message" jsonschema:"required,title=Hack result message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary with the result and the path to reach the goal. Written in the engagement language declared by your system prompt."`
 }
 
@@ -916,3 +916,103 @@ func (t *AnswerType) UnmarshalJSON(data []byte) error {
 func (t AnswerType) MarshalJSON() ([]byte, error) { return json.Marshal(string(t)) }
 
 func (t AnswerType) String() string { return string(t) }
+
+// IDString is an identifier models send either as a JSON string or as a bare number
+// (Telegram ids, message ids); both decode to the same text.
+type IDString string
+
+func (s *IDString) UnmarshalJSON(data []byte) error {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "null" || trimmed == "" {
+		*s = ""
+		return nil
+	}
+	if trimmed[0] != '"' {
+		var num json.Number
+		if err := json.Unmarshal(data, &num); err != nil {
+			return fmt.Errorf("invalid id value: expected a string or a number, got: %s", trimmed)
+		}
+		*s = IDString(num.String())
+		return nil
+	}
+	var raw String
+	if err := raw.UnmarshalJSON(data); err != nil {
+		return err
+	}
+	*s = IDString(strings.TrimSpace(raw.String()))
+	return nil
+}
+
+func (s IDString) String() string { return string(s) }
+
+type GrowthSearchSourcesAction struct {
+	Mode     String  `json:"mode" jsonschema:"required,type=string,enum=search,enum=resolve,enum=recommend" jsonschema_description:"'search' finds public Telegram groups and channels by keyword (query). 'resolve' turns links found elsewhere (Telegram links, @usernames, or forum and web page URLs) into pool sources (links). 'recommend' lists Telegram channels similar to a pool source (source_id). Every source found is added to the source pool."`
+	Query    string  `json:"query,omitempty" jsonschema_description:"search only: keywords in the language the target audience writes in, e.g. a game title or genre. Short queries return more; rotate several."`
+	Links    Strings `json:"links,omitempty" jsonschema_description:"resolve only: links to add, e.g. https://t.me/somegroup, @somechannel, https://forum.example.com/thread/123"`
+	SourceID Int64   `json:"source_id,omitempty" jsonschema:"type=integer" jsonschema_description:"recommend only: the pool source_id to find similar channels for"`
+	Limit    Int64   `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum results (1-50, default 20)"`
+	Message  string  `json:"message" jsonschema:"required,title=Source search message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on what you are looking for and why. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthAddSourcesAction struct {
+	Links                  Strings `json:"links" jsonschema:"required" jsonschema_description:"Telegram links, @usernames, invite links, or forum and web page URLs: supplied by the customer, or found inside a source's messages. Duplicates of sources already in the pool are reported as existing."`
+	DiscoveredFromSourceID *Int64  `json:"discovered_from_source_id,omitempty" jsonschema:"type=integer" jsonschema_description:"When the links were found in the messages of a pool source, that source_id; omit for links the customer supplied"`
+	Message                string  `json:"message" jsonschema:"required,title=Add sources message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on which sources are being added. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthJoinSourceAction struct {
+	SourceIDs []Int64 `json:"source_ids" jsonschema:"required" jsonschema_description:"Pool source_ids to join with the customer's Telegram account. Already joined sources are skipped; web sources need no joining."`
+	Message   string  `json:"message" jsonschema:"required,title=Join sources message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on which sources are being joined and why. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthSyncSourceAction struct {
+	Action         String   `json:"action" jsonschema:"required,type=string,enum=history,enum=user" jsonschema_description:"'history' reads the next page of a Telegram source's public messages (source_id). 'user' returns the public profile of a Telegram user (platform_user_id)."`
+	SourceID       Int64    `json:"source_id,omitempty" jsonschema:"type=integer" jsonschema_description:"history only: the pool source_id to read"`
+	Direction      String   `json:"direction,omitempty" jsonschema:"type=string,enum=older,enum=newer" jsonschema_description:"history only: 'older' (default) continues backwards from the oldest message read so far; 'newer' fetches messages posted after the newest one read. The position is kept between calls."`
+	Limit          Int64    `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"history only: messages per page (1-200, default 100)"`
+	PlatformUserID IDString `json:"platform_user_id,omitempty" jsonschema:"type=string" jsonschema_description:"user only: the sender id from a history page"`
+	Message        string   `json:"message" jsonschema:"required,title=Sync source message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on what you are reading and why. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthEvidenceArg struct {
+	SourceID    Int64    `json:"source_id" jsonschema:"required,type=integer" jsonschema_description:"The pool source_id the message or post was read from"`
+	MessageID   IDString `json:"message_id,omitempty" jsonschema:"type=string" jsonschema_description:"Telegram: the message_id from the history page (required). Web: optional, the post URL or anchor; defaults to message_link."`
+	MessageLink string   `json:"message_link,omitempty" jsonschema_description:"Link that opens the message or post"`
+	MessageTime string   `json:"message_time,omitempty" jsonschema_description:"When it was posted, RFC 3339 (e.g. 2026-10-16T09:30:00Z), taken from the tool output or the page"`
+	CapturedAt  string   `json:"captured_at,omitempty" jsonschema_description:"Web only: when you read the page, RFC 3339; defaults to now"`
+	Excerpt     string   `json:"excerpt" jsonschema:"required" jsonschema_description:"The message text quoted verbatim in its original language; never translated or paraphrased"`
+	MatchReason string   `json:"match_reason,omitempty" jsonschema_description:"Technical-channel payload — which signal this message shows, in English"`
+}
+
+type GrowthLeadArg struct {
+	Platform       String              `json:"platform,omitempty" jsonschema:"type=string,enum=telegram,enum=web" jsonschema_description:"Informational: the platform is taken from the evidence sources"`
+	PlatformUserID IDString            `json:"platform_user_id" jsonschema:"required,type=string" jsonschema_description:"Telegram: the stable numeric sender id from the tool output. Web: the author's profile URL, or 'host:username' (e.g. forum.example.com:alice) when no profile link exists."`
+	Username       string              `json:"username,omitempty" jsonschema_description:"Username exactly as the tool output or page shows it"`
+	DisplayName    string              `json:"display_name,omitempty" jsonschema_description:"Display name exactly as shown"`
+	Score          Int64               `json:"score" jsonschema:"required,type=integer" jsonschema_description:"Total signal score. 7 or more is qualified and counts toward the target; 4-6 is watchlist; 3 or less is not saved."`
+	Tier           String              `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist" jsonschema_description:"Your tier; the stored tier always follows from score"`
+	MatchReason    string              `json:"match_reason" jsonschema:"required" jsonschema_description:"Technical-channel payload — the score breakdown in English, e.g. 'player+3, wants similar game+3, 7d+2, genre match+3 = 11'"`
+	Evidence       []GrowthEvidenceArg `json:"evidence" jsonschema:"required" jsonschema_description:"One or more messages or posts by this person that show the signals"`
+}
+
+type GrowthUpsertLeadsAction struct {
+	Leads   []GrowthLeadArg `json:"leads" jsonschema:"required" jsonschema_description:"Batch of up to 20 leads. Every value must come from tool output or the page read; never invent fields."`
+	Message string          `json:"message" jsonschema:"required,title=Save leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on the batch being saved. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthGetProgressAction struct {
+	Target  Int64  `json:"target,omitempty" jsonschema:"type=integer" jsonschema_description:"Set the round's target when the customer named a number (default 50); omit to only read progress"`
+	Message string `json:"message" jsonschema:"required,title=Progress message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are checking progress. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthDeliverLeadsAction struct {
+	AllowPartial Bool   `json:"allow_partial,omitempty" jsonschema:"type=boolean" jsonschema_description:"Deliver fewer than the target. Set it only when every source is exhausted or blocked; otherwise a short round delivers nothing and says how many more are needed."`
+	Message      string `json:"message" jsonschema:"required,title=Deliver leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on closing the round. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthListLeadsAction struct {
+	Scope   String `json:"scope,omitempty" jsonschema:"type=string,enum=flow,enum=task,enum=delivered" jsonschema_description:"'flow' (default) leads seen in this flow; 'task' leads touched by the current task; 'delivered' leads already delivered from this flow"`
+	Tier    String `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist,enum=all" jsonschema_description:"Filter by tier (default all)"`
+	Limit   Int64  `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum leads (1-500, default 100)"`
+	Message string `json:"message" jsonschema:"required,title=List leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are listing leads. Written in the engagement language declared by your system prompt."`
+}

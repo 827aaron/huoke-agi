@@ -111,6 +111,8 @@ type knowledgeMeta struct {
 	PartSize    int    `json:"part_size,omitempty"`
 	TotalSize   int    `json:"total_size,omitempty"`
 	Manual      bool   `json:"manual,omitempty"` // set by CreateDocument, never by an agent's store tool
+	// Shared documents are found by every customer's owner-scoped searches (the "shared" key in pkg/tools).
+	Shared bool `json:"shared,omitempty"`
 }
 
 func parseMeta(raw string) knowledgeMeta {
@@ -475,6 +477,21 @@ func requireSubType(meta knowledgeMeta) error {
 }
 
 func (ks *knowledgeStore) CreateDocument(ctx context.Context, userID int64, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
+	return ks.createDocument(ctx, userID, input, false)
+}
+
+// CreateSharedDocument stores a document that owner-scoped searches return to every customer,
+// for seed knowledge an operator imports once.
+func (ks *knowledgeStore) CreateSharedDocument(ctx context.Context, userID int64, input model.CreateKnowledgeDocumentInput) (*model.KnowledgeDocument, error) {
+	return ks.createDocument(ctx, userID, input, true)
+}
+
+func (ks *knowledgeStore) createDocument(
+	ctx context.Context,
+	userID int64,
+	input model.CreateKnowledgeDocumentInput,
+	shared bool,
+) (*model.KnowledgeDocument, error) {
 	if err := ks.requireEmbedder(); err != nil {
 		return nil, err
 	}
@@ -484,6 +501,7 @@ func (ks *knowledgeStore) CreateDocument(ctx context.Context, userID int64, inpu
 		UserID:   userID,
 		Question: input.Question,
 		Manual:   true,
+		Shared:   shared,
 	}
 	if input.Description != nil {
 		meta.Description = *input.Description

@@ -39,7 +39,8 @@ When writing the closing entry of `{{.FinalyToolName}}`, translate the relevant 
 - The authoritative number comes from the lead tools (`growth_get_progress`), never from a specialist's prose estimate
 - Call `growth_get_progress` at the start of every subtask and before closing it
 - Leads are scored by the lead researcher against a signal list (default: player signals for game companies; replaced by the business profile's own signals when given). Score >= 7 is `qualified` and counts toward the target; 4-6 is `watchlist` and does not count
-- When new_leads_this_task >= target, stop delegating further collection, and close the subtask with `{{.FinalyToolName}}`, stating clearly that the target is reached
+- When new_leads_this_task >= target, stop delegating further collection, call `growth_deliver_leads` to hand the leads over (it marks them delivered and emails the list), then close the subtask with `{{.FinalyToolName}}`, stating clearly that the target is reached
+- If `growth_deliver_leads` answers that more leads are needed, nothing was delivered: keep collecting. Call it with `allow_partial=true` only when every source is exhausted, and say in the result that the delivery is partial
 </lead_target>
 
 ## TOOL EXECUTION RULES
@@ -280,7 +281,7 @@ IMPORTANT:
 
 1. Follow the LANGUAGE POLICY above on every tool call. Every `message` field is an engagement-log entry written in `{{.Lang}}`; every delegation `question` and the technical excerpts you send with `{{.AdviceToolName}}` stay on the technical channel in English
 2. Closing log entry: you MUST use the `{{.FinalyToolName}}` tool — both `result` (full write-up) and `message` (concise recap) are engagement-log entries written in `{{.Lang}}`. Translate the relevant prose from English specialist results into `{{.Lang}}`, preserving identifiers verbatim
-3. The `result` MUST contain: the latest `PROGRESS: new_leads_this_task=<n> target=<t>` line copied verbatim from the lead tools, the sources and keywords used with how many new leads each produced, sources that are exhausted, and blockers (rate limits, private sources)
+3. The `result` MUST contain: the latest `PROGRESS: new_leads_this_task=<n> target=<t>` line copied verbatim from the lead tools, what `growth_deliver_leads` reported when it was called (delivered count and email status), the sources and keywords used with how many new leads each produced, sources that are exhausted, and blockers (rate limits, private sources)
 4. Provide COMPREHENSIVE results that will be used for task replanning and refinement; recommend what the next subtask should try if the target is not reached
 5. Your report directly impacts the system's ability to plan effective next steps
 

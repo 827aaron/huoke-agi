@@ -9,48 +9,56 @@ import (
 )
 
 const (
-	FinalyToolName             = "done"
-	AskUserToolName            = "ask"
-	MaintenanceToolName        = "maintenance"
-	MaintenanceResultToolName  = "maintenance_result"
-	CoderToolName              = "coder"
-	CodeResultToolName         = "code_result"
-	PentesterToolName          = "pentester"
-	HackResultToolName         = "hack_result"
-	AdviceToolName             = "advice"
-	MemoristToolName           = "memorist"
-	MemoristResultToolName     = "memorist_result"
-	BrowserToolName            = "browser"
-	GoogleToolName             = "google"
-	DuckDuckGoToolName         = "duckduckgo"
-	TavilyToolName             = "tavily"
-	FirecrawlToolName          = "firecrawl"
-	TraversaalToolName         = "traversaal"
-	PerplexityToolName         = "perplexity"
-	SearxngToolName            = "searxng"
-	SploitusToolName           = "sploitus"
-	WebSearchToolName          = "web_search"
-	SearchToolName             = "search"
-	SearchResultToolName       = "search_result"
-	EnricherResultToolName     = "enricher_result"
-	SearchInMemoryToolName     = "search_in_memory"
-	SearchGuideToolName        = "search_guide"
-	StoreGuideToolName         = "store_guide"
-	SearchAnswerToolName       = "search_answer"
-	StoreAnswerToolName        = "store_answer"
-	SearchCodeToolName         = "search_code"
-	StoreCodeToolName          = "store_code"
-	GraphitiSearchToolName     = "graphiti_search"
-	ReportResultToolName       = "report_result"
-	SubtaskListToolName        = "subtask_list"
-	SubtaskPatchToolName       = "subtask_patch"
-	TerminalToolName           = "terminal"
-	FileToolName               = "file"
-	GetFlowStatusToolName      = "get_flow_status"
-	StopFlowToolName           = "stop_flow"
-	SubmitFlowInputToolName    = "submit_flow_input"
-	PatchFlowSubtasksToolName  = "patch_flow_subtasks"
-	WaitFlowCompletionToolName = "wait_flow_completion"
+	FinalyToolName              = "done"
+	AskUserToolName             = "ask"
+	MaintenanceToolName         = "maintenance"
+	MaintenanceResultToolName   = "maintenance_result"
+	CoderToolName               = "coder"
+	CodeResultToolName          = "code_result"
+	PentesterToolName           = "pentester"
+	HackResultToolName          = "hack_result"
+	AdviceToolName              = "advice"
+	MemoristToolName            = "memorist"
+	MemoristResultToolName      = "memorist_result"
+	BrowserToolName             = "browser"
+	GoogleToolName              = "google"
+	DuckDuckGoToolName          = "duckduckgo"
+	TavilyToolName              = "tavily"
+	FirecrawlToolName           = "firecrawl"
+	TraversaalToolName          = "traversaal"
+	PerplexityToolName          = "perplexity"
+	SearxngToolName             = "searxng"
+	SploitusToolName            = "sploitus"
+	WebSearchToolName           = "web_search"
+	SearchToolName              = "search"
+	SearchResultToolName        = "search_result"
+	EnricherResultToolName      = "enricher_result"
+	SearchInMemoryToolName      = "search_in_memory"
+	SearchGuideToolName         = "search_guide"
+	StoreGuideToolName          = "store_guide"
+	SearchAnswerToolName        = "search_answer"
+	StoreAnswerToolName         = "store_answer"
+	SearchCodeToolName          = "search_code"
+	StoreCodeToolName           = "store_code"
+	GraphitiSearchToolName      = "graphiti_search"
+	ReportResultToolName        = "report_result"
+	SubtaskListToolName         = "subtask_list"
+	SubtaskPatchToolName        = "subtask_patch"
+	TerminalToolName            = "terminal"
+	FileToolName                = "file"
+	GetFlowStatusToolName       = "get_flow_status"
+	StopFlowToolName            = "stop_flow"
+	SubmitFlowInputToolName     = "submit_flow_input"
+	PatchFlowSubtasksToolName   = "patch_flow_subtasks"
+	WaitFlowCompletionToolName  = "wait_flow_completion"
+	GrowthSearchSourcesToolName = "growth_search_sources"
+	GrowthAddSourcesToolName    = "growth_add_sources"
+	GrowthJoinSourceToolName    = "growth_join_source"
+	GrowthSyncSourceToolName    = "growth_sync_source"
+	GrowthUpsertLeadsToolName   = "growth_upsert_leads"
+	GrowthGetProgressToolName   = "growth_get_progress"
+	GrowthDeliverLeadsToolName  = "growth_deliver_leads"
+	GrowthListLeadsToolName     = "growth_list_leads"
 )
 
 type ToolType int
@@ -96,48 +104,56 @@ func GetToolType(name string) ToolType {
 }
 
 var toolsTypeMapping = map[string]ToolType{
-	FinalyToolName:             BarrierToolType,
-	AskUserToolName:            BarrierToolType,
-	MaintenanceToolName:        AgentToolType,
-	MaintenanceResultToolName:  StoreAgentResultToolType,
-	CoderToolName:              AgentToolType,
-	CodeResultToolName:         StoreAgentResultToolType,
-	PentesterToolName:          AgentToolType,
-	HackResultToolName:         StoreAgentResultToolType,
-	AdviceToolName:             AgentToolType,
-	MemoristToolName:           AgentToolType,
-	MemoristResultToolName:     StoreAgentResultToolType,
-	BrowserToolName:            SearchNetworkToolType,
-	GoogleToolName:             SearchNetworkToolType,
-	DuckDuckGoToolName:         SearchNetworkToolType,
-	TavilyToolName:             SearchNetworkToolType,
-	FirecrawlToolName:          SearchNetworkToolType,
-	TraversaalToolName:         SearchNetworkToolType,
-	PerplexityToolName:         SearchNetworkToolType,
-	SearxngToolName:            SearchNetworkToolType,
-	SploitusToolName:           SearchNetworkToolType,
-	WebSearchToolName:          SearchNetworkToolType,
-	SearchToolName:             AgentToolType,
-	SearchResultToolName:       StoreAgentResultToolType,
-	EnricherResultToolName:     StoreAgentResultToolType,
-	SearchInMemoryToolName:     SearchVectorDbToolType,
-	SearchGuideToolName:        SearchVectorDbToolType,
-	StoreGuideToolName:         StoreVectorDbToolType,
-	SearchAnswerToolName:       SearchVectorDbToolType,
-	StoreAnswerToolName:        StoreVectorDbToolType,
-	SearchCodeToolName:         SearchVectorDbToolType,
-	StoreCodeToolName:          StoreVectorDbToolType,
-	GraphitiSearchToolName:     SearchVectorDbToolType,
-	ReportResultToolName:       StoreAgentResultToolType,
-	SubtaskListToolName:        StoreAgentResultToolType,
-	SubtaskPatchToolName:       StoreAgentResultToolType,
-	TerminalToolName:           EnvironmentToolType,
-	FileToolName:               EnvironmentToolType,
-	GetFlowStatusToolName:      EnvironmentToolType,
-	StopFlowToolName:           EnvironmentToolType,
-	SubmitFlowInputToolName:    EnvironmentToolType,
-	PatchFlowSubtasksToolName:  EnvironmentToolType,
-	WaitFlowCompletionToolName: EnvironmentToolType,
+	FinalyToolName:              BarrierToolType,
+	AskUserToolName:             BarrierToolType,
+	MaintenanceToolName:         AgentToolType,
+	MaintenanceResultToolName:   StoreAgentResultToolType,
+	CoderToolName:               AgentToolType,
+	CodeResultToolName:          StoreAgentResultToolType,
+	PentesterToolName:           AgentToolType,
+	HackResultToolName:          StoreAgentResultToolType,
+	AdviceToolName:              AgentToolType,
+	MemoristToolName:            AgentToolType,
+	MemoristResultToolName:      StoreAgentResultToolType,
+	BrowserToolName:             SearchNetworkToolType,
+	GoogleToolName:              SearchNetworkToolType,
+	DuckDuckGoToolName:          SearchNetworkToolType,
+	TavilyToolName:              SearchNetworkToolType,
+	FirecrawlToolName:           SearchNetworkToolType,
+	TraversaalToolName:          SearchNetworkToolType,
+	PerplexityToolName:          SearchNetworkToolType,
+	SearxngToolName:             SearchNetworkToolType,
+	SploitusToolName:            SearchNetworkToolType,
+	WebSearchToolName:           SearchNetworkToolType,
+	SearchToolName:              AgentToolType,
+	SearchResultToolName:        StoreAgentResultToolType,
+	EnricherResultToolName:      StoreAgentResultToolType,
+	SearchInMemoryToolName:      SearchVectorDbToolType,
+	SearchGuideToolName:         SearchVectorDbToolType,
+	StoreGuideToolName:          StoreVectorDbToolType,
+	SearchAnswerToolName:        SearchVectorDbToolType,
+	StoreAnswerToolName:         StoreVectorDbToolType,
+	SearchCodeToolName:          SearchVectorDbToolType,
+	StoreCodeToolName:           StoreVectorDbToolType,
+	GraphitiSearchToolName:      SearchVectorDbToolType,
+	ReportResultToolName:        StoreAgentResultToolType,
+	SubtaskListToolName:         StoreAgentResultToolType,
+	SubtaskPatchToolName:        StoreAgentResultToolType,
+	TerminalToolName:            EnvironmentToolType,
+	FileToolName:                EnvironmentToolType,
+	GetFlowStatusToolName:       EnvironmentToolType,
+	StopFlowToolName:            EnvironmentToolType,
+	SubmitFlowInputToolName:     EnvironmentToolType,
+	PatchFlowSubtasksToolName:   EnvironmentToolType,
+	WaitFlowCompletionToolName:  EnvironmentToolType,
+	GrowthSearchSourcesToolName: SearchNetworkToolType,
+	GrowthAddSourcesToolName:    EnvironmentToolType,
+	GrowthJoinSourceToolName:    EnvironmentToolType,
+	GrowthSyncSourceToolName:    SearchNetworkToolType,
+	GrowthUpsertLeadsToolName:   EnvironmentToolType,
+	GrowthGetProgressToolName:   EnvironmentToolType,
+	GrowthDeliverLeadsToolName:  EnvironmentToolType,
+	GrowthListLeadsToolName:     EnvironmentToolType,
 }
 
 var reflector = &jsonschema.Reflector{
@@ -208,7 +224,7 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Description: "Search in a different search engines in the internet and long-term memory " +
 			"by your complex question to the researcher team member, also you can add some instructions to get result " +
 			"in a specific format or structure or content type like " +
-			"code or command samples, manuals, guides, exploits, vulnerability details, repositories, libraries, etc.",
+			"community and group links, forum threads, audience research, manuals, guides, code samples, libraries, etc.",
 		Parameters: reflector.Reflect(&ComplexSearch{}),
 	},
 	SearchResultToolName: {
@@ -278,8 +294,7 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Name: WebSearchToolName,
 		Description: "Search the web through a unified engine. Provide a `query` and a `mode`: " +
 			"`links` for a quick list of source links with snippets, `answer` for a synthesized answer over " +
-			"live sources (default), `research` for deep multi-source analysis with reasoning, or `exploit` for " +
-			"exploit code, PoCs, and offensive tooling. The tool selects the best available search provider for " +
+			"live sources (default), or `research` for deep multi-source analysis with reasoning. The tool selects the best available search provider for " +
 			"that mode, retries transient failures, and automatically falls back to alternative providers, so you " +
 			"do NOT choose or name a specific engine. Queries must be short, keyword-focused, and in English.",
 		Parameters: reflector.Reflect(&WebSearchAction{}),
@@ -346,13 +361,13 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 	},
 	GraphitiSearchToolName: {
 		Name: GraphitiSearchToolName,
-		Description: "Search the Graphiti temporal knowledge graph for historical penetration testing context, " +
+		Description: "Search the Graphiti temporal knowledge graph for historical context of this engagement, " +
 			"including previous agent responses, tool execution records, discovered entities, and their relationships. " +
 			"Supports 7 search types: temporal_window (time-bounded search), entity_relationships (graph traversal from an entity), " +
 			"diverse_results (anti-redundancy search), episode_context (full agent reasoning and tool outputs), " +
 			"successful_tools (proven techniques), recent_context (latest findings), and entity_by_label (type-specific entity search). " +
-			"Use this to avoid repeating failed approaches, reuse successful exploitation techniques, understand entity relationships, " +
-			"and build on previous findings within the same penetration testing engagement.",
+			"Use this to avoid repeating failed approaches, reuse successful techniques, understand entity relationships, " +
+			"and build on previous findings within the same engagement.",
 		Parameters: reflector.Reflect(&GraphitiSearchAction{}),
 	},
 	MemoristToolName: {
@@ -387,12 +402,12 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 	},
 	PentesterToolName: {
 		Name:        PentesterToolName,
-		Description: "Call to pentester team member to perform a penetration test or looking for vulnerabilities and weaknesses",
+		Description: "Call the lead research specialist to read sources, qualify the people posting there, and save qualified leads with evidence",
 		Parameters:  reflector.Reflect(&PentesterAction{}),
 	},
 	HackResultToolName: {
 		Name:        HackResultToolName,
-		Description: "Send the penetration test result to the user with detailed report",
+		Description: "Send the lead research result to the user with detailed report",
 		Parameters:  reflector.Reflect(&HackResult{}),
 	},
 	AdviceToolName: {
@@ -446,6 +461,60 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"Returns an error if a task is currently running — cancel it first.",
 		Parameters: reflector.Reflect(&PatchFlowSubtasksAction{}),
 	},
+	GrowthSearchSourcesToolName: {
+		Name: GrowthSearchSourcesToolName,
+		Description: "Find lead sources and add them to the customer's source pool: public Telegram groups and channels " +
+			"by keyword (mode=search), links found elsewhere including forum threads and web pages (mode=resolve), " +
+			"or Telegram channels similar to a pool source (mode=recommend). Returns each source with its source_id, " +
+			"membership and how much of it has been read.",
+		Parameters: reflector.Reflect(&GrowthSearchSourcesAction{}),
+	},
+	GrowthAddSourcesToolName: {
+		Name: GrowthAddSourcesToolName,
+		Description: "Add sources the customer supplied by hand (Telegram links, @usernames, invite links, forum or web page URLs) " +
+			"to the source pool. They are deduplicated against sources already found and processed like them.",
+		Parameters: reflector.Reflect(&GrowthAddSourcesAction{}),
+	},
+	GrowthJoinSourceToolName: {
+		Name: GrowthJoinSourceToolName,
+		Description: "Join pool sources with the customer's Telegram account and record the outcome per source: joined, " +
+			"pending (join request awaits approval) or not_joinable. Already joined sources are skipped. " +
+			"Many public groups can be read without joining; join when reading fails or the group is private.",
+		Parameters: reflector.Reflect(&GrowthJoinSourceAction{}),
+	},
+	GrowthSyncSourceToolName: {
+		Name: GrowthSyncSourceToolName,
+		Description: "Read a Telegram pool source's public messages one page at a time (action=history); the read position " +
+			"is kept, so repeated calls continue where the last stopped. Each message has its sender id, username, time and link. " +
+			"action=user returns a sender's public profile. Web sources are read with the browser tool instead.",
+		Parameters: reflector.Reflect(&GrowthSyncSourceAction{}),
+	},
+	GrowthUpsertLeadsToolName: {
+		Name: GrowthUpsertLeadsToolName,
+		Description: "Save scored leads with their evidence. A person is stored once per customer however often they are saved: " +
+			"a repeat adds evidence and may raise the score. Returns per lead NEW, EXISTING, UPGRADED (watchlist to qualified) " +
+			"or REJECTED with the reason, and the progress line. Only qualified leads (score 7 or more) count toward the target.",
+		Parameters: reflector.Reflect(&GrowthUpsertLeadsAction{}),
+	},
+	GrowthGetProgressToolName: {
+		Name: GrowthGetProgressToolName,
+		Description: "Return the current round's progress from the database: qualified leads collected this round " +
+			"(new_leads_this_task), the target, watchlist leads, and the state of the source pool, followed by the line " +
+			"'PROGRESS: new_leads_this_task=<n> target=<t>'. Pass target to set the round's goal when the customer named one.",
+		Parameters: reflector.Reflect(&GrowthGetProgressAction{}),
+	},
+	GrowthDeliverLeadsToolName: {
+		Name: GrowthDeliverLeadsToolName,
+		Description: "Close the round: mark the best qualified leads up to the target as delivered and return the list " +
+			"with evidence. Delivered people are never delivered again in a later round. If the target is not reached it " +
+			"delivers nothing and says how many more are needed, unless allow_partial is set.",
+		Parameters: reflector.Reflect(&GrowthDeliverLeadsAction{}),
+	},
+	GrowthListLeadsToolName: {
+		Name:        GrowthListLeadsToolName,
+		Description: "List saved leads with their evidence, read-only, for reporting.",
+		Parameters:  reflector.Reflect(&GrowthListLeadsAction{}),
+	},
 	WaitFlowCompletionToolName: {
 		Name: WaitFlowCompletionToolName,
 		Description: "Block until the currently running automation task completes (or the timeout expires). " +
@@ -467,7 +536,8 @@ func getMessageType(name string) database.MsglogType {
 		return database.MsglogTypeBrowser
 	case MemoristToolName, SearchToolName, GoogleToolName, DuckDuckGoToolName, TavilyToolName, FirecrawlToolName,
 		TraversaalToolName, PerplexityToolName, SearxngToolName, SploitusToolName, WebSearchToolName,
-		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName:
+		SearchGuideToolName, SearchAnswerToolName, SearchCodeToolName, SearchInMemoryToolName, GraphitiSearchToolName,
+		GrowthSearchSourcesToolName, GrowthSyncSourceToolName:
 		return database.MsglogTypeSearch
 	case AdviceToolName:
 		return database.MsglogTypeAdvice
@@ -484,7 +554,10 @@ func getMessageResultFormat(name string) database.MsglogResultFormat {
 	switch name {
 	case TerminalToolName:
 		return database.MsglogResultFormatTerminal
-	case FileToolName, BrowserToolName:
+	case FileToolName, BrowserToolName,
+		GrowthSearchSourcesToolName, GrowthAddSourcesToolName, GrowthJoinSourceToolName, GrowthSyncSourceToolName,
+		GrowthUpsertLeadsToolName, GrowthGetProgressToolName, GrowthDeliverLeadsToolName, GrowthListLeadsToolName:
+		// The growth tools answer in JSON, which the Markdown view runs together.
 		return database.MsglogResultFormatPlain
 	default:
 		return database.MsglogResultFormatMarkdown
