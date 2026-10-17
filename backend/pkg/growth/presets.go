@@ -5,7 +5,10 @@ package growth
 // the agents and the judgement model read, so it is English whatever the interface
 // language; the interface names a preset by its ID.
 type ProfilePreset struct {
-	ID      string  `json:"id"`
+	ID string `json:"id"`
+	// Default marks the preset the form starts from and leads are judged by while the
+	// owner has saved no profile.
+	Default bool    `json:"default"`
 	Profile Profile `json:"profile"`
 }
 
@@ -14,23 +17,8 @@ type ProfilePreset struct {
 func ProfilePresets() []ProfilePreset {
 	return []ProfilePreset{
 		{
-			ID: "game_publisher",
-			Profile: Profile{
-				Pitch:         "A mobile or PC game looking for players who play similar games and are open to a new one.",
-				Genre:         "Mobile and PC games",
-				DefaultTarget: 50,
-				Signals: []string{
-					"looking for a new game", "any game like", "bored of", "quitting", "top up", "skins",
-					"battle pass", "guide", "build", "rank",
-				},
-				Excludes: []string{
-					"accounts selling or boosting services", "bots and spam", "developers advertising their own game",
-				},
-				ContactTypes: []string{ContactPlatformHandle},
-			},
-		},
-		{
-			ID: "licensed_casino",
+			ID:      "licensed_casino",
+			Default: true,
 			Profile: Profile{
 				Pitch: "A licensed, regulated online gaming operator (casino games and sports) serving the regions " +
 					"its license covers. Leads are adult players who already discuss online gaming platforms in " +
@@ -59,5 +47,31 @@ func ProfilePresets() []ProfilePreset {
 				ContactTypes: []string{ContactPlatformHandle},
 			},
 		},
+		{
+			ID: "game_publisher",
+			Profile: Profile{
+				Pitch:         "A mobile or PC game looking for players who play similar games and are open to a new one.",
+				Genre:         "Mobile and PC games",
+				DefaultTarget: 50,
+				Signals: []string{
+					"looking for a new game", "any game like", "bored of", "quitting", "top up", "skins",
+					"battle pass", "guide", "build", "rank",
+				},
+				Excludes: []string{
+					"accounts selling or boosting services", "bots and spam", "developers advertising their own game",
+				},
+				ContactTypes: []string{ContactPlatformHandle},
+			},
+		},
 	}
+}
+
+// DefaultProfile is the profile of the default preset.
+func DefaultProfile() Profile {
+	for _, p := range ProfilePresets() {
+		if p.Default {
+			return p.Profile
+		}
+	}
+	return Profile{}
 }

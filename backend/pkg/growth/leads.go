@@ -124,10 +124,7 @@ type LeadFilter struct {
 func (s *Service) UpsertLeads(ctx context.Context, scope Scope, inputs []LeadInput) ([]LeadResult, error) {
 	sources := map[int64]database.GrowthSource{}
 	results := make([]LeadResult, 0, len(inputs))
-	scoring := DefaultScoring
-	if v, err := s.GetProfile(ctx, scope.UserID); err == nil {
-		scoring = v.ScoringOrDefault()
-	}
+	scoring := s.judgingProfile(ctx, scope.UserID).ScoringOrDefault()
 
 	var sc *screener
 	judge := func(src database.GrowthSource, in LeadInput) (int, bool, error) {

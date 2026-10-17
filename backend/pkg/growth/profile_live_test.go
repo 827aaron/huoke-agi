@@ -62,22 +62,6 @@ func (m *memoryKnowledge) DeleteUserDocument(ctx context.Context, userID int64, 
 	return nil
 }
 
-func gameProfile() Profile {
-	return Profile{
-		Name:          "Starfall Studio",
-		Pitch:         " A fair MMORPG with no pay-to-win ",
-		Games:         []string{"Starfall Online"},
-		Genre:         "MMORPG",
-		Competitors:   []string{"Rival Saga"},
-		Regions:       []string{"SEA", " "},
-		Languages:     []string{"英语", "泰语"},
-		DefaultTarget: 50,
-		Signals:       []string{"s1", "s2", "s3", "s4", "s5", "s6"},
-		Excludes:      []string{"account sellers"},
-		Notes:         "Players who quit Rival Saga after the last patch are the best fit.",
-	}
-}
-
 func TestProfile_SaveProfile_WritesTheFileAndSeedsTheLists(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
@@ -148,8 +132,12 @@ func TestProfile_WithProfile_PutsTheCompactBlockFirstOnce(t *testing.T) {
 	w.svc.cfg.DataDir = t.TempDir()
 
 	input, res := w.svc.WithProfile(ctx, w.user, "find 50 players", nil)
-	assert.Equal(t, "find 50 players", input, "no profile, no change")
-	assert.Empty(t, res)
+	require.True(t, strings.HasPrefix(input, "<business_profile>\nOffer: A licensed, regulated online gaming operator"), input)
+	assert.Contains(t, input, "Signal words: deposit experience; withdrawal speed; bonus terms; cashback; VIP program; odds; "+
+		"platform reliability; looking for a new platform; platform recommendation\n", "nothing holds the rest, so nothing is cut")
+	assert.NotContains(t, input, "Full profile:")
+	assert.True(t, strings.HasSuffix(input, "</business_profile>\n\nfind 50 players"), input)
+	assert.Empty(t, res, "the default preset has no file")
 
 	_, err := w.svc.SaveProfile(ctx, w.user, gameProfile())
 	require.NoError(t, err)

@@ -42,6 +42,7 @@ func TestLeads_UpsertLeads_OneLeadPerPersonAcrossFlows(t *testing.T) {
 
 func TestLeads_UpsertLeads_TierFollowsTheScore(t *testing.T) {
 	w := newWorld(t)
+	w.judgeAsAGamePublisher(t)
 	ctx := context.Background()
 	scope := w.seedTask(t)
 	src := w.mustAddTelegramGroup(t, scope, tgGroup("901", "card_games", "Cards"))
@@ -74,6 +75,7 @@ func TestLeads_UpsertLeads_TierFollowsTheScore(t *testing.T) {
 
 func TestLeads_UpsertLeads_JudgesTheExcerptsOfAWebLeadOnce(t *testing.T) {
 	w := newWorld(t)
+	w.judgeAsAGamePublisher(t)
 	ctx := context.Background()
 	scope := w.seedTask(t)
 	jev := signalJev(t)
@@ -232,6 +234,7 @@ func TestLeads_UpsertLeads_WhenJevFailsOnTheExcerpts(t *testing.T) {
 
 	t.Run("an unreachable Jev leaves the agent's score", func(t *testing.T) {
 		w := newWorld(t)
+		w.judgeAsAGamePublisher(t)
 		gone := httptest.NewServer(http.NotFoundHandler())
 		gone.Close()
 		w.svc.cfg.TypeSafeAPIURL = gone.URL

@@ -238,10 +238,7 @@ func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (Pro
 	if err != nil {
 		return ProfileView{}, err
 	}
-	var prev Profile
-	if v, err := s.GetProfile(ctx, userID); err == nil {
-		prev = v.Profile
-	}
+	prev := s.judgingProfile(ctx, userID)
 	row, err := s.db.UpsertGrowthProfile(ctx, database.UpsertGrowthProfileParams{UserID: userID, Profile: raw})
 	if err != nil {
 		return ProfileView{}, fmt.Errorf("failed to store the business profile: %w", err)
@@ -361,6 +358,11 @@ func (s *Service) seedProfileKnowledge(ctx context.Context, userID int64, p Prof
 // agent call carries it, summarised, in the execution context; long lists and text are
 // cut here and read in full from the file or with search_guide.
 func (p Profile) Compact() string {
+	return p.compact(true)
+}
+
+// compact without the file is the whole profile, since nothing else holds what it cuts.
+func (p Profile) compact(withFile bool) string {
 	var b strings.Builder
 	cut := false
 	line := func(label, value string) {
@@ -369,7 +371,10 @@ func (p Profile) Compact() string {
 		}
 	}
 	list := func(label string, items []string, sep string) {
-		shown := head(items, compactItems)
+		shown := items
+		if withFile {
+			shown = head(items, compactItems)
+		}
 		text := strings.Join(shown, sep)
 		if len(shown) < len(items) {
 			text += sep + "…"
@@ -378,7 +383,10 @@ func (p Profile) Compact() string {
 		line(label, text)
 	}
 	text := func(label, value string) {
-		short := truncateRunes(value, compactRunes)
+		short := value
+		if withFile {
+			short = truncateRunes(value, compactRunes)
+		}
 		if short != value {
 			cut = true
 		}
@@ -402,11 +410,14 @@ func (p Profile) Compact() string {
 	if !slices.Equal(p.ContactTypes, []string{ContactPlatformHandle}) {
 		line("Contacts to find", strings.Join(p.ContactTypes, ", "))
 	}
-	fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, ProfileResourcePath)
-	if cut {
-		b.WriteString(" (the lines above are cut; read the file, or search_guide \"business profile\")")
+	if withFile {
+		fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, ProfileResourcePath)
+		if cut {
+			b.WriteString(" (the lines above are cut; read the file, or search_guide \"business profile\")")
+		}
+		b.WriteString("\n")
 	}
-	b.WriteString("\n</business_profile>")
+	b.WriteString("</business_profile>")
 	return b.String()
 }
 
@@ -458,8 +469,8 @@ func head(items []string, n int) []string {
 }
 
 // WithProfile puts the owner's compact profile at the start of input, replacing a block
-// already there, and adds the profile file to resources. Without a saved profile both
-// come back unchanged.
+// already there, and adds the profile file to resources. Without a saved profile the
+// block is DefaultProfile's and there is no file to add.
 func (s *Service) WithProfile(
 	ctx context.Context,
 	userID int64,
@@ -467,14 +478,24 @@ func (s *Service) WithProfile(
 	res []database.UserResource,
 ) (string, []database.UserResource) {
 	v, err := s.GetProfile(ctx, userID)
-	if err != nil {
-		if !errors.Is(err, ErrNoProfile) {
-			logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).Warn("task started without the business profile")
-		}
+	switch {
+	case errors.Is(err, ErrNoProfile):
+		return DefaultProfile().compact(false) + "\n\n" + strings.TrimSpace(profileBlock.ReplaceAllString(input, "")), res
+	case err != nil:
+		logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).Warn("task started without the business profile")
 		return input, res
 	}
 	input = v.Compact() + "\n\n" + strings.TrimSpace(profileBlock.ReplaceAllString(input, ""))
 	return input, s.WithProfileResource(ctx, userID, res)
+}
+
+// judgingProfile is the profile leads are judged by: the owner's, or DefaultProfile
+// when they have none or it cannot be read.
+func (s *Service) judgingProfile(ctx context.Context, userID int64) Profile {
+	if v, err := s.GetProfile(ctx, userID); err == nil {
+		return v.Profile
+	}
+	return DefaultProfile()
 }
 
 // WithProfileResource adds the profile file to res unless it is there already.
