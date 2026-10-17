@@ -17,6 +17,8 @@ const lead = (id: number, patch: Partial<GrowthLead> = {}): GrowthLead => ({
     first_task_id: 1,
     id,
     last_active_at: null,
+    note: '',
+    origin: 'ai',
     platform: 'telegram',
     platform_user_id: String(id),
     profile: null,

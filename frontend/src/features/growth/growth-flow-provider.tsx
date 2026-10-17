@@ -31,6 +31,7 @@ interface GrowthFlowContextValue {
     leads: GrowthLead[];
     leadsError: unknown;
     profile: GrowthProfile | null;
+    refetchLeads: () => Promise<void>;
     refetchSources: () => Promise<void>;
     run: GrowthRun | null;
     sources: GrowthSource[];
@@ -45,6 +46,7 @@ const EMPTY: GrowthFlowContextValue = {
     leads: [],
     leadsError: null,
     profile: null,
+    refetchLeads: async () => {},
     refetchSources: async () => {},
     run: null,
     sources: [],
@@ -74,6 +76,7 @@ export function GrowthFlowProvider({ children }: { children: ReactNode }) {
             leads: leadsState.data ?? [],
             leadsError: leadsState.error,
             profile: profilesState.data?.[0] ?? null,
+            refetchLeads: leadsState.refetch,
             refetchSources: sourcesState.refetch,
             run,
             sources: sourcesState.data?.sources ?? [],

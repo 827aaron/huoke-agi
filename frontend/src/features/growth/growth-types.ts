@@ -85,6 +85,9 @@ export interface GrowthLead {
     first_task_id: number;
     id: number;
     last_active_at: null | string;
+    // The owner's own words about the lead; empty when none.
+    note: string;
+    origin: GrowthLeadOrigin;
     platform: GrowthPlatform;
     platform_user_id: string;
     profile: GrowthLeadProfile | null;
@@ -114,6 +117,20 @@ export interface GrowthLeadEvidence {
     source_title: string;
 }
 
+// A lead the owner added by hand is scored at the qualified line and never screened.
+export interface GrowthLeadInput {
+    contacts?: GrowthLeadContact[];
+    display_name?: string;
+    flow_id?: number;
+    // Account id, username or profile link on the platform.
+    handle: string;
+    note?: string;
+    platform: GrowthPlatform;
+    tier?: GrowthLeadTier;
+}
+
+export type GrowthLeadOrigin = 'ai' | 'manual';
+
 // Public-profile enrichment; every field is optional and an absent one is not rendered.
 export interface GrowthLeadProfile {
     bio?: string;
@@ -125,6 +142,13 @@ export interface GrowthLeadProfile {
 export type GrowthLeadSignal = 'competitor' | 'genre_match' | 'paying' | 'player' | 'recent' | 'switching';
 
 export type GrowthLeadTier = 'qualified' | 'watch';
+
+// Omitted fields stay as they are; contacts replace the whole list.
+export interface GrowthLeadUpdate {
+    contacts?: GrowthLeadContact[];
+    note?: string;
+    tier?: GrowthLeadTier;
+}
 
 // The relay's id is what the setting stores; name is its display name, when it has one.
 export interface GrowthModelOption {
@@ -352,6 +376,8 @@ export interface GrowthSource {
     leads_count: number;
     link: string;
     members_count: null | number;
+    // The owner's own words about the source; empty when none.
+    note: string;
     origin: GrowthSourceOrigin;
     platform: GrowthPlatform;
     source_id: string;
@@ -366,7 +392,7 @@ export interface GrowthSourceAddResult {
     source?: GrowthSource;
 }
 
-export type GrowthSourceJoinStatus = 'joined' | 'not_joined' | 'pending_approval' | 'unjoinable';
+export type GrowthSourceJoinStatus = 'direct' | 'joined' | 'not_joined' | 'pending_approval' | 'unjoinable';
 
 export type GrowthSourceOrigin = 'ai' | 'manual';
 
@@ -378,6 +404,12 @@ export interface GrowthSourcesResponse {
     sources: GrowthSource[];
     total: number;
     warnings: GrowthJoinWarning[] | null;
+}
+
+// Omitted fields stay as they are; the link cannot change.
+export interface GrowthSourceUpdate {
+    note?: string;
+    title?: string;
 }
 
 // Telegram sign-in is a short conversation: the phone gets a code, and an account with two-step

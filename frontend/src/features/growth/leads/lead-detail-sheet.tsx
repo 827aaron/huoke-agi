@@ -1,4 +1,4 @@
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Pencil, Trash2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,10 +13,12 @@ import { contactsText } from './leads-csv';
 
 interface LeadDetailSheetProps {
     lead: GrowthLead | null;
+    onDelete: (lead: GrowthLead) => void;
+    onEdit: (lead: GrowthLead) => void;
     onOpenChange: (isOpen: boolean) => void;
 }
 
-function LeadDetailSheet({ lead, onOpenChange }: LeadDetailSheetProps) {
+function LeadDetailSheet({ lead, onDelete, onEdit, onOpenChange }: LeadDetailSheetProps) {
     const profile = lead?.profile;
     const hasProfile =
         !!profile &&
@@ -34,6 +36,7 @@ function LeadDetailSheet({ lead, onOpenChange }: LeadDetailSheetProps) {
                             <SheetTitle>{lead.display_name}</SheetTitle>
                             <SheetDescription className="flex flex-wrap items-center gap-2">
                                 {lead.username && <span>@{lead.username}</span>}
+                                {lead.origin === 'manual' && <span>{copy.leads.manual}</span>}
                                 <LeadScoreBadge lead={lead} />
                                 {lead.delivered_at && (
                                     <span>
@@ -44,6 +47,30 @@ function LeadDetailSheet({ lead, onOpenChange }: LeadDetailSheetProps) {
                         </SheetHeader>
 
                         <div className="flex flex-col gap-6 px-4 pb-6">
+                            <div className="flex gap-2">
+                                <Button
+                                    onClick={() => onEdit(lead)}
+                                    size="sm"
+                                    variant="outline"
+                                >
+                                    <Pencil />
+                                    {copy.action.edit}
+                                </Button>
+                                <Button
+                                    onClick={() => onDelete(lead)}
+                                    size="sm"
+                                    variant="outline"
+                                >
+                                    <Trash2 />
+                                    {copy.action.delete}
+                                </Button>
+                            </div>
+                            {lead.note && (
+                                <section className="flex flex-col gap-2">
+                                    <h3 className="text-sm font-semibold">{copy.leads.form.note}</h3>
+                                    <p className="text-sm whitespace-pre-wrap">{lead.note}</p>
+                                </section>
+                            )}
                             {!!lead.contacts?.length && (
                                 <section className="flex flex-col gap-2">
                                     <h3 className="text-sm font-semibold">{copy.leads.detail.contacts}</h3>

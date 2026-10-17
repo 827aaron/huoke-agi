@@ -6,6 +6,8 @@ import type {
     GrowthEmailResult,
     GrowthJoinWarning,
     GrowthLead,
+    GrowthLeadInput,
+    GrowthLeadUpdate,
     GrowthModelsInput,
     GrowthModelsResponse,
     GrowthProfile,
@@ -21,8 +23,10 @@ import type {
     GrowthSettingInput,
     GrowthSettingKind,
     GrowthSettingsResponse,
+    GrowthSource,
     GrowthSourcesAddResponse,
     GrowthSourcesResponse,
+    GrowthSourceUpdate,
     GrowthTelegramLoginStep,
 } from './growth-types';
 
@@ -32,6 +36,7 @@ import {
     fromWireRuns,
     fromWireSource,
     fromWireSourceAddResult,
+    toWireTier,
     type WireLead,
     type WireRun,
     type WireSource,
@@ -81,12 +86,24 @@ const live = {
     clearSetting: async (kind: GrowthSettingKind) => {
         await api.delete(`/growth/settings/${kind}`);
     },
+    // Answers 409 when the platform already has a lead with that handle.
+    createLead: async (input: GrowthLeadInput) => {
+        await api.post('/growth/leads/', { ...input, tier: input.tier && toWireTier(input.tier) });
+    },
     createProfile: async (input: GrowthProfileInput) =>
         unwrapApiResponse(await api.post<GrowthProfile>('/growth/profiles', input)),
     createSchedule: async (input: GrowthScheduleInput) =>
         unwrapApiResponse(await api.post<GrowthSchedule>('/growth/schedules', input)),
+    // Removes the lead with its evidence and scores, delivered or not.
+    deleteLead: async (id: number) => {
+        await api.delete(`/growth/leads/${id}`);
+    },
     deleteSchedule: async (id: number) => {
         await api.delete(`/growth/schedules/${id}`);
+    },
+    // Leads found through the source and their evidence are kept.
+    deleteSource: async (id: number) => {
+        await api.delete(`/growth/sources/${id}`);
     },
     finishRemoteLogin: async (sessionId: string) =>
         unwrapApiResponse(await api.post<GrowthAccount>(`/growth/accounts/remote-login/${sessionId}/finish`)),
@@ -152,10 +169,15 @@ const live = {
         unwrapApiResponse(await api.post<GrowthEmailResult>('/growth/settings/test-email', { language })),
     testSetting: async (kind: GrowthSettingKind) =>
         unwrapApiResponse(await api.post<GrowthSetting>(`/growth/settings/${kind}/test`)),
+    updateLead: async (id: number, input: GrowthLeadUpdate) => {
+        await api.put(`/growth/leads/${id}`, { ...input, tier: input.tier && toWireTier(input.tier) });
+    },
     updateProfile: async (id: number, input: GrowthProfileInput) =>
         unwrapApiResponse(await api.put<GrowthProfile>(`/growth/profiles/${id}`, input)),
     updateSchedule: async (id: number, input: GrowthScheduleInput) =>
         unwrapApiResponse(await api.put<GrowthSchedule>(`/growth/schedules/${id}`, input)),
+    updateSource: async (id: number, input: GrowthSourceUpdate): Promise<GrowthSource> =>
+        fromWireSource(unwrapApiResponse(await api.put<WireSource>(`/growth/sources/${id}`, input))),
 };
 
 export const growthApi: typeof live = isMock ? growthMock : live;

@@ -10,7 +10,7 @@ import RemoteLoginDialog from './accounts/remote-login-dialog';
 import { growthApi } from './growth-api';
 import GrowthProgressBar from './progress/growth-progress-bar';
 
-const server = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn() }));
+const server = vi.hoisted(() => ({ delete: vi.fn(), get: vi.fn(), post: vi.fn(), put: vi.fn() }));
 const flow = vi.hoisted(() => ({ run: null as GrowthRun | null }));
 
 vi.mock('@/lib/axios', async (importOriginal) => ({
@@ -99,6 +99,8 @@ const leads = [
         evidence: [],
         flow_id: 1,
         lead_id: 23,
+        note: 'met at the Bangkok expo',
+        origin: 'manual',
         platform: 'telegram',
         platform_user_id: '9003',
         score: 8,
@@ -124,6 +126,7 @@ const sources = [
         last_synced_at: '2026-10-17T14:12:00Z',
         link: 'https://t.me/myslots',
         member_count: 1200,
+        note: 'busy at night',
         origin: 'ai',
         platform: 'telegram',
         qualified_leads: 1,
@@ -258,6 +261,8 @@ describe('growth wire', () => {
             first_task_id: 11,
             id: 21,
             last_active_at: '2026-10-17T08:00:00Z',
+            note: '',
+            origin: 'ai',
             platform: 'telegram',
             platform_user_id: '9001',
             profile: null,
@@ -281,21 +286,22 @@ describe('growth wire', () => {
             tier: 'watch',
             username: null,
         });
-        expect(bare?.id).toBe(23);
+        expect(bare).toMatchObject({ id: 23, note: 'met at the Bangkok expo', origin: 'manual' });
     });
 
-    it('reads the sources with the join states the pages know', async () => {
+    it('reads the sources, a forum as read without joining', async () => {
         expect(await growthApi.listSources()).toEqual({
             sources: [
                 {
                     created_at: '',
                     id: 3,
-                    join_status: 'unjoinable',
+                    join_status: 'direct',
                     kind: 'group',
                     last_read_at: null,
                     leads_count: 0,
                     link: 'https://forum.example.my/slots',
                     members_count: null,
+                    note: '',
                     origin: 'manual',
                     platform: 'web',
                     source_id: 'https://forum.example.my/slots',
@@ -310,6 +316,7 @@ describe('growth wire', () => {
                     leads_count: 1,
                     link: 'https://t.me/myslots',
                     members_count: 1200,
+                    note: 'busy at night',
                     origin: 'ai',
                     platform: 'telegram',
                     source_id: 'myslots',
@@ -319,6 +326,24 @@ describe('growth wire', () => {
             total: 0,
             warnings: null,
         });
+    });
+
+    it('takes which sources can be joined from the server when it says so', async () => {
+        serve({
+            leads: null,
+            runs: null,
+            sources: [
+                { ...sources[1], joinable: false, source_id: 5 },
+                { ...sources[0], join_status: 'not_joined', joinable: true, source_id: 6 },
+            ],
+        });
+
+        const { sources: pool } = await growthApi.listSources();
+
+        expect(pool.map(({ id, join_status }) => [id, join_status])).toEqual([
+            [5, 'direct'],
+            [6, 'not_joined'],
+        ]);
     });
 
     it('reads an empty pool the server sends as null', async () => {
@@ -345,6 +370,39 @@ describe('growth wire', () => {
             ['https://t.me/myslots', 'existing', 4],
             ['not a link', 'invalid', undefined],
         ]);
+    });
+
+    it('sends the pool edits with the tier names the server knows', async () => {
+        server.put.mockResolvedValueOnce(ok({ ...sources[1], note: 'quiet now', title: 'MY slots chat' }));
+        server.put.mockResolvedValueOnce(ok(leads[1]));
+        server.post.mockResolvedValue(ok(leads[2]));
+        server.delete.mockResolvedValue(ok(null));
+
+        const source = await growthApi.updateSource(4, { note: 'quiet now', title: 'MY slots chat' });
+        await growthApi.updateLead(22, { note: 'asked about rebates', tier: 'watch' });
+        await growthApi.createLead({ handle: '@kopi', platform: 'telegram', tier: 'watch' });
+        await growthApi.deleteLead(22);
+
+        expect([source.id, source.title, source.note, source.join_status]).toEqual([
+            4,
+            'MY slots chat',
+            'quiet now',
+            'pending_approval',
+        ]);
+        expect(server.put).toHaveBeenNthCalledWith(1, '/growth/sources/4', {
+            note: 'quiet now',
+            title: 'MY slots chat',
+        });
+        expect(server.put).toHaveBeenNthCalledWith(2, '/growth/leads/22', {
+            note: 'asked about rebates',
+            tier: 'watchlist',
+        });
+        expect(server.post).toHaveBeenCalledWith('/growth/leads/', {
+            handle: '@kopi',
+            platform: 'telegram',
+            tier: 'watchlist',
+        });
+        expect(server.delete).toHaveBeenCalledWith('/growth/leads/22');
     });
 
     it('shows a running round from the server on the progress bar', async () => {
