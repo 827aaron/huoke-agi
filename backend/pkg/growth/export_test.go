@@ -27,7 +27,7 @@ func TestExport_LeadsCSV_OneRowPerLeadWithItsFirstEvidence(t *testing.T) {
 			ID: 2, Platform: "web", PlatformUserID: "forum.example.com/u/7", IdentityKind: "profile_url", Score: 7, Tier: "qualified",
 			Contacts: []Contact{{Type: "email", Value: "ann@example.test"}, {Type: "messenger", Value: "WhatsApp +66 81 234 5678"}},
 		},
-	})
+	}, "")
 
 	require.True(t, strings.HasPrefix(string(data), "\xEF\xBB\xBF"))
 	rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(string(data), "\xEF\xBB\xBF"))).ReadAll()
@@ -41,4 +41,12 @@ func TestExport_LeadsCSV_OneRowPerLeadWithItsFirstEvidence(t *testing.T) {
 	assert.Equal(t, "https://forum.example.com/u/7", rows[2][5])
 	assert.Equal(t, "0", rows[2][12])
 	assert.Equal(t, "email: ann@example.test; messenger: WhatsApp +66 81 234 5678", rows[2][14])
+}
+
+func TestExport_LeadsCSV_WritesItsOwnTextInTheCustomersLanguage(t *testing.T) {
+	data := LeadsCSV([]LeadView{{ID: 1, Platform: "telegram", PlatformUserID: "42", Score: 9}}, "Chinese")
+	rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(string(data), "\xEF\xBB\xBF"))).ReadAll()
+	require.NoError(t, err)
+	assert.Equal(t, "lead_id", rows[0][0], "the header stays machine-readable")
+	assert.Equal(t, "仅平台账号", rows[1][14])
 }

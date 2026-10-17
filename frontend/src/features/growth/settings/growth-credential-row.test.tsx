@@ -11,6 +11,7 @@ vi.mock('../growth-api', () => ({
     growthApi: {
         listModels: vi.fn(async () => [{ id: 'typesafe/jev-latest' }, { id: 'typesafe/jev-2026-09' }]),
         saveSetting: vi.fn(async () => savedProxy),
+        testEmail: vi.fn(async () => ({ sent: true, to: ['ops@example.com'] })),
         testSetting: vi.fn(async () => savedProxy),
     },
 }));
@@ -94,6 +95,22 @@ describe('GrowthCredentialCard', () => {
         );
     });
 
+    it('asks for the test email in the language of the page', async () => {
+        renderCard(
+            setting({
+                fields: { notify_emails: 'ops@example.com' },
+                kind: 'email',
+                platform_smtp: true,
+                source: 'database',
+                status: 'connected',
+            }),
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: '发送测试邮件' }));
+
+        await waitFor(() => expect(growthApi.testEmail).toHaveBeenCalledWith('Chinese'));
+    });
+
     it('asks a relay for its models with the saved key and offers them to pick', async () => {
         renderCard(
             setting({
@@ -118,6 +135,54 @@ describe('GrowthCredentialCard', () => {
         );
         expect(await screen.findByRole('combobox', { name: '模型' })).toHaveTextContent('选择模型');
         expect(screen.getByLabelText('OpenRouter 密钥')).toHaveValue('');
+    });
+
+    it('lists OpenRouter embedding models with the key the LLM card lends', async () => {
+        renderCard(
+            setting({ kind: 'embedding', provider: 'openrouter', providers: ['openai', 'openrouter', 'ollama'] }),
+        );
+
+        expect(screen.getByLabelText('OpenRouter 密钥')).toHaveAttribute(
+            'placeholder',
+            '留空则复用大模型的 OpenRouter 密钥',
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: '获取模型' }));
+
+        await waitFor(() =>
+            expect(growthApi.listModels).toHaveBeenCalledWith('embedding', {
+                api_key: '',
+                provider: 'openrouter',
+                server_url: '',
+            }),
+        );
+    });
+
+    it('saves the newest Jev alias in place of a pinned model', async () => {
+        renderCard(
+            setting({
+                fields: { api_key: '••••7c1e', api_url: '', model: 'typesafe/jev-1.13', threshold: '0.6' },
+                kind: 'screening',
+                provider: 'openrouter',
+                providers: ['typesafe', 'openrouter', 'custom'],
+                source: 'database',
+                status: 'connected',
+            }),
+        );
+
+        fireEvent.click(screen.getByRole('button', { name: '更换密钥' }));
+        fireEvent.click(screen.getByRole('button', { name: '改回最新' }));
+
+        expect(screen.getByLabelText('模型')).toHaveValue('typesafe/jev-latest');
+
+        fireEvent.click(screen.getByRole('button', { name: /保存/ }));
+
+        await waitFor(() =>
+            expect(growthApi.saveSetting).toHaveBeenCalledWith('screening', {
+                fields: expect.objectContaining({ model: 'typesafe/jev-latest' }),
+                provider: 'openrouter',
+            }),
+        );
     });
 
     it('sends no model to a server whose Jev setting has none', async () => {

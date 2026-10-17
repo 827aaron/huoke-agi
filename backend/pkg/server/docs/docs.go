@@ -10811,6 +10811,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "providers": {
+                    "description": "Providers is empty, never absent, for a kind with a single provider.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -13714,6 +13715,11 @@ const docTemplate = `{
         "services.growthTestEmailRequest": {
             "type": "object",
             "properties": {
+                "language": {
+                    "description": "Language names the language of the message, as the agents name it (\"Chinese\");\nempty takes the language of the user's newest task.",
+                    "type": "string",
+                    "example": "Chinese"
+                },
                 "to": {
                     "type": "string"
                 }

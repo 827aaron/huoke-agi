@@ -456,8 +456,11 @@ RETURNING *;
 
 -- name: GetOverdueGrowthRuns :many
 SELECT * FROM growth_runs
-WHERE status = 'running' AND deadline_at IS NOT NULL AND deadline_at <= sqlc.arg(now)::timestamptz
+WHERE deadline_at IS NOT NULL AND deadline_closed_at IS NULL AND deadline_at <= sqlc.arg(now)::timestamptz
 ORDER BY deadline_at, id;
+
+-- name: CloseGrowthRunDeadline :exec
+UPDATE growth_runs SET deadline_closed_at = now() WHERE id = sqlc.arg(id) AND deadline_closed_at IS NULL;
 
 -- name: CreateGrowthSchedule :one
 INSERT INTO growth_schedules (

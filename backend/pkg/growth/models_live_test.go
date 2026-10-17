@@ -117,3 +117,23 @@ func TestModels_ListModels_SaysWhyTheListIsMissing(t *testing.T) {
 	_, err = w.svc.ListModels(ctx, w.user, SettingTelegram, "", nil)
 	assert.ErrorIs(t, err, ErrInvalidSetting)
 }
+
+func TestModels_ListModels_ListsOpenRouterEmbeddingsWithTheLLMsKey(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	stub := startModelsStub(t)
+	_, err := w.svc.SaveSetting(ctx, w.user, SettingLLM, "custom", map[string]string{
+		"api_key": "sk-or-llm", "server_url": "https://openrouter.ai/api/v1",
+	})
+	require.NoError(t, err)
+
+	got, err := w.svc.ListModels(ctx, w.user, SettingEmbedding, embeddingOpenRouter, map[string]string{"server_url": stub.URL + "/api/v1/"})
+	require.NoError(t, err)
+	assert.Len(t, got, 4)
+	path, header := stub.last()
+	assert.Equal(t, "/api/v1/embeddings/models", path)
+	assert.Equal(t, "Bearer sk-or-llm", header.Get("Authorization"))
+
+	_, err = w.svc.ListModels(ctx, w.user, SettingEmbedding, "jina", map[string]string{"api_key": "k"})
+	assert.ErrorContains(t, err, "jina embedding models are typed by name")
+}

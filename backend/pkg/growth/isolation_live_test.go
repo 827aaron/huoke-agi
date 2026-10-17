@@ -60,7 +60,7 @@ func TestRunner_Deliver_OneCustomersDeliveryLeavesTheOthersLeadOpen(t *testing.T
 	_, err := a.svc.SetTarget(ctx, scopeA, 1)
 	require.NoError(t, err)
 	a.mustSaveQualified(t, scopeA, srcA, 1, 1)
-	d, err := a.svc.Deliver(ctx, scopeA, false)
+	d, err := a.svc.Deliver(ctx, scopeA, DeliverOptions{})
 	require.NoError(t, err)
 	require.Equal(t, RunStatusCompleted, d.Status)
 

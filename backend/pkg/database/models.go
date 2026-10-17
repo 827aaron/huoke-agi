@@ -1025,21 +1025,22 @@ type GrowthProfile struct {
 }
 
 type GrowthRun struct {
-	ID             int64         `json:"id"`
-	UserID         int64         `json:"user_id"`
-	FlowID         sql.NullInt64 `json:"flow_id"`
-	TaskID         sql.NullInt64 `json:"task_id"`
-	Target         int32         `json:"target"`
-	Status         string        `json:"status"`
-	DeliveredCount int32         `json:"delivered_count"`
-	FinishedAt     sql.NullTime  `json:"finished_at"`
-	NotifyStatus   string        `json:"notify_status"`
-	NotifyError    string        `json:"notify_error"`
-	NotifiedAt     sql.NullTime  `json:"notified_at"`
-	CreatedAt      sql.NullTime  `json:"created_at"`
-	UpdatedAt      sql.NullTime  `json:"updated_at"`
-	DeadlineAt     sql.NullTime  `json:"deadline_at"`
-	ScheduleID     sql.NullInt64 `json:"schedule_id"`
+	ID               int64         `json:"id"`
+	UserID           int64         `json:"user_id"`
+	FlowID           sql.NullInt64 `json:"flow_id"`
+	TaskID           sql.NullInt64 `json:"task_id"`
+	Target           int32         `json:"target"`
+	Status           string        `json:"status"`
+	DeliveredCount   int32         `json:"delivered_count"`
+	FinishedAt       sql.NullTime  `json:"finished_at"`
+	NotifyStatus     string        `json:"notify_status"`
+	NotifyError      string        `json:"notify_error"`
+	NotifiedAt       sql.NullTime  `json:"notified_at"`
+	CreatedAt        sql.NullTime  `json:"created_at"`
+	UpdatedAt        sql.NullTime  `json:"updated_at"`
+	DeadlineAt       sql.NullTime  `json:"deadline_at"`
+	ScheduleID       sql.NullInt64 `json:"schedule_id"`
+	DeadlineClosedAt sql.NullTime  `json:"deadline_closed_at"`
 }
 
 type GrowthSchedule struct {

@@ -101,4 +101,5 @@ export const routeTitles = {
     },
 
     templates: { title: 'Templates' },
+    users: { title: copy.users.title },
 } as const satisfies Record<string, RouteTitleHandle>;

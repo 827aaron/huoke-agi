@@ -104,6 +104,10 @@ func TestSchedules_CreateSchedule_RefusesAPastOnceAndAnotherCustomersTask(t *tes
 	require.ErrorIs(t, err, ErrFlowNotFound)
 
 	mine := w.mustCreateSchedule(t, daily)
+	_, err = w.svc.UpdateSchedule(ctx, w.user, mine.ID, ScheduleInput{
+		Days: ScheduleOnce, Date: "2020-01-05", StartTime: "02:00", EndTime: "06:00", Timezone: "Asia/Bangkok",
+	})
+	require.ErrorIs(t, err, ErrInvalidSchedule)
 	_, err = w.svc.UpdateSchedule(ctx, other, mine.ID, daily)
 	require.ErrorIs(t, err, ErrScheduleNotFound)
 	require.ErrorIs(t, w.svc.DeleteSchedule(ctx, other, mine.ID), ErrScheduleNotFound)
@@ -181,11 +185,11 @@ func TestSchedules_DueStarts_DisablesAOnceAfterItsStart(t *testing.T) {
 	assert.Nil(t, list[0].NextStartAt)
 }
 
-func TestSchedules_CloseOverdueRounds_DeliversWhatTheAdoptedRoundQualified(t *testing.T) {
-	w := newWorld(t)
+// startScheduledRound runs a daily schedule's first start into a new flow and returns the
+// scope of that flow's first task and the round's end time.
+func (w *world) startScheduledRound(t *testing.T) (Scope, time.Time) {
+	t.Helper()
 	ctx := context.Background()
-	sink := startSMTPSink(t)
-	w.saveSink(t, sink, "boss@example.test")
 	template := w.seedFlowWithInput(t, "find 5 players")
 	v := w.mustCreateSchedule(t, ScheduleInput{
 		FlowID: template, Days: ScheduleDaily, StartTime: "02:00", EndTime: "06:00", Timezone: "Asia/Bangkok",
@@ -193,19 +197,26 @@ func TestSchedules_CloseOverdueRounds_DeliversWhatTheAdoptedRoundQualified(t *te
 	starts, err := w.svc.DueStarts(ctx, v.NextStartAt.Add(time.Minute))
 	require.NoError(t, err)
 	require.Len(t, starts, 1)
-	deadline := starts[0].Deadline
 
 	var flowID int64
 	require.NoError(t, w.db.QueryRow(`
 		INSERT INTO flows (title, model, model_provider_name, language, user_id, model_provider_type)
 		VALUES ('scheduled', 'm', 'p', 'en', $1, 'openai') RETURNING id`, w.user).Scan(&flowID))
 	require.NoError(t, w.svc.StartedSchedule(ctx, starts[0], flowID))
+	return w.seedTaskIn(t, flowID), starts[0].Deadline
+}
 
-	scope := w.seedTaskIn(t, flowID)
+func TestSchedules_CloseOverdueRounds_DeliversWhatTheAdoptedRoundQualified(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	sink := startSMTPSink(t)
+	w.saveSink(t, sink, "boss@example.test")
+	scope, deadline := w.startScheduledRound(t)
+
 	p, err := w.svc.SetTarget(ctx, scope, 5)
 	require.NoError(t, err)
 	var rounds int
-	require.NoError(t, w.db.QueryRow(`SELECT count(*) FROM growth_runs WHERE flow_id = $1`, flowID).Scan(&rounds))
+	require.NoError(t, w.db.QueryRow(`SELECT count(*) FROM growth_runs WHERE flow_id = $1`, scope.FlowID).Scan(&rounds))
 	assert.Equal(t, 1, rounds, "the task adopts the scheduled round instead of opening its own")
 
 	src := w.mustAddTelegramGroup(t, scope, tgGroup("720", "arpg", "ARPG"))
@@ -220,7 +231,7 @@ func TestSchedules_CloseOverdueRounds_DeliversWhatTheAdoptedRoundQualified(t *te
 	require.Len(t, closed, 1)
 	closed[0].Deadline = closed[0].Deadline.UTC()
 	assert.Equal(t, ClosedRound{
-		RunID: p.RunID, UserID: w.user, FlowID: flowID, Target: 5, Delivered: 2,
+		RunID: p.RunID, UserID: w.user, FlowID: scope.FlowID, Target: 5, Delivered: 2,
 		Deadline: deadline.UTC(), Timezone: "Asia/Bangkok", Language: "en",
 	}, closed[0])
 
@@ -235,7 +246,58 @@ func TestSchedules_CloseOverdueRounds_DeliversWhatTheAdoptedRoundQualified(t *te
 	require.Len(t, msgs, 1)
 	assert.Contains(t, decodeMailText(t, msgs[0].Data), "Delivered at the schedule's end time, ")
 
-	again, err := w.svc.CloseOverdueRounds(ctx, deadline.Add(time.Hour))
+	retry, err := w.svc.CloseOverdueRounds(ctx, deadline.Add(time.Hour))
 	require.NoError(t, err)
-	assert.Empty(t, again, "a closed round is closed once")
+	require.Len(t, retry, 1, "a round whose task is not stopped yet comes back")
+	assert.Equal(t, 2, retry[0].Delivered)
+	assert.Len(t, sink.Messages(), 1, "the retry mails nothing new")
+
+	require.NoError(t, w.svc.DeadlineHandled(ctx, p.RunID))
+	done, err := w.svc.CloseOverdueRounds(ctx, deadline.Add(time.Hour))
+	require.NoError(t, err)
+	assert.Empty(t, done)
+}
+
+func TestSchedules_CloseOverdueRounds_TopsUpARoundTheAgentsDeliveredInPart(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	sink := startSMTPSink(t)
+	w.saveSink(t, sink, "boss@example.test")
+	scope, deadline := w.startScheduledRound(t)
+	_, err := w.svc.SetTarget(ctx, scope, 5)
+	require.NoError(t, err)
+	src := w.mustAddTelegramGroup(t, scope, tgGroup("721", "mmo_fans", "MMO"))
+	w.mustSaveQualified(t, scope, src, 1, 1)
+	early, err := w.svc.Deliver(ctx, scope, DeliverOptions{AllowPartial: true})
+	require.NoError(t, err)
+	require.Equal(t, RunStatusPartial, early.Status)
+	w.mustSaveQualified(t, scope, src, 2, 2)
+
+	closed, err := w.svc.CloseOverdueRounds(ctx, deadline)
+	require.NoError(t, err)
+	require.Len(t, closed, 1)
+	assert.Equal(t, 3, closed[0].Delivered)
+	assert.Len(t, sink.Messages(), 2, "the top-up is mailed like any new delivery")
+}
+
+func TestSchedules_CloseOverdueRounds_MailsASummaryWhenNothingQualified(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	sink := startSMTPSink(t)
+	w.saveSink(t, sink, "boss@example.test")
+	_, deadline := w.startScheduledRound(t)
+
+	closed, err := w.svc.CloseOverdueRounds(ctx, deadline)
+	require.NoError(t, err)
+	require.Len(t, closed, 1)
+	assert.Equal(t, 0, closed[0].Delivered)
+	msgs := sink.Messages()
+	require.Len(t, msgs, 1)
+	body := decodeMailText(t, msgs[0].Data)
+	assert.Contains(t, body, "Leads delivered: 0 (target 50)\n")
+	assert.Contains(t, body, ": 0 of the target 50.\n")
+
+	_, err = w.svc.CloseOverdueRounds(ctx, deadline)
+	require.NoError(t, err)
+	assert.Len(t, sink.Messages(), 1, "the summary is mailed once")
 }
