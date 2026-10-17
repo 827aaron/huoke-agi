@@ -1,0 +1,16 @@
+{
+  "name": "kelai-browser-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persistent-profile Chromium service that the growth connectors drive over HTTP",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js"
+  },
+  "dependencies": {
+    "playwright-core": "1.56.1"
+  }
+}
