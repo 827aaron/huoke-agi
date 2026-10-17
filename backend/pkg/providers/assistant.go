@@ -3,9 +3,11 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"pentagi/pkg/cast"
 	"pentagi/pkg/csum"
@@ -210,14 +212,18 @@ func (ap *assistantProvider) PerformAgentChain(ctx context.Context) error {
 	)
 	ctx, _ = executorAgent.Observation(ctx)
 
+	timeout, researcherTimeout := time.Duration(0), time.Duration(0)
+	if ap.fp.cfg != nil {
+		timeout, researcherTimeout = ap.fp.cfg.AssistantDelegationTimeout, ap.fp.cfg.AssistantResearcherTimeout
+	}
 	cfg := tools.AssistantExecutorConfig{
 		UseAgents:   useAgents,
-		Adviser:     adviser,
-		Coder:       coder,
-		Installer:   installer,
-		Memorist:    memorist,
-		Pentester:   pentester,
-		Searcher:    searcher,
+		Adviser:     withDelegationTimeout(adviser, timeout),
+		Coder:       withDelegationTimeout(coder, timeout),
+		Installer:   withDelegationTimeout(installer, timeout),
+		Memorist:    withDelegationTimeout(memorist, timeout),
+		Pentester:   withDelegationTimeout(pentester, researcherTimeout),
+		Searcher:    withDelegationTimeout(searcher, timeout),
 		Summarizer:  ap.fp.GetSummarizeResultHandler(nil, nil),
 		FlowManager: ap.buildFlowManagerHandlers(),
 	}
@@ -413,6 +419,24 @@ func (ap *assistantProvider) getAssistantExecutionContext(ctx context.Context) (
 	}
 
 	return executionContext, nil
+}
+
+// withDelegationTimeout bounds one delegation: a specialist whose model stops
+// answering would otherwise hold the assistant through every retry layer for hours.
+func withDelegationTimeout(handler tools.ExecutorHandler, timeout time.Duration) tools.ExecutorHandler {
+	if timeout <= 0 {
+		return handler
+	}
+	return func(ctx context.Context, name string, args json.RawMessage) (string, error) {
+		callCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		result, err := handler(callCtx, name, args)
+		if err != nil && ctx.Err() == nil && errors.Is(callCtx.Err(), context.DeadlineExceeded) {
+			return "", fmt.Errorf("no result within %s, so it was stopped", timeout)
+		}
+		return result, err
+	}
 }
 
 // buildFlowManagerHandlers constructs FlowManagerHandlers from the injected flowWorker.

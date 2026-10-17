@@ -968,7 +968,7 @@ type GrowthJoinSourceAction struct {
 type GrowthSyncSourceAction struct {
 	Action         String   `json:"action" jsonschema:"required,type=string,enum=history,enum=user" jsonschema_description:"'history' reads the next page of a Telegram source's public messages (source_id). 'user' returns the public profile of a Telegram user (platform_user_id)."`
 	SourceID       Int64    `json:"source_id,omitempty" jsonschema:"type=integer" jsonschema_description:"history only: the pool source_id to read"`
-	SourceIDs      []Int64  `json:"source_ids,omitempty" jsonschema:"type=array" jsonschema_description:"history only: several pool source_ids to read in one call, instead of source_id"`
+	SourceIDs      []Int64  `json:"source_ids,omitempty" jsonschema:"type=array" jsonschema_description:"history only: several pool source_ids to read in one call, instead of source_id. With neither, every source an account has joined is read in turn"`
 	Direction      String   `json:"direction,omitempty" jsonschema:"type=string,enum=older,enum=newer" jsonschema_description:"history only: 'older' (default) continues backwards from the oldest message read so far until the source's back-read is done; 'newer' reads what was posted after the newest message read, page by page until caught up. Once older reading is done, come back with 'newer' to monitor the source. The position is kept between calls."`
 	Limit          Int64    `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"history only: messages per page (1-200, default 100)"`
 	AllMessages    Bool     `json:"all_messages,omitempty" jsonschema:"type=boolean" jsonschema_description:"history only: true returns every message read; by default only the messages the judgement model (Jev) picks as worth a closer look are returned and the rest are counted in skipped_count"`
@@ -1004,6 +1004,7 @@ type GrowthUpsertLeadsAction struct {
 
 type GrowthGetProgressAction struct {
 	Target  Int64  `json:"target,omitempty" jsonschema:"type=integer" jsonschema_description:"Set the round's target when the customer named a number (default 50); omit to only read progress"`
+	Since   string `json:"since,omitempty" jsonschema_description:"Outside a task: count only leads first found at or after this time, RFC 3339 with the user's offset (e.g. 2026-10-17T00:00:00+07:00 for today in Bangkok); a bare date counts from 00:00 UTC"`
 	Message string `json:"message" jsonschema:"required,title=Progress message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are checking progress. Written in the engagement language declared by your system prompt."`
 }
 
@@ -1013,7 +1014,8 @@ type GrowthDeliverLeadsAction struct {
 }
 
 type GrowthListLeadsAction struct {
-	Scope   String `json:"scope,omitempty" jsonschema:"type=string,enum=flow,enum=task,enum=delivered" jsonschema_description:"'flow' (default) leads seen in this flow; 'task' leads touched by the current task; 'delivered' leads already delivered from this flow"`
+	Scope   String `json:"scope,omitempty" jsonschema:"type=string,enum=flow,enum=task,enum=delivered,enum=all" jsonschema_description:"'flow' (default) leads seen in this flow; 'task' leads touched by the current task; 'delivered' leads already delivered from this flow; 'all' every lead of the user"`
+	Since   string `json:"since,omitempty" jsonschema_description:"Only leads first found at or after this time, RFC 3339 with the user's offset (e.g. 2026-10-17T00:00:00+07:00); a bare date counts from 00:00 UTC"`
 	Tier    String `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist,enum=all" jsonschema_description:"Filter by tier (default all)"`
 	Limit   Int64  `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum leads (1-500, default 100)"`
 	Message string `json:"message" jsonschema:"required,title=List leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are listing leads. Written in the engagement language declared by your system prompt."`

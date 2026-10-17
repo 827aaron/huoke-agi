@@ -15,29 +15,32 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
-const countFlowLeads = `-- name: CountFlowLeads :one
+const countUserLeads = `-- name: CountUserLeads :one
 SELECT
   COUNT(*) FILTER (WHERE tier = 'qualified' AND delivered_at IS NULL)::bigint AS deliverable,
   COUNT(*) FILTER (WHERE tier = 'watchlist' AND delivered_at IS NULL)::bigint AS watchlist,
   COUNT(*) FILTER (WHERE delivered_at IS NOT NULL)::bigint AS delivered
 FROM leads
-WHERE user_id = $1 AND last_flow_id = $2
+WHERE user_id = $1
+  AND ($2::bigint IS NULL OR last_flow_id = $2::bigint)
+  AND ($3::timestamptz IS NULL OR created_at >= $3::timestamptz)
 `
 
-type CountFlowLeadsParams struct {
+type CountUserLeadsParams struct {
 	UserID int64         `json:"user_id"`
 	FlowID sql.NullInt64 `json:"flow_id"`
+	Since  sql.NullTime  `json:"since"`
 }
 
-type CountFlowLeadsRow struct {
+type CountUserLeadsRow struct {
 	Deliverable int64 `json:"deliverable"`
 	Watchlist   int64 `json:"watchlist"`
 	Delivered   int64 `json:"delivered"`
 }
 
-func (q *Queries) CountFlowLeads(ctx context.Context, arg CountFlowLeadsParams) (CountFlowLeadsRow, error) {
-	row := q.db.QueryRowContext(ctx, countFlowLeads, arg.UserID, arg.FlowID)
-	var i CountFlowLeadsRow
+func (q *Queries) CountUserLeads(ctx context.Context, arg CountUserLeadsParams) (CountUserLeadsRow, error) {
+	row := q.db.QueryRowContext(ctx, countUserLeads, arg.UserID, arg.FlowID, arg.Since)
+	var i CountUserLeadsRow
 	err := row.Scan(&i.Deliverable, &i.Watchlist, &i.Delivered)
 	return i, err
 }
@@ -1146,8 +1149,9 @@ WHERE user_id = $1
   AND ($4::bigint IS NULL OR delivered_run_id = $4::bigint)
   AND ($5::text IS NULL OR tier = $5::text)
   AND ($6::boolean IS NULL OR (delivered_at IS NOT NULL) = $6::boolean)
+  AND ($7::timestamptz IS NULL OR created_at >= $7::timestamptz)
 ORDER BY score DESC, updated_at DESC, id DESC
-LIMIT $8 OFFSET $7
+LIMIT $9 OFFSET $8
 `
 
 type GetUserLeadsParams struct {
@@ -1157,6 +1161,7 @@ type GetUserLeadsParams struct {
 	RunID     sql.NullInt64  `json:"run_id"`
 	Tier      sql.NullString `json:"tier"`
 	Delivered sql.NullBool   `json:"delivered"`
+	Since     sql.NullTime   `json:"since"`
 	Off       int64          `json:"off"`
 	Lim       int64          `json:"lim"`
 }
@@ -1169,6 +1174,7 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 		arg.RunID,
 		arg.Tier,
 		arg.Delivered,
+		arg.Since,
 		arg.Off,
 		arg.Lim,
 	)

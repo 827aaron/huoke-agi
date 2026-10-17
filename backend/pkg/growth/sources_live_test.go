@@ -348,7 +348,7 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	ctx := context.Background()
 	scope := w.seedTask(t)
 	p := gameProfile()
-	p.Signals = []string{"想换游戏"}
+	p.Signals = []string{"looking for a new game"}
 	_, err := w.svc.SaveProfile(ctx, w.user, p)
 	require.NoError(t, err)
 	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
@@ -408,7 +408,7 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	state := requests[0]["state"].(map[string]any)
 	assert.Equal(t, "telegram", state["platform"])
 	assert.Equal(t, "Screen A", state["source"])
-	assert.Contains(t, state["business"], "想换游戏")
+	assert.Contains(t, state["business"], "looking for a new game")
 	assert.Len(t, state["messages"], 40)
 	assert.Equal(t, "@u145", state["messages"].(map[string]any)["m0"].(map[string]any)["sender"])
 
@@ -428,6 +428,29 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	require.Len(t, all[0].Messages, 1, "all_messages skips the pre-screen")
 	assert.Zero(t, all[0].Skipped)
 	assert.Len(t, requests, 3)
+}
+
+func TestSources_SyncSources_ReadsEveryJoinedSourceWhenGivenNoIDs(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
+	a := w.mustAddTelegramGroup(t, scope, tgGroup("370", "joined_a", "Joined A"), tgMessage(1, "31", "hi"))
+	w.mustAddTelegramGroup(t, scope, tgGroup("371", "left_b", "Left B"), tgMessage(1, "32", "hi"))
+	c := w.mustAddTelegramGroup(t, scope, tgGroup("372", "joined_c", "Joined C"), tgMessage(1, "33", "hi"), tgMessage(2, "34", "yo"))
+
+	_, err := w.svc.SyncSources(ctx, scope, nil, SyncOptions{})
+	assert.ErrorIs(t, err, ErrNoJoinedSource)
+
+	_, err = w.svc.JoinSources(ctx, scope, []int64{c, a})
+	require.NoError(t, err)
+	results, err := w.svc.SyncSources(ctx, scope, nil, SyncOptions{})
+	require.NoError(t, err)
+	got := map[int64]int{}
+	for _, r := range results {
+		got[r.Source.ID] = r.Read
+	}
+	assert.Equal(t, map[int64]int{a: 1, c: 2}, got)
 }
 
 func TestSources_SyncSource_KeepsTheCursorWhenTheJudgeKeyIsRefused(t *testing.T) {

@@ -271,6 +271,10 @@ type Config struct {
 	AssistantSummarizerMaxQASections  int  `env:"ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS" envDefault:"7"`
 	AssistantSummarizerMaxQABytes     int  `env:"ASSISTANT_SUMMARIZER_MAX_QA_BYTES" envDefault:"76800"`
 	AssistantSummarizerKeepQASections int  `env:"ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS" envDefault:"3"`
+	// How long one assistant delegation may run before the assistant is told it timed
+	// out; the researcher reads groups and gets longer. Zero or less means no limit.
+	AssistantDelegationTimeout time.Duration `env:"ASSISTANT_DELEGATION_TIMEOUT" envDefault:"15m"`
+	AssistantResearcherTimeout time.Duration `env:"ASSISTANT_RESEARCHER_TIMEOUT" envDefault:"20m"`
 
 	// === Network Proxy Settings ===
 	ProxyURL string `env:"PROXY_URL"`

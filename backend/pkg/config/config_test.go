@@ -170,7 +170,7 @@ func clearConfigEnv(t *testing.T) {
 		"ASSISTANT_USE_AGENTS", "ASSISTANT_SUMMARIZER_PRESERVE_LAST",
 		"ASSISTANT_SUMMARIZER_LAST_SEC_BYTES", "ASSISTANT_SUMMARIZER_MAX_BP_BYTES",
 		"ASSISTANT_SUMMARIZER_MAX_QA_SECTIONS", "ASSISTANT_SUMMARIZER_MAX_QA_BYTES",
-		"ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS",
+		"ASSISTANT_SUMMARIZER_KEEP_QA_SECTIONS", "ASSISTANT_DELEGATION_TIMEOUT", "ASSISTANT_RESEARCHER_TIMEOUT",
 		"PROXY_URL", "EXTERNAL_SSL_CA_PATH", "EXTERNAL_SSL_INSECURE", "HTTP_CLIENT_TIMEOUT",
 		"OTEL_HOST", "LANGFUSE_BASE_URL", "LANGFUSE_PROJECT_ID", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY",
 		"GRAPHITI_ENABLED", "GRAPHITI_TIMEOUT", "GRAPHITI_URL",
@@ -198,6 +198,8 @@ func TestConfig_NewConfig_FillsDefaultsForAnEmptyEnvironment(t *testing.T) {
 	assert.Equal(t, false, config.Debug)
 	assert.Equal(t, "./data", config.DataDir)
 	assert.Equal(t, time.Duration(0), config.UpdateCheckInterval)
+	assert.Equal(t, 15*time.Minute, config.AssistantDelegationTimeout)
+	assert.Equal(t, 20*time.Minute, config.AssistantResearcherTimeout)
 	assert.Len(t, config.GrowthSecretKey, 64)
 	assert.Equal(t, false, config.ServerUseSSL)
 	assert.Nil(t, config.StaticURL)
