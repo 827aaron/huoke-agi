@@ -1603,6 +1603,7 @@ const zh = {
     routeError: {
         chunk: '系统刚刚更新了版本，重新加载即可使用最新版。',
         desync: '页面显示出了点小问题，重新加载通常就能恢复。',
+        details: '错误详情（截图发给我们便于定位）',
         offline: '网络已断开，页面没能加载。网络恢复后会自动重新加载。',
         title: '出了点问题',
         unexpected: '页面遇到了意外错误，重新加载通常就能恢复。',
@@ -3663,6 +3664,7 @@ const en: Copy = {
     routeError: {
         chunk: 'A new version was likely just deployed. Reloading will load the latest one.',
         desync: 'The page hit a display glitch. Reloading usually clears it.',
+        details: 'Error details (include them in a screenshot to help us find the cause)',
         offline: 'You are offline, so this page could not load. It will reload once the connection is back.',
         title: 'Something went wrong',
         unexpected: 'The page ran into an unexpected error. Reloading usually clears it.',

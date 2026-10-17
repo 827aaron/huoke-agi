@@ -126,4 +126,12 @@ describe('RouteErrorBoundary', () => {
 
         expect(reloadSpy).toHaveBeenCalledTimes(1);
     });
+
+    it('shows what was thrown behind the details toggle', async () => {
+        renderWithRouteError(renderError());
+
+        await userEvent.click(await screen.findByText('错误详情（截图发给我们便于定位）'));
+
+        expect(screen.getByText(/TypeError: Cannot read properties of undefined \(reading length\)/)).toBeVisible();
+    });
 });
