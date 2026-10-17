@@ -10,6 +10,8 @@ import type {
     GrowthProxyTestResult,
     GrowthRemoteLogin,
     GrowthRun,
+    GrowthSchedule,
+    GrowthScheduleInput,
     GrowthSetting,
     GrowthSettingInput,
     GrowthSettingKind,
@@ -283,6 +285,47 @@ const lead = (
         username,
     };
 };
+
+// The mock does not compute the next start in the schedule's zone; a day ahead is enough to show the line.
+const toSchedule = (id: number, input: GrowthScheduleInput, current: GrowthSchedule | null): GrowthSchedule => {
+    const enabled = input.enabled ?? current?.enabled ?? true;
+
+    return {
+        date: input.days === 'once' ? (input.date ?? null) : null,
+        days: input.days,
+        enabled,
+        end_time: input.end_time,
+        flow_id: input.flow_id,
+        id,
+        input: input.input ?? '',
+        last_error: current?.last_error ?? null,
+        last_run: current?.last_run ?? null,
+        next_start_at: enabled ? new Date(now + 24 * 60 * 60_000).toISOString() : null,
+        start_time: input.start_time,
+        timezone: input.timezone,
+        weekdays: input.days === 'weekly' ? (input.weekdays ?? []) : null,
+    };
+};
+
+let nextScheduleId = 2;
+
+let schedules: GrowthSchedule[] = [
+    {
+        ...toSchedule(
+            1,
+            {
+                days: 'daily',
+                end_time: '18:00',
+                flow_id: 1,
+                input: '找 50 个泰国的 MOBA 玩家',
+                start_time: '09:00',
+                timezone: 'Asia/Bangkok',
+            },
+            null,
+        ),
+        last_run: { deadline_at: ago(900), delivered_count: 32, run_id: 11, status: 'delivered', target: 50 },
+    },
+];
 
 const [sea, tw] = sources as [GrowthSource, GrowthSource];
 
@@ -593,6 +636,16 @@ export const growthMock = {
 
         return delay(profile);
     },
+    createSchedule: (input: GrowthScheduleInput): Promise<GrowthSchedule> => {
+        const schedule = toSchedule(nextScheduleId++, input, null);
+        schedules = [...schedules, schedule];
+
+        return delay(schedule);
+    },
+    deleteSchedule: async (id: number) => {
+        schedules = schedules.filter((item) => item.id !== id);
+        await delay(null);
+    },
     finishRemoteLogin: (sessionId: string): Promise<GrowthAccount> => {
         const pending = remoteLogins.get(sessionId);
 
@@ -630,6 +683,8 @@ export const growthMock = {
               ),
     listProfiles: () => delay(profiles),
     listRuns: (flowId: number | string) => delay(runs.map((run) => ({ ...run, flow_id: Number(flowId) }))),
+    listSchedules: (flowId: number | string) =>
+        delay(schedules.map((schedule) => ({ ...schedule, flow_id: Number(flowId) }))),
     listSettings: () => delay(settings),
     listSources: () => delay({ sources, total: sources.length, warnings: [] }),
     saveSetting: (kind: GrowthSettingKind, input: GrowthSettingInput): Promise<GrowthSetting> => {
@@ -744,5 +799,12 @@ export const growthMock = {
         profiles = [profile];
 
         return delay(profile);
+    },
+    updateSchedule: (id: number, input: GrowthScheduleInput): Promise<GrowthSchedule> => {
+        const current = schedules.find((item) => item.id === id) ?? null;
+        const schedule = toSchedule(id, { ...input, input: input.input || current?.input }, current);
+        schedules = schedules.map((item) => (item.id === id ? schedule : item));
+
+        return delay(schedule);
     },
 };

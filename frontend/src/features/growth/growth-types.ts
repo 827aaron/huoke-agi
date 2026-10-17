@@ -201,6 +201,8 @@ export interface GrowthRemoteLogin {
 // One round is one Task of the flow. `target` is null for an assistant question that set no goal.
 export interface GrowthRun {
     current_action: null | string;
+    // A scheduled round is delivered at this time, found or not.
+    deadline_at?: null | string;
     delivered: number;
     error: null | string;
     finished_at: null | string;
@@ -211,6 +213,7 @@ export interface GrowthRun {
     // Outcome of emailing the delivered list; `skipped` when email notifications are not set up.
     notify_status: 'failed' | 'sent' | 'skipped' | null;
     round: number;
+    schedule_id?: null | number;
     sources: GrowthRunSources;
     started_at: string;
     status: GrowthRunStatus;
@@ -227,6 +230,53 @@ export interface GrowthRunSources {
 }
 
 export type GrowthRunStatus = 'delivered' | 'failed' | 'missed' | 'running' | 'waiting';
+
+// A recurring round of a flow. Times are wall-clock in `timezone`; an end not after the start ends the next day.
+export interface GrowthSchedule {
+    date: null | string;
+    days: GrowthScheduleDays;
+    enabled: boolean;
+    end_time: string;
+    flow_id: number;
+    id: number;
+    input: string;
+    last_error?: null | string;
+    last_run?: GrowthScheduleLastRun | null;
+    // UTC; absent while paused or once a one-off date has passed.
+    next_start_at?: null | string;
+    start_time: string;
+    timezone: string;
+    // 0 is Sunday.
+    weekdays: null | number[];
+}
+
+export type GrowthScheduleDays = 'daily' | 'once' | 'weekdays' | 'weekly';
+
+// An empty input reuses the flow's first task input; flow_id is ignored on update.
+export interface GrowthScheduleInput {
+    date?: string;
+    days: GrowthScheduleDays;
+    enabled?: boolean;
+    end_time: string;
+    flow_id: number;
+    input?: string;
+    start_time: string;
+    timezone: string;
+    weekdays?: number[];
+}
+
+export interface GrowthScheduleLastRun {
+    deadline_at: null | string;
+    delivered_count: number;
+    run_id: number;
+    status: GrowthRunStatus;
+    target: null | number;
+}
+
+export interface GrowthSchedulesResponse {
+    schedules: GrowthSchedule[];
+    total: number;
+}
 
 // Each signal the judgement model sees in a message adds its weight; `active` adds it for a message of the last 7
 // days and half of it for one of the last 30.
