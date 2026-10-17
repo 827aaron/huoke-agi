@@ -237,7 +237,7 @@ const lead = (
     const points: Record<string, number> = { genre_match: 3, paying: 2, player: 3, recent: 2, switching: 3 };
 
     return {
-        contacts: id % 3 === 1 ? [{ type: 'messenger', value: `line: ${username ?? name}` }] : [],
+        contacts: id % 3 === 1 ? [{ type: 'line', value: username ?? name }] : [],
         delivered_at: delivered ? ago(5) : null,
         delivered_task_id: delivered ? 11 : null,
         display_name: name,

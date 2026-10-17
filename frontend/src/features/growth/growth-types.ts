@@ -148,7 +148,7 @@ export type GrowthPlatform = 'facebook' | 'instagram' | 'telegram' | 'tiktok' | 
 
 export const GROWTH_PLATFORMS: GrowthPlatform[] = ['telegram', 'facebook', 'instagram', 'tiktok', 'youtube', 'web'];
 
-export type GrowthContactType = 'email' | 'messenger' | 'other' | 'phone' | 'platform_handle';
+export type GrowthContactType = 'email' | 'line' | 'other' | 'phone' | 'platform_handle' | 'telegram' | 'whatsapp';
 
 // Stored as the server generated it; only these keys are shown.
 export interface GrowthFingerprint {

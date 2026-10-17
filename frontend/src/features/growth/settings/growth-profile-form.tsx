@@ -58,7 +58,15 @@ const languageFormValues = (languages: null | string[] = []) => {
     };
 };
 
-export const CONTACT_TYPES: GrowthContactType[] = ['platform_handle', 'phone', 'email', 'messenger', 'other'];
+export const CONTACT_TYPES: GrowthContactType[] = [
+    'platform_handle',
+    'phone',
+    'email',
+    'whatsapp',
+    'line',
+    'telegram',
+    'other',
+];
 
 const SCORING_SIGNALS: GrowthScoringSignal[] = ['player', 'pain', 'paying', 'active', 'match'];
 

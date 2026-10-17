@@ -102,6 +102,22 @@ describe('GrowthProfileForm', () => {
         );
     });
 
+    it('saves WhatsApp, Line and Telegram as separate contact methods', async () => {
+        renderForm();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Line' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Telegram' }));
+        fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+        await waitFor(() =>
+            expect(growthApi.updateProfile).toHaveBeenCalledWith(
+                3,
+                expect.objectContaining({ contact_types: ['platform_handle', 'line', 'telegram'] }),
+            ),
+        );
+        expect(screen.getByRole('button', { name: 'WhatsApp' })).toBeInTheDocument();
+    });
+
     it('refuses a qualified line the weights cannot reach', async () => {
         renderForm();
 
