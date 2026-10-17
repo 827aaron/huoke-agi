@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"pentagi/pkg/config"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -302,4 +304,22 @@ func TestFacebook_Register_BuildsAConnectorThatCarriesTheAccountProfile(t *testi
 	body := fb.lastBody("/sessions/facebook-42/navigate")
 	assert.Equal(t, "http://u:p@proxy:8080", body["proxy"])
 	assert.Equal(t, map[string]any{"platform": "Win32"}, body["fingerprint"])
+}
+
+func TestFacebook_Register_PrefersTheConfiguredServiceOverTheEnvironment(t *testing.T) {
+	fb := newFakeBrowser(t)
+	fb.page(fbFeedURL, feedPages(t))
+	t.Setenv("BROWSER_SERVICE_URL", "http://127.0.0.1:1")
+	t.Setenv("BROWSER_TOKEN", "stale-token")
+	resetSharedBrowser(t)
+
+	factory, ok := Lookup(PlatformFacebook)
+	require.True(t, ok)
+	cfg := &config.Config{BrowserServiceURL: fb.server.URL, BrowserToken: fb.token}
+	conn, err := factory(context.Background(), cfg, Account{ID: 43, Platform: PlatformFacebook, Kind: "browser_session"})
+	require.NoError(t, err)
+
+	_, err = conn.ReadHistory(context.Background(), SourceRef{Link: fbGroupURL}, HistoryRequest{Limit: 1})
+	require.NoError(t, err)
+	assert.NotNil(t, fb.lastBody("/sessions/facebook-43/navigate"))
 }

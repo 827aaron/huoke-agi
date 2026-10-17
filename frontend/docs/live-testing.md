@@ -124,11 +124,7 @@ Backend startup replays flows and can take a minute; poll rather than sleep.
   listing, terminal input) answer `FlowFiles.ContainerNotRunning` and are simply
   unreachable on a keyless stack. Cover those at the handler level instead of
   pretending the live 400 is the case under test.
-- **The compose file names an image, it does not build one.** The `pentagi`
-  service is declared `image: ${PENTAGI_IMAGE:-vxcontrol/pentagi:latest}`, so a
-  plain `docker compose up -d` starts a published build and every green you then
-  collect belongs to somebody else's code. Build first and name it:
-  `docker build -t local/pentagi:branch . && PENTAGI_IMAGE=local/pentagi:branch docker compose up -d`.
+- **The compose file builds its image only when it is missing.** The `pentagi` service is declared `image: ${PENTAGI_IMAGE:-kelai-agi:latest}` with a `build` section, so the first `docker compose up -d` builds the checkout and every later one starts that same image, however far the branch has moved since. Build first and name it: `docker build -t local/pentagi:branch . && PENTAGI_IMAGE=local/pentagi:branch docker compose up -d`.
   Prove the running stack is yours before trusting it — the served bundle carries
   the operations it was built from
   (`docker exec pentagi grep -o 'value:"<yourNewField>"' /opt/pentagi/fe/assets/index-*.js`),

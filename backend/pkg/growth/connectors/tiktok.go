@@ -71,8 +71,8 @@ var _ Connector = (*TikTok)(nil)
 
 func init() {
 	RegisterRemoteLogin(PlatformTikTok, browserRemoteLogin{platform: PlatformTikTok})
-	Register(PlatformTikTok, func(_ context.Context, _ *config.Config, acc Account) (Connector, error) {
-		browser, err := browserFromEnv()
+	Register(PlatformTikTok, func(_ context.Context, cfg *config.Config, acc Account) (Connector, error) {
+		browser, err := browserFor(cfg)
 		if err != nil {
 			return nil, err
 		}
