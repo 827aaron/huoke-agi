@@ -185,18 +185,22 @@ var settingSpecs = map[string]settingSpec{
 			}
 		},
 	},
-	// notify_emails is a comma-separated list; empty means the owner's login address.
+	// notify_emails is a comma-separated list; empty means the owner's login address. With
+	// no host the server is the platform's SMTP_* from .env, so a customer gives only that.
 	SettingEmail: {
 		fields: []settingField{
-			{name: "host", required: true},
+			{name: "host"},
 			{name: "port"},
 			{name: "username"},
 			{name: "password", secret: true},
-			{name: "from", required: true},
+			{name: "from"},
 			{name: "tls"},
 			{name: "notify_emails"},
 		},
 		apply: func(c *config.Config, _ string, v map[string]string) {
+			if v["host"] == "" {
+				return
+			}
 			c.SMTPHost = v["host"]
 			if port, err := strconv.Atoi(v["port"]); err == nil {
 				c.SMTPPort = port
@@ -269,9 +273,12 @@ type SettingView struct {
 	Status       string            `json:"status"`
 	StatusReason string            `json:"status_reason,omitempty"`
 	// Configured is false while nothing, saved or in .env, sets this kind.
-	Configured bool       `json:"configured"`
-	TestedAt   *time.Time `json:"tested_at,omitempty"`
-	UpdatedAt  *time.Time `json:"updated_at,omitempty"`
+	Configured bool `json:"configured"`
+	// PlatformSMTP, on the email kind only, says .env carries an SMTP server, so the
+	// customer needs to give only the recipients.
+	PlatformSMTP *bool      `json:"platform_smtp,omitempty"`
+	TestedAt     *time.Time `json:"tested_at,omitempty"`
+	UpdatedAt    *time.Time `json:"updated_at,omitempty"`
 }
 
 type storedSetting struct {
@@ -413,7 +420,7 @@ func (s *Service) SaveSetting(
 	if kind == SettingProxy || (kind == SettingTelegram && merged["api_id"]+"\x00"+merged["api_hash"] != prevCredential) {
 		s.dropUserConnectors(ctx, userID)
 	}
-	return settingView(row, spec, provider, merged), nil
+	return s.settingView(row, spec, provider, merged), nil
 }
 
 func validateSetting(kind, provider string, v map[string]string) error {
@@ -441,7 +448,13 @@ func validateSetting(kind, provider string, v map[string]string) error {
 		if t := v["tls"]; t != "" && !slices.Contains([]string{smtpStartTLS, smtpImplicitTLS, smtpNoTLS}, t) {
 			return fmt.Errorf("%w: tls must be %s, %s or %s", ErrInvalidSetting, smtpStartTLS, smtpImplicitTLS, smtpNoTLS)
 		}
-		if _, err := mail.ParseAddress(v["from"]); err != nil {
+		if v["host"] == "" {
+			for _, f := range []string{"port", "username", "password", "from", "tls"} {
+				if v[f] != "" {
+					return fmt.Errorf("%w: %s applies only to your own server, which needs host", ErrInvalidSetting, f)
+				}
+			}
+		} else if _, err := mail.ParseAddress(v["from"]); err != nil {
 			return fmt.Errorf("%w: from is not an email address: %v", ErrInvalidSetting, err)
 		}
 		if _, err := parseRecipients(v["notify_emails"]); err != nil {
@@ -520,17 +533,17 @@ func (s *Service) ListSettings(ctx context.Context, userID int64) ([]SettingView
 		}
 		stored, err := s.open(row)
 		if err != nil {
-			v := settingView(row, spec, row.Provider, nil)
+			v := s.settingView(row, spec, row.Provider, nil)
 			v.Status, v.StatusReason = SettingStatusInvalid, err.Error()
 			views = append(views, v)
 			continue
 		}
-		views = append(views, settingView(row, spec, stored.Provider, stored.Values))
+		views = append(views, s.settingView(row, spec, stored.Provider, stored.Values))
 	}
 	return views, nil
 }
 
-func settingView(row database.GrowthSetting, spec settingSpec, provider string, values map[string]string) SettingView {
+func (s *Service) settingView(row database.GrowthSetting, spec settingSpec, provider string, values map[string]string) SettingView {
 	v := SettingView{
 		Kind:         row.Kind,
 		Provider:     provider,
@@ -543,7 +556,15 @@ func settingView(row database.GrowthSetting, spec settingSpec, provider string, 
 		TestedAt:     nullTime(row.TestedAt.Time, row.TestedAt.Valid),
 		UpdatedAt:    nullTime(row.UpdatedAt.Time, row.UpdatedAt.Valid),
 	}
+	s.markPlatformSMTP(&v)
 	return v
+}
+
+func (s *Service) markPlatformSMTP(v *SettingView) {
+	if v.Kind == SettingEmail {
+		platform := s.cfg.SMTPHost != ""
+		v.PlatformSMTP = &platform
+	}
 }
 
 func maskFields(spec settingSpec, values map[string]string) map[string]string {
@@ -587,6 +608,7 @@ func (s *Service) envView(kind string, spec settingSpec) SettingView {
 		values["host"] != "" || values["url"] != "" || (kind == SettingEmbedding && provider != "") {
 		v.Source, v.Provider, v.Configured = SettingSourceEnv, provider, true
 	}
+	s.markPlatformSMTP(&v)
 	return v
 }
 
@@ -751,7 +773,7 @@ func (s *Service) recordTest(
 	if provider == "" {
 		provider = row.Provider
 	}
-	return settingView(updated, spec, provider, values), nil
+	return s.settingView(updated, spec, provider, values), nil
 }
 
 func (s *Service) probe(ctx context.Context, cfg *config.Config, kind, provider string) (string, string) {

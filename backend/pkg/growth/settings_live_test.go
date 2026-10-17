@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -222,6 +223,37 @@ func TestSettings_SendTestEmail_GoesToTheLoginAddressByDefault(t *testing.T) {
 	assert.Equal(t, []string{"qa@example.test"}, msgs[1].To)
 
 	v, err := w.svc.TestSetting(ctx, w.user, SettingEmail)
+	require.NoError(t, err)
+	assert.Equal(t, SettingStatusConnected, v.Status)
+}
+
+func TestSettings_SendTestEmail_UsesThePlatformServerWhenOnlyRecipientsAreSaved(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	assert.False(t, *settingOf(t, w, SettingEmail).PlatformSMTP)
+
+	sink := startSMTPSink(t)
+	port, err := strconv.Atoi(sink.Port)
+	require.NoError(t, err)
+	w.svc.cfg.SMTPHost, w.svc.cfg.SMTPPort, w.svc.cfg.SMTPFrom, w.svc.cfg.SMTPTLS = sink.Host, port, "platform@example.test", smtpNoTLS
+
+	_, err = w.svc.SaveSetting(ctx, w.user, SettingEmail, "", map[string]string{"from": "me@example.test"})
+	require.ErrorContains(t, err, "from applies only to your own server")
+
+	v, err := w.svc.SaveSetting(ctx, w.user, SettingEmail, "", map[string]string{"notify_emails": "qa@example.test"})
+	require.NoError(t, err)
+	assert.True(t, v.Configured)
+	assert.True(t, *v.PlatformSMTP)
+	assert.True(t, *settingOf(t, w, SettingEmail).PlatformSMTP)
+
+	to, err := w.svc.SendTestEmail(ctx, w.user, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"qa@example.test"}, to)
+	msgs := sink.Messages()
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "platform@example.test", msgs[0].From)
+
+	v, err = w.svc.TestSetting(ctx, w.user, SettingEmail)
 	require.NoError(t, err)
 	assert.Equal(t, SettingStatusConnected, v.Status)
 }
