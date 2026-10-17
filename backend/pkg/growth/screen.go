@@ -271,6 +271,34 @@ func scoreMessage(sc Scoring, signals map[string]float64, at, now time.Time) (in
 	return score, fmt.Sprintf("%s = %d", strings.Join(fired, ", "), score)
 }
 
+// signalActive names the recency weight in a score breakdown.
+const signalActive = "active"
+
+// ScorePart is one weight a message's score adds up from.
+type ScorePart struct {
+	Signal string `json:"signal"`
+	Points int    `json:"points"`
+}
+
+// scoreParts reads back the text scoreMessage stores, reporting either recency label as
+// the active signal.
+func scoreParts(text string) []ScorePart {
+	text, _, _ = strings.Cut(text, " = ")
+	parts := []ScorePart{}
+	for _, field := range strings.Split(text, ", ") {
+		label, n, ok := strings.Cut(field, "+")
+		points, err := strconv.Atoi(n)
+		if !ok || err != nil {
+			continue
+		}
+		if label == "7d" || label == "30d" {
+			label = signalActive
+		}
+		parts = append(parts, ScorePart{Signal: label, Points: points})
+	}
+	return parts
+}
+
 func (sc Scoring) tier(score int) string {
 	switch {
 	case score >= sc.Qualified:

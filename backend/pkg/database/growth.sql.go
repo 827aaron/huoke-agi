@@ -94,6 +94,50 @@ func (q *Queries) CloseGrowthRunDeadline(ctx context.Context, id int64) error {
 	return err
 }
 
+const countGrowthRunLeads = `-- name: CountGrowthRunLeads :many
+SELECT r.id AS run_id,
+  COUNT(l.id) FILTER (WHERE l.tier = 'qualified')::bigint AS found,
+  COUNT(l.id) FILTER (WHERE l.tier = 'watchlist')::bigint AS watch
+FROM growth_runs r
+JOIN leads l ON l.user_id = r.user_id AND (l.last_task_id = r.task_id OR l.delivered_run_id = r.id)
+WHERE r.user_id = $1 AND r.id = ANY($2::bigint[])
+GROUP BY r.id
+`
+
+type CountGrowthRunLeadsParams struct {
+	UserID int64   `json:"user_id"`
+	RunIds []int64 `json:"run_ids"`
+}
+
+type CountGrowthRunLeadsRow struct {
+	RunID int64 `json:"run_id"`
+	Found int64 `json:"found"`
+	Watch int64 `json:"watch"`
+}
+
+func (q *Queries) CountGrowthRunLeads(ctx context.Context, arg CountGrowthRunLeadsParams) ([]CountGrowthRunLeadsRow, error) {
+	rows, err := q.db.QueryContext(ctx, countGrowthRunLeads, arg.UserID, pq.Array(arg.RunIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountGrowthRunLeadsRow
+	for rows.Next() {
+		var i CountGrowthRunLeadsRow
+		if err := rows.Scan(&i.RunID, &i.Found, &i.Watch); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countUserLeads = `-- name: CountUserLeads :one
 SELECT
   COUNT(*) FILTER (WHERE tier = 'qualified' AND delivered_at IS NULL)::bigint AS deliverable,
@@ -760,6 +804,45 @@ func (q *Queries) GetLeadByPlatformUser(ctx context.Context, arg GetLeadByPlatfo
 		&i.Origin,
 	)
 	return i, err
+}
+
+const getLeadsBestScores = `-- name: GetLeadsBestScores :many
+SELECT DISTINCT ON (le.lead_id) le.lead_id, gms.score, gms.signals
+FROM lead_evidence le
+JOIN leads l ON l.id = le.lead_id
+JOIN growth_message_scores gms
+  ON gms.user_id = l.user_id AND gms.source_id = le.source_id AND gms.message_id = le.message_id
+WHERE le.lead_id = ANY($1::bigint[])
+ORDER BY le.lead_id, gms.score DESC, gms.id DESC
+`
+
+type GetLeadsBestScoresRow struct {
+	LeadID  int64  `json:"lead_id"`
+	Score   int32  `json:"score"`
+	Signals string `json:"signals"`
+}
+
+func (q *Queries) GetLeadsBestScores(ctx context.Context, leadIds []int64) ([]GetLeadsBestScoresRow, error) {
+	rows, err := q.db.QueryContext(ctx, getLeadsBestScores, pq.Array(leadIds))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetLeadsBestScoresRow
+	for rows.Next() {
+		var i GetLeadsBestScoresRow
+		if err := rows.Scan(&i.LeadID, &i.Score, &i.Signals); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getLeadsEvidence = `-- name: GetLeadsEvidence :many

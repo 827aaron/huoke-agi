@@ -10762,6 +10762,19 @@ const docTemplate = `{
                 "score": {
                     "type": "integer"
                 },
+                "score_breakdown": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.ScorePart"
+                    }
+                },
+                "signals": {
+                    "description": "Signals and ScoreBreakdown come from the best judged message of the evidence; both\nare empty for a lead no judgement scored, such as one added by hand.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "task_id": {
                     "type": "integer"
                 },
@@ -11153,6 +11166,17 @@ const docTemplate = `{
                 }
             }
         },
+        "growth.ScorePart": {
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "integer"
+                },
+                "signal": {
+                    "type": "string"
+                }
+            }
+        },
         "growth.Scoring": {
             "type": "object",
             "properties": {
@@ -11231,6 +11255,35 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "growth.SourceStats": {
+            "type": "object",
+            "properties": {
+                "exhausted": {
+                    "type": "integer"
+                },
+                "invalid": {
+                    "type": "integer"
+                },
+                "joined": {
+                    "type": "integer"
+                },
+                "not_joinable": {
+                    "type": "integer"
+                },
+                "pending": {
+                    "type": "integer"
+                },
+                "read": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "unresolved": {
+                    "type": "integer"
                 }
             }
         },
@@ -14012,6 +14065,10 @@ const docTemplate = `{
                 "flow_id": {
                     "type": "integer"
                 },
+                "found": {
+                    "description": "Found and Watch count the qualified and watchlist leads its task found or it delivered.",
+                    "type": "integer"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -14021,8 +14078,16 @@ const docTemplate = `{
                 "notify_status": {
                     "type": "string"
                 },
+                "round": {
+                    "description": "Round numbers the rounds of a flow from 1, oldest first.",
+                    "type": "integer"
+                },
                 "schedule_id": {
                     "type": "integer"
+                },
+                "sources": {
+                    "description": "Sources is the owner's pool now; it is the same on every round.",
+                    "$ref": "#/definitions/growth.SourceStats"
                 },
                 "status": {
                     "type": "string"
@@ -14031,6 +14096,9 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "task_id": {
+                    "type": "integer"
+                },
+                "watch": {
                     "type": "integer"
                 }
             }

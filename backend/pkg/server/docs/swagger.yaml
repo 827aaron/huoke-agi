@@ -247,6 +247,17 @@ definitions:
         type: string
       score:
         type: integer
+      score_breakdown:
+        items:
+          $ref: '#/definitions/growth.ScorePart'
+        type: array
+      signals:
+        description: |-
+          Signals and ScoreBreakdown come from the best judged message of the evidence; both
+          are empty for a lead no judgement scored, such as one added by hand.
+        items:
+          type: string
+        type: array
       task_id:
         type: integer
       tier:
@@ -515,6 +526,13 @@ definitions:
           type: integer
         type: array
     type: object
+  growth.ScorePart:
+    properties:
+      points:
+        type: integer
+      signal:
+        type: string
+    type: object
   growth.Scoring:
     properties:
       qualified:
@@ -571,6 +589,25 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  growth.SourceStats:
+    properties:
+      exhausted:
+        type: integer
+      invalid:
+        type: integer
+      joined:
+        type: integer
+      not_joinable:
+        type: integer
+      pending:
+        type: integer
+      read:
+        type: integer
+      total:
+        type: integer
+      unresolved:
+        type: integer
     type: object
   growth.SourceUpdate:
     properties:
@@ -2534,19 +2571,31 @@ definitions:
         type: string
       flow_id:
         type: integer
+      found:
+        description: Found and Watch count the qualified and watchlist leads its task
+          found or it delivered.
+        type: integer
       id:
         type: integer
       notify_error:
         type: string
       notify_status:
         type: string
+      round:
+        description: Round numbers the rounds of a flow from 1, oldest first.
+        type: integer
       schedule_id:
         type: integer
+      sources:
+        $ref: '#/definitions/growth.SourceStats'
+        description: Sources is the owner's pool now; it is the same on every round.
       status:
         type: string
       target:
         type: integer
       task_id:
+        type: integer
+      watch:
         type: integer
     type: object
   services.growthRuns:
