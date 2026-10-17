@@ -5805,6 +5805,278 @@
                 }
             }
         },
+        "/growth/schedules": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Retrieve the schedules that repeat the user's tasks",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "only schedules repeating this flow",
+                        "name": "flow_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "schedules received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/services.growthSchedules"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid query",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "getting schedules not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting schedules",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Repeat a task on the chosen days; each start opens a new task delivered by the end time",
+                "parameters": [
+                    {
+                        "description": "schedule",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/growth.ScheduleInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "schedule saved successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.ScheduleView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid schedule",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "saving the schedule not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "task not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on saving the schedule",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/schedules/{scheduleID}": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Change a schedule; flow_id is ignored, an empty input keeps the saved one",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "schedule id",
+                        "name": "scheduleID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "schedule",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/growth.ScheduleInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "schedule saved successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.ScheduleView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid schedule",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "saving the schedule not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "schedule not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on saving the schedule",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Remove a schedule; the tasks it started are kept",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "schedule id",
+                        "name": "scheduleID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "schedule deleted successful",
+                        "schema": {
+                            "$ref": "#/definitions/SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid schedule id",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "deleting the schedule not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "schedule not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on deleting the schedule",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/growth/settings/": {
             "get": {
                 "security": [
@@ -10362,6 +10634,117 @@
                 }
             }
         },
+        "growth.ScheduleInput": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "days": {
+                    "type": "string",
+                    "enum": [
+                        "daily",
+                        "weekdays",
+                        "weekly",
+                        "once"
+                    ]
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "end_time": {
+                    "type": "string",
+                    "example": "06:00"
+                },
+                "flow_id": {
+                    "type": "integer"
+                },
+                "input": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string",
+                    "example": "02:00"
+                },
+                "timezone": {
+                    "type": "string",
+                    "example": "Asia/Bangkok"
+                },
+                "weekdays": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
+        "growth.ScheduleRun": {
+            "type": "object",
+            "properties": {
+                "deadline_at": {
+                    "type": "string"
+                },
+                "delivered_count": {
+                    "type": "integer"
+                },
+                "run_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "target": {
+                    "type": "integer"
+                }
+            }
+        },
+        "growth.ScheduleView": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "days": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "flow_id": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "input": {
+                    "type": "string"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "last_run": {
+                    "$ref": "#/definitions/growth.ScheduleRun"
+                },
+                "next_start_at": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "timezone": {
+                    "type": "string"
+                },
+                "weekdays": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                }
+            }
+        },
         "growth.Scoring": {
             "type": "object",
             "properties": {
@@ -13191,6 +13574,9 @@
                 "created_at": {
                     "type": "string"
                 },
+                "deadline_at": {
+                    "type": "string"
+                },
                 "delivered_count": {
                     "type": "integer"
                 },
@@ -13208,6 +13594,9 @@
                 },
                 "notify_status": {
                     "type": "string"
+                },
+                "schedule_id": {
+                    "type": "integer"
                 },
                 "status": {
                     "type": "string"
@@ -13248,6 +13637,20 @@
                 },
                 "provider": {
                     "type": "string"
+                }
+            }
+        },
+        "services.growthSchedules": {
+            "type": "object",
+            "properties": {
+                "schedules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.ScheduleView"
+                    }
+                },
+                "total": {
+                    "type": "integer"
                 }
             }
         },

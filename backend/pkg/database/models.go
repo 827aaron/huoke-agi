@@ -1038,6 +1038,28 @@ type GrowthRun struct {
 	NotifiedAt     sql.NullTime  `json:"notified_at"`
 	CreatedAt      sql.NullTime  `json:"created_at"`
 	UpdatedAt      sql.NullTime  `json:"updated_at"`
+	DeadlineAt     sql.NullTime  `json:"deadline_at"`
+	ScheduleID     sql.NullInt64 `json:"schedule_id"`
+}
+
+type GrowthSchedule struct {
+	ID           int64         `json:"id"`
+	UserID       int64         `json:"user_id"`
+	FlowID       sql.NullInt64 `json:"flow_id"`
+	Input        string        `json:"input"`
+	ProviderName string        `json:"provider_name"`
+	Days         string        `json:"days"`
+	Weekdays     []int64       `json:"weekdays"`
+	Date         string        `json:"date"`
+	StartTime    string        `json:"start_time"`
+	EndTime      string        `json:"end_time"`
+	Timezone     string        `json:"timezone"`
+	Enabled      bool          `json:"enabled"`
+	NextStartAt  sql.NullTime  `json:"next_start_at"`
+	LastRunID    sql.NullInt64 `json:"last_run_id"`
+	LastError    string        `json:"last_error"`
+	CreatedAt    sql.NullTime  `json:"created_at"`
+	UpdatedAt    sql.NullTime  `json:"updated_at"`
 }
 
 type GrowthSetting struct {

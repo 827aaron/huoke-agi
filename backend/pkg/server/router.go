@@ -476,6 +476,10 @@ func setGrowthGroup(parent *gin.RouterGroup, svc *services.GrowthService) {
 		gg.DELETE("/settings/:kind", auth.PrivilegesRequired("growth.edit"), svc.DeleteSetting)
 		gg.POST("/settings/:kind/test", auth.PrivilegesRequired("growth.edit"), svc.TestSetting)
 		gg.POST("/settings/:kind/models", auth.PrivilegesRequired("growth.edit"), svc.ListModels)
+		gg.GET("/schedules", auth.PrivilegesRequired("growth.view"), svc.ListSchedules)
+		gg.POST("/schedules", auth.PrivilegesRequired("growth.edit"), svc.CreateSchedule)
+		gg.PUT("/schedules/:scheduleID", auth.PrivilegesRequired("growth.edit"), svc.UpdateSchedule)
+		gg.DELETE("/schedules/:scheduleID", auth.PrivilegesRequired("growth.edit"), svc.DeleteSchedule)
 	}
 }
 

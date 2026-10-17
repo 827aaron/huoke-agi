@@ -8,6 +8,7 @@ import (
 	"net/mail"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -57,8 +58,15 @@ func decodePart(t *testing.T, part *multipart.Part) string {
 }
 
 func TestMailer_DeliverySummary_CountsScores(t *testing.T) {
-	subject, body := deliverySummary("Game X", []LeadView{{Score: 9}, {Score: 7}, {Score: 9}}, 50)
+	subject, body := deliverySummary("Game X", []LeadView{{Score: 9}, {Score: 7}, {Score: 9}}, 50, time.Time{})
 	assert.Equal(t, "Game X: 3 leads delivered", subject)
 	assert.Contains(t, body, "Leads delivered: 3 (target 50)")
 	assert.Contains(t, body, "  score 9: 2\n  score 7: 1\n")
+	assert.NotContains(t, body, "end time")
+}
+
+func TestMailer_DeliverySummary_SaysTheRoundClosedAtTheEndTime(t *testing.T) {
+	deadline := time.Date(2026, 10, 19, 6, 0, 0, 0, time.FixedZone("ICT", 7*3600))
+	_, body := deliverySummary("Game X", []LeadView{{Score: 9}}, 50, deadline)
+	assert.Contains(t, body, "Delivered at the schedule's end time, 2026-10-18 23:00 UTC: 1 of the target 50.\n")
 }
