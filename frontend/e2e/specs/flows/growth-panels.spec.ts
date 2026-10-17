@@ -3,7 +3,7 @@ import { expectCleanPage } from '../../helpers/errors.ts';
 import { flowTabsCassette } from '../../mocks/cassettes/flows.ts';
 
 // The mock tier answers /api/v1/growth from the bundle's in-memory sample data: six Telegram leads (four
-// qualified, two on the watch list) and a pool of sources.
+// qualified, two on the watch list) found a day apart, and a pool of sources.
 test.describe('growth prospect and source panels', { tag: '@flows' }, () => {
     test.use({ cassette: flowTabsCassette() });
 
@@ -11,11 +11,20 @@ test.describe('growth prospect and source panels', { tag: '@flows' }, () => {
         await page.goto('/flows/5');
         await page.getByRole('tab', { name: '潜客' }).click();
 
+        await expect(page.getByRole('row', { name: /阿杰 Jay/ })).toBeVisible();
+        await expect(page.getByRole('row', { name: /Mina/ })).toHaveCount(0);
+
+        const collapsedDays = page.getByRole('button', { expanded: false, name: /位 · 合格/ });
+
+        while ((await collapsedDays.count()) > 0) {
+            await collapsedDays.first().click();
+        }
+
         for (const name of ['阿杰 Jay', 'Mina', '老K', 'Arif', '小鱼', 'Thanh']) {
             await expect(page.getByRole('row', { name: new RegExp(name) })).toBeVisible();
         }
 
-        await page.getByRole('combobox').first().click();
+        await page.getByRole('combobox', { exact: true, name: '评分' }).click();
         await page.getByRole('option', { name: '待观察' }).click();
 
         await expect(page.getByRole('row', { name: /小鱼/ })).toBeVisible();

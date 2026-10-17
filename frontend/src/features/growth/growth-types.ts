@@ -74,6 +74,8 @@ export interface GrowthJoinWarning {
 export interface GrowthLead {
     // Ways to reach the lead beside its platform account; empty when it has none.
     contacts?: GrowthLeadContact[];
+    // When the pool first took the lead in: found by the agent or added by hand.
+    created_at: string;
     delivered_at: null | string;
     delivered_task_id: null | number;
     display_name: string;

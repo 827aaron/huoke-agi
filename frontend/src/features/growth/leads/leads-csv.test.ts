@@ -20,6 +20,7 @@ const lead: GrowthLead = {
         { type: 'phone', value: '+66 81 234 5678' },
         { type: 'line', value: 'jay88' },
     ],
+    created_at: '2026-10-15T08:00:00Z',
     delivered_at: null,
     delivered_task_id: null,
     display_name: '阿杰',
