@@ -313,13 +313,31 @@ const zh = {
             'screening.openrouter.api_key': { label: 'OpenRouter 密钥', placeholder: '粘贴 OpenRouter 的密钥' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
+            'embedding.model': '留空用这家服务商默认的向量模型。',
             'embedding.openrouter.api_key': '留空则复用大模型的 OpenRouter 密钥；大模型用的不是 OpenRouter 时必须填。',
             'embedding.openrouter.model': '推荐 openai/text-embedding-3-small，便宜够用；留空就用它。',
-            'telegram.join_ramp': '从账号首次登录那天算起，每天最多加几个群，逗号分隔；排完后按“每天加群上限”。',
-            'telegram.risk_reminders': '关闭后不再显示加群节奏的黄色提醒。',
-            'web_search.api_keys': '可填多个，用完一个自动换下一个。',
+            'embedding.server_url': '只有走中转地址时才填，留空用官方地址。',
+            'telegram.first_sync_days':
+                '新加入的群往回读多少天的历史消息，和“新群回溯消息数”哪个先到就停。默认 7 天；填 0 表示不按天数限制。',
+            'telegram.first_sync_messages':
+                '新加入的群往回最多读多少条消息，和“新群回溯天数”哪个先到就停。默认 300 条；填 0 表示不按条数限制。',
+            'telegram.join_interval_minutes':
+                '同一个号两次加群之间建议隔多久，填范围就每次随机取，例如 3-10。默认 3-10 分钟。只是建议：没到时间只提醒，不会拦住加群。',
+            'telegram.join_ramp':
+                '从这个号在本系统第一次登录那天算起，逐天取值：第 1 个数是第 1 天建议加几个群，第 2 个数是第 2 天，依此类推；排完后按“每天加群上限”。默认 0,0,0,1,1,2,2,3,3,3,3,3,3,3，前 3 天建议不加。老号想跳过预热，填一个数，例如 5，就是从第一天起每天建议 5 个。只是建议：超过只提醒，不会拦住加群。',
+            'telegram.joined_groups_warning':
+                '一个号已加入的群达到这个数时，来源页显示黄色提醒。Telegram 大约 500 个群封顶，默认 450。只提醒，不拦截。',
+            'telegram.joins_per_day':
+                '预热排完以后，每个号 24 小时内建议最多加几个群。默认 5。只是建议：超过只提醒，不会拦住加群。',
+            'telegram.private_joins_per_day':
+                '通过邀请链接（t.me/+ 开头）加私密群，每个号 24 小时内建议最多几个。默认 2。只是建议：超过只提醒，不会拦住加群。',
+            'telegram.read_interval_seconds':
+                '同一个号读完一个群、换去读另一个群之前等多久，范围内随机取。默认 5-15 秒。这一项会真的等待：调小读得更快，但更容易被 Telegram 限流。',
+            'telegram.risk_reminders':
+                '关掉后不再显示加群节奏的黄色提醒（预热、每日上限、间隔、私密群、已加群数），不影响实际加群。默认开。',
+            'web_search.api_keys': '可填多个：每行一个，或用英文逗号隔开；用完一个自动换下一个。',
             'youtube.api_keys':
-                '可填多个，用完一个自动换下一个。注意：同一个 Google 项目里的多个 key 共用额度，多 key 不增加额度；建议向 Google 免费申请提额。',
+                '可填多个：每行一个，或用英文逗号隔开；用完一个自动换下一个。注意：同一个 Google 项目里的多个 key 共用额度，多 key 不增加额度；建议向 Google 免费申请提额。',
         } as Record<string, string>,
         fieldInvalid: {
             api_hash: 'api_hash 应为 32 位字母和数字',
@@ -381,7 +399,8 @@ const zh = {
             customHint:
                 '适用于中转站、自建网关或任何 OpenAI / Anthropic 格式的接口，需填写接口地址、协议、模型名称和 API 密钥。',
             overrides: '自定义设置',
-            overridesHint: '留空则使用该服务商的默认模型和官方地址。',
+            overridesHint: '留空则使用官方地址。',
+            rolesHint: '这家服务商的模型按智能体角色自动分配，不用自己填；想换某个角色用的模型，点下面的链接。',
             rolesLink: '按角色分配模型',
         },
         llmTopUpNote: '新注册的账号请先在服务商后台充值，否则测试会提示额度不足。',
@@ -2328,16 +2347,34 @@ const en: Copy = {
             'screening.openrouter.api_key': { label: 'OpenRouter key', placeholder: 'Paste your OpenRouter key' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
+            'embedding.model': 'Empty uses the provider’s default embedding model.',
             'embedding.openrouter.api_key':
                 'Empty reuses the OpenRouter key of the language model; required when the language model is not on OpenRouter.',
             'embedding.openrouter.model':
                 'openai/text-embedding-3-small is recommended: cheap and good enough. Empty uses it.',
+            'embedding.server_url': 'Only for a relay address; empty uses the official one.',
+            'telegram.first_sync_days':
+                'How many days of history a newly joined group is read back; reading stops at this or at the message count, whichever comes first. Default 7; 0 sets no day limit.',
+            'telegram.first_sync_messages':
+                'How many messages of a newly joined group are read back at most; reading stops at this or at the day count, whichever comes first. Default 300; 0 sets no message limit.',
+            'telegram.join_interval_minutes':
+                'Suggested gap between two joins of one account; a range picks a random value each time, such as 3-10. Default 3-10 minutes. A suggestion only: joining sooner shows a reminder and is not stopped.',
             'telegram.join_ramp':
-                'Most joins on each day from the account’s first sign-in, comma separated; after that, Joins per day applies.',
-            'telegram.risk_reminders': 'Off hides the yellow join-pace reminders.',
-            'web_search.api_keys': 'Several keys are fine; when one runs out the next is used.',
+                'Taken day by day from the account’s first sign-in here: the first number is the suggested joins on day 1, the second on day 2, and so on; after the list, Joins per day applies. Default 0,0,0,1,1,2,2,3,3,3,3,3,3,3, so no joins are suggested in the first 3 days. To skip the warm-up for an old account, enter one number, such as 5, for 5 a day from day 1. A suggestion only: going past it shows a reminder and is not stopped.',
+            'telegram.joined_groups_warning':
+                'When an account has joined this many groups, the Sources page shows a yellow reminder. Telegram caps an account at about 500 groups; default 450. A reminder only.',
+            'telegram.joins_per_day':
+                'Suggested joins per account in 24 hours once the warm-up list ends. Default 5. A suggestion only: going past it shows a reminder and is not stopped.',
+            'telegram.private_joins_per_day':
+                'Suggested joins of private groups through invite links (t.me/+...) per account in 24 hours. Default 2. A suggestion only: going past it shows a reminder and is not stopped.',
+            'telegram.read_interval_seconds':
+                'How long an account waits before moving from one group to read another, a random value in the range. Default 5-15 seconds. This wait is real: lower reads faster but is more likely to be rate-limited by Telegram.',
+            'telegram.risk_reminders':
+                'Off hides the yellow join-pace reminders (warm-up, daily joins, gap, private groups, joined groups); joins are not affected. Default on.',
+            'web_search.api_keys':
+                'Several keys are fine, one per line or comma separated; when one runs out the next is used.',
             'youtube.api_keys':
-                'Several keys are fine; when one runs out the next is used. Keys from the same Google project share one quota, so more keys add no quota; ask Google for a free quota increase instead.',
+                'Several keys are fine, one per line or comma separated; when one runs out the next is used. Keys from the same Google project share one quota, so more keys add no quota; ask Google for a free quota increase instead.',
         },
         fieldInvalid: {
             api_hash: 'api_hash is 32 letters and digits',
@@ -2400,7 +2437,9 @@ const en: Copy = {
             customHint:
                 'For relays, self-hosted gateways or any OpenAI- or Anthropic-format API: fill in the endpoint, protocol, model name and API key.',
             overrides: 'Custom settings',
-            overridesHint: 'Leave empty to use the provider’s default model and official endpoint.',
+            overridesHint: 'Leave empty to use the official endpoint.',
+            rolesHint:
+                'This provider’s models are assigned per agent role, so there is none to enter; to change the model of a role, follow the link below.',
             rolesLink: 'Assign models per role',
         },
         llmTopUpNote: 'New accounts need a top-up first, or the test reports no quota.',
