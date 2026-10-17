@@ -39,6 +39,10 @@ type TelegramConfig struct {
 	// one is returned as a FloodWaitError so the caller is not blocked.
 	MaxInlineFloodWait time.Duration `env:"TG_MAX_INLINE_FLOOD_WAIT" envDefault:"60s"`
 	CallTimeout        time.Duration `env:"TG_CALL_TIMEOUT" envDefault:"30s"`
+	// ConnectTimeout bounds the wait for a login's connection, below the HTTP
+	// server's request timeout: gotd reconnects forever and would otherwise
+	// leave the operator with a gateway timeout instead of the reason.
+	ConnectTimeout time.Duration `env:"TG_CONNECT_TIMEOUT" envDefault:"15s"`
 
 	// Anti-spam pacing defaults; zero turns each off. The gap between two
 	// requests is random within [MinCallInterval, MaxCallInterval].
@@ -46,9 +50,11 @@ type TelegramConfig struct {
 	MaxCallInterval time.Duration `env:"TG_MAX_CALL_INTERVAL" envDefault:"3s"`
 	MaxConcurrency  int           `env:"TG_MAX_CONCURRENCY" envDefault:"1"`
 	// Joins are spaced JoinWarmupInterval apart for the account's first
-	// JoinWarmupCount joins, then JoinInterval, each plus up to 50% jitter.
-	JoinInterval       time.Duration `env:"TG_JOIN_INTERVAL" envDefault:"90s"`
-	JoinWarmupInterval time.Duration `env:"TG_JOIN_WARMUP_INTERVAL" envDefault:"5m"`
+	// JoinWarmupCount joins, then JoinInterval, each plus up to 50% jitter; a
+	// join inside the gap is refused as a rate limit. Off by default: the
+	// growth service suggests a join pace the customer edits, and only reminds.
+	JoinInterval       time.Duration `env:"TG_JOIN_INTERVAL" envDefault:"0s"`
+	JoinWarmupInterval time.Duration `env:"TG_JOIN_WARMUP_INTERVAL" envDefault:"0s"`
 	JoinWarmupCount    int           `env:"TG_JOIN_WARMUP_COUNT" envDefault:"10"`
 }
 

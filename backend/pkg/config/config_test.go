@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -83,6 +84,7 @@ func TestConfig_GetSecretPatterns_FindsEachSecretVerbatim(t *testing.T) {
 		TavilyAPIKey:            "tvly-1234567890abcdefghijklmnopqrstuvwxyz",
 		FirecrawlAPIKey:         "fc-123",
 		PerplexityAPIKey:        "perplexity-123",
+		TypeSafeAPIKey:          "ts-1234567890abcdef",
 		ProxyURL:                "http://user:password@proxy.example.com:8080",
 		LangfusePublicKey:       "pk-lf-1234567890abcdefghijklmnopqrstuvwxyz",
 		LangfuseSecretKey:       "sk-lf-1234567890abcdefghijklmnopqrstuvwxyz",
@@ -121,7 +123,7 @@ func clearConfigEnv(t *testing.T) {
 
 	envVars := []string{
 		"GROWTH_ENABLED", "TG_API_ID", "TG_API_HASH", "TG_SESSION_DIR", "YOUTUBE_API_KEY", "GROWTH_PROXY_URL", "BROWSER_SERVICE_URL", "BROWSER_TOKEN",
-		"GROWTH_SECRET_KEY",
+		"GROWTH_SECRET_KEY", "TYPESAFE_API_KEY", "TYPESAFE_API_URL",
 		"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_TLS",
 		"DATABASE_URL", "DEBUG", "DATA_DIR", "ASK_USER", "TENANT_ID", "INSTALLATION_ID", "LICENSE_KEY",
 		"DOCKER_INSIDE", "DOCKER_NET_ADMIN", "DOCKER_SOCKET", "DOCKER_NETWORK",
@@ -195,6 +197,8 @@ func TestConfig_NewConfig_FillsDefaultsForAnEmptyEnvironment(t *testing.T) {
 	assert.Equal(t, "0.0.0.0", config.ServerHost)
 	assert.Equal(t, false, config.Debug)
 	assert.Equal(t, "./data", config.DataDir)
+	assert.Equal(t, time.Duration(0), config.UpdateCheckInterval)
+	assert.Len(t, config.GrowthSecretKey, 64)
 	assert.Equal(t, false, config.ServerUseSSL)
 	assert.Nil(t, config.StaticURL)
 	assert.Equal(t, []string{"*"}, config.CorsOrigins)
@@ -299,6 +303,85 @@ func TestConfig_NewConfig_ReadsTheEnvironment(t *testing.T) {
 
 		assert.Equal(t, 0, config.HTTPClientTimeout)
 		assert.Equal(t, 0, config.TerminalToolTimeout)
+	})
+}
+
+func TestConfig_EnsureGrowthSecretKey_KeepsTheEnvOrStoredKeyAndGeneratesOnlyWhenItCanStoreIt(t *testing.T) {
+	tests := []struct {
+		name       string
+		env        string
+		file       string
+		dataDirIsA string
+		want       string
+		wantStored bool
+	}{
+		{name: "nothing yet generates and stores a key", wantStored: true},
+		{name: "a stored key is read back", file: "stored-key\n", want: "stored-key"},
+		{name: "the env value wins over a stored key", env: "env-key", file: "stored-key", want: "env-key"},
+		{name: "a data path that is not a directory leaves the key empty", dataDirIsA: "file", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dataDir := t.TempDir()
+			if tt.dataDirIsA == "file" {
+				dataDir = filepath.Join(dataDir, "data")
+				require.NoError(t, os.WriteFile(dataDir, []byte("not a directory"), 0644))
+			}
+			keyPath := filepath.Join(dataDir, "growth_secret_key")
+			if tt.file != "" {
+				require.NoError(t, os.WriteFile(keyPath, []byte(tt.file), 0600))
+			}
+
+			config := &Config{DataDir: dataDir, GrowthSecretKey: tt.env}
+			ensureGrowthSecretKey(config)
+
+			if !tt.wantStored {
+				assert.Equal(t, tt.want, config.GrowthSecretKey)
+				return
+			}
+			assert.Len(t, config.GrowthSecretKey, 64)
+			stored, err := os.ReadFile(keyPath)
+			require.NoError(t, err)
+			assert.Equal(t, config.GrowthSecretKey, string(stored))
+			info, err := os.Stat(keyPath)
+			require.NoError(t, err)
+			assert.Equal(t, os.FileMode(0600), info.Mode().Perm())
+
+			again := &Config{DataDir: dataDir}
+			ensureGrowthSecretKey(again)
+			assert.Equal(t, config.GrowthSecretKey, again.GrowthSecretKey)
+		})
+	}
+}
+
+func TestConfig_EnsureBrowserToken_GeneratesAReadableTokenOnlyForAConfiguredService(t *testing.T) {
+	t.Run("no service leaves the token empty", func(t *testing.T) {
+		dataDir := t.TempDir()
+		config := &Config{DataDir: dataDir}
+		ensureBrowserToken(config)
+		assert.Empty(t, config.BrowserToken)
+		assert.NoFileExists(t, filepath.Join(dataDir, "browser", "token"))
+	})
+
+	t.Run("a configured service gets a stored token the service can read", func(t *testing.T) {
+		dataDir := t.TempDir()
+		config := &Config{DataDir: dataDir, BrowserServiceURL: "http://browser:7070"}
+		ensureBrowserToken(config)
+		assert.Len(t, config.BrowserToken, 64)
+		tokenPath := filepath.Join(dataDir, "browser", "token")
+		stored, err := os.ReadFile(tokenPath)
+		require.NoError(t, err)
+		assert.Equal(t, config.BrowserToken, string(stored))
+		info, err := os.Stat(tokenPath)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0644), info.Mode().Perm())
+	})
+
+	t.Run("the env value is kept", func(t *testing.T) {
+		config := &Config{DataDir: t.TempDir(), BrowserServiceURL: "http://browser:7070", BrowserToken: "env-token"}
+		ensureBrowserToken(config)
+		assert.Equal(t, "env-token", config.BrowserToken)
 	})
 }
 

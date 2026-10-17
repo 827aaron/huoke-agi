@@ -40,7 +40,7 @@ func TestReferenceDrift_ComposeReferenceDefaults_ReadsTheShippedComposeFiles(t *
 	require.NoError(t, err)
 
 	assert.GreaterOrEqual(t, len(defaults), 20, "every image is parameterised, so every one has a default")
-	assert.Equal(t, "vxcontrol/pentagi:latest", defaults["PENTAGI_IMAGE"])
+	assert.Equal(t, "kelai-agi:latest", defaults["PENTAGI_IMAGE"])
 	assert.Equal(t, "postgres:16", defaults["POSTGRES_IMAGE"])
 	// Two services ship the same image under different variables, so the variable is the key.
 	assert.Equal(t, "clickhouse/clickhouse-server:24", defaults["CLICKHOUSE_IMAGE"])

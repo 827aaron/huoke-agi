@@ -17,6 +17,8 @@ import (
 type growthSources struct {
 	Sources []growth.SourceView `json:"sources"`
 	Total   uint64              `json:"total"`
+	// Warnings names the accounts nearing Telegram's cap on joined groups; joins go on.
+	Warnings []growth.JoinWarning `json:"warnings"`
 }
 
 type growthAddSourcesRequest struct {
@@ -79,7 +81,14 @@ func (s *GrowthService) ListSources(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, http.StatusOK, growthSources{Sources: sources, Total: uint64(len(sources))})
+	warnings, err := s.svc.JoinWarnings(c, uid)
+	if err != nil {
+		logger.FromContext(c).WithError(err).Errorf("error counting joined growth sources")
+		response.Error(c, response.ErrInternal, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, growthSources{Sources: sources, Total: uint64(len(sources)), Warnings: warnings})
 }
 
 // AddSources is a function to add sources to the pool by hand
@@ -429,6 +438,8 @@ func accountError(c *gin.Context, err error) {
 		response.Error(c, response.ErrGrowthLoginRejected, err)
 	case errors.As(err, new(*connectors.FloodWaitError)):
 		response.Error(c, response.ErrGrowthRateLimited, err)
+	case errors.Is(err, connectors.ErrUnreachable):
+		response.Error(c, response.ErrGrowthUnreachable, err)
 	default:
 		logger.FromContext(c).WithError(err).Errorf("error handling growth account")
 		response.Error(c, response.ErrInternal, err)

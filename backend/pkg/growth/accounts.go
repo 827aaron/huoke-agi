@@ -52,6 +52,15 @@ type AccountView struct {
 	ProxySource       string          `json:"proxy_source"`
 	Fingerprint       json.RawMessage `json:"fingerprint,omitempty" swaggertype:"object"`
 	ExternalBrowserWS string          `json:"external_browser_ws,omitempty"`
+	// The join pace counts days from FirstSignedInAt; NextJoinAt is the earliest next join
+	// its interval allows. JoinedSources and JoinsToday (last 24 hours) are filled by ListAccounts.
+	FirstSignedInAt *time.Time `json:"first_signed_in_at,omitempty"`
+	NextJoinAt      *time.Time `json:"next_join_at,omitempty"`
+	JoinedSources   int64      `json:"joined_sources"`
+	JoinsToday      int64      `json:"joins_today"`
+	// JoinAdvice holds the reminder codes a next join would raise, plus joined_groups_high
+	// at the joined-groups reminder count; empty with reminders off.
+	JoinAdvice []string `json:"join_advice,omitempty"`
 }
 
 // AccountUpdate changes an account; a nil field keeps its value and an empty string
@@ -98,12 +107,39 @@ func (s *Service) ListAccounts(ctx context.Context, userID int64) ([]AccountView
 	if err != nil {
 		return nil, err
 	}
+	counts, err := s.db.GetUserAccountJoinCounts(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count account joins: %w", err)
+	}
+	pace := s.telegramPace(ctx, userID)
+	byAccount := make(map[int64]database.GetUserAccountJoinCountsRow, len(counts))
+	for _, c := range counts {
+		byAccount[c.AccountID] = c
+	}
 	views := make([]AccountView, 0, len(accounts))
 	for _, a := range accounts {
 		if _, keyed := keyedPlatforms[connectors.Platform(a.Platform)]; keyed {
 			continue
 		}
-		views = append(views, s.accountView(a, cfg))
+		v := s.accountView(a, cfg)
+		c := byAccount[a.ID]
+		v.JoinedSources, v.JoinsToday = c.Joined, c.Joins24h
+		if a.Platform == string(connectors.PlatformTelegram) {
+			l := joinLoad{joins: c.Joins24h, private: c.PrivateJoins24h}
+			if a.FirstSignedInAt.Valid {
+				l.signedInAt = a.FirstSignedInAt.Time
+			} else if a.CreatedAt.Valid {
+				l.signedInAt = a.CreatedAt.Time
+			}
+			if a.NextJoinAt.Valid {
+				l.nextJoinAt = a.NextJoinAt.Time
+			}
+			v.JoinAdvice = pace.advice(time.Now(), l, false)
+			if pace.Reminders && pace.WarnAt > 0 && c.Joined >= int64(pace.WarnAt) {
+				v.JoinAdvice = append(v.JoinAdvice, AdviceJoinedGroups)
+			}
+		}
+		views = append(views, v)
 	}
 	return views, nil
 }
@@ -123,6 +159,10 @@ func (s *Service) accountView(a database.ChannelAccount, cfg *config.Config) Acc
 		ConsecutiveErrors: int(a.ConsecutiveErrors),
 		LastError:         a.LastError,
 		ProxySource:       ProxySourceDirect,
+		FirstSignedInAt:   nullTime(a.FirstSignedInAt.Time, a.FirstSignedInAt.Valid),
+	}
+	if a.NextJoinAt.Valid && a.NextJoinAt.Time.After(now) {
+		v.NextJoinAt = nullTime(a.NextJoinAt.Time, true)
 	}
 	resting := a.RateLimitUntil.Valid && a.RateLimitUntil.Time.After(now)
 	if resting {
@@ -372,12 +412,15 @@ func nullTime(t time.Time, valid bool) *time.Time {
 // a rate limit, preferring an account that already joined sourceID (its cursor and
 // membership are there), then the fewest errors in a row, then the longest unused.
 // With every usable account resting it returns a FloodWaitError for the shortest rest.
+// For a join, an account that already joined sourceID comes first, then one whose next
+// join fits the suggested pace; the advice of the account picked is left in join.
 func (s *Service) pickAccount(
 	ctx context.Context,
 	userID int64,
 	platform connectors.Platform,
 	sourceID int64,
 	tried map[int64]bool,
+	join *joinIntent,
 ) (database.ChannelAccount, error) {
 	rows, err := s.db.GetUsableChannelAccounts(ctx, database.GetUsableChannelAccountsParams{
 		UserID:   userID,
@@ -397,6 +440,7 @@ func (s *Service) pickAccount(
 	var (
 		ready   []database.GetUsableChannelAccountsRow
 		soonest time.Time
+		advice  = map[int64][]string{}
 	)
 	for _, r := range rows {
 		if tried[r.ID] {
@@ -407,6 +451,9 @@ func (s *Service) pickAccount(
 				soonest = r.RateLimitUntil.Time
 			}
 			continue
+		}
+		if join != nil && !r.JoinedSource {
+			advice[r.ID] = join.pace.advice(now, loadOf(r), join.private)
 		}
 		ready = append(ready, r)
 	}
@@ -422,6 +469,9 @@ func (s *Service) pickAccount(
 		if a.JoinedSource != b.JoinedSource {
 			return a.JoinedSource
 		}
+		if len(advice[a.ID]) != len(advice[b.ID]) {
+			return len(advice[a.ID]) < len(advice[b.ID])
+		}
 		if a.ConsecutiveErrors != b.ConsecutiveErrors {
 			return a.ConsecutiveErrors < b.ConsecutiveErrors
 		}
@@ -431,6 +481,9 @@ func (s *Service) pickAccount(
 		return a.LastUsedAt.Time.Before(b.LastUsedAt.Time)
 	})
 	r := ready[0]
+	if join != nil {
+		join.advice[r.ID] = advice[r.ID]
+	}
 	return database.ChannelAccount{
 		ID:                r.ID,
 		UserID:            r.UserID,
@@ -446,14 +499,30 @@ func (s *Service) pickAccount(
 	}, nil
 }
 
+func loadOf(r database.GetUsableChannelAccountsRow) joinLoad {
+	l := joinLoad{joins: r.Joins24h, private: r.PrivateJoins24h}
+	switch {
+	case r.FirstSignedInAt.Valid:
+		l.signedInAt = r.FirstSignedInAt.Time
+	case r.CreatedAt.Valid:
+		l.signedInAt = r.CreatedAt.Time
+	}
+	if r.NextJoinAt.Valid {
+		l.nextJoinAt = r.NextJoinAt.Time
+	}
+	return l
+}
+
 // withAccount runs op on the account pickAccount chooses and moves on to the next one
 // when the platform rate-limits or rejects it. Once no account is left it returns the
-// shortest rate limit seen, or else the last error. sourceID 0 means no preference.
+// shortest rate limit seen, or else the last error. sourceID 0 means no preference;
+// join is nil unless op joins sourceID.
 func (s *Service) withAccount(
 	ctx context.Context,
 	userID int64,
 	platform connectors.Platform,
 	sourceID int64,
+	join *joinIntent,
 	op func(conn connectors.Connector, acc database.ChannelAccount) error,
 ) error {
 	tried := make(map[int64]bool)
@@ -469,7 +538,7 @@ func (s *Service) withAccount(
 	}
 
 	for {
-		acc, err := s.pickAccount(ctx, userID, platform, sourceID, tried)
+		acc, err := s.pickAccount(ctx, userID, platform, sourceID, tried, join)
 		if err != nil {
 			keepShortest(err)
 			switch {

@@ -9878,7 +9878,24 @@ const docTemplate = `{
                 "fingerprint": {
                     "type": "object"
                 },
+                "first_signed_in_at": {
+                    "description": "The join pace counts days from FirstSignedInAt; NextJoinAt is the earliest next join\nits interval allows. JoinedSources and JoinsToday (last 24 hours) are filled by ListAccounts.",
+                    "type": "string"
+                },
                 "id": {
+                    "type": "integer"
+                },
+                "join_advice": {
+                    "description": "JoinAdvice holds the reminder codes a next join would raise, plus joined_groups_high\nat the joined-groups reminder count; empty with reminders off.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "joined_sources": {
+                    "type": "integer"
+                },
+                "joins_today": {
                     "type": "integer"
                 },
                 "kind": {
@@ -9897,6 +9914,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "last_used_at": {
+                    "type": "string"
+                },
+                "next_join_at": {
                     "type": "string"
                 },
                 "platform": {
@@ -9956,6 +9976,26 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "source_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "growth.JoinWarning": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "integer"
+                },
+                "joined_sources": {
+                    "type": "integer"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "platform": {
+                    "type": "string"
+                },
+                "warn_at": {
                     "type": "integer"
                 }
             }
@@ -10208,6 +10248,10 @@ const docTemplate = `{
         "growth.SettingView": {
             "type": "object",
             "properties": {
+                "configured": {
+                    "description": "Configured is false while nothing, saved or in .env, sets this kind.",
+                    "type": "boolean"
+                },
                 "fields": {
                     "type": "object",
                     "additionalProperties": {
@@ -13043,6 +13087,13 @@ const docTemplate = `{
                 },
                 "total": {
                     "type": "integer"
+                },
+                "warnings": {
+                    "description": "Warnings names the accounts nearing Telegram's cap on joined groups; joins go on.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.JoinWarning"
+                    }
                 }
             }
         },

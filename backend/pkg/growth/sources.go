@@ -1,6 +1,7 @@
 package growth
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/growth/connectors"
 
+	"github.com/sirupsen/logrus"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -83,11 +86,15 @@ const (
 	AddResultInvalid    = "invalid"
 )
 
+// JoinOutcome is one source's join. Advice holds the reminder codes of a join that went
+// past the account's suggested pace, and Warning says the same in a sentence.
 type JoinOutcome struct {
-	SourceID   int64  `json:"source_id"`
-	Title      string `json:"title,omitempty"`
-	JoinStatus string `json:"join_status"`
-	Reason     string `json:"reason,omitempty"`
+	SourceID   int64    `json:"source_id"`
+	Title      string   `json:"title,omitempty"`
+	JoinStatus string   `json:"join_status"`
+	Reason     string   `json:"reason,omitempty"`
+	Advice     []string `json:"advice,omitempty"`
+	Warning    string   `json:"warning,omitempty"`
 }
 
 type MessageView struct {
@@ -102,9 +109,17 @@ type MessageView struct {
 	Text           string    `json:"text"`
 }
 
+// SyncResult is one source's read. Read counts every message read, Skipped those the
+// pre-screen left out; CaughtUp is set on a forward read. Error is set instead when a
+// batch read of this source failed.
 type SyncResult struct {
 	Source   SourceView    `json:"source"`
 	Messages []MessageView `json:"messages"`
+	Read     int           `json:"read"`
+	Skipped  int           `json:"skipped_count"`
+	CaughtUp *bool         `json:"caught_up,omitempty"`
+	Error    string        `json:"error,omitempty"`
+	Err      error         `json:"-"`
 }
 
 // DetectPlatform tells a Telegram reference from a web page; anything that is not
@@ -353,7 +368,7 @@ func (s *Service) SearchSources(
 		return nil, errors.New("query is required")
 	}
 	var views []SourceView
-	err := s.withAccount(ctx, scope.UserID, platform, 0, func(conn connectors.Connector, acc database.ChannelAccount) error {
+	err := s.withAccount(ctx, scope.UserID, platform, 0, nil, func(conn connectors.Connector, acc database.ChannelAccount) error {
 		if !connectors.Has(conn, connectors.CapSearchSources) {
 			return fmt.Errorf("%w: search on %s", connectors.ErrUnsupported, platform)
 		}
@@ -376,7 +391,7 @@ func (s *Service) RecommendSources(ctx context.Context, scope Scope, sourceID in
 		return nil, fmt.Errorf("%w: recommendations exist only for Telegram sources", connectors.ErrUnsupported)
 	}
 	var views []SourceView
-	err = s.withAccount(ctx, scope.UserID, connectors.Platform(src.Platform), src.ID,
+	err = s.withAccount(ctx, scope.UserID, connectors.Platform(src.Platform), src.ID, nil,
 		func(conn connectors.Connector, acc database.ChannelAccount) error {
 			if !connectors.Has(conn, connectors.CapRecommendSources) {
 				return fmt.Errorf("%w: recommendations on %s", connectors.ErrUnsupported, src.Platform)
@@ -455,7 +470,7 @@ func (s *Service) AddSources(
 		}
 
 		var storeErr error
-		err = s.withAccount(ctx, scope.UserID, platform, 0, func(conn connectors.Connector, acc database.ChannelAccount) error {
+		err = s.withAccount(ctx, scope.UserID, platform, 0, nil, func(conn connectors.Connector, acc database.ChannelAccount) error {
 			if !connectors.Has(conn, connectors.CapResolveSource) {
 				return fmt.Errorf("%w: resolving links on %s", connectors.ErrUnsupported, platform)
 			}
@@ -629,10 +644,11 @@ func (s *Service) joinOne(ctx context.Context, scope Scope, src database.GrowthS
 	}
 
 	var outcome JoinOutcome
-	err := s.withAccount(ctx, scope.UserID, connectors.Platform(src.Platform), src.ID,
+	join := s.joinIntentFor(ctx, scope.UserID, src)
+	err := s.withAccount(ctx, scope.UserID, connectors.Platform(src.Platform), src.ID, join,
 		func(conn connectors.Connector, acc database.ChannelAccount) error {
 			var err error
-			outcome, err = s.joinWith(ctx, scope, conn, acc, src)
+			outcome, err = s.joinWith(ctx, scope, conn, acc, src, join)
 			return err
 		})
 	return outcome, err
@@ -644,6 +660,7 @@ func (s *Service) joinWith(
 	conn connectors.Connector,
 	acc database.ChannelAccount,
 	src database.GrowthSource,
+	join *joinIntent,
 ) (JoinOutcome, error) {
 	if !connectors.Has(conn, connectors.CapJoinSource) {
 		return JoinOutcome{}, fmt.Errorf("%w: join on %s", connectors.ErrUnsupported, src.Platform)
@@ -668,6 +685,11 @@ func (s *Service) joinWith(
 	if err != nil {
 		return JoinOutcome{}, err
 	}
+	if join != nil {
+		_ = s.db.ScheduleChannelAccountJoin(context.WithoutCancel(ctx), database.ScheduleChannelAccountJoinParams{
+			ID: acc.ID, NextJoinAt: sql.NullTime{Time: time.Now().Add(join.pace.gap()), Valid: true},
+		})
+	}
 
 	if res.Source != nil && src.Status == SourceStatusUnresolved {
 		gs, _, err := s.upsertFound(ctx, scope, acc, *res.Source, src.Origin, src.Query, nullInt(src.DiscoveredFromID))
@@ -687,19 +709,34 @@ func (s *Service) joinWith(
 		status = string(connectors.JoinStatusNotJoinable)
 	}
 	if _, err := s.db.UpdateAccountSourceJoin(ctx, database.UpdateAccountSourceJoinParams{
-		ID:         as.ID,
-		JoinStatus: status,
-		JoinError:  res.Reason,
+		ID:          as.ID,
+		JoinStatus:  status,
+		JoinError:   res.Reason,
+		PrivateJoin: join != nil && join.private,
 	}); err != nil {
 		return JoinOutcome{}, fmt.Errorf("failed to record join of source %d: %w", src.ID, err)
 	}
 
-	return JoinOutcome{SourceID: src.ID, Title: src.Title, JoinStatus: status, Reason: res.Reason}, nil
+	outcome := JoinOutcome{SourceID: src.ID, Title: src.Title, JoinStatus: status, Reason: res.Reason}
+	if join != nil && len(join.advice[acc.ID]) > 0 {
+		outcome.Advice, outcome.Warning = join.advice[acc.ID], adviceSentence(join.advice[acc.ID])
+		logrus.WithContext(ctx).WithFields(logrus.Fields{
+			"user_id": scope.UserID, "account_id": acc.ID, "source_id": src.ID, "advice": outcome.Advice,
+		}).Info("join went past the account's suggested pace")
+	}
+	return outcome, nil
 }
 
-// SyncSource reads one page of a source's history and advances the per-account cursor:
-// "older" continues backwards from the oldest message read so far, "newer" fetches what
-// arrived after the newest one.
+// SyncOptions shape a read. All skips the pre-screen.
+type SyncOptions struct {
+	Direction string
+	Limit     int
+	All       bool
+}
+
+// SyncSource reads a source's history and advances the per-account cursor: "older"
+// continues one page backwards from the oldest message read so far, "newer" reads
+// forward from the newest one until it has caught up.
 func (s *Service) SyncSource(
 	ctx context.Context,
 	scope Scope,
@@ -707,6 +744,32 @@ func (s *Service) SyncSource(
 	direction string,
 	limit int,
 ) (SyncResult, error) {
+	return s.syncOne(ctx, scope, sourceID, SyncOptions{Direction: direction, Limit: limit})
+}
+
+// SyncSources reads several sources in turn and stops early, keeping what it read, when
+// the platform rate-limits or no account can read.
+func (s *Service) SyncSources(ctx context.Context, scope Scope, sourceIDs []int64, opt SyncOptions) ([]SyncResult, error) {
+	results := make([]SyncResult, 0, len(sourceIDs))
+	for _, id := range sourceIDs {
+		res, err := s.syncOne(ctx, scope, id, opt)
+		if err != nil {
+			res.Source.ID, res.Error, res.Err, res.Messages = id, err.Error(), err, []MessageView{}
+			results = append(results, res)
+			var flood *connectors.FloodWaitError
+			if errors.As(err, &flood) || errors.Is(err, ErrNoAccount) || errors.Is(err, connectors.ErrUnauthorized) ||
+				errors.Is(err, ErrNoJudge) ||
+				errors.Is(err, connectors.ErrNoConnector) || ctx.Err() != nil {
+				return results, err
+			}
+			continue
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
+
+func (s *Service) syncOne(ctx context.Context, scope Scope, sourceID int64, opt SyncOptions) (SyncResult, error) {
 	src, err := s.userSource(ctx, scope.UserID, sourceID)
 	if err != nil {
 		return SyncResult{}, err
@@ -714,15 +777,33 @@ func (s *Service) SyncSource(
 	if src.Platform == string(connectors.PlatformWeb) {
 		return SyncResult{Source: s.viewSource(ctx, src, 0)}, fmt.Errorf("%w: open %s", ErrBrowserSource, src.Link)
 	}
-	var result SyncResult
-	err = s.withAccount(ctx, scope.UserID, connectors.Platform(src.Platform), src.ID,
+	sc, err := s.screenerFor(ctx, scope.UserID)
+	if err != nil {
+		return SyncResult{Source: s.viewSource(ctx, src, 0)}, err
+	}
+	var (
+		result   SyncResult
+		judgeErr error
+	)
+	err = s.withAccount(ctx, scope.UserID, connectors.Platform(src.Platform), src.ID, nil,
 		func(conn connectors.Connector, acc database.ChannelAccount) error {
 			var err error
-			result, err = s.syncWith(ctx, scope, conn, acc, src, direction, limit)
+			result, err = s.syncWith(ctx, scope, conn, acc, src, opt, sc)
+			// A refused judgement key says nothing about the platform account.
+			if errors.Is(err, ErrNoJudge) {
+				judgeErr, err = err, nil
+			}
 			return err
 		})
+	if judgeErr != nil {
+		return SyncResult{Source: s.viewSource(ctx, src, 0)}, judgeErr
+	}
 	return result, err
 }
+
+// maxCatchUpPages bounds one forward read; a source further behind says so and the next
+// call continues from where this one stopped.
+const maxCatchUpPages = 10
 
 // syncWith reads with one account. The cursor is per account, so an account that takes
 // over a source starts from its newest message; leads and evidence it finds again are
@@ -733,8 +814,8 @@ func (s *Service) syncWith(
 	conn connectors.Connector,
 	acc database.ChannelAccount,
 	src database.GrowthSource,
-	direction string,
-	limit int,
+	opt SyncOptions,
+	sc *screener,
 ) (SyncResult, error) {
 	var err error
 	if !connectors.Has(conn, connectors.CapReadHistory) {
@@ -749,38 +830,69 @@ func (s *Service) syncWith(
 		return SyncResult{}, fmt.Errorf("failed to load account view of source %d: %w", src.ID, err)
 	}
 
-	req := connectors.HistoryRequest{Limit: clampLimit(limit, defaultPageLimit, maxHistoryLimit)}
-	switch direction {
+	limit := clampLimit(opt.Limit, defaultPageLimit, maxHistoryLimit)
+	telegram := src.Platform == string(connectors.PlatformTelegram)
+	pace := defaultTelegramPace
+	if telegram {
+		pace = s.telegramPace(ctx, scope.UserID)
+	}
+
+	var (
+		messages  []connectors.Message
+		exhausted bool
+		caughtUp  bool
+	)
+	switch opt.Direction {
 	case "", DirectionOlder:
-		direction = DirectionOlder
 		if as.HistoryExhausted {
 			return SyncResult{Source: s.viewSource(ctx, src, acc.ID), Messages: []MessageView{}}, nil
 		}
-		req.OffsetID = as.OldestMessageID
+		if telegram {
+			if err := s.awaitReadGap(ctx, acc.ID, src.ID, pace); err != nil {
+				return SyncResult{}, err
+			}
+		}
+		messages, exhausted, err = s.readOlder(ctx, conn, acc, src, as, limit, telegram, pace)
 	case DirectionNewer:
-		req.MinID = as.NewestMessageID
+		if telegram {
+			if err := s.awaitReadGap(ctx, acc.ID, src.ID, pace); err != nil {
+				return SyncResult{}, err
+			}
+		}
+		messages, caughtUp, err = s.readNewer(ctx, conn, acc, src, as, limit)
 	default:
-		return SyncResult{}, fmt.Errorf("unknown direction %q: use %q or %q", direction, DirectionOlder, DirectionNewer)
+		return SyncResult{}, fmt.Errorf("unknown direction %q: use %q or %q", opt.Direction, DirectionOlder, DirectionNewer)
 	}
-
-	page, err := conn.ReadHistory(ctx, s.sourceRef(ctx, acc.ID, src), req)
 	if err != nil {
 		return SyncResult{}, err
 	}
 
+	// The pre-screen runs before the cursor moves, so a read it refuses is read again.
+	slices.SortFunc(messages, func(a, b connectors.Message) int { return cmp.Compare(b.ID, a.ID) })
+	views := make([]MessageView, 0, len(messages))
+	for _, m := range messages {
+		views = append(views, messageView(m))
+	}
+	kept := views
+	if !opt.All {
+		source := src.Title
+		if source == "" {
+			source = src.Link
+		}
+		if kept, err = s.screen(ctx, scope.UserID, sc, src.ID, src.Platform, source, views); err != nil {
+			return SyncResult{}, err
+		}
+	}
+
 	var newest, oldest int64
-	views := make([]MessageView, 0, len(page.Messages))
-	for _, m := range page.Messages {
+	for _, m := range messages {
 		newest = max(newest, m.ID)
 		if oldest == 0 || m.ID < oldest {
 			oldest = m.ID
 		}
-		views = append(views, messageView(m))
 	}
-
 	// A newer-direction read of a never-read source is its first page; it also anchors the older cursor.
-	exhausted := direction == DirectionOlder && (page.Exhausted || len(page.Messages) == 0)
-	if direction == DirectionNewer && as.OldestMessageID != 0 {
+	if opt.Direction == DirectionNewer && as.OldestMessageID != 0 {
 		oldest = 0
 	}
 	if _, err := s.db.UpdateAccountSourceSync(ctx, database.UpdateAccountSourceSyncParams{
@@ -788,7 +900,7 @@ func (s *Service) syncWith(
 		NewestMessageID:  newest,
 		OldestMessageID:  oldest,
 		HistoryExhausted: exhausted,
-		MessagesRead:     int64(len(page.Messages)),
+		MessagesRead:     int64(len(messages)),
 	}); err != nil {
 		return SyncResult{}, fmt.Errorf("failed to advance cursor of source %d: %w", src.ID, err)
 	}
@@ -800,7 +912,94 @@ func (s *Service) syncWith(
 		return SyncResult{}, fmt.Errorf("failed to record read of source %d: %w", src.ID, err)
 	}
 
-	return SyncResult{Source: s.viewSource(ctx, src, acc.ID), Messages: views}, nil
+	res := SyncResult{
+		Source: s.viewSource(ctx, src, acc.ID), Messages: kept, Read: len(messages), Skipped: len(messages) - len(kept),
+	}
+	if opt.Direction == DirectionNewer {
+		res.CaughtUp = &caughtUp
+	}
+	return res, nil
+}
+
+// readOlder reads one page backwards. On Telegram the back-read of a source stops at the
+// pace's first-sync window: so many days before the account first read it, or so many messages.
+func (s *Service) readOlder(
+	ctx context.Context,
+	conn connectors.Connector,
+	acc database.ChannelAccount,
+	src database.GrowthSource,
+	as database.AccountSource,
+	limit int,
+	telegram bool,
+	pace TelegramPace,
+) ([]connectors.Message, bool, error) {
+	req := connectors.HistoryRequest{OffsetID: as.OldestMessageID, Limit: limit}
+	var (
+		cutoff  time.Time
+		bounded bool
+	)
+	if telegram {
+		if n := int64(pace.FirstSyncMessages); n > 0 {
+			left := n - as.MessagesRead
+			if left <= 0 {
+				return nil, true, nil
+			}
+			req.Limit = int(min(int64(req.Limit), left))
+		}
+		if pace.FirstSyncDays > 0 && as.CreatedAt.Valid {
+			cutoff = as.CreatedAt.Time.AddDate(0, 0, -pace.FirstSyncDays)
+		}
+	}
+
+	page, err := conn.ReadHistory(ctx, s.sourceRef(ctx, acc.ID, src), req)
+	if err != nil {
+		return nil, false, err
+	}
+	messages := page.Messages
+	if !cutoff.IsZero() {
+		kept := messages[:0:0]
+		for _, m := range messages {
+			if !m.Time.IsZero() && m.Time.Before(cutoff) {
+				bounded = true
+				continue
+			}
+			kept = append(kept, m)
+		}
+		messages = kept
+	}
+	return messages, page.Exhausted || len(messages) == 0 || bounded, nil
+}
+
+// readNewer pages forward from the cursor, each page the messages just above the last,
+// until a short page shows it has caught up.
+func (s *Service) readNewer(
+	ctx context.Context,
+	conn connectors.Connector,
+	acc database.ChannelAccount,
+	src database.GrowthSource,
+	as database.AccountSource,
+	limit int,
+) ([]connectors.Message, bool, error) {
+	ref := s.sourceRef(ctx, acc.ID, src)
+	cursor := as.NewestMessageID
+	var messages []connectors.Message
+	for range maxCatchUpPages {
+		page, err := conn.ReadHistory(ctx, ref, connectors.HistoryRequest{MinID: cursor, Limit: limit})
+		if err != nil {
+			return nil, false, err
+		}
+		messages = append(messages, page.Messages...)
+		next := cursor
+		for _, m := range page.Messages {
+			next = max(next, m.ID)
+		}
+		// A never-read source starts from its newest page: there is nothing above it.
+		if cursor == 0 || len(page.Messages) < limit || next == cursor {
+			return messages, true, nil
+		}
+		cursor = next
+	}
+	return messages, false, nil
 }
 
 func (s *Service) GetUser(
@@ -810,7 +1009,7 @@ func (s *Service) GetUser(
 	userID string,
 ) (connectors.UserProfile, error) {
 	var profile connectors.UserProfile
-	err := s.withAccount(ctx, scope.UserID, platform, 0, func(conn connectors.Connector, _ database.ChannelAccount) error {
+	err := s.withAccount(ctx, scope.UserID, platform, 0, nil, func(conn connectors.Connector, _ database.ChannelAccount) error {
 		if !connectors.Has(conn, connectors.CapUserProfile) {
 			return fmt.Errorf("%w: user profiles on %s", connectors.ErrUnsupported, platform)
 		}

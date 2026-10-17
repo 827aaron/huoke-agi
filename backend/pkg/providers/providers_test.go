@@ -17,8 +17,8 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
-	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/embeddings"
+	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
 
 	"github.com/sirupsen/logrus"

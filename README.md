@@ -1,5 +1,7 @@
 # PentAGI
 
+> **Deploying KeLai AGI:** follow [docs/deploy.md](docs/deploy.md) for hardware, configuration, first login, backup and troubleshooting.
+
 <div align="center" style="font-size: 1.5em; margin: 20px 0;">
     <strong>P</strong>enetration testing <strong>A</strong>rtificial <strong>G</strong>eneral <strong>I</strong>ntelligence
 </div>
@@ -3050,7 +3052,7 @@ PentAGI allows you to configure Docker image selection for executing various tas
 
 | Variable                           | Default                | Description                                                 |
 | ---------------------------------- | ---------------------- | ----------------------------------------------------------- |
-| `PENTAGI_IMAGE`                    | `vxcontrol/pentagi:latest` | Docker image used for the main PentAGI application service |
+| `PENTAGI_IMAGE`                    | `kelai-agi:latest`         | Docker image used for the main PentAGI application service; built from the checkout when missing |
 | `DOCKER_DEFAULT_IMAGE`             | `debian:latest`        | Default Docker image for general tasks and ambiguous cases  |
 | `DOCKER_DEFAULT_IMAGE_FOR_PENTEST` | `vxcontrol/kali-linux` | Default Docker image for security/penetration testing tasks |
 | `DOCKER_ALLOWED_IMAGES`            | empty                  | Comma-separated allow-list the selected image must belong to |

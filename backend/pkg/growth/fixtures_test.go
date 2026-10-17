@@ -6,8 +6,11 @@ import (
 	"bufio"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
@@ -76,7 +79,12 @@ type world struct {
 func newWorld(t *testing.T) *world {
 	t.Helper()
 	db := openSchema(t)
-	svc := NewService(database.New(db), &config.Config{GrowthSecretKey: "test-master-key", SMTPPort: 587, SMTPTLS: smtpStartTLS})
+	jev := httptest.NewServer(http.HandlerFunc(keepEveryMessage))
+	t.Cleanup(jev.Close)
+	svc := NewService(database.New(db), &config.Config{
+		GrowthSecretKey: "test-master-key", SMTPPort: 587, SMTPTLS: smtpStartTLS,
+		TypeSafeAPIKey: "ts-test", TypeSafeAPIURL: jev.URL,
+	})
 	t.Cleanup(func() { _ = svc.Close() })
 
 	w := &world{db: db, svc: svc, tg: NewMemoryConnector(connectors.PlatformTelegram), user: seedUser(t, db, "owner@example.test")}
@@ -85,7 +93,43 @@ func newWorld(t *testing.T) *world {
 		t.Fatalf("seed account: %v", err)
 	}
 	svc.SetConnector(acc.ID, w.tg)
+	w.signedInDaysAgo(t, acc.ID, 30)
 	return w
+}
+
+// keepEveryMessage is a Jev that answers yes to every question.
+func keepEveryMessage(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Questions map[string]json.RawMessage `json:"questions"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	answers := make(map[string]any, len(body.Questions))
+	for qid := range body.Questions {
+		answers[qid] = map[string]any{"type": "noul", "noul": 1.0}
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"answers": answers})
+}
+
+// signedInDaysAgo backdates an account's first sign-in, which its join pace counts from.
+func (w *world) signedInDaysAgo(t *testing.T, accountID int64, days float64) {
+	t.Helper()
+	at := time.Now().Add(-time.Duration(days * float64(24*time.Hour)))
+	if _, err := w.db.Exec(`UPDATE channel_accounts SET first_signed_in_at = $2 WHERE id = $1`, accountID, at); err != nil {
+		t.Fatalf("backdate account %d: %v", accountID, err)
+	}
+}
+
+// savePace saves the Telegram setting with the given pace fields.
+func (w *world) savePace(t *testing.T, fields map[string]string) {
+	t.Helper()
+	values := map[string]string{"api_id": "12345", "api_hash": "0123456789abcdef0123456789abcdef"}
+	for k, v := range fields {
+		values[k] = v
+	}
+	if _, err := w.svc.SaveSetting(context.Background(), w.user, SettingTelegram, "", values); err != nil {
+		t.Fatalf("save pace: %v", err)
+	}
+	w.svc.SetConnector(w.firstAccount(t), w.tg)
 }
 
 func seedUser(t *testing.T, db *sql.DB, mail string) int64 {
@@ -142,7 +186,7 @@ func tgMessage(id int64, sender, text string) connectors.Message {
 		SenderID:       sender,
 		SenderUsername: "u" + sender,
 		Text:           text,
-		Time:           time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC),
+		Time:           time.Now().UTC().Add(-time.Hour).Truncate(time.Second),
 		Link:           fmt.Sprintf("https://t.me/c/1/%d", id),
 	}
 }

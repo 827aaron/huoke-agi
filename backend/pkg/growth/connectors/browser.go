@@ -707,8 +707,8 @@ type browserRemoteLogin struct {
 	platform Platform
 }
 
-func (l browserRemoteLogin) client(acc Account) (*BrowserClient, string, error) {
-	browser, err := browserFromEnv()
+func (l browserRemoteLogin) client(cfg *config.Config, acc Account) (*BrowserClient, string, error) {
+	browser, err := browserFor(cfg)
 	if err != nil {
 		return nil, "", err
 	}
@@ -717,8 +717,8 @@ func (l browserRemoteLogin) client(acc Account) (*BrowserClient, string, error) 
 	return browser, name, nil
 }
 
-func (l browserRemoteLogin) Start(ctx context.Context, _ *config.Config, acc Account) (RemoteLoginView, error) {
-	browser, name, err := l.client(acc)
+func (l browserRemoteLogin) Start(ctx context.Context, cfg *config.Config, acc Account) (RemoteLoginView, error) {
+	browser, name, err := l.client(cfg, acc)
 	if err != nil {
 		return RemoteLoginView{}, err
 	}
@@ -733,8 +733,8 @@ func (l browserRemoteLogin) Start(ctx context.Context, _ *config.Config, acc Acc
 	return view, nil
 }
 
-func (l browserRemoteLogin) Finish(ctx context.Context, _ *config.Config, acc Account) (bool, string, error) {
-	browser, name, err := l.client(acc)
+func (l browserRemoteLogin) Finish(ctx context.Context, cfg *config.Config, acc Account) (bool, string, error) {
+	browser, name, err := l.client(cfg, acc)
 	if err != nil {
 		return false, "", err
 	}
@@ -752,8 +752,8 @@ func (l browserRemoteLogin) Finish(ctx context.Context, _ *config.Config, acc Ac
 	return false, reason, nil
 }
 
-func (l browserRemoteLogin) Cancel(ctx context.Context, _ *config.Config, acc Account) error {
-	browser, name, err := l.client(acc)
+func (l browserRemoteLogin) Cancel(ctx context.Context, cfg *config.Config, acc Account) error {
+	browser, name, err := l.client(cfg, acc)
 	if err != nil {
 		return err
 	}
@@ -766,16 +766,23 @@ var (
 	sharedBrowser   *BrowserClient
 )
 
-// browserFromEnv is the one client of the browser service the factories
-// share. BROWSER_SERVICE_URL and BROWSER_TOKEN are read from the environment
-// until the config carries them.
-func browserFromEnv() (*BrowserClient, error) {
+// browserFor is the one client of the browser service the factories share,
+// built on first use. The config wins over the environment because it holds
+// the token generated at startup when BROWSER_TOKEN is empty.
+func browserFor(cfg *config.Config) (*BrowserClient, error) {
 	sharedBrowserMu.Lock()
 	defer sharedBrowserMu.Unlock()
 	if sharedBrowser != nil {
 		return sharedBrowser, nil
 	}
-	c, err := NewBrowserClient(BrowserConfig{BaseURL: os.Getenv("BROWSER_SERVICE_URL"), Token: os.Getenv("BROWSER_TOKEN")})
+	base, token := os.Getenv("BROWSER_SERVICE_URL"), os.Getenv("BROWSER_TOKEN")
+	if cfg != nil && cfg.BrowserServiceURL != "" {
+		base = cfg.BrowserServiceURL
+	}
+	if cfg != nil && cfg.BrowserToken != "" {
+		token = cfg.BrowserToken
+	}
+	c, err := NewBrowserClient(BrowserConfig{BaseURL: base, Token: token})
 	if err != nil {
 		return nil, err
 	}
