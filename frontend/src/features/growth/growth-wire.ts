@@ -35,6 +35,8 @@ export interface WireLead {
     flow_id?: number;
     lead_id: number;
     match_reason?: string;
+    note?: string;
+    origin?: string;
     platform: string;
     platform_user_id: string;
     score: number;
@@ -64,6 +66,7 @@ export interface WireSource {
     last_synced_at?: string;
     link?: string;
     member_count?: number;
+    note?: string;
     origin: string;
     platform: string;
     qualified_leads: number;
@@ -84,6 +87,9 @@ const JOIN_STATUS: Record<string, GrowthSourceJoinStatus> = {
     pending: 'pending_approval',
 };
 
+// Only these platforms have groups an account joins; the rest are public pages read as they are.
+const JOINABLE_PLATFORMS = new Set(['facebook', 'telegram']);
+
 const RUN_STATUS: Record<string, GrowthRunStatus> = {
     completed: 'delivered',
     partial: 'missed',
@@ -91,15 +97,20 @@ const RUN_STATUS: Record<string, GrowthRunStatus> = {
 
 const TIER: Record<string, GrowthLeadTier> = { watchlist: 'watch' };
 
+export const toWireTier = (tier: GrowthLeadTier): string => (tier === 'watch' ? 'watchlist' : tier);
+
 export const fromWireSource = (source: WireSource): GrowthSource => ({
     created_at: '',
     id: source.source_id,
-    join_status: JOIN_STATUS[source.join_status] ?? (source.join_status as GrowthSourceJoinStatus),
+    join_status: !JOINABLE_PLATFORMS.has(source.platform)
+        ? 'direct'
+        : (JOIN_STATUS[source.join_status] ?? (source.join_status as GrowthSourceJoinStatus)),
     kind: source.kind === 'channel' ? 'channel' : 'group',
     last_read_at: source.last_synced_at ?? null,
     leads_count: source.qualified_leads,
     link: source.link ?? '',
     members_count: source.member_count ?? null,
+    note: source.note ?? '',
     origin: source.origin as GrowthSourceOrigin,
     platform: source.platform as GrowthPlatform,
     source_id: source.username ?? source.link ?? '',
@@ -185,6 +196,8 @@ export const fromWireLeads = (
             first_task_id: lead.task_id ?? 0,
             id: lead.lead_id,
             last_active_at: newest?.posted_at ?? null,
+            note: lead.note ?? '',
+            origin: lead.origin === 'manual' ? 'manual' : 'agent',
             platform: lead.platform as GrowthPlatform,
             platform_user_id: lead.platform_user_id,
             profile: null,

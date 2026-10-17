@@ -30,6 +30,8 @@ const lead: GrowthLead = {
     first_task_id: 1,
     id: 1,
     last_active_at: null,
+    note: '',
+    origin: 'agent',
     platform: 'telegram',
     platform_user_id: '700001',
     profile: null,

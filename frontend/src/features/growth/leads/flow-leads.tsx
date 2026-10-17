@@ -1,7 +1,9 @@
-import { AlertCircle, ListFilter, Search, UserSearch, X } from 'lucide-react';
+import { AlertCircle, ListFilter, Plus, Search, UserSearch, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 
+import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,14 +18,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getApiErrorMessage } from '@/lib/axios';
 import { copy } from '@/lib/copy';
+import { useFlow } from '@/providers/flow-provider';
 
 import type { GrowthLead, GrowthLeadTier } from '../growth-types';
 
+import { growthApi } from '../growth-api';
 import { useGrowthFlow } from '../growth-flow-provider';
 import { PlatformFilter } from '../platform-filter';
 import { LEAD_SOURCE_PARAM, LEAD_TIER_PARAM, useGrowthTabLink } from '../use-growth-tab-link';
 import LeadDetailSheet from './lead-detail-sheet';
+import LeadFormDialog from './lead-form-dialog';
 import LeadScoreBadge from './lead-score-badge';
 import LeadsEmailButton from './leads-email-button';
 import LeadsExportMenu from './leads-export-menu';
@@ -52,7 +58,8 @@ const readFilters = (params: URLSearchParams): LeadFilters => {
 };
 
 function FlowLeads() {
-    const { isLeadsLoading, leads, leadsError, sources } = useGrowthFlow();
+    const { isLeadsLoading, leads, leadsError, refetchLeads, sources } = useGrowthFlow();
+    const { flowId } = useFlow();
     const { openSources } = useGrowthTabLink();
     const [searchParams] = useSearchParams();
 
@@ -61,6 +68,9 @@ function FlowLeads() {
 
     const [filters, setFilters] = useState<LeadFilters>(() => readFilters(searchParams));
     const [selectedLead, setSelectedLead] = useState<GrowthLead | null>(null);
+    // `null` adds a lead by hand; undefined keeps the form closed.
+    const [formLead, setFormLead] = useState<GrowthLead | null | undefined>(undefined);
+    const [pendingDelete, setPendingDelete] = useState<GrowthLead | null>(null);
 
     // A link from the progress bar or the Sources tab arrives as URL params; a new one replaces the filters.
     const linkKey = `${tierParam}|${sourceParam}`;
@@ -79,6 +89,23 @@ function FlowLeads() {
         () => sources.filter((source) => leads.some((lead) => lead.source_id === source.id)),
         [leads, sources],
     );
+
+    const handleDelete = async () => {
+        if (!pendingDelete) {
+            return;
+        }
+
+        try {
+            await growthApi.deleteLead(pendingDelete.id);
+            toast.success(copy.leads.deleted);
+            setSelectedLead(null);
+            await refetchLeads();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, copy.common.networkError));
+        } finally {
+            setPendingDelete(null);
+        }
+    };
 
     const update = (patch: Partial<LeadFilters>) => setFilters((previous) => ({ ...previous, ...patch }));
     const isFiltered =
@@ -215,6 +242,13 @@ function FlowLeads() {
                     </SelectContent>
                 </Select>
                 <div className="ml-auto flex gap-2">
+                    <Button
+                        onClick={() => setFormLead(null)}
+                        variant="outline"
+                    >
+                        <Plus />
+                        {copy.leads.add}
+                    </Button>
                     <LeadsEmailButton />
                     <LeadsExportMenu filteredLeads={visibleLeads} />
                 </div>
@@ -344,7 +378,9 @@ function FlowLeads() {
                                                 : copy.leads.status.notDelivered}
                                         </TableCell>
                                         <TableCell className="text-muted-foreground whitespace-nowrap">
-                                            {copy.leads.foundIn(lead.first_flow_title, lead.first_round)}
+                                            {lead.origin === 'manual'
+                                                ? copy.leads.manual
+                                                : copy.leads.foundIn(lead.first_flow_title, lead.first_round)}
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -356,7 +392,28 @@ function FlowLeads() {
 
             <LeadDetailSheet
                 lead={selectedLead}
+                onDelete={setPendingDelete}
+                onEdit={setFormLead}
                 onOpenChange={(isOpen) => !isOpen && setSelectedLead(null)}
+            />
+            {formLead !== undefined && (
+                <LeadFormDialog
+                    flowId={flowId ? Number(flowId) : null}
+                    lead={formLead ?? undefined}
+                    onClose={() => setFormLead(undefined)}
+                    onSaved={async () => {
+                        setSelectedLead(null);
+                        await refetchLeads();
+                    }}
+                />
+            )}
+            <ConfirmationDialog
+                confirmText={copy.action.delete}
+                description={pendingDelete ? copy.leads.deleteDescription(pendingDelete.display_name) : undefined}
+                handleConfirm={handleDelete}
+                handleOpenChange={(isOpen) => !isOpen && setPendingDelete(null)}
+                isOpen={!!pendingDelete}
+                title={copy.leads.delete}
             />
         </div>
     );

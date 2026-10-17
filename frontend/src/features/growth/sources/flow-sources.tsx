@@ -1,7 +1,9 @@
-import { AlertCircle, ExternalLink, ListFilter, Plus, Search, Users, X } from 'lucide-react';
+import { AlertCircle, ExternalLink, ListFilter, Pencil, Plus, Search, Trash2, Users, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 
+import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Badge, type BadgeVariant } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from '@/components/ui/empty';
@@ -17,6 +19,7 @@ import { formatNumber } from '@/lib/utils/format';
 
 import type {
     GrowthPlatform,
+    GrowthSource,
     GrowthSourceAddResult,
     GrowthSourceJoinStatus,
     GrowthSourceOrigin,
@@ -27,10 +30,12 @@ import { useGrowthFlow } from '../growth-flow-provider';
 import { PlatformFilter } from '../platform-filter';
 import { MAX_SOURCE_LINKS, splitSourceLinks } from '../source-links';
 import { SOURCE_QUERY_PARAM, useGrowthTabLink } from '../use-growth-tab-link';
+import SourceEditDialog from './source-edit-dialog';
 
 const ALL = 'all';
 
 const joinStatusVariant: Record<GrowthSourceJoinStatus, BadgeVariant> = {
+    direct: 'blue',
     joined: 'green',
     not_joined: 'outline',
     pending_approval: 'yellow',
@@ -63,6 +68,8 @@ function FlowSources() {
     const [joinStatus, setJoinStatus] = useState<'all' | GrowthSourceJoinStatus>(ALL);
     const [origin, setOrigin] = useState<'all' | GrowthSourceOrigin>(ALL);
     const [platform, setPlatform] = useState<GrowthPlatform | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<GrowthSource | null>(null);
+    const [editing, setEditing] = useState<GrowthSource | null>(null);
 
     const [appliedQueryParam, setAppliedQueryParam] = useState(queryParam);
 
@@ -82,7 +89,10 @@ function FlowSources() {
                 (joinStatus === ALL || source.join_status === joinStatus) &&
                 (origin === ALL || source.origin === origin) &&
                 (platform === null || source.platform === platform) &&
-                (!query || source.title.toLowerCase().includes(query) || source.link.toLowerCase().includes(query)),
+                (!query ||
+                    source.title.toLowerCase().includes(query) ||
+                    source.link.toLowerCase().includes(query) ||
+                    source.note.toLowerCase().includes(query)),
         );
     }, [sources, search, joinStatus, origin, platform]);
 
@@ -123,6 +133,22 @@ function FlowSources() {
             setMessages([{ isError: true, text: getApiErrorMessage(error, copy.common.networkError) }]);
         } finally {
             setIsAdding(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!pendingDelete) {
+            return;
+        }
+
+        try {
+            await growthApi.deleteSource(pendingDelete.id);
+            toast.success(copy.sources.deleted);
+            await refetchSources();
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, copy.common.networkError));
+        } finally {
+            setPendingDelete(null);
         }
     };
 
@@ -269,6 +295,9 @@ function FlowSources() {
                                 <TableHead className="text-right">{copy.sources.column.members}</TableHead>
                                 <TableHead>{copy.sources.column.lastRead}</TableHead>
                                 <TableHead className="text-right">{copy.sources.column.leads}</TableHead>
+                                <TableHead className="w-0">
+                                    <span className="sr-only">{copy.sources.column.actions}</span>
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -293,6 +322,11 @@ function FlowSources() {
                                                 {source.link}
                                                 <ExternalLink className="size-3" />
                                             </a>
+                                            {source.note && (
+                                                <div className="text-muted-foreground mt-1 max-w-80 text-xs whitespace-pre-wrap">
+                                                    {source.note}
+                                                </div>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant={source.origin === 'ai' ? 'blue' : 'purple'}>
@@ -329,6 +363,24 @@ function FlowSources() {
                                                 {source.leads_count}
                                             </button>
                                         </TableCell>
+                                        <TableCell className="whitespace-nowrap">
+                                            <Button
+                                                aria-label={`${copy.sources.edit} ${source.title}`}
+                                                onClick={() => setEditing(source)}
+                                                size="icon-sm"
+                                                variant="ghost"
+                                            >
+                                                <Pencil />
+                                            </Button>
+                                            <Button
+                                                aria-label={`${copy.sources.delete} ${source.title}`}
+                                                onClick={() => setPendingDelete(source)}
+                                                size="icon-sm"
+                                                variant="ghost"
+                                            >
+                                                <Trash2 />
+                                            </Button>
+                                        </TableCell>
                                     </TableRow>
                                 );
                             })}
@@ -336,6 +388,22 @@ function FlowSources() {
                     </Table>
                 </div>
             )}
+
+            {editing && (
+                <SourceEditDialog
+                    onClose={() => setEditing(null)}
+                    onSaved={refetchSources}
+                    source={editing}
+                />
+            )}
+            <ConfirmationDialog
+                confirmText={copy.action.delete}
+                description={pendingDelete ? copy.sources.deleteDescription(pendingDelete.title) : undefined}
+                handleConfirm={handleDelete}
+                handleOpenChange={(isOpen) => !isOpen && setPendingDelete(null)}
+                isOpen={!!pendingDelete}
+                title={copy.sources.delete}
+            />
         </div>
     );
 }

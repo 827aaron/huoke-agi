@@ -3,6 +3,8 @@ import type {
     GrowthAccount,
     GrowthEmailResult,
     GrowthLead,
+    GrowthLeadInput,
+    GrowthLeadUpdate,
     GrowthModelOption,
     GrowthModelsInput,
     GrowthProfile,
@@ -18,6 +20,7 @@ import type {
     GrowthSettingKind,
     GrowthSource,
     GrowthSourcesAddResponse,
+    GrowthSourceUpdate,
     GrowthTelegramLoginStep,
 } from './growth-types';
 
@@ -160,6 +163,7 @@ const sources: GrowthSource[] = [
         leads_count: 4,
         link: 'https://t.me/slg_players_sea',
         members_count: 18240,
+        note: '',
         origin: 'ai',
         platform: 'telegram',
         source_id: '-1001820000001',
@@ -174,6 +178,7 @@ const sources: GrowthSource[] = [
         leads_count: 2,
         link: 'https://t.me/mmorpg_tw_chat',
         members_count: 6120,
+        note: '',
         origin: 'ai',
         platform: 'telegram',
         source_id: '-1001820000002',
@@ -188,6 +193,7 @@ const sources: GrowthSource[] = [
         leads_count: 0,
         link: 'https://t.me/+k3QxR8sLmA1hNjVl',
         members_count: null,
+        note: '',
         origin: 'manual',
         platform: 'telegram',
         source_id: '-1001820000003',
@@ -202,6 +208,7 @@ const sources: GrowthSource[] = [
         leads_count: 0,
         link: 'https://t.me/gamers_mena',
         members_count: 40210,
+        note: '',
         origin: 'ai',
         platform: 'telegram',
         source_id: '-1001820000004',
@@ -216,6 +223,7 @@ const sources: GrowthSource[] = [
         leads_count: 0,
         link: 'https://t.me/closed_guild_vn',
         members_count: null,
+        note: '',
         origin: 'ai',
         platform: 'telegram',
         source_id: '-1001820000005',
@@ -269,6 +277,8 @@ const lead = (
         first_task_id: 11,
         id,
         last_active_at: ago(activeMinutesAgo),
+        note: '',
+        origin: 'agent',
         platform: 'telegram',
         platform_user_id: String(700000 + id),
         profile:
@@ -698,6 +708,7 @@ export const growthMock = {
                 leads_count: 0,
                 link,
                 members_count: null,
+                note: '',
                 origin: 'manual',
                 platform: 'telegram',
                 source_id: '',
@@ -719,6 +730,40 @@ export const growthMock = {
         storedValues.delete(kind);
         await delay(null);
     },
+    createLead: async (input: GrowthLeadInput) => {
+        if (leads.some((item) => item.platform === input.platform && item.platform_user_id === input.handle)) {
+            await delay(null);
+
+            throw new Error('mock: this lead is already in the pool');
+        }
+
+        leads.push({
+            contacts: input.contacts ?? [],
+            delivered_at: null,
+            delivered_task_id: null,
+            display_name: input.display_name || input.handle,
+            evidence: [],
+            first_flow_id: input.flow_id ?? 0,
+            first_flow_title: '',
+            first_round: 0,
+            first_task_id: 0,
+            id: Math.max(0, ...leads.map(({ id }) => id)) + 1,
+            last_active_at: null,
+            note: input.note ?? '',
+            origin: 'manual',
+            platform: input.platform,
+            platform_user_id: input.handle,
+            profile: null,
+            score: 7,
+            score_breakdown: [],
+            signals: [],
+            source_id: 0,
+            source_title: '',
+            tier: input.tier ?? 'qualified',
+            username: null,
+        });
+        await delay(null);
+    },
     createProfile: (input: GrowthProfileInput): Promise<GrowthProfile> => {
         const profile = { ...input, id: 1, updated_at: new Date().toISOString() };
         profiles = [profile];
@@ -731,8 +776,26 @@ export const growthMock = {
 
         return delay(schedule);
     },
+    deleteLead: async (id: number) => {
+        const index = leads.findIndex((item) => item.id === id);
+
+        if (index >= 0) {
+            leads.splice(index, 1);
+        }
+
+        await delay(null);
+    },
     deleteSchedule: async (id: number) => {
         schedules = schedules.filter((item) => item.id !== id);
+        await delay(null);
+    },
+    deleteSource: async (id: number) => {
+        const index = sources.findIndex((item) => item.id === id);
+
+        if (index >= 0) {
+            sources.splice(index, 1);
+        }
+
         await delay(null);
     },
     finishRemoteLogin: (sessionId: string): Promise<GrowthAccount> => {
@@ -886,6 +949,15 @@ export const growthMock = {
             }),
         );
     },
+    updateLead: async (id: number, input: GrowthLeadUpdate) => {
+        const index = leads.findIndex((item) => item.id === id);
+
+        if (index >= 0) {
+            leads[index] = { ...(leads[index] as GrowthLead), ...input };
+        }
+
+        await delay(null);
+    },
     updateProfile: (id: number, input: GrowthProfileInput): Promise<GrowthProfile> => {
         const profile = { ...input, id, updated_at: new Date().toISOString() };
         profiles = [profile];
@@ -898,5 +970,17 @@ export const growthMock = {
         schedules = schedules.map((item) => (item.id === id ? schedule : item));
 
         return delay(schedule);
+    },
+    updateSource: (id: number, input: GrowthSourceUpdate): Promise<GrowthSource> => {
+        const index = sources.findIndex((item) => item.id === id);
+
+        if (index < 0) {
+            return Promise.reject(new Error('mock: unknown source'));
+        }
+
+        const source = { ...(sources[index] as GrowthSource), ...input };
+        sources[index] = source;
+
+        return delay(source);
     },
 };
