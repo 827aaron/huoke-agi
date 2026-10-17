@@ -9,6 +9,7 @@ import path from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { createServer } from '../src/server.js';
 import { SessionManager } from '../src/sessions.js';
+import { PLATFORMS } from '../src/detect.js';
 
 const TOKEN = 'test-token';
 
@@ -42,10 +43,26 @@ document.getElementById('me').textContent = JSON.stringify({
   ua: navigator.userAgent, platform: navigator.platform, cores: navigator.hardwareConcurrency,
   language: navigator.language, tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
   screen: screen.width + 'x' + screen.height, dpr: window.devicePixelRatio,
+  gpu: (() => {
+    const gl = document.createElement('canvas').getContext('webgl');
+    const ext = gl && gl.getExtension('WEBGL_debug_renderer_info');
+    return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
+  })(),
 });
 </script>`;
 
+const TIKTOK_VIDEO = `<!doctype html><html><head>
+<style>@font-face { font-family: f; src: url(/media/f.woff2); } body { font-family: f; }</style></head><body>
+<img src="/media/cover.jpg" width="100" height="100">
+<video src="/media/clip.mp4" autoplay muted></video>
+<div id="comments" style="height:300px;overflow:auto"><div style="height:3000px">comments</div></div>
+<script>fetch('/api/comment/list/?aweme_id=123&cursor=0').then((r) => r.json());</script>
+</body></html>`;
+
 const PAGES = {
+  '/@creator/video/123': TIKTOK_VIDEO,
+  '/@creator/video/124': '<!doctype html><div class="captcha">Drag the slider to fit the puzzle</div>',
+  '/foryou': TIKTOK_VIDEO,
   '/whoami': WHOAMI,
   '/feed': FEED,
   '/login/': '<!doctype html><form><input name="email"><input type="password" name="pass"><button>Log in</button></form>',
@@ -54,11 +71,22 @@ const PAGES = {
 <button onclick="fetch('/api/graphql/', {method:'POST', body:'join'}).then(()=>{this.textContent='Cancel request'})">Join group</button>`,
 };
 
+// The feed tests count scrolls, which depend on the viewport height.
+const FIXED_FP = {
+  user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+  platform: 'Win32',
+  locale: 'en-US',
+  timezone: 'America/New_York',
+  viewport: { width: 1366, height: 638 },
+  screen: { width: 1366, height: 768 },
+};
+
 let fixture;
 let fixtureUrl;
 let inflight = 0;
 let maxInflight = 0;
 let graphqlCalls = 0;
+let mediaCalls = 0;
 
 let service;
 let serviceUrl;
@@ -76,6 +104,15 @@ function startFixture() {
         const n = Number((body.match(/page=(\d+)/) || [])[1] || 0);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ posts: body === 'join' ? [] : [`post ${n}a`, `post ${n}b`], request: body }));
+      }
+      if (url.pathname.startsWith('/media/')) {
+        mediaCalls += 1;
+        res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+        return res.end(Buffer.alloc(1024));
+      }
+      if (url.pathname === '/api/comment/list/') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ comments: [{ cid: '9001', text: 'which server is this?' }], has_more: 0 }));
       }
       if (url.pathname === '/slow') {
         inflight += 1;
@@ -177,7 +214,7 @@ describe('auth and routing', () => {
 
 describe('facebook account lifecycle', () => {
   test('a new account refuses work until an operator logs in', async () => {
-    const r = await call('POST', '/sessions/fb1/navigate', { platform: 'facebook', url: fixtureUrl + '/feed' });
+    const r = await call('POST', '/sessions/fb1/navigate', { platform: 'facebook', fingerprint: FIXED_FP, url: fixtureUrl + '/feed' });
     assert.equal(r.status, 423);
     assert.equal(r.data.error.code, 'needs_login');
     assert.equal(r.data.error.account_state, 'new');
@@ -414,6 +451,7 @@ describe('per-account fingerprint', () => {
     const r = await call('POST', '/sessions/fp1/navigate', { platform: 'web', region: 'jp', url: fixtureUrl + '/whoami', wait_ms: 0 });
     assert.equal(r.status, 200, JSON.stringify(r.data));
     first = (await call('GET', '/sessions/fp1')).data.fingerprint;
+    assert.equal(first.version, 2);
     assert.equal(first.region, 'JP');
     assert.equal(first.locale, 'ja-JP');
     assert.equal(first.timezone, 'Asia/Tokyo');
@@ -426,6 +464,7 @@ describe('per-account fingerprint', () => {
     assert.equal(seen.tz, 'Asia/Tokyo');
     assert.equal(seen.screen, `${first.screen.width}x${first.screen.height}`);
     assert.equal(seen.dpr, first.device_scale_factor);
+    assert.equal(seen.gpu, first.suite.fingerprint.videoCard.renderer);
   });
 
   test('the fingerprint survives a reopen and a service restart', async () => {
@@ -574,5 +613,63 @@ describe('external browser', () => {
     const r = await call('POST', '/sessions/ext2/navigate', { platform: 'web', external_browser_ws: `http://127.0.0.1:${port}`, url: fixtureUrl + '/whoami' });
     assert.equal(r.status, 502);
     assert.equal(r.data.error.code, 'unavailable');
+  });
+});
+
+describe('tiktok', () => {
+  test('each file in src/platforms is a platform', () => {
+    assert.deepEqual(Object.keys(PLATFORMS).sort(), ['facebook', 'instagram', 'tiktok', 'web']);
+    assert.equal(PLATFORMS.web.needsLogin, false);
+    assert.equal(PLATFORMS.facebook.paceFactor, 1);
+  });
+
+  test('the operator login window loads images, so a verification puzzle shows', async () => {
+    mediaCalls = 0;
+    await call('POST', '/sessions/tt1/login/start', { platform: 'tiktok', url: fixtureUrl + '/@creator/video/123' });
+    await call('POST', '/sessions/tt1/input', { kind: 'goto', text: fixtureUrl + '/@creator/video/123' });
+    assert.ok(mediaCalls > 0);
+    const r = await call('POST', '/sessions/tt1/login/confirm');
+    assert.equal(r.data.state, 'ok');
+  });
+
+  test('a video page gives its comments and fetches no media', async () => {
+    mediaCalls = 0;
+    const r = await call('POST', '/sessions/tt1/navigate', { url: fixtureUrl + '/@creator/video/123', wait_ms: 800 });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.captures.length, 1);
+    assert.match(r.data.captures[0].url, /\/api\/comment\/list\/\?aweme_id=123/);
+    const scrolled = await call('POST', '/sessions/tt1/scroll', { times: 1, wait_ms: 200, selector: '#comments' });
+    assert.equal(scrolled.status, 200, JSON.stringify(scrolled.data));
+    assert.equal(mediaCalls, 0);
+  });
+
+  test('agents do not open pages other than search, creators and videos', async () => {
+    mediaCalls = 0;
+    const r = await call('POST', '/sessions/tt1/navigate', { url: fixtureUrl + '/foryou' });
+    assert.equal(r.status, 400);
+    assert.match(r.data.error.message, /tiktok agents only open/);
+    assert.equal(mediaCalls, 0);
+  });
+
+  test('a verification puzzle stops the account for an operator', async () => {
+    const r = await call('POST', '/sessions/tt1/navigate', { url: fixtureUrl + '/@creator/video/124', wait_ms: 100 });
+    assert.equal(r.status, 423);
+    assert.match(r.data.error.message, /verification on page/);
+    assert.equal(r.data.account.challenge, true);
+  });
+});
+
+describe('pace', () => {
+  test('a platform factor stretches the pause and the environment overrides it', async () => {
+    const cfg = loadConfig({ BROWSER_PROFILES_DIR: profilesDir, BROWSER_ACTION_DELAY_MIN_MS: '100', BROWSER_ACTION_DELAY_MAX_MS: '100', BROWSER_WARMUP_DAYS: '0' });
+    const timed = async (c, platform) => {
+      const s = await new SessionManager(c).get(`pace-${platform}-${Object.keys(c.paceFactors).length}`, platform);
+      const start = Date.now();
+      await s.pace();
+      return Date.now() - start;
+    };
+    assert.ok((await timed(cfg, 'tiktok')) >= 190);
+    const fast = loadConfig({ ...{ BROWSER_PROFILES_DIR: profilesDir, BROWSER_ACTION_DELAY_MIN_MS: '100', BROWSER_ACTION_DELAY_MAX_MS: '100', BROWSER_WARMUP_DAYS: '0' }, BROWSER_PACE_FACTOR_TIKTOK: '0' });
+    assert.ok((await timed(fast, 'tiktok')) < 90);
   });
 });

@@ -7,7 +7,7 @@ const zeros = () => 0;
 
 describe('generateFingerprint', () => {
   test('takes locale and timezone from a known region', () => {
-    const fp = generateFingerprint({ chromeMajor: '141', region: 'br', cfg, rand: zeros });
+    const fp = generateFingerprint({ chromeMajor: '141', region: 'br', cfg, rand: zeros, generator: null });
     assert.deepEqual(fp, {
       version: 1,
       os: 'windows',
@@ -25,18 +25,39 @@ describe('generateFingerprint', () => {
   });
 
   test('falls back to the configured locale for an unknown region', () => {
-    const fp = generateFingerprint({ chromeMajor: '141', region: 'ZZ', cfg: { locale: 'en-GB', timezoneId: 'Europe/Dublin' }, rand: zeros });
+    const fp = generateFingerprint({ chromeMajor: '141', region: 'ZZ', cfg: { locale: 'en-GB', timezoneId: 'Europe/Dublin' }, rand: zeros, generator: null });
     assert.equal(fp.region, '');
     assert.equal(fp.locale, 'en-GB');
     assert.equal(fp.timezone, 'Europe/Dublin');
   });
 
   test('a mac fingerprint keeps a mac platform and a retina scale', () => {
-    const fp = generateFingerprint({ chromeMajor: '141', region: 'US', cfg, rand: () => 0.99 });
+    const fp = generateFingerprint({ chromeMajor: '141', region: 'US', cfg, rand: () => 0.99, generator: null });
     assert.equal(fp.os, 'mac');
     assert.equal(fp.platform, 'MacIntel');
     assert.match(fp.user_agent, /Macintosh; Intel Mac OS X/);
     assert.equal(fp.device_scale_factor, 2);
+  });
+});
+
+describe('generateFingerprint with fingerprint-suite', () => {
+  test('draws a desktop Chrome of the engine version for the region', () => {
+    const fp = generateFingerprint({ chromeMajor: '141', region: 'th', cfg, rand: zeros });
+    assert.equal(fp.version, 2);
+    assert.equal(fp.os, 'windows');
+    assert.equal(fp.platform, 'Win32');
+    assert.match(fp.user_agent, /Windows NT 10\.0; Win64; x64.*Chrome\/141\.0\.0\.0 /);
+    assert.equal(fp.locale, 'th-TH');
+    assert.equal(fp.timezone, 'Asia/Bangkok');
+    assert.equal(fp.suite.fingerprint.navigator.userAgent, fp.user_agent);
+    assert.equal(fp.suite.fingerprint.screen.width, fp.screen.width);
+    assert.ok(fp.viewport.height < fp.screen.height);
+  });
+
+  test('a version the suite has no device for falls back to the tables', () => {
+    const fp = generateFingerprint({ chromeMajor: '9', region: 'US', cfg, rand: zeros });
+    assert.equal(fp.version, 1);
+    assert.match(fp.user_agent, /Chrome\/9\.0\.0\.0 /);
   });
 });
 

@@ -47,6 +47,12 @@ export function loadConfig(env = process.env) {
     captureLimit: int(env, 'BROWSER_CAPTURE_LIMIT', 300),
     captureBodyMaxBytes: int(env, 'BROWSER_CAPTURE_BODY_MAX_BYTES', 4 * 1024 * 1024),
   };
+  // BROWSER_PACE_FACTOR_TIKTOK=1 overrides the factor a platform file sets.
+  cfg.paceFactors = {};
+  for (const name of Object.keys(env)) {
+    const m = name.match(/^BROWSER_PACE_FACTOR_([A-Z0-9_]+)$/);
+    if (m) cfg.paceFactors[m[1].toLowerCase()] = float(env, name, 1);
+  }
   if (cfg.actionDelayMaxMs < cfg.actionDelayMinMs) cfg.actionDelayMaxMs = cfg.actionDelayMinMs;
   return cfg;
 }

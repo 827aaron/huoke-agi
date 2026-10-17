@@ -66,8 +66,8 @@ var _ Connector = (*Instagram)(nil)
 
 func init() {
 	RegisterRemoteLogin(PlatformInstagram, browserRemoteLogin{platform: PlatformInstagram})
-	Register(PlatformInstagram, func(_ context.Context, _ *config.Config, acc Account) (Connector, error) {
-		browser, err := browserFromEnv()
+	Register(PlatformInstagram, func(_ context.Context, cfg *config.Config, acc Account) (Connector, error) {
+		browser, err := browserFor(cfg)
 		if err != nil {
 			return nil, err
 		}
