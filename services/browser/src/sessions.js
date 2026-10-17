@@ -2,9 +2,10 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
-import { detectState, platformSpec, shouldCapture } from './detect.js';
+import { agentMayOpen, detectState, platformSpec, shouldCapture } from './detect.js';
 import { ServiceError } from './errors.js';
 import {
+  attachSuite,
   contextOptions,
   generateFingerprint,
   initScript,
@@ -51,10 +52,15 @@ class Session {
     this.seq = 0;
     this.queue = Promise.resolve();
     this.idleTimer = null;
+    this.operatorView = false;
   }
 
   get platform() {
     return this.meta.platform;
+  }
+
+  get spec() {
+    return platformSpec(this.platform);
   }
 
   // One action at a time per account: two tabs driving one profile is the
@@ -144,8 +150,21 @@ class Session {
       this.context = null;
       this.page = null;
     });
+    await this.applyPlatform();
     this.page = this.context.pages()[0] || (await this.context.newPage());
     this.context.on('response', (response) => this.onResponse(response));
+  }
+
+  // Resource blocking stops for the operator login window: a verification
+  // puzzle is an image.
+  async applyPlatform() {
+    const { block, initScript: script } = this.spec;
+    if (script) await this.context.addInitScript(script);
+    if (block.length === 0) return;
+    await this.context.route('**/*', (route) => {
+      if (!this.operatorView && block.includes(route.request().resourceType())) return route.abort('blockedbyclient');
+      return route.continue();
+    });
   }
 
   async launch() {
@@ -159,7 +178,8 @@ class Session {
     const proxy = parseProxy(this.proxy);
     if (proxy) options.proxy = proxy;
     this.context = await chromium.launchPersistentContext(path.join(this.dir, 'profile'), options);
-    await this.context.addInitScript(initScript(fp));
+    if (fp.suite) await attachSuite(this.context, fp);
+    else await this.context.addInitScript(initScript(fp));
   }
 
   // An external fingerprint browser (AdsPower, BitBrowser) owns its profile,
@@ -209,6 +229,7 @@ class Session {
     this.browser = null;
     this.context = null;
     this.page = null;
+    this.operatorView = false;
   }
 
   warmingUp() {
@@ -220,6 +241,7 @@ class Session {
   async pace() {
     const { actionDelayMinMs: min, actionDelayMaxMs: max } = this.cfg;
     let delay = min + Math.random() * (max - min);
+    delay *= this.cfg.paceFactors[this.platform] ?? this.spec.paceFactor;
     if (this.warmingUp()) delay *= this.cfg.warmupFactor;
     if (delay > 0) await sleep(delay);
   }
@@ -227,7 +249,7 @@ class Session {
   // Refuses work for an account the platform has logged out or is throttling.
   // Nothing here tries to get past a verification step; an operator does that.
   gate() {
-    if (this.platform !== 'web' && this.meta.state !== 'ok') {
+    if (this.spec.needsLogin && this.meta.state !== 'ok') {
       throw new ServiceError('needs_login', this.meta.state_reason || 'account has not been logged in by an operator', {
         account_state: this.meta.state,
       });
@@ -282,6 +304,9 @@ class Session {
 
   async navigate({ url, wait_ms: waitMs = 2000 }) {
     if (!url) throw new ServiceError('bad_request', 'url is required');
+    if (!agentMayOpen(this.platform, url)) {
+      throw new ServiceError('bad_request', `${this.platform} agents only open the pages its connector reads, not ${url}`);
+    }
     this.gate();
     await this.open();
     await this.pace();
@@ -299,10 +324,16 @@ class Session {
     };
   }
 
-  async scroll({ times = 3, wait_ms: waitMs = 1500 }) {
+  // selector names a scrollable panel (a comment list beside a video); the
+  // wheel is turned over it, or over the page when nothing matches.
+  async scroll({ times = 3, wait_ms: waitMs = 1500, selector = '' }) {
     this.gate();
     await this.open();
     const cursor = this.seq;
+    if (selector) {
+      const panel = this.page.locator(selector).first();
+      if ((await panel.count()) > 0) await panel.hover().catch(() => {});
+    }
     let reachedEnd = false;
     for (let i = 0; i < Math.max(1, times); i += 1) {
       await this.pace();
@@ -388,6 +419,7 @@ class Session {
   // Raw input from the operator login page. Not paced and not gated: a person
   // is at the keyboard.
   async input({ kind, x, y, text, key, dy }) {
+    this.operatorView = true;
     await this.open();
     const page = this.page;
     switch (kind) {
@@ -414,6 +446,7 @@ class Session {
   }
 
   async loginStart({ url } = {}) {
+    this.operatorView = true;
     await this.open();
     await this.page.goto(url || platformSpec(this.platform).login, { waitUntil: 'domcontentloaded' });
     return { url: this.page.url() };
@@ -483,7 +516,7 @@ class Session {
   signal() {
     const until = this.meta.cooldown_until ? Date.parse(this.meta.cooldown_until) : 0;
     let status = 'active';
-    if (this.platform !== 'web' && this.meta.state !== 'ok') status = 'needs_login';
+    if (this.spec.needsLogin && this.meta.state !== 'ok') status = 'needs_login';
     else if (until > Date.now()) status = 'rate_limited';
     return {
       account_id: this.accountId,
@@ -538,8 +571,7 @@ export class SessionManager {
       let meta = await this.readMeta(accountId);
       if (!meta) {
         if (!platform) throw new ServiceError('not_found', `account ${accountId} does not exist; pass platform to create it`);
-        platformSpec(platform);
-        meta = { platform, state: platform === 'web' ? 'ok' : 'new', created_at: new Date().toISOString() };
+        meta = { platform, state: platformSpec(platform).needsLogin ? 'new' : 'ok', created_at: new Date().toISOString() };
       }
       session = new Session(this, accountId, meta);
       await session.saveMeta();
