@@ -10,6 +10,7 @@ import {
     Send,
     Settings as SettingsIcon,
     User,
+    Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
@@ -29,11 +30,14 @@ import {
 import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { getSafeReturnUrl } from '@/lib/utils/auth';
+import { useUser } from '@/providers/user-provider';
 
 interface MenuItem {
     icon?: ReactNode;
     id: string;
     path: string;
+    // Hidden unless the signed-in user holds it.
+    privilege?: string;
     title: string;
 }
 
@@ -84,10 +88,18 @@ const menuItems: readonly MenuItem[] = [
         path: routes.settings.apiTokens,
         title: copy.settingsNav.apiTokens,
     },
+    {
+        icon: <Users className="size-4" />,
+        id: 'users',
+        path: routes.settings.users,
+        privilege: 'users.view',
+        title: copy.settingsNav.users,
+    },
 ] as const;
 
 export function SettingsSidebar() {
     const location = useLocation();
+    const { authInfo } = useUser();
     const [returnUrl] = useState(() =>
         getSafeReturnUrl((location.state as null | { from?: string })?.from ?? null, routes.flows),
     );
@@ -113,12 +125,14 @@ export function SettingsSidebar() {
                 <SidebarGroup>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {menuItems.map((item) => (
-                                <SettingsSidebarMenuItem
-                                    item={item}
-                                    key={item.id}
-                                />
-                            ))}
+                            {menuItems
+                                .filter((item) => !item.privilege || authInfo?.privileges?.includes(item.privilege))
+                                .map((item) => (
+                                    <SettingsSidebarMenuItem
+                                        item={item}
+                                        key={item.id}
+                                    />
+                                ))}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>
