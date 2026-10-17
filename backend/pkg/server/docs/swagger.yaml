@@ -593,6 +593,8 @@ definitions:
         type: boolean
       join_status:
         type: string
+      joinable:
+        type: boolean
       kind:
         type: string
       last_synced_at:

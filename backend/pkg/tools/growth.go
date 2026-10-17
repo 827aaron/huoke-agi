@@ -114,15 +114,12 @@ func (g *growthTools) addSources(ctx context.Context, args json.RawMessage) (str
 	if len(action.Links) == 0 {
 		return "", errors.New("links is required: one or more Telegram links, @usernames or web page URLs")
 	}
-	// Links a researcher found inside a source's messages are the AI's discovery, not the customer's.
-	origin, from := growth.OriginManual, action.DiscoveredFromSourceID.PtrInt64()
+	// Only the page's own form adds a source as manual; a link an agent adds is its discovery.
+	from := action.DiscoveredFromSourceID.PtrInt64()
 	if from != nil && *from <= 0 {
 		from = nil
 	}
-	if from != nil {
-		origin = growth.OriginAI
-	}
-	added, err := g.backend.AddSources(ctx, g.scope, action.Links, origin, from)
+	added, err := g.backend.AddSources(ctx, g.scope, action.Links, growth.OriginAI, from)
 	if err != nil {
 		return g.failure(ctx, err)
 	}

@@ -11266,6 +11266,9 @@ const docTemplate = `{
                 "join_status": {
                     "type": "string"
                 },
+                "joinable": {
+                    "type": "boolean"
+                },
                 "kind": {
                     "type": "string"
                 },

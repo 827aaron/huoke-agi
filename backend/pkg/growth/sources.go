@@ -63,6 +63,7 @@ type SourceView struct {
 	Status           string `json:"status"`
 	StatusReason     string `json:"status_reason,omitempty"`
 	JoinStatus       string `json:"join_status"`
+	Joinable         bool   `json:"joinable"`
 	MessagesRead     int64  `json:"messages_read"`
 	HistoryExhausted bool   `json:"history_exhausted"`
 	QualifiedLeads   int    `json:"qualified_leads"`
@@ -285,6 +286,7 @@ func (s *Service) viewSource(ctx context.Context, src database.GrowthSource, acc
 		Status:       src.Status,
 		StatusReason: src.StatusReason,
 		JoinStatus:   string(connectors.JoinStatusNotJoined),
+		Joinable:     connectors.Joinable(connectors.Platform(src.Platform)),
 
 		QualifiedLeads: int(src.QualifiedLeads),
 		EmptyStreak:    int(src.EmptyStreak),
