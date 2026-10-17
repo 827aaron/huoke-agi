@@ -72,6 +72,9 @@ const FIELD_CHECKS: Record<string, (value: string) => boolean> = {
 // Secrets go through the masked input and come back masked; everything else is shown as saved.
 const SECRET_FIELDS = new Set(['api_hash', 'api_key', 'api_keys', 'password']);
 
+// The server masks these too, and keeps the stored value when they are left empty, so editing starts them empty.
+const MASKED_FIELDS = new Set([...SECRET_FIELDS, 'url']);
+
 // One value per line; YouTube rotates to the next key when one runs out of quota.
 const MULTILINE_FIELDS = new Set(['api_keys']);
 
@@ -208,7 +211,7 @@ export function GrowthCredentialCard({
 
     const startEditing = () => {
         setValues(
-            Object.fromEntries(Object.entries(setting?.fields ?? {}).filter(([field]) => !SECRET_FIELDS.has(field))),
+            Object.fromEntries(Object.entries(setting?.fields ?? {}).filter(([field]) => !MASKED_FIELDS.has(field))),
         );
         setIsEditing(true);
     };
@@ -317,7 +320,7 @@ export function GrowthCredentialCard({
 
     const renderInput = (field: string) => {
         const id = `credential-${kind}-${field}`;
-        const placeholder = canKeepSaved && SECRET_FIELDS.has(field) ? text.keepSaved : text.field[field]?.placeholder;
+        const placeholder = canKeepSaved && MASKED_FIELDS.has(field) ? text.keepSaved : text.field[field]?.placeholder;
         const onValue = (value: string) => setValues((previous) => ({ ...previous, [field]: value }));
 
         if (!isEditing) {
