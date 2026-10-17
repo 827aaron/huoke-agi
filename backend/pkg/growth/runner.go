@@ -1,10 +1,12 @@
 package growth
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"pentagi/pkg/database"
@@ -166,7 +168,7 @@ func (s *Service) ProgressSince(ctx context.Context, scope Scope, since time.Tim
 		p.Warning = ErrNoJudge.Error()
 	}
 
-	if p.Sources, err = s.sourceStats(ctx, scope.UserID); err != nil {
+	if p.Sources, err = s.SourceStats(ctx, scope.UserID); err != nil {
 		return p, err
 	}
 	return p, nil
@@ -182,7 +184,7 @@ type DeliverOptions struct {
 	atDeadline bool
 }
 
-func (s *Service) sourceStats(ctx context.Context, userID int64) (SourceStats, error) {
+func (s *Service) SourceStats(ctx context.Context, userID int64) (SourceStats, error) {
 	row, err := s.db.GetUserSourceStats(ctx, userID)
 	if err != nil {
 		return SourceStats{}, fmt.Errorf("failed to summarise the source pool: %w", err)
@@ -310,6 +312,38 @@ func (s *Service) deliverRun(ctx context.Context, scope Scope, run database.Grow
 		d.Email = s.notifyDelivery(ctx, scope, run, views, target, deadline)
 	}
 	return d, nil
+}
+
+// RunLeads counts a round's leads by tier: those its task found and those it delivered.
+type RunLeads struct {
+	Found int
+	Watch int
+}
+
+// RunLeads is keyed by round id; a round with no lead is absent.
+func (s *Service) RunLeads(ctx context.Context, userID int64, runIDs []int64) (map[int64]RunLeads, error) {
+	rows, err := s.db.CountGrowthRunLeads(ctx, database.CountGrowthRunLeadsParams{UserID: userID, RunIds: runIDs})
+	if err != nil {
+		return nil, fmt.Errorf("failed to count the leads of the rounds: %w", err)
+	}
+	out := make(map[int64]RunLeads, len(rows))
+	for _, r := range rows {
+		out[r.RunID] = RunLeads{Found: int(r.Found), Watch: int(r.Watch)}
+	}
+	return out, nil
+}
+
+// RoundNumbers numbers the rounds of each flow from 1 by id, oldest first; runs need
+// hold every round of the flows they cover.
+func RoundNumbers(runs []database.GrowthRun) map[int64]int {
+	sorted := slices.SortedFunc(slices.Values(runs), func(a, b database.GrowthRun) int { return cmp.Compare(a.ID, b.ID) })
+	rounds := make(map[int64]int, len(runs))
+	perFlow := make(map[int64]int)
+	for _, r := range sorted {
+		perFlow[r.FlowID.Int64]++
+		rounds[r.ID] = perFlow[r.FlowID.Int64]
+	}
+	return rounds
 }
 
 func (s *Service) ListRuns(ctx context.Context, userID int64, flowID *int64) ([]database.GrowthRun, error) {

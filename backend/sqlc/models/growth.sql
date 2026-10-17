@@ -310,6 +310,15 @@ SELECT * FROM lead_evidence
 WHERE lead_id = ANY(sqlc.arg(lead_ids)::bigint[])
 ORDER BY lead_id, message_time DESC NULLS LAST, id DESC;
 
+-- name: GetLeadsBestScores :many
+SELECT DISTINCT ON (le.lead_id) le.lead_id, gms.score, gms.signals
+FROM lead_evidence le
+JOIN leads l ON l.id = le.lead_id
+JOIN growth_message_scores gms
+  ON gms.user_id = l.user_id AND gms.source_id = le.source_id AND gms.message_id = le.message_id
+WHERE le.lead_id = ANY(sqlc.arg(lead_ids)::bigint[])
+ORDER BY le.lead_id, gms.score DESC, gms.id DESC;
+
 -- name: GetUserLead :one
 SELECT * FROM leads WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
@@ -407,6 +416,15 @@ SELECT * FROM growth_runs
 WHERE user_id = sqlc.arg(user_id)
   AND (sqlc.narg(flow_id)::bigint IS NULL OR flow_id = sqlc.narg(flow_id)::bigint)
 ORDER BY id DESC;
+
+-- name: CountGrowthRunLeads :many
+SELECT r.id AS run_id,
+  COUNT(l.id) FILTER (WHERE l.tier = 'qualified')::bigint AS found,
+  COUNT(l.id) FILTER (WHERE l.tier = 'watchlist')::bigint AS watch
+FROM growth_runs r
+JOIN leads l ON l.user_id = r.user_id AND (l.last_task_id = r.task_id OR l.delivered_run_id = r.id)
+WHERE r.user_id = sqlc.arg(user_id) AND r.id = ANY(sqlc.arg(run_ids)::bigint[])
+GROUP BY r.id;
 
 -- name: UpdateGrowthRunTarget :one
 UPDATE growth_runs SET target = sqlc.arg(target) WHERE id = sqlc.arg(id) RETURNING *;

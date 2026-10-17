@@ -23,6 +23,7 @@ type Querier interface {
 	CountContainers(ctx context.Context) (int64, error)
 	CountFlowTemplates(ctx context.Context) (int64, error)
 	CountFlows(ctx context.Context) (int64, error)
+	CountGrowthRunLeads(ctx context.Context, arg CountGrowthRunLeadsParams) ([]CountGrowthRunLeadsRow, error)
 	CountPrompts(ctx context.Context) (int64, error)
 	CountSubtasks(ctx context.Context) (int64, error)
 	CountTasks(ctx context.Context) (int64, error)
@@ -161,6 +162,7 @@ type Querier interface {
 	// Fetch a single knowledge document by its UUID (admin view — no user_id check).
 	GetKnowledgeDocument(ctx context.Context, uuid string) (GetKnowledgeDocumentRow, error)
 	GetLeadByPlatformUser(ctx context.Context, arg GetLeadByPlatformUserParams) (Lead, error)
+	GetLeadsBestScores(ctx context.Context, leadIds []int64) ([]GetLeadsBestScoresRow, error)
 	GetLeadsEvidence(ctx context.Context, leadIds []int64) ([]LeadEvidence, error)
 	GetMessageScores(ctx context.Context, arg GetMessageScoresParams) ([]GrowthMessageScore, error)
 	GetMsgChain(ctx context.Context, id int64) (Msgchain, error)

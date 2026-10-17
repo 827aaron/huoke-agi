@@ -246,3 +246,44 @@ func TestRunner_Deliver_HasContactDeliversOnlyReachableLeads(t *testing.T) {
 	require.Len(t, d.Leads, 1)
 	assert.Equal(t, "51", d.Leads[0].PlatformUserID)
 }
+
+func TestRunner_RunLeads_CountsWhatEachRoundFoundAndDelivered(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	first := w.seedTask(t)
+	src := w.mustAddTelegramGroup(t, first, tgGroup("720", "rounds", "Rounds"))
+	_, err := w.svc.SetTarget(ctx, first, 5)
+	require.NoError(t, err)
+	w.mustSaveQualified(t, first, src, 1, 2)
+	res, err := w.svc.UpsertLeads(ctx, first, []LeadInput{qualified("30", src, "m30")})
+	require.NoError(t, err)
+	watchlist := TierWatchlist
+	_, err = w.svc.UpdateLead(ctx, w.user, res[0].LeadID, LeadUpdate{Tier: &watchlist})
+	require.NoError(t, err)
+
+	second := w.seedTaskIn(t, first.FlowID)
+	_, err = w.svc.SetTarget(ctx, second, 5)
+	require.NoError(t, err)
+	w.mustSaveQualified(t, second, src, 40, 1)
+	_, err = w.svc.Deliver(ctx, second, DeliverOptions{AllowPartial: true})
+	require.NoError(t, err)
+
+	runs, err := w.svc.ListRuns(ctx, w.user, &first.FlowID)
+	require.NoError(t, err)
+	require.Len(t, runs, 2)
+	byTask := map[int64]int64{}
+	ids := []int64{}
+	for _, r := range runs {
+		byTask[r.TaskID.Int64] = r.ID
+		ids = append(ids, r.ID)
+	}
+
+	counts, err := w.svc.RunLeads(ctx, w.user, ids)
+	require.NoError(t, err)
+	assert.Equal(t, RunLeads{Found: 2, Watch: 1}, counts[byTask[*first.TaskID]])
+	assert.Equal(t, RunLeads{Found: 3}, counts[byTask[*second.TaskID]], "its own lead and the two it delivered")
+
+	other, err := w.svc.RunLeads(ctx, seedUser(t, w.db, "b@example.test"), ids)
+	require.NoError(t, err)
+	assert.Empty(t, other, "another customer's rounds")
+}
