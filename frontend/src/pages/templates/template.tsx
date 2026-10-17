@@ -73,178 +73,87 @@ const PRESETS_TITLE = 'Preset templates';
 
 const PRESET_TEMPLATES: { text: string; title: string }[] = [
     {
-        text: `Perform comprehensive security assessment of web application: {{TARGET_URL}}
+        text: `在 Telegram 上为我寻找 {{目标数量}} 个潜在玩家客户。
 
-Action plan:
-1. Application Exploration: Navigate all pages, test features, identify endpoints and input vectors
-2. Vulnerability Testing per endpoint:
-   - Path Traversal: attempt to read /etc/passwd, focus on file download/upload features
-   - XSS: inject unique markers, scan responses, craft context-specific payloads
-   - SQL Injection: run sqlmap on inputs, use tamper scripts for WAF bypass
-   - Command Injection: use time-based detection, try commix utility
-   - SSRF: use Interactsh for OOB, target file upload/PDF generation endpoints
-   - XXE: test XML uploads and Office documents
-   - Unsafe File Upload: test executable extensions, double extensions, null byte injection
-   - CSRF: test token validation, POST to GET conversion
-3. Authentication & Session: test for broken authentication, session fixation, weak password policies
-4. Business Logic: identify privilege escalation, price manipulation, workflow bypass opportunities
-5. Report: document all findings with reproduction steps and proof-of-concept exploits`,
-        title: 'Web Application Security Assessment',
+工作步骤：
+1. 来源发现：结合业务档案里的目标语言、目标地区和信号词，搜索相关的公开群组、频道和话题，整理成来源池（只收集公开可见的信息）。
+2. 加入来源：在授权账号下加入最有价值的公开群组，按平台节奏慢速操作，遇到验证就停下并标记需要人工登录。
+3. 识别意向：在群里浏览公开发言，找出正在玩同类游戏、表达相关需求或付费意愿的人。
+4. 线索打分：按玩家身份、需求痛点、付费意愿、近期是否活跃、与业务档案的匹配度打分；排除卖号、代练、竞品和机器人。
+5. 入库去重：把合格线索（评分达标）写入线索库，和历史线索自动去重。
+6. 交付：整理一份带证据（发言截图/链接、匹配理由、评分）的潜客清单。`,
+        title: 'Telegram 群组找玩家',
     },
     {
-        text: `Perform network infrastructure reconnaissance of target: {{TARGET_NETWORK}}
+        text: `在 Facebook 上为我寻找 {{目标数量}} 个潜在玩家客户。
 
-Action plan:
-1. Network Discovery: identify live hosts using nmap ping sweeps, map network topology
-2. Port Scanning: comprehensive port scan (1-65535), identify all open services
-3. Service Enumeration: fingerprint service versions, detect OS information
-4. Vulnerability Scanning: run automated vulnerability scans against discovered services
-5. SSL/TLS Analysis: check certificate validity, weak ciphers, protocol vulnerabilities
-6. Banner Grabbing: collect detailed service information for exploit research
-7. Network Diagram: create visual map of discovered infrastructure
-8. Report: prioritized list of hosts, services, and potential attack vectors`,
-        title: 'Network Infrastructure Discovery & Mapping',
+工作步骤：
+1. 来源发现：根据业务档案的目标语言、地区和信号词，找到相关的公开小组和公开主页，整理成来源池。
+2. 加入来源：在授权账号下加入值得关注的公开小组，慢速、单账号操作，遇到验证即停并标记需要人工登录。
+3. 识别意向：浏览小组帖子和公开主页下的评论，找出讨论同类游戏、表达需求或付费意愿的人。
+4. 线索打分：按玩家身份、需求痛点、付费意愿、近期活跃度、与业务档案的匹配度打分，淘汰卖号、代练、竞品和机器人。
+5. 入库去重：合格线索写入线索库并与历史记录去重。
+6. 交付：输出带证据和评分的潜客清单。`,
+        title: 'Facebook 小组与主页评论找玩家',
     },
     {
-        text: `Conduct Active Directory security assessment for domain: {{DOMAIN_NAME}}
+        text: `在 Instagram 上为我寻找 {{目标数量}} 个潜在玩家客户。
 
-Action plan:
-1. Initial Access: test password spraying, check for AS-REP roasting, look for Kerberoastable accounts
-2. Domain Enumeration: enumerate users, groups, computers, GPOs, trust relationships
-3. Privilege Escalation: identify misconfigured ACLs, check for exploitable group memberships, find delegation issues
-4. Credential Harvesting: search for credentials in SYSVOL, check for password in AD attributes, dump NTDS.dit if possible
-5. Lateral Movement: test pass-the-hash, pass-the-ticket, overpass-the-hash techniques
-6. Persistence: identify opportunities for golden ticket, silver ticket, DCSync rights
-7. Domain Admin Path: map attack path from current privileges to Domain Admin
-8. Report: document attack chain, compromised accounts, security gaps in AD configuration`,
-        title: 'Active Directory Penetration Test',
+工作步骤：
+1. 来源发现：围绕业务档案里的目标游戏、信号词和目标地区，锁定相关的话题标签和公开账号，整理成来源池。
+2. 浏览内容：在授权账号下查看相关话题下的公开帖子和评论（只看公开内容）。
+3. 识别意向：找出在评论或帖子中表达对同类游戏兴趣、需求或付费意愿的人。
+4. 线索打分：按玩家身份、痛点、付费意愿、活跃度和业务档案匹配度打分，排除卖号、代练、竞品和机器人。
+5. 入库去重：合格线索写入线索库并去重。
+6. 交付：输出带证据和评分的潜客清单。`,
+        title: 'Instagram 话题找玩家',
     },
     {
-        text: `Perform comprehensive API security assessment: {{API_BASE_URL}}
+        text: `在 YouTube 上为我寻找 {{目标数量}} 个有意向的潜在客户。
 
-Action plan:
-1. API Discovery: identify all endpoints, HTTP methods, parameters
-2. Authentication Testing: test broken authentication, token manipulation, JWT vulnerabilities
-3. Authorization Testing: test broken object-level authorization (BOLA/IDOR), function-level authorization bypass
-4. Input Validation: test injection attacks (SQL, NoSQL, Command, XXE), mass assignment vulnerabilities
-5. Rate Limiting: test for absence of rate limiting, brute force protection
-6. Business Logic: test for excessive data exposure, lack of resource limiting, unsafe consumption of APIs
-7. Security Misconfiguration: check CORS policy, security headers, verbose error messages
-8. GraphQL Specific (if applicable): test introspection, query depth limits, batching attacks
-9. Report: document API vulnerabilities with curl/Postman proof-of-concepts`,
-        title: 'API Security Testing',
+工作步骤：
+1. 来源发现：根据业务档案的目标游戏和信号词，搜索相关的视频和频道，整理成来源池。
+2. 浏览评论：查看这些视频评论区里的公开留言。
+3. 识别意向：找出在评论中表达想玩、想换游戏、咨询或付费意愿的观众。
+4. 线索打分：按玩家身份、痛点、付费意愿、近期活跃度、与业务档案的匹配度打分，淘汰卖号、代练、竞品和机器人。
+5. 入库去重：合格线索写入线索库并去重。
+6. 交付：输出带证据（评论链接、匹配理由、评分）的潜客清单。`,
+        title: 'YouTube 评论区找意向用户',
     },
     {
-        text: `Perform security audit of AWS infrastructure: {{AWS_ACCOUNT_ID or DOMAIN}}
+        text: `在公开论坛上为我寻找 {{目标数量}} 个有付费意愿的潜在玩家。
 
-Action plan:
-1. Reconnaissance: identify S3 buckets, EC2 instances, public endpoints, enumerate services via DNS
-2. S3 Security: test bucket permissions, public access, ACL misconfigurations, bucket policies
-3. IAM Assessment: review roles, policies, check for overly permissive permissions, find unused credentials
-4. EC2 Security: scan for open security groups, test instance metadata service (169.254.169.254), check IMDSv2
-5. Network Security: review VPC configurations, security groups, NACLs, public subnets
-6. Database Exposure: check RDS public accessibility, security groups, encryption settings
-7. Lambda Functions: test for function URL exposure, environment variable leaks, IAM role permissions
-8. CloudTrail & Logging: verify logging is enabled, check for security monitoring gaps
-9. Report: prioritized cloud security findings with AWS-specific remediation steps`,
-        title: 'Cloud Infrastructure Security Audit (AWS)',
+工作步骤：
+1. 来源发现：结合业务档案的目标语言、地区和信号词，用联网搜索找到相关的公开游戏论坛、贴吧和社区板块，整理成来源池。
+2. 浏览内容：抓取相关版块的公开帖子和回复（只看公开信息）。
+3. 识别意向：重点找讨论充值、氪金、购买道具、换区换服等话题，表现出明确付费意愿的用户。
+4. 线索打分：在玩家、痛点、活跃度的基础上，对表达付费意愿的人加权；排除卖号、代练、竞品和机器人。
+5. 入库去重：合格线索写入线索库并去重。
+6. 交付：输出一份偏重付费意向、带证据和评分的潜客清单。`,
+        title: '公开论坛找付费玩家',
     },
     {
-        text: `Conduct WordPress security assessment: {{WORDPRESS_URL}}
+        text: `根据我的业务档案，帮我把来源池扩充到更广的范围。
 
-Action plan:
-1. Version Detection: identify WordPress core version, theme, and active plugins
-2. Plugin Vulnerabilities: enumerate installed plugins, check for known CVEs using WPScan and Sploitus
-3. Theme Vulnerabilities: identify theme version, search for known exploits
-4. User Enumeration: enumerate valid usernames via REST API, author archives, login responses
-5. Authentication Testing: test weak passwords, brute force protection, 2FA bypass
-6. File Upload: test media upload restrictions, arbitrary file upload vulnerabilities
-7. XML-RPC: check if enabled, test pingback SSRF, brute force amplification
-8. SQL Injection: test search functionality, custom query parameters, plugin-specific inputs
-9. XSS Testing: test comments, search, contact forms, custom fields
-10. Configuration Issues: check wp-config.php exposure, directory listing, sensitive file access
-11. Report: document WordPress-specific vulnerabilities with exploit steps`,
-        title: 'WordPress Security Assessment',
+工作步骤：
+1. 读取档案：读取业务档案里的目标游戏、语言、地区、信号词和排除项。
+2. 横向发现：围绕这些线索跨平台（Telegram、Facebook、Instagram、YouTube、公开论坛）寻找此前没有收录的相关公开群组、主页、话题和社区。
+3. 评估价值：对每个候选来源估算潜在线索规模和相关度，去掉与档案不相关或命中排除项的来源。
+4. 写入来源池：把有价值的新来源补充进来源池，并和已有来源去重。
+5. 交付：输出一份新增来源清单，说明每个来源的平台、类型和推荐理由，供我确认后再采集线索。`,
+        title: '按业务档案扩充来源池',
     },
     {
-        text: `Perform external attack surface assessment for organization: {{ORGANIZATION_NAME or DOMAIN}}
+        text: `对我已有的来源做一次同步，更新线索库。
 
-Action plan:
-1. Asset Discovery: enumerate all domains, subdomains (subfinder, amass), IP ranges, ASN information
-2. Certificate Transparency: search crt.sh for subdomains, identify forgotten assets
-3. Port Scanning: scan all discovered assets for open ports and services
-4. Web Application Fingerprinting: identify technologies, CMS, frameworks, server versions
-5. Email Security: test SPF, DKIM, DMARC records, email spoofing potential
-6. Cloud Asset Discovery: search for exposed S3 buckets, Azure blobs, exposed cloud databases
-7. Sensitive Data Exposure: search GitHub, GitLab, Pastebin for leaked credentials, API keys
-8. Third-Party Integrations: identify SaaS applications, API endpoints, partner integrations
-9. Vulnerability Prioritization: identify internet-facing critical vulnerabilities
-10. Report: comprehensive external attack surface map with risk-prioritized findings`,
-        title: 'External Attack Surface Assessment',
-    },
-    {
-        text: `Conduct internal network penetration test from position: {{INITIAL_ACCESS_LEVEL}}
-
-Action plan:
-1. Network Reconnaissance: ARP scanning, identify network segments, map internal infrastructure
-2. Service Discovery: comprehensive port scanning of internal hosts, identify critical servers
-3. SMB/NetBIOS Enumeration: test null sessions, enumerate shares, check for anonymous access
-4. Credential Attacks: LLMNR/NBT-NS poisoning (Responder), relay attacks, password spraying
-5. Vulnerability Exploitation: exploit unpatched services, test default credentials, known CVEs
-6. Privilege Escalation: exploit local vulnerabilities, misconfigured services, weak permissions
-7. Lateral Movement: pass-the-hash, token impersonation, exploit trust relationships
-8. Data Exfiltration: identify sensitive data locations, test data loss prevention controls
-9. Persistence: establish persistent access mechanisms
-10. Report: document internal security posture, attack path visualization, remediation priorities`,
-        title: 'Internal Network Penetration Test',
-    },
-    {
-        text: `Perform security testing of mobile application backend API: {{API_URL}}
-
-Action plan:
-1. Traffic Interception: analyze mobile app traffic, extract API endpoints and authentication
-2. Authentication Mechanisms: test OAuth flows, JWT implementation, refresh token handling, certificate pinning bypass
-3. API Endpoint Testing: test all discovered endpoints for BOLA/IDOR, broken function-level authorization
-4. Data Validation: test for injection attacks in API parameters, test file upload endpoints
-5. Business Logic: test premium feature bypass, subscription validation, in-app purchase verification
-6. Session Management: test token expiration, concurrent session handling, session fixation
-7. Sensitive Data: check for PII exposure, excessive data in responses, hardcoded secrets
-8. Rate Limiting: test brute force protection on login, API rate limits, account lockout
-9. Deep Linking: test for deep link hijacking, intent redirection (Android), URL scheme abuse (iOS)
-10. Report: mobile-specific vulnerabilities with mitigation recommendations`,
-        title: 'Mobile Application Security Testing (API Backend)',
-    },
-    {
-        text: `Assess DevOps infrastructure and CI/CD pipeline security: {{ORGANIZATION}}
-
-Action plan:
-1. Repository Security: scan GitHub/GitLab for exposed secrets, API keys, credentials in commit history
-2. CI/CD Configuration: review Jenkins/GitLab CI/GitHub Actions configurations, test for injection in pipeline definitions
-3. Container Security: scan Docker images for vulnerabilities, test for container escape, check image sources
-4. Secrets Management: test secret storage (HashiCorp Vault, AWS Secrets Manager), check for hardcoded secrets
-5. Access Control: review permissions on repositories, pipeline access, deployment keys, service accounts
-6. Artifact Security: scan build artifacts, test artifact repository access controls (Nexus, Artifactory)
-7. Kubernetes Security: review pod security policies, RBAC, network policies, exposed dashboards
-8. Infrastructure as Code: review Terraform/Ansible for misconfigurations, overly permissive IAM roles
-9. Monitoring & Logging: verify security logging, test log tampering, check for security monitoring gaps
-10. Report: DevOps security findings with secure pipeline recommendations`,
-        title: 'DevOps & CI/CD Pipeline Security',
-    },
-    {
-        text: `Conduct database security assessment: {{DATABASE_TYPE}} at {{HOST:PORT}}
-
-Action plan:
-1. Access Testing: test for default credentials, weak passwords, anonymous access
-2. Network Exposure: verify database should not be internet-accessible, check firewall rules
-3. Authentication: test authentication mechanisms, user enumeration, password policies
-4. Authorization: review user permissions, test for privilege escalation, check for excessive grants
-5. Injection Testing: SQL injection in application layer, test stored procedures for injection
-6. Configuration Review: check for dangerous configuration options (xp_cmdshell, LOAD DATA, file_priv)
-7. Encryption: verify data-at-rest encryption, SSL/TLS for connections, check for sensitive data in plaintext
-8. Backup Security: test backup file access, check backup encryption, verify backup restoration procedures
-9. Audit Logging: verify audit logs enabled, test log tampering, check retention policies
-10. Report: database-specific security findings with hardening recommendations`,
-        title: 'Database Security Assessment',
+工作步骤：
+1. 选择来源：读取当前来源池里状态正常、仍然有效的来源。
+2. 增量同步：在授权账号下重新浏览这些来源的最新公开内容，慢速、单账号操作，遇到验证即停并标记需要人工登录。
+3. 识别新意向：找出上次采集之后新出现的、符合业务档案的潜在玩家。
+4. 线索打分与去重：对新发现的人按玩家、痛点、付费意愿、活跃度和匹配度打分，和历史线索去重，只保留新增的合格线索。
+5. 更新来源状态：根据本次产出刷新每个来源的有效性（有效/低产/失效）。
+6. 交付：输出本次新增的潜客清单，并汇总各来源的更新情况。`,
+        title: '同步已有来源并更新线索',
     },
 ];
 
