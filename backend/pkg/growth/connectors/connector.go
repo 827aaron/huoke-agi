@@ -63,6 +63,9 @@ var (
 	// A connector returning it should expect the account to be moved to needs_login.
 	ErrUnauthorized = errors.New("platform account is not authorized")
 	ErrNoConnector  = errors.New("no connector is registered for this platform")
+	// ErrUnreachable means the platform's servers could not be reached, usually a
+	// missing or broken proxy.
+	ErrUnreachable = errors.New("the platform could not be reached; check the proxy")
 )
 
 // FloodWaitError is returned when the platform asked for a pause longer than the
@@ -108,7 +111,9 @@ type JoinResult struct {
 }
 
 // HistoryRequest pages through a source. With both ids zero it returns the newest page.
-// OffsetID returns messages strictly older than it; MinID returns messages strictly newer than it.
+// OffsetID returns messages strictly older than it; MinID returns messages strictly newer
+// than it. With only MinID set the page is the Limit messages just above MinID, not the
+// newest ones, so a cursor that advances to the page's newest message skips nothing.
 type HistoryRequest struct {
 	OffsetID int64
 	MinID    int64

@@ -883,6 +883,8 @@ type AccountSource struct {
 	SyncedAt         sql.NullTime          `json:"synced_at"`
 	CreatedAt        sql.NullTime          `json:"created_at"`
 	UpdatedAt        sql.NullTime          `json:"updated_at"`
+	JoinAttemptedAt  sql.NullTime          `json:"join_attempted_at"`
+	PrivateJoin      bool                  `json:"private_join"`
 }
 
 type Agentlog struct {
@@ -962,6 +964,8 @@ type ChannelAccount struct {
 	ExternalBrowserWs []byte                `json:"external_browser_ws"`
 	CreatedAt         sql.NullTime          `json:"created_at"`
 	UpdatedAt         sql.NullTime          `json:"updated_at"`
+	FirstSignedInAt   sql.NullTime          `json:"first_signed_in_at"`
+	NextJoinAt        sql.NullTime          `json:"next_join_at"`
 }
 
 type Container struct {

@@ -160,7 +160,7 @@ func (q *Queries) EnsureGrowthRun(ctx context.Context, arg EnsureGrowthRunParams
 }
 
 const getAccountSource = `-- name: GetAccountSource :one
-SELECT id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at FROM account_sources WHERE account_id = $1 AND source_id = $2
+SELECT id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at, join_attempted_at, private_join FROM account_sources WHERE account_id = $1 AND source_id = $2
 `
 
 type GetAccountSourceParams struct {
@@ -186,12 +186,14 @@ func (q *Queries) GetAccountSource(ctx context.Context, arg GetAccountSourcePara
 		&i.SyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.JoinAttemptedAt,
+		&i.PrivateJoin,
 	)
 	return i, err
 }
 
 const getChannelAccount = `-- name: GetChannelAccount :one
-SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at FROM channel_accounts WHERE id = $1
+SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at FROM channel_accounts WHERE id = $1
 `
 
 func (q *Queries) GetChannelAccount(ctx context.Context, id int64) (ChannelAccount, error) {
@@ -218,6 +220,8 @@ func (q *Queries) GetChannelAccount(ctx context.Context, id int64) (ChannelAccou
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }
@@ -564,8 +568,15 @@ func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64)
 }
 
 const getUsableChannelAccounts = `-- name: GetUsableChannelAccounts :many
-SELECT ca.id, ca.user_id, ca.platform, ca.kind, ca.label, ca.external_id, ca.session, ca.profile_dir, ca.status, ca.last_used_at, ca.last_success_at, ca.last_rate_limited_at, ca.rate_limit_until, ca.consecutive_errors, ca.last_error, ca.proxy, ca.fingerprint, ca.external_browser_ws, ca.created_at, ca.updated_at, COALESCE(acs.join_status = 'joined', false)::boolean AS joined_source
+SELECT ca.id, ca.user_id, ca.platform, ca.kind, ca.label, ca.external_id, ca.session, ca.profile_dir, ca.status, ca.last_used_at, ca.last_success_at, ca.last_rate_limited_at, ca.rate_limit_until, ca.consecutive_errors, ca.last_error, ca.proxy, ca.fingerprint, ca.external_browser_ws, ca.created_at, ca.updated_at, ca.first_signed_in_at, ca.next_join_at, COALESCE(acs.join_status = 'joined', false)::boolean AS joined_source,
+  j.joins_24h, j.private_joins_24h
 FROM channel_accounts ca
+CROSS JOIN LATERAL (
+  SELECT count(*)::bigint AS joins_24h,
+    count(*) FILTER (WHERE a.private_join)::bigint AS private_joins_24h
+  FROM account_sources a
+  WHERE a.account_id = ca.id AND a.join_attempted_at > now() - interval '24 hours'
+) j
 LEFT JOIN account_sources acs ON acs.account_id = ca.id AND acs.source_id = $1
 WHERE ca.user_id = $2 AND ca.platform = $3
   AND ca.status IN ('active', 'rate_limited')
@@ -599,11 +610,16 @@ type GetUsableChannelAccountsRow struct {
 	ExternalBrowserWs []byte                `json:"external_browser_ws"`
 	CreatedAt         sql.NullTime          `json:"created_at"`
 	UpdatedAt         sql.NullTime          `json:"updated_at"`
+	FirstSignedInAt   sql.NullTime          `json:"first_signed_in_at"`
+	NextJoinAt        sql.NullTime          `json:"next_join_at"`
 	JoinedSource      bool                  `json:"joined_source"`
+	Joins24h          int64                 `json:"joins_24h"`
+	PrivateJoins24h   int64                 `json:"private_joins_24h"`
 }
 
 // Accounts that may take a call now or after their rate limit ends; joined_source tells
-// whether the account already joined source_id (0 matches none).
+// whether the account already joined source_id (0 matches none). The join columns count
+// the joins of the last 24 hours, all and through invite links.
 func (q *Queries) GetUsableChannelAccounts(ctx context.Context, arg GetUsableChannelAccountsParams) ([]GetUsableChannelAccountsRow, error) {
 	rows, err := q.db.QueryContext(ctx, getUsableChannelAccounts, arg.SourceID, arg.UserID, arg.Platform)
 	if err != nil {
@@ -634,7 +650,65 @@ func (q *Queries) GetUsableChannelAccounts(ctx context.Context, arg GetUsableCha
 			&i.ExternalBrowserWs,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.FirstSignedInAt,
+			&i.NextJoinAt,
 			&i.JoinedSource,
+			&i.Joins24h,
+			&i.PrivateJoins24h,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserAccountJoinCounts = `-- name: GetUserAccountJoinCounts :many
+SELECT ca.id AS account_id, ca.platform, ca.label,
+  count(acs.id) FILTER (WHERE acs.join_status IN ('joined', 'pending'))::bigint AS joined,
+  count(acs.id) FILTER (WHERE acs.join_attempted_at > now() - interval '24 hours')::bigint AS joins_24h,
+  count(acs.id) FILTER (WHERE acs.join_attempted_at > now() - interval '24 hours' AND acs.private_join)::bigint
+    AS private_joins_24h
+FROM channel_accounts ca
+LEFT JOIN account_sources acs ON acs.account_id = ca.id
+WHERE ca.user_id = $1
+GROUP BY ca.id
+ORDER BY ca.id
+`
+
+type GetUserAccountJoinCountsRow struct {
+	AccountID       int64  `json:"account_id"`
+	Platform        string `json:"platform"`
+	Label           string `json:"label"`
+	Joined          int64  `json:"joined"`
+	Joins24h        int64  `json:"joins_24h"`
+	PrivateJoins24h int64  `json:"private_joins_24h"`
+}
+
+// Per account: the sources joined or awaiting approval, and the joins of the last 24 hours,
+// all and through invite links.
+func (q *Queries) GetUserAccountJoinCounts(ctx context.Context, userID int64) ([]GetUserAccountJoinCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserAccountJoinCounts, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserAccountJoinCountsRow
+	for rows.Next() {
+		var i GetUserAccountJoinCountsRow
+		if err := rows.Scan(
+			&i.AccountID,
+			&i.Platform,
+			&i.Label,
+			&i.Joined,
+			&i.Joins24h,
+			&i.PrivateJoins24h,
 		); err != nil {
 			return nil, err
 		}
@@ -650,7 +724,7 @@ func (q *Queries) GetUsableChannelAccounts(ctx context.Context, arg GetUsableCha
 }
 
 const getUserAccountSources = `-- name: GetUserAccountSources :many
-SELECT acs.id, acs.account_id, acs.source_id, acs.peer, acs.join_status, acs.join_error, acs.newest_message_id, acs.oldest_message_id, acs.history_exhausted, acs.messages_read, acs.joined_at, acs.synced_at, acs.created_at, acs.updated_at
+SELECT acs.id, acs.account_id, acs.source_id, acs.peer, acs.join_status, acs.join_error, acs.newest_message_id, acs.oldest_message_id, acs.history_exhausted, acs.messages_read, acs.joined_at, acs.synced_at, acs.created_at, acs.updated_at, acs.join_attempted_at, acs.private_join
 FROM account_sources acs
 JOIN channel_accounts ga ON ga.id = acs.account_id
 WHERE ga.user_id = $1
@@ -681,6 +755,8 @@ func (q *Queries) GetUserAccountSources(ctx context.Context, userID int64) ([]Ac
 			&i.SyncedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.JoinAttemptedAt,
+			&i.PrivateJoin,
 		); err != nil {
 			return nil, err
 		}
@@ -696,7 +772,7 @@ func (q *Queries) GetUserAccountSources(ctx context.Context, userID int64) ([]Ac
 }
 
 const getUserChannelAccount = `-- name: GetUserChannelAccount :one
-SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at FROM channel_accounts WHERE id = $1 AND user_id = $2
+SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at FROM channel_accounts WHERE id = $1 AND user_id = $2
 `
 
 type GetUserChannelAccountParams struct {
@@ -728,12 +804,14 @@ func (q *Queries) GetUserChannelAccount(ctx context.Context, arg GetUserChannelA
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }
 
 const getUserChannelAccounts = `-- name: GetUserChannelAccounts :many
-SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at FROM channel_accounts WHERE user_id = $1 ORDER BY id
+SELECT id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at FROM channel_accounts WHERE user_id = $1 ORDER BY id
 `
 
 func (q *Queries) GetUserChannelAccounts(ctx context.Context, userID int64) ([]ChannelAccount, error) {
@@ -766,6 +844,8 @@ func (q *Queries) GetUserChannelAccounts(ctx context.Context, userID int64) ([]C
 			&i.ExternalBrowserWs,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.FirstSignedInAt,
+			&i.NextJoinAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1253,6 +1333,43 @@ func (q *Queries) InsertLeadEvidence(ctx context.Context, arg InsertLeadEvidence
 	return result.RowsAffected()
 }
 
+const markChannelAccountSignedIn = `-- name: MarkChannelAccountSignedIn :one
+UPDATE channel_accounts
+SET status = 'active', first_signed_in_at = COALESCE(first_signed_in_at, now())
+WHERE id = $1
+RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at
+`
+
+func (q *Queries) MarkChannelAccountSignedIn(ctx context.Context, id int64) (ChannelAccount, error) {
+	row := q.db.QueryRowContext(ctx, markChannelAccountSignedIn, id)
+	var i ChannelAccount
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Platform,
+		&i.Kind,
+		&i.Label,
+		&i.ExternalID,
+		&i.Session,
+		&i.ProfileDir,
+		&i.Status,
+		&i.LastUsedAt,
+		&i.LastSuccessAt,
+		&i.LastRateLimitedAt,
+		&i.RateLimitUntil,
+		&i.ConsecutiveErrors,
+		&i.LastError,
+		&i.Proxy,
+		&i.Fingerprint,
+		&i.ExternalBrowserWs,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
+	)
+	return i, err
+}
+
 const markChannelAccountUsed = `-- name: MarkChannelAccountUsed :exec
 UPDATE channel_accounts SET last_used_at = now() WHERE id = $1
 `
@@ -1353,6 +1470,7 @@ func (q *Queries) RecordChannelAccountRateLimit(ctx context.Context, arg RecordC
 const recordChannelAccountSuccess = `-- name: RecordChannelAccountSuccess :exec
 UPDATE channel_accounts
 SET last_success_at = now(),
+    first_signed_in_at = COALESCE(first_signed_in_at, now()),
     consecutive_errors = 0,
     last_error = '',
     rate_limit_until = NULL,
@@ -1528,23 +1646,45 @@ func (q *Queries) ResolveGrowthSource(ctx context.Context, arg ResolveGrowthSour
 	return i, err
 }
 
+const scheduleChannelAccountJoin = `-- name: ScheduleChannelAccountJoin :exec
+UPDATE channel_accounts SET next_join_at = $1 WHERE id = $2
+`
+
+type ScheduleChannelAccountJoinParams struct {
+	NextJoinAt sql.NullTime `json:"next_join_at"`
+	ID         int64        `json:"id"`
+}
+
+func (q *Queries) ScheduleChannelAccountJoin(ctx context.Context, arg ScheduleChannelAccountJoinParams) error {
+	_, err := q.db.ExecContext(ctx, scheduleChannelAccountJoin, arg.NextJoinAt, arg.ID)
+	return err
+}
+
 const updateAccountSourceJoin = `-- name: UpdateAccountSourceJoin :one
 UPDATE account_sources
 SET join_status = $1,
     join_error  = $2,
+    join_attempted_at = CURRENT_TIMESTAMP,
+    private_join = $3,
     joined_at   = CASE WHEN $1::text = 'joined' THEN COALESCE(joined_at, CURRENT_TIMESTAMP) ELSE joined_at END
-WHERE id = $3
-RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at
+WHERE id = $4
+RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at, join_attempted_at, private_join
 `
 
 type UpdateAccountSourceJoinParams struct {
-	JoinStatus string `json:"join_status"`
-	JoinError  string `json:"join_error"`
-	ID         int64  `json:"id"`
+	JoinStatus  string `json:"join_status"`
+	JoinError   string `json:"join_error"`
+	PrivateJoin bool   `json:"private_join"`
+	ID          int64  `json:"id"`
 }
 
 func (q *Queries) UpdateAccountSourceJoin(ctx context.Context, arg UpdateAccountSourceJoinParams) (AccountSource, error) {
-	row := q.db.QueryRowContext(ctx, updateAccountSourceJoin, arg.JoinStatus, arg.JoinError, arg.ID)
+	row := q.db.QueryRowContext(ctx, updateAccountSourceJoin,
+		arg.JoinStatus,
+		arg.JoinError,
+		arg.PrivateJoin,
+		arg.ID,
+	)
 	var i AccountSource
 	err := row.Scan(
 		&i.ID,
@@ -1561,6 +1701,8 @@ func (q *Queries) UpdateAccountSourceJoin(ctx context.Context, arg UpdateAccount
 		&i.SyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.JoinAttemptedAt,
+		&i.PrivateJoin,
 	)
 	return i, err
 }
@@ -1577,7 +1719,7 @@ SET newest_message_id = GREATEST(newest_message_id, $1),
     messages_read     = messages_read + $4::bigint,
     synced_at         = CURRENT_TIMESTAMP
 WHERE id = $5
-RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at
+RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at, join_attempted_at, private_join
 `
 
 type UpdateAccountSourceSyncParams struct {
@@ -1612,6 +1754,8 @@ func (q *Queries) UpdateAccountSourceSync(ctx context.Context, arg UpdateAccount
 		&i.SyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.JoinAttemptedAt,
+		&i.PrivateJoin,
 	)
 	return i, err
 }
@@ -1631,7 +1775,7 @@ func (q *Queries) UpdateChannelAccountSession(ctx context.Context, arg UpdateCha
 }
 
 const updateChannelAccountStatus = `-- name: UpdateChannelAccountStatus :one
-UPDATE channel_accounts SET status = $1 WHERE id = $2 RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at
+UPDATE channel_accounts SET status = $1 WHERE id = $2 RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at
 `
 
 type UpdateChannelAccountStatusParams struct {
@@ -1663,6 +1807,8 @@ func (q *Queries) UpdateChannelAccountStatus(ctx context.Context, arg UpdateChan
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }
@@ -1825,7 +1971,7 @@ SET label               = $1,
     fingerprint         = $4,
     external_browser_ws = $5
 WHERE id = $6 AND user_id = $7
-RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at
+RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at
 `
 
 type UpdateUserChannelAccountParams struct {
@@ -1870,6 +2016,8 @@ func (q *Queries) UpdateUserChannelAccount(ctx context.Context, arg UpdateUserCh
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }
@@ -1879,7 +2027,7 @@ INSERT INTO account_sources (account_id, source_id, peer)
 VALUES ($1, $2, $3)
 ON CONFLICT (account_id, source_id) DO UPDATE
 SET peer = COALESCE(EXCLUDED.peer, account_sources.peer)
-RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at
+RETURNING id, account_id, source_id, peer, join_status, join_error, newest_message_id, oldest_message_id, history_exhausted, messages_read, joined_at, synced_at, created_at, updated_at, join_attempted_at, private_join
 `
 
 type UpsertAccountSourceParams struct {
@@ -1906,6 +2054,8 @@ func (q *Queries) UpsertAccountSource(ctx context.Context, arg UpsertAccountSour
 		&i.SyncedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.JoinAttemptedAt,
+		&i.PrivateJoin,
 	)
 	return i, err
 }
@@ -1921,7 +2071,7 @@ SET kind        = EXCLUDED.kind,
     external_id = COALESCE(NULLIF(EXCLUDED.external_id, ''), channel_accounts.external_id),
     profile_dir = COALESCE(NULLIF(EXCLUDED.profile_dir, ''), channel_accounts.profile_dir),
     status      = EXCLUDED.status
-RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at
+RETURNING id, user_id, platform, kind, label, external_id, session, profile_dir, status, last_used_at, last_success_at, last_rate_limited_at, rate_limit_until, consecutive_errors, last_error, proxy, fingerprint, external_browser_ws, created_at, updated_at, first_signed_in_at, next_join_at
 `
 
 type UpsertChannelAccountParams struct {
@@ -1966,6 +2116,8 @@ func (q *Queries) UpsertChannelAccount(ctx context.Context, arg UpsertChannelAcc
 		&i.ExternalBrowserWs,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.FirstSignedInAt,
+		&i.NextJoinAt,
 	)
 	return i, err
 }

@@ -484,9 +484,12 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 	},
 	GrowthSyncSourceToolName: {
 		Name: GrowthSyncSourceToolName,
-		Description: "Read a Telegram pool source's public messages one page at a time (action=history); the read position " +
-			"is kept, so repeated calls continue where the last stopped. Each message has its sender id, username, time and link. " +
-			"action=user returns a sender's public profile. Web sources are read with the browser tool instead.",
+		Description: "Read pool sources' public messages (action=history), one source or a batch of source_ids. 'older' reads " +
+			"backwards one page per call until the source's back-read is done; 'newer' then reads what was posted since, " +
+			"page by page until caught up, which is how a source is monitored. The read position is kept between calls. " +
+			"Only the messages the judgement model (Jev) picks as worth a closer look are returned unless all_messages is true; " +
+			"each has its sender id, username, time and link. action=user returns a sender's public profile. " +
+			"Web sources are read with the browser tool instead.",
 		Parameters: reflector.Reflect(&GrowthSyncSourceAction{}),
 	},
 	GrowthUpsertLeadsToolName: {

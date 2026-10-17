@@ -19,9 +19,17 @@ SELECT * FROM channel_accounts WHERE user_id = sqlc.arg(user_id) ORDER BY id;
 
 -- name: GetUsableChannelAccounts :many
 -- Accounts that may take a call now or after their rate limit ends; joined_source tells
--- whether the account already joined source_id (0 matches none).
-SELECT ca.*, COALESCE(acs.join_status = 'joined', false)::boolean AS joined_source
+-- whether the account already joined source_id (0 matches none). The join columns count
+-- the joins of the last 24 hours, all and through invite links.
+SELECT ca.*, COALESCE(acs.join_status = 'joined', false)::boolean AS joined_source,
+  j.joins_24h, j.private_joins_24h
 FROM channel_accounts ca
+CROSS JOIN LATERAL (
+  SELECT count(*)::bigint AS joins_24h,
+    count(*) FILTER (WHERE a.private_join)::bigint AS private_joins_24h
+  FROM account_sources a
+  WHERE a.account_id = ca.id AND a.join_attempted_at > now() - interval '24 hours'
+) j
 LEFT JOIN account_sources acs ON acs.account_id = ca.id AND acs.source_id = sqlc.arg(source_id)
 WHERE ca.user_id = sqlc.arg(user_id) AND ca.platform = sqlc.arg(platform)
   AND ca.status IN ('active', 'rate_limited')
@@ -33,6 +41,7 @@ UPDATE channel_accounts SET last_used_at = now() WHERE id = sqlc.arg(id);
 -- name: RecordChannelAccountSuccess :exec
 UPDATE channel_accounts
 SET last_success_at = now(),
+    first_signed_in_at = COALESCE(first_signed_in_at, now()),
     consecutive_errors = 0,
     last_error = '',
     rate_limit_until = NULL,
@@ -56,6 +65,29 @@ SELECT session FROM channel_accounts WHERE id = sqlc.arg(id);
 
 -- name: UpdateChannelAccountSession :exec
 UPDATE channel_accounts SET session = sqlc.arg(session) WHERE id = sqlc.arg(id);
+
+-- name: MarkChannelAccountSignedIn :one
+UPDATE channel_accounts
+SET status = 'active', first_signed_in_at = COALESCE(first_signed_in_at, now())
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
+-- name: ScheduleChannelAccountJoin :exec
+UPDATE channel_accounts SET next_join_at = sqlc.arg(next_join_at) WHERE id = sqlc.arg(id);
+
+-- name: GetUserAccountJoinCounts :many
+-- Per account: the sources joined or awaiting approval, and the joins of the last 24 hours,
+-- all and through invite links.
+SELECT ca.id AS account_id, ca.platform, ca.label,
+  count(acs.id) FILTER (WHERE acs.join_status IN ('joined', 'pending'))::bigint AS joined,
+  count(acs.id) FILTER (WHERE acs.join_attempted_at > now() - interval '24 hours')::bigint AS joins_24h,
+  count(acs.id) FILTER (WHERE acs.join_attempted_at > now() - interval '24 hours' AND acs.private_join)::bigint
+    AS private_joins_24h
+FROM channel_accounts ca
+LEFT JOIN account_sources acs ON acs.account_id = ca.id
+WHERE ca.user_id = sqlc.arg(user_id)
+GROUP BY ca.id
+ORDER BY ca.id;
 
 -- name: UpdateChannelAccountStatus :one
 UPDATE channel_accounts SET status = sqlc.arg(status) WHERE id = sqlc.arg(id) RETURNING *;
@@ -188,6 +220,8 @@ ORDER BY acs.source_id, acs.account_id;
 UPDATE account_sources
 SET join_status = sqlc.arg(join_status),
     join_error  = sqlc.arg(join_error),
+    join_attempted_at = CURRENT_TIMESTAMP,
+    private_join = sqlc.arg(private_join),
     joined_at   = CASE WHEN sqlc.arg(join_status)::text = 'joined' THEN COALESCE(joined_at, CURRENT_TIMESTAMP) ELSE joined_at END
 WHERE id = sqlc.arg(id)
 RETURNING *;

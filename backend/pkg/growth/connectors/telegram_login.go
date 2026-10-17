@@ -84,6 +84,10 @@ func startTelegramLogin(ctx context.Context, cfg *config.Config, account Account
 	case err := <-runErr:
 		cancel()
 		return nil, fmt.Errorf("connect to telegram: %w", err)
+	case <-time.After(tc.ConnectTimeout):
+		cancel()
+		<-done
+		return nil, fmt.Errorf("%w: no connection to telegram within %s", ErrUnreachable, tc.ConnectTimeout)
 	case <-ctx.Done():
 		cancel()
 		<-done

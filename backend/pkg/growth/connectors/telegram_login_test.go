@@ -2,8 +2,12 @@ package connectors
 
 import (
 	"context"
+	"net"
+	"sync"
 	"testing"
 	"time"
+
+	"pentagi/pkg/config"
 
 	"github.com/gotd/td/telegram/auth"
 	"github.com/gotd/td/tg"
@@ -132,4 +136,38 @@ func TestTelegramLogin_Code_AfterExpiry(t *testing.T) {
 	close(expired)
 	l.expired = expired
 	assert.ErrorIs(t, l.Code(context.Background(), "12345"), errLoginOver)
+}
+
+func TestTelegramLogin_StartTelegramLogin_NamesTheProxyWhenTelegramIsUnreachable(t *testing.T) {
+	silent, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	var mu sync.Mutex
+	var conns []net.Conn
+	t.Cleanup(func() {
+		_ = silent.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, conn := range conns {
+			_ = conn.Close()
+		}
+	})
+	go func() {
+		for {
+			conn, err := silent.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			conns = append(conns, conn)
+			mu.Unlock()
+		}
+	}()
+	t.Setenv("TG_CONNECT_TIMEOUT", "300ms")
+
+	start := time.Now()
+	_, err = startTelegramLogin(t.Context(),
+		&config.Config{TGAPIID: 12345, TGAPIHash: "abc", TGSessionDir: t.TempDir()},
+		Account{ID: 1, Proxy: "socks5://" + silent.Addr().String()}, "+66812345678")
+	assert.ErrorIs(t, err, ErrUnreachable)
+	assert.Less(t, time.Since(start), 10*time.Second)
 }

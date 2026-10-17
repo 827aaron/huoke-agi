@@ -312,6 +312,10 @@ type Config struct {
 	// optionally with user:pass@); an account's own proxy wins. PROXY_URL is unrelated:
 	// it carries the server's own outbound calls.
 	GrowthProxyURL string `env:"GROWTH_PROXY_URL"`
+	// TypeSafeAPIKey turns on the Jev pre-screen of synced messages; without it the
+	// pre-screen runs on the summarizer role's model. An empty URL is TypeSafe's own.
+	TypeSafeAPIKey string `env:"TYPESAFE_API_KEY"`
+	TypeSafeAPIURL string `env:"TYPESAFE_API_URL"`
 	// BrowserServiceURL is the browser service that keeps a logged-in browser per Facebook
 	// and Instagram account; BrowserToken authorises the backend to it. Left empty while the
 	// URL is set, a generated token is kept in DataDir/browser/token for the service to read.
@@ -626,6 +630,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.OAuthGithubClientSecret, "Github Client Secret"},
 		{c.TGAPIHash, "Telegram API Hash"},
 		{c.GrowthProxyURL, "Growth Proxy URL"},
+		{c.TypeSafeAPIKey, "TypeSafe API Key"},
 		{c.BrowserToken, "Browser Service Token"},
 		{c.GrowthSecretKey, "Growth Secret Key"},
 		{c.SMTPPassword, "SMTP Password"},
