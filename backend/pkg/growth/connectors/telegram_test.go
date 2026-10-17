@@ -565,7 +565,7 @@ func TestTelegram_Membership(t *testing.T) {
 	}
 }
 
-func historyPage(msgs ...tg.MessageClass) *tg.MessagesChannelMessages {
+func tgHistoryPage(msgs ...tg.MessageClass) *tg.MessagesChannelMessages {
 	return &tg.MessagesChannelMessages{
 		Messages: msgs,
 		Users: []tg.UserClass{
@@ -592,7 +592,7 @@ func TestTelegram_ReadHistory_NewestPage(t *testing.T) {
 			assert.Equal(t, 3, req.Limit)
 			reply := chatMsg(12, 502, "same, looking for a new gacha game")
 			reply.ReplyTo = &tg.MessageReplyHeader{ReplyToMsgID: 11}
-			return historyPage(
+			return tgHistoryPage(
 				reply,
 				&tg.MessageService{ID: 11, Action: &tg.MessageActionChatJoinedByLink{}},
 				chatMsg(10, 501, "bored of this game, any recommendations?"),
@@ -624,7 +624,7 @@ func TestTelegram_ReadHistory_OlderPageReachesStart(t *testing.T) {
 		getHistory: func(req *tg.MessagesGetHistoryRequest) (tg.MessagesMessagesClass, error) {
 			assert.Equal(t, 10, req.OffsetID)
 			assert.Equal(t, 0, req.AddOffset)
-			return historyPage(chatMsg(9, 501, "hi")), nil
+			return tgHistoryPage(chatMsg(9, 501, "hi")), nil
 		},
 	})
 	page, err := tgc.ReadHistory(context.Background(), channelRef(1001, 77, ""), HistoryRequest{OffsetID: 10, Limit: 3})
@@ -640,7 +640,7 @@ func TestTelegram_ReadHistory_NewerThanMinID(t *testing.T) {
 			assert.Equal(t, -3, req.AddOffset)
 			assert.Equal(t, 12, req.MinID)
 			assert.Equal(t, 3, req.Limit)
-			return historyPage(chatMsg(14, 501, "b"), chatMsg(13, 501, "a")), nil
+			return tgHistoryPage(chatMsg(14, 501, "b"), chatMsg(13, 501, "a")), nil
 		},
 	})
 	page, err := tgc.ReadHistory(context.Background(), channelRef(1001, 77, ""), HistoryRequest{MinID: 12, Limit: 3})
@@ -673,7 +673,7 @@ func TestTelegram_GetUser(t *testing.T) {
 	var asked []tg.InputUserClass
 	tgc, _ := newTestTelegram(t, &fakeTelegramAPI{
 		getHistory: func(*tg.MessagesGetHistoryRequest) (tg.MessagesMessagesClass, error) {
-			return historyPage(chatMsg(12, 502, "x"), chatMsg(10, 501, "y")), nil
+			return tgHistoryPage(chatMsg(12, 502, "x"), chatMsg(10, 501, "y")), nil
 		},
 		getFullUser: func(id tg.InputUserClass) (*tg.UsersUserFull, error) {
 			asked = append(asked, id)
