@@ -280,7 +280,6 @@ services:
     build:
       context: ./services/browser
     restart: unless-stopped
-    container_name: browser
     hostname: browser
     expose:
       - 7070/tcp
