@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,18 +15,18 @@ import (
 	"github.com/gotd/td/tgerr"
 )
 
-type LoginStep string
+type loginStep int
 
 const (
-	LoginStepCode     LoginStep = "code"
-	LoginStepPassword LoginStep = "password"
-	LoginStepDone     LoginStep = "done"
+	stepCode loginStep = iota
+	stepPassword
+	stepDone
 )
 
 // loginTTL bounds an abandoned login; Telegram expires the code sooner.
 const loginTTL = 15 * time.Minute
 
-var errLoginOver = errors.New("this telegram login is finished or expired; start a new one")
+var errLoginOver = errors.New("this telegram login has expired or been cancelled; start a new one")
 
 // loginAPI is the part of *auth.Client a login calls; tests replace it.
 type loginAPI interface {
@@ -34,35 +35,36 @@ type loginAPI interface {
 	Password(ctx context.Context, password string) (*tg.AuthAuthorization, error)
 }
 
-// TelegramLogin is one operator login of an account. Telegram binds the code
+// telegramLogin is one operator login of an account. Telegram binds the code
 // to the connection that asked for it, so the connection stays open from
-// StartTelegramLogin until the login is done, closed or expired. The session
-// is written to the account's SessionStore (or session file) as gotd
-// creates it, and is authorized once the step reaches done.
-type TelegramLogin struct {
+// startTelegramLogin until Cancel or loginTTL. gotd writes the session to the
+// account's SessionStore (or session file) as it creates it; it is signed in
+// once Code or Password returns nil.
+type telegramLogin struct {
 	timeout time.Duration
 	phone   string
 
 	mu       sync.Mutex
 	api      loginAPI
 	codeHash string
-	step     LoginStep
+	step     loginStep
 	expired  <-chan struct{}
 	stop     context.CancelFunc
 	done     chan struct{}
 }
 
-// StartTelegramLogin connects as acc, through acc.Proxy, and asks Telegram to
-// send a login code to phone (international format). The step is code, or
-// done when Telegram signs the session in without one.
-func StartTelegramLogin(ctx context.Context, cfg *config.Config, acc Account, phone string) (*TelegramLogin, LoginStep, error) {
+var _ PhoneLoginSession = (*telegramLogin)(nil)
+
+// startTelegramLogin connects as account, through account.Proxy, and asks
+// Telegram to send a login code to phone (international format).
+func startTelegramLogin(ctx context.Context, cfg *config.Config, account Account, phone string) (PhoneLoginSession, error) {
 	tc, err := TelegramConfigFor(cfg)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	client, err := newTelegramClient(tc, acc)
+	client, err := newTelegramClient(tc, account)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), loginTTL)
@@ -81,95 +83,96 @@ func StartTelegramLogin(ctx context.Context, cfg *config.Config, acc Account, ph
 	case <-ready:
 	case err := <-runErr:
 		cancel()
-		return nil, "", fmt.Errorf("connect to telegram: %w", err)
+		return nil, fmt.Errorf("connect to telegram: %w", err)
 	case <-ctx.Done():
 		cancel()
 		<-done
-		return nil, "", ctx.Err()
+		return nil, ctx.Err()
 	}
 
-	l := &TelegramLogin{timeout: tc.CallTimeout, phone: phone, api: client.Auth(), expired: runCtx.Done(), stop: cancel, done: done}
-	step, err := l.sendCode(ctx)
-	if err != nil {
-		_ = l.Close()
-		return nil, "", err
+	l := &telegramLogin{timeout: tc.CallTimeout, phone: phone, api: client.Auth(), expired: runCtx.Done(), stop: cancel, done: done}
+	if err := l.sendCode(ctx); err != nil {
+		l.Cancel()
+		return nil, err
 	}
-	return l, step, nil
+	return l, nil
 }
 
-func (l *TelegramLogin) sendCode(ctx context.Context) (LoginStep, error) {
+func (l *telegramLogin) sendCode(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, l.timeout)
 	defer cancel()
 	sent, err := l.api.SendCode(ctx, l.phone, auth.SendCodeOptions{})
 	if err != nil {
-		return "", loginError(err)
+		return loginError(err)
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	switch v := sent.(type) {
 	case *tg.AuthSentCode:
-		l.codeHash, l.step = v.PhoneCodeHash, LoginStepCode
+		l.codeHash, l.step = v.PhoneCodeHash, stepCode
 	case *tg.AuthSentCodeSuccess:
-		l.step = LoginStepDone
+		l.step = stepDone
 	default:
-		return "", fmt.Errorf("unexpected telegram code response %T", sent)
+		return fmt.Errorf("unexpected telegram code response %T", sent)
 	}
-	return l.step, nil
+	return nil
 }
 
-// SubmitCode signs in with the code. The step is done, or password when the
-// account has two-step verification. A wrong or expired code is an error and
-// leaves the step at code.
-func (l *TelegramLogin) SubmitCode(ctx context.Context, code string) (LoginStep, error) {
+// Code signs in with the code. ErrPasswordNeeded means the account has
+// two-step verification; ErrBadCode leaves the login waiting for another code.
+func (l *telegramLogin) Code(ctx context.Context, code string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.step != LoginStepCode || l.isExpired() {
-		return l.step, l.wrongStep(LoginStepCode)
+	switch {
+	case l.isExpired():
+		return errLoginOver
+	case l.step == stepDone:
+		return nil
+	case l.step == stepPassword:
+		return ErrPasswordNeeded
 	}
 	ctx, cancel := context.WithTimeout(ctx, l.timeout)
 	defer cancel()
-	_, err := l.api.SignIn(ctx, l.phone, code, l.codeHash)
+	_, err := l.api.SignIn(ctx, l.phone, strings.TrimSpace(code), l.codeHash)
 	switch {
 	case errors.Is(err, auth.ErrPasswordAuthNeeded):
-		l.step = LoginStepPassword
+		l.step = stepPassword
+		return ErrPasswordNeeded
 	case errors.Is(err, &auth.SignUpRequired{}):
-		return l.step, errors.New("this phone number has no Telegram account")
+		return errors.New("this phone number has no Telegram account")
 	case err != nil:
-		return l.step, loginError(err)
-	default:
-		l.finish()
+		return loginError(err)
 	}
-	return l.step, nil
+	l.step = stepDone
+	return nil
 }
 
-// SubmitPassword completes two-step verification. A wrong password is an
-// error and leaves the step at password.
-func (l *TelegramLogin) SubmitPassword(ctx context.Context, password string) (LoginStep, error) {
+// Password completes two-step verification; ErrBadCode leaves the login
+// waiting for another password.
+func (l *telegramLogin) Password(ctx context.Context, password string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.step != LoginStepPassword || l.isExpired() {
-		return l.step, l.wrongStep(LoginStepPassword)
+	switch {
+	case l.isExpired():
+		return errLoginOver
+	case l.step == stepDone:
+		return nil
+	case l.step == stepCode:
+		return errors.New("this telegram login is still waiting for its code")
 	}
 	ctx, cancel := context.WithTimeout(ctx, l.timeout)
 	defer cancel()
 	if _, err := l.api.Password(ctx, password); err != nil {
 		if errors.Is(err, auth.ErrPasswordInvalid) {
-			return l.step, errors.New("the two-step verification password is wrong")
+			return fmt.Errorf("%w: the two-step verification password is wrong", ErrBadCode)
 		}
-		return l.step, loginError(err)
+		return loginError(err)
 	}
-	l.finish()
-	return l.step, nil
+	l.step = stepDone
+	return nil
 }
 
-func (l *TelegramLogin) wrongStep(want LoginStep) error {
-	if l.step == "" || l.step == LoginStepDone || l.isExpired() {
-		return errLoginOver
-	}
-	return fmt.Errorf("this telegram login is waiting for its %s, not its %s", l.step, want)
-}
-
-func (l *TelegramLogin) isExpired() bool {
+func (l *telegramLogin) isExpired() bool {
 	select {
 	case <-l.expired:
 		return true
@@ -178,20 +181,12 @@ func (l *TelegramLogin) isExpired() bool {
 	}
 }
 
-// finish ends the connection once signed in; the connector opens its own.
-// The caller holds l.mu.
-func (l *TelegramLogin) finish() {
-	l.step = LoginStepDone
-	go func() { _ = l.Close() }()
-}
-
-// Close drops the connection; an unfinished login cannot continue after it.
-func (l *TelegramLogin) Close() error {
+// Cancel drops the connection; the account's connector opens its own.
+func (l *telegramLogin) Cancel() {
 	if l.stop != nil {
 		l.stop()
 		<-l.done
 	}
-	return nil
 }
 
 func loginError(err error) error {
@@ -200,8 +195,8 @@ func loginError(err error) error {
 		return errors.New("telegram does not accept this phone number; use the international format, such as +66812345678")
 	case tgerr.Is(err, "PHONE_NUMBER_BANNED"):
 		return errors.New("telegram has banned this phone number")
-	case tgerr.Is(err, "PHONE_CODE_INVALID"):
-		return errors.New("the login code is wrong")
+	case tgerr.Is(err, "PHONE_CODE_INVALID", "PHONE_CODE_EMPTY"):
+		return fmt.Errorf("%w: the login code is wrong", ErrBadCode)
 	case tgerr.Is(err, "PHONE_CODE_EXPIRED"):
 		return errors.New("the login code has expired; start the login again")
 	}

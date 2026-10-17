@@ -745,6 +745,8 @@ func TestTelegram_Init_Registers(t *testing.T) {
 	assert.True(t, ok)
 	_, ok = LookupCredentialCheck(PlatformTelegram)
 	assert.True(t, ok)
+	_, ok = LookupPhoneLogin(PlatformTelegram)
+	assert.True(t, ok)
 }
 
 func TestTelegramConfig_TelegramConfigFor(t *testing.T) {

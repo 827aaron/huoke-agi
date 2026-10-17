@@ -24,6 +24,7 @@ import (
 func init() {
 	Register(PlatformTelegram, newTelegramConnector)
 	RegisterCredentialCheck(PlatformTelegram, checkTelegramCredentials)
+	RegisterPhoneLogin(PlatformTelegram, startTelegramLogin)
 }
 
 type TelegramConfig struct {

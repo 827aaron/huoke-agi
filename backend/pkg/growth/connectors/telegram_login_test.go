@@ -39,22 +39,23 @@ func (f *fakeLoginAPI) Password(ctx context.Context, password string) (*tg.AuthA
 	return f.password(password)
 }
 
-func newTestLogin(t *testing.T, api *fakeLoginAPI) (*TelegramLogin, LoginStep) {
+func newTestLogin(t *testing.T, api *fakeLoginAPI) *telegramLogin {
 	t.Helper()
-	l := &TelegramLogin{timeout: 5 * time.Second, phone: "+66812345678", api: api, expired: make(chan struct{})}
-	step, err := l.sendCode(context.Background())
-	require.NoError(t, err)
-	return l, step
+	l := &telegramLogin{timeout: 5 * time.Second, phone: "+66812345678", api: api, expired: make(chan struct{})}
+	require.NoError(t, l.sendCode(context.Background()))
+	return l
 }
 
 func sentCode(phone string) (tg.AuthSentCodeClass, error) {
 	return &tg.AuthSentCode{PhoneCodeHash: "hash-for-" + phone}, nil
 }
 
-func TestTelegramLogin_SubmitCode_SignsIn(t *testing.T) {
-	l, step := newTestLogin(t, &fakeLoginAPI{
+func TestTelegramLogin_Code_SignsIn(t *testing.T) {
+	signIns := 0
+	l := newTestLogin(t, &fakeLoginAPI{
 		sendCode: sentCode,
 		signIn: func(phone, code, hash string) (*tg.AuthAuthorization, error) {
+			signIns++
 			assert.Equal(t, "+66812345678", phone)
 			assert.Equal(t, "hash-for-+66812345678", hash)
 			if code != "12345" {
@@ -63,23 +64,16 @@ func TestTelegramLogin_SubmitCode_SignsIn(t *testing.T) {
 			return &tg.AuthAuthorization{}, nil
 		},
 	})
-	require.Equal(t, LoginStepCode, step)
 	ctx := context.Background()
 
-	step, err := l.SubmitCode(ctx, "00000")
-	assert.ErrorContains(t, err, "code is wrong")
-	assert.Equal(t, LoginStepCode, step)
-
-	step, err = l.SubmitCode(ctx, "12345")
-	require.NoError(t, err)
-	assert.Equal(t, LoginStepDone, step)
-
-	_, err = l.SubmitCode(ctx, "12345")
-	assert.ErrorIs(t, err, errLoginOver)
+	assert.ErrorIs(t, l.Code(ctx, "00000"), ErrBadCode)
+	require.NoError(t, l.Code(ctx, " 12345 "))
+	require.NoError(t, l.Code(ctx, "12345"), "a signed-in login stays signed in")
+	assert.Equal(t, 2, signIns)
 }
 
-func TestTelegramLogin_SubmitPassword_TwoStep(t *testing.T) {
-	l, _ := newTestLogin(t, &fakeLoginAPI{
+func TestTelegramLogin_Password_TwoStep(t *testing.T) {
+	l := newTestLogin(t, &fakeLoginAPI{
 		sendCode: sentCode,
 		signIn: func(string, string, string) (*tg.AuthAuthorization, error) {
 			return nil, auth.ErrPasswordAuthNeeded
@@ -93,52 +87,49 @@ func TestTelegramLogin_SubmitPassword_TwoStep(t *testing.T) {
 	})
 	ctx := context.Background()
 
-	_, err := l.SubmitPassword(ctx, "s3cret")
-	assert.ErrorContains(t, err, "waiting for its code")
-
-	step, err := l.SubmitCode(ctx, "12345")
-	require.NoError(t, err)
-	assert.Equal(t, LoginStepPassword, step)
-
-	step, err = l.SubmitPassword(ctx, "wrong")
-	assert.ErrorContains(t, err, "password is wrong")
-	assert.Equal(t, LoginStepPassword, step)
-
-	step, err = l.SubmitPassword(ctx, "s3cret")
-	require.NoError(t, err)
-	assert.Equal(t, LoginStepDone, step)
+	assert.ErrorContains(t, l.Password(ctx, "s3cret"), "waiting for its code")
+	assert.ErrorIs(t, l.Code(ctx, "12345"), ErrPasswordNeeded)
+	assert.ErrorIs(t, l.Code(ctx, "12345"), ErrPasswordNeeded, "a second code does not restart the login")
+	assert.ErrorIs(t, l.Password(ctx, "wrong"), ErrBadCode)
+	require.NoError(t, l.Password(ctx, "s3cret"))
 }
 
 func TestTelegramLogin_SendCode(t *testing.T) {
 	t.Run("signed in without a code", func(t *testing.T) {
-		_, step := newTestLogin(t, &fakeLoginAPI{sendCode: func(string) (tg.AuthSentCodeClass, error) {
+		l := newTestLogin(t, &fakeLoginAPI{sendCode: func(string) (tg.AuthSentCodeClass, error) {
 			return &tg.AuthSentCodeSuccess{}, nil
 		}})
-		assert.Equal(t, LoginStepDone, step)
+		assert.NoError(t, l.Code(context.Background(), ""))
 	})
 	t.Run("flood wait", func(t *testing.T) {
-		l := &TelegramLogin{timeout: time.Second, api: &fakeLoginAPI{sendCode: func(string) (tg.AuthSentCodeClass, error) {
+		l := &telegramLogin{timeout: time.Second, api: &fakeLoginAPI{sendCode: func(string) (tg.AuthSentCodeClass, error) {
 			return nil, tgerr.New(420, "FLOOD_WAIT_300")
 		}}}
-		_, err := l.sendCode(context.Background())
 		var flood *FloodWaitError
-		require.ErrorAs(t, err, &flood)
+		require.ErrorAs(t, l.sendCode(context.Background()), &flood)
 		assert.Equal(t, 300*time.Second, flood.Wait)
 	})
 	t.Run("bad number", func(t *testing.T) {
-		l := &TelegramLogin{timeout: time.Second, api: &fakeLoginAPI{sendCode: func(string) (tg.AuthSentCodeClass, error) {
+		l := &telegramLogin{timeout: time.Second, api: &fakeLoginAPI{sendCode: func(string) (tg.AuthSentCodeClass, error) {
 			return nil, tgerr.New(400, "PHONE_NUMBER_INVALID")
 		}}}
-		_, err := l.sendCode(context.Background())
-		assert.ErrorContains(t, err, "international format")
+		assert.ErrorContains(t, l.sendCode(context.Background()), "international format")
 	})
 }
 
-func TestTelegramLogin_SubmitCode_AfterExpiry(t *testing.T) {
-	l, _ := newTestLogin(t, &fakeLoginAPI{sendCode: sentCode})
+func TestTelegramLogin_Code_ExpiredCodeIsNotRetryable(t *testing.T) {
+	l := newTestLogin(t, &fakeLoginAPI{sendCode: sentCode, signIn: func(string, string, string) (*tg.AuthAuthorization, error) {
+		return nil, tgerr.New(400, "PHONE_CODE_EXPIRED")
+	}})
+	err := l.Code(context.Background(), "12345")
+	assert.ErrorContains(t, err, "start the login again")
+	assert.NotErrorIs(t, err, ErrBadCode)
+}
+
+func TestTelegramLogin_Code_AfterExpiry(t *testing.T) {
+	l := newTestLogin(t, &fakeLoginAPI{sendCode: sentCode})
 	expired := make(chan struct{})
 	close(expired)
 	l.expired = expired
-	_, err := l.SubmitCode(context.Background(), "12345")
-	assert.ErrorIs(t, err, errLoginOver)
+	assert.ErrorIs(t, l.Code(context.Background(), "12345"), errLoginOver)
 }
