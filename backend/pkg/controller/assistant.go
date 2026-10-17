@@ -34,6 +34,7 @@ type AssistantWorker interface {
 	GetStatus(ctx context.Context) (database.AssistantStatus, error)
 	SetStatus(ctx context.Context, status database.AssistantStatus) error
 	PutInput(ctx context.Context, input string, useAgents bool, resources []database.UserResource) error
+	SwitchProvider(ctx context.Context, prv provider.Provider) error
 	Finish(ctx context.Context) error
 	Stop(ctx context.Context) error
 }
@@ -631,6 +632,31 @@ func (aw *assistantWorker) SetStatus(ctx context.Context, status database.Assist
 
 	aw.pub.AssistantUpdated(ctx, assistant)
 
+	return nil
+}
+
+// SwitchProvider moves the assistant onto prv, which takes effect from its next call;
+// the same provider with the same configuration is a no-op.
+func (aw *assistantWorker) SwitchProvider(ctx context.Context, prv provider.Provider) error {
+	changed, tcIDTemplate, err := aw.ap.SetProvider(ctx, prv)
+	if err != nil {
+		return fmt.Errorf("failed to set the provider of assistant %d: %w", aw.id, err)
+	}
+	if !changed {
+		return nil
+	}
+	assistant, err := aw.db.UpdateAssistantProvider(ctx, database.UpdateAssistantProviderParams{
+		ModelProviderName:  prv.Name().String(),
+		ModelProviderType:  database.ProviderType(prv.Type()),
+		ToolCallIDTemplate: tcIDTemplate,
+		Model:              prv.Model(pconfig.OptionsTypePrimaryAgent),
+		ID:                 aw.id,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to store the provider of assistant %d: %w", aw.id, err)
+	}
+	aw.logger.WithField("provider", prv.Name()).Info("assistant provider switched")
+	aw.pub.AssistantUpdated(ctx, assistant)
 	return nil
 }
 

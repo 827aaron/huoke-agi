@@ -367,6 +367,38 @@ func (q *Queries) GetUserFlows(ctx context.Context, userID int64) ([]Flow, error
 	return items, nil
 }
 
+const getUserProviderReferences = `-- name: GetUserProviderReferences :many
+SELECT DISTINCT model_provider_name FROM flows
+WHERE user_id = $1::bigint AND deleted_at IS NULL
+UNION
+SELECT DISTINCT a.model_provider_name FROM assistants a
+JOIN flows f ON f.id = a.flow_id
+WHERE f.user_id = $1::bigint AND a.deleted_at IS NULL AND f.deleted_at IS NULL
+`
+
+func (q *Queries) GetUserProviderReferences(ctx context.Context, userID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getUserProviderReferences, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var model_provider_name string
+		if err := rows.Scan(&model_provider_name); err != nil {
+			return nil, err
+		}
+		items = append(items, model_provider_name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserTotalFlowsStats = `-- name: GetUserTotalFlowsStats :one
 SELECT
   COALESCE(COUNT(DISTINCT f.id), 0)::bigint AS total_flows_count,

@@ -61,6 +61,8 @@ type FlowController interface {
 		oldName provider.ProviderName,
 		prvtype provider.ProviderType,
 	) error
+	ProviderFor(ctx context.Context, userID int64, prvname provider.ProviderName) (provider.Provider, error)
+	RepointDanglingProviders(ctx context.Context, userID int64) error
 }
 
 // flowPrepareTimeout bounds the background preparation of a new flow. It is
@@ -784,6 +786,53 @@ func (fc *flowController) ResetFlowsProviderToDefault(
 	prvtype provider.ProviderType,
 ) error {
 	return fc.reassignFlowsProvider(ctx, userID, oldName, provider.ProviderName(prvtype))
+}
+
+// ProviderFor resolves prvname for userID. A name nothing answers to any more, because
+// the user replaced the key behind it on the settings page, gives the user's current
+// provider instead, and every flow and assistant still naming it is repointed there, the
+// way deleting a custom provider repoints them.
+func (fc *flowController) ProviderFor(
+	ctx context.Context,
+	userID int64,
+	prvname provider.ProviderName,
+) (provider.Provider, error) {
+	prv, err := fc.provs.GetProvider(ctx, prvname, userID)
+	if !errors.Is(err, provider.ErrProviderNotFound) {
+		return prv, err
+	}
+	current, cerr := fc.provs.CurrentProvider(ctx, userID)
+	if cerr != nil {
+		return nil, errors.Join(err, cerr)
+	}
+	if err := fc.reassignFlowsProvider(ctx, userID, prvname, current.Name()); err != nil {
+		logrus.WithContext(ctx).WithError(err).Warn("failed to repoint the flows of a provider that is gone")
+	}
+	return current, nil
+}
+
+// RepointDanglingProviders repoints every flow and assistant of userID whose provider
+// is gone at the user's current one; called after the user changes the LLM key.
+func (fc *flowController) RepointDanglingProviders(ctx context.Context, userID int64) error {
+	names, err := fc.db.GetUserProviderReferences(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to list the providers the flows name: %w", err)
+	}
+	var current provider.Provider
+	var errs []error
+	for _, name := range names {
+		prvname := provider.ProviderName(name)
+		if _, err := fc.provs.GetProvider(ctx, prvname, userID); !errors.Is(err, provider.ErrProviderNotFound) {
+			continue
+		}
+		if current == nil {
+			if current, err = fc.provs.CurrentProvider(ctx, userID); err != nil {
+				return err
+			}
+		}
+		errs = append(errs, fc.reassignFlowsProvider(ctx, userID, prvname, current.Name()))
+	}
+	return errors.Join(errs...)
 }
 
 // reassignFlowsProvider rewrites the provider reference stored on a user's flow

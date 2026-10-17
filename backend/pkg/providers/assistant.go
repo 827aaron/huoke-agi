@@ -32,6 +32,7 @@ type AssistantProvider interface {
 	Language() string
 	ToolCallIDTemplate() string
 	Embedder() embeddings.Embedder
+	SetProvider(ctx context.Context, newProvider provider.Provider) (bool, string, error)
 
 	SetMsgChainID(msgChainID int64)
 	SetAgentLogProvider(agentLog tools.AgentLogProvider)
@@ -85,6 +86,10 @@ func (ap *assistantProvider) ToolCallIDTemplate() string {
 
 func (ap *assistantProvider) Embedder() embeddings.Embedder {
 	return ap.fp.Embedder()
+}
+
+func (ap *assistantProvider) SetProvider(ctx context.Context, newProvider provider.Provider) (bool, string, error) {
+	return ap.fp.SetProvider(ctx, newProvider)
 }
 
 func (ap *assistantProvider) SetMsgChainID(msgChainID int64) {
