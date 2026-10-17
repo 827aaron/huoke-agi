@@ -256,7 +256,7 @@ func (s *Service) SendTestEmail(ctx context.Context, userID int64, to string) ([
 
 // notifyDelivery mails the leads a round has just delivered and records the outcome on
 // the round. It never fails the round: a send error is stored and returned as a status.
-func (s *Service) notifyDelivery(ctx context.Context, scope Scope, run database.GrowthRun, leads []LeadView, target int) string {
+func (s *Service) notifyDelivery(ctx context.Context, scope Scope, run database.GrowthRun, leads []LeadView, target int, deadline time.Time) string {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*smtpTimeout)
 	defer cancel()
 
@@ -268,7 +268,7 @@ func (s *Service) notifyDelivery(ctx context.Context, scope Scope, run database.
 	case cfg.SMTPHost == "":
 		status, reason = NotifySkipped, ErrNoSMTP.Error()
 	default:
-		if _, err = s.mailLeads(ctx, cfg, scope, run.ID, leads, target); err != nil {
+		if _, err = s.mailLeads(ctx, cfg, scope, run.ID, leads, target, deadline); err != nil {
 			status, reason = NotifyFailed, truncateRunes(err.Error(), 500)
 		}
 	}
@@ -295,7 +295,8 @@ func (s *Service) flowTitle(ctx context.Context, scope Scope) string {
 	return flow.Title
 }
 
-func deliverySummary(business string, leads []LeadView, target int) (string, string) {
+// deliverySummary: a non-zero deadline is the schedule's end time the round was closed at.
+func deliverySummary(business string, leads []LeadView, target int, deadline time.Time) (string, string) {
 	if business == "" {
 		business = "Lead search"
 	}
@@ -313,7 +314,12 @@ func deliverySummary(business string, leads []LeadView, target int) (string, str
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "Business: %s\n", business)
-	fmt.Fprintf(&b, "Leads delivered: %d (target %d)\n\n", len(leads), target)
+	fmt.Fprintf(&b, "Leads delivered: %d (target %d)\n", len(leads), target)
+	if !deadline.IsZero() {
+		fmt.Fprintf(&b, "Delivered at the schedule's end time, %s UTC: %d of the target %d.\n",
+			deadline.UTC().Format("2006-01-02 15:04"), len(leads), target)
+	}
+	b.WriteString("\n")
 	b.WriteString("Score distribution:\n")
 	for _, k := range keys {
 		fmt.Fprintf(&b, "  score %d: %d\n", k, scores[k])
@@ -329,12 +335,13 @@ func (s *Service) mailLeads(
 	runID int64,
 	leads []LeadView,
 	target int,
+	deadline time.Time,
 ) ([]string, error) {
 	to, err := s.notifyRecipients(ctx, scope.UserID)
 	if err != nil {
 		return nil, err
 	}
-	subject, body := deliverySummary(s.flowTitle(ctx, scope), leads, target)
+	subject, body := deliverySummary(s.flowTitle(ctx, scope), leads, target, deadline)
 	name := fmt.Sprintf("leads-flow-%d.csv", scope.FlowID)
 	if runID != 0 {
 		name = fmt.Sprintf("leads-round-%d.csv", runID)
@@ -397,5 +404,5 @@ func (s *Service) EmailLeads(ctx context.Context, userID, flowID int64, taskID *
 	if target == 0 {
 		target = len(leads)
 	}
-	return s.mailLeads(ctx, cfg, scope, runID, leads, target)
+	return s.mailLeads(ctx, cfg, scope, runID, leads, target, time.Time{})
 }

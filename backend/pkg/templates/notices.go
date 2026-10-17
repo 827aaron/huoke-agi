@@ -7,13 +7,15 @@ import (
 )
 
 // Notice is a user-visible line the backend writes itself, where no model is at hand to
-// write it in the conversation's language. Its text may hold one %s.
+// write it in the conversation's language. Every language's text takes the same verbs in
+// the same order: one %s, except deadline_delivered's time, delivered and target.
 type Notice string
 
 const (
-	NoticeAssistantFailed Notice = "assistant_failed"
-	NoticeToolFailed      Notice = "tool_failed"
-	NoticeToolStopped     Notice = "tool_stopped"
+	NoticeAssistantFailed   Notice = "assistant_failed"
+	NoticeToolFailed        Notice = "tool_failed"
+	NoticeToolStopped       Notice = "tool_stopped"
+	NoticeDeadlineDelivered Notice = "deadline_delivered"
 )
 
 //go:embed notices/notices.json

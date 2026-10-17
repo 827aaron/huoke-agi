@@ -394,6 +394,81 @@ definitions:
       view_url:
         type: string
     type: object
+  growth.ScheduleInput:
+    properties:
+      date:
+        type: string
+      days:
+        enum:
+        - daily
+        - weekdays
+        - weekly
+        - once
+        type: string
+      enabled:
+        type: boolean
+      end_time:
+        example: "06:00"
+        type: string
+      flow_id:
+        type: integer
+      input:
+        type: string
+      start_time:
+        example: "02:00"
+        type: string
+      timezone:
+        example: Asia/Bangkok
+        type: string
+      weekdays:
+        items:
+          type: integer
+        type: array
+    type: object
+  growth.ScheduleRun:
+    properties:
+      deadline_at:
+        type: string
+      delivered_count:
+        type: integer
+      run_id:
+        type: integer
+      status:
+        type: string
+      target:
+        type: integer
+    type: object
+  growth.ScheduleView:
+    properties:
+      date:
+        type: string
+      days:
+        type: string
+      enabled:
+        type: boolean
+      end_time:
+        type: string
+      flow_id:
+        type: integer
+      id:
+        type: integer
+      input:
+        type: string
+      last_error:
+        type: string
+      last_run:
+        $ref: '#/definitions/growth.ScheduleRun'
+      next_start_at:
+        type: string
+      start_time:
+        type: string
+      timezone:
+        type: string
+      weekdays:
+        items:
+          type: integer
+        type: array
+    type: object
   growth.Scoring:
     properties:
       qualified:
@@ -2393,6 +2468,8 @@ definitions:
     properties:
       created_at:
         type: string
+      deadline_at:
+        type: string
       delivered_count:
         type: integer
       finished_at:
@@ -2405,6 +2482,8 @@ definitions:
         type: string
       notify_status:
         type: string
+      schedule_id:
+        type: integer
       status:
         type: string
       target:
@@ -2431,6 +2510,15 @@ definitions:
         type: string
     required:
     - fields
+    type: object
+  services.growthSchedules:
+    properties:
+      schedules:
+        items:
+          $ref: '#/definitions/growth.ScheduleView'
+        type: array
+      total:
+        type: integer
     type: object
   services.growthSettings:
     properties:
@@ -6503,6 +6591,173 @@ paths:
       security:
       - BearerAuth: []
       summary: Retrieve the lead collection rounds of the current user
+      tags:
+      - Growth
+  /growth/schedules:
+    get:
+      parameters:
+      - description: only schedules repeating this flow
+        in: query
+        name: flow_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: schedules received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/services.growthSchedules'
+              type: object
+        "400":
+          description: invalid query
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: getting schedules not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting schedules
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the schedules that repeat the user's tasks
+      tags:
+      - Growth
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: schedule
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.ScheduleInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: schedule saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.ScheduleView'
+              type: object
+        "400":
+          description: invalid schedule
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: saving the schedule not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: task not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on saving the schedule
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Repeat a task on the chosen days; each start opens a new task delivered
+        by the end time
+      tags:
+      - Growth
+  /growth/schedules/{scheduleID}:
+    delete:
+      parameters:
+      - description: schedule id
+        in: path
+        minimum: 0
+        name: scheduleID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: schedule deleted successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: invalid schedule id
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: deleting the schedule not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: schedule not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting the schedule
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a schedule; the tasks it started are kept
+      tags:
+      - Growth
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: schedule id
+        in: path
+        minimum: 0
+        name: scheduleID
+        required: true
+        type: integer
+      - description: schedule
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.ScheduleInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: schedule saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.ScheduleView'
+              type: object
+        "400":
+          description: invalid schedule
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: saving the schedule not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: schedule not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on saving the schedule
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change a schedule; flow_id is ignored, an empty input keeps the saved
+        one
       tags:
       - Growth
   /growth/settings/:

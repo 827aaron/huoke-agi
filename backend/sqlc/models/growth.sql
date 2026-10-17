@@ -437,3 +437,70 @@ SET score = EXCLUDED.score, signals = EXCLUDED.signals;
 -- name: GetMessageScores :many
 SELECT * FROM growth_message_scores
 WHERE user_id = sqlc.arg(user_id) AND source_id = sqlc.arg(source_id) AND message_id = ANY(sqlc.arg(message_ids)::text[]);
+
+-- name: AdoptGrowthRun :one
+UPDATE growth_runs SET task_id = sqlc.arg(task_id)
+WHERE id = (
+  SELECT r.id FROM growth_runs r
+  WHERE r.user_id = sqlc.arg(user_id) AND r.flow_id = sqlc.arg(flow_id) AND r.task_id IS NULL AND r.status = 'running'
+  ORDER BY r.id
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING *;
+
+-- name: OpenScheduledGrowthRun :one
+INSERT INTO growth_runs (user_id, flow_id, target, deadline_at, schedule_id)
+VALUES (sqlc.arg(user_id), sqlc.arg(flow_id), sqlc.arg(target), sqlc.arg(deadline_at), sqlc.arg(schedule_id))
+RETURNING *;
+
+-- name: GetOverdueGrowthRuns :many
+SELECT * FROM growth_runs
+WHERE status = 'running' AND deadline_at IS NOT NULL AND deadline_at <= sqlc.arg(now)::timestamptz
+ORDER BY deadline_at, id;
+
+-- name: CreateGrowthSchedule :one
+INSERT INTO growth_schedules (
+  user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at
+) VALUES (
+  sqlc.arg(user_id), sqlc.arg(flow_id), sqlc.arg(input), sqlc.arg(provider_name), sqlc.arg(days), sqlc.arg(weekdays),
+  sqlc.arg(date), sqlc.arg(start_time), sqlc.arg(end_time), sqlc.arg(timezone), sqlc.arg(enabled), sqlc.arg(next_start_at)
+)
+RETURNING *;
+
+-- name: UpdateGrowthSchedule :one
+UPDATE growth_schedules
+SET input = sqlc.arg(input), days = sqlc.arg(days), weekdays = sqlc.arg(weekdays), date = sqlc.arg(date),
+    start_time = sqlc.arg(start_time), end_time = sqlc.arg(end_time), timezone = sqlc.arg(timezone),
+    enabled = sqlc.arg(enabled), next_start_at = sqlc.arg(next_start_at), last_error = ''
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
+RETURNING *;
+
+-- name: GetUserGrowthSchedule :one
+SELECT * FROM growth_schedules WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+
+-- name: GetUserGrowthSchedules :many
+SELECT * FROM growth_schedules
+WHERE user_id = sqlc.arg(user_id)
+  AND (sqlc.narg(flow_id)::bigint IS NULL OR flow_id = sqlc.narg(flow_id)::bigint)
+ORDER BY id;
+
+-- name: DeleteUserGrowthSchedule :execrows
+DELETE FROM growth_schedules WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
+
+-- name: GetDueGrowthSchedules :many
+SELECT * FROM growth_schedules
+WHERE enabled AND next_start_at IS NOT NULL AND next_start_at <= sqlc.arg(now)::timestamptz
+ORDER BY next_start_at, id;
+
+-- AdvanceGrowthSchedule claims the start at handled_start_at by moving the schedule past
+-- it; zero rows means another pass has claimed it already.
+-- name: AdvanceGrowthSchedule :execrows
+UPDATE growth_schedules
+SET next_start_at = sqlc.narg(next_start_at), enabled = sqlc.arg(enabled)
+WHERE id = sqlc.arg(id) AND next_start_at = sqlc.arg(handled_start_at);
+
+-- name: RecordGrowthScheduleStart :exec
+UPDATE growth_schedules
+SET last_run_id = COALESCE(sqlc.narg(last_run_id), last_run_id), last_error = sqlc.arg(last_error)
+WHERE id = sqlc.arg(id);

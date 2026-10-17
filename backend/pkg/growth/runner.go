@@ -75,6 +75,21 @@ func (s *Service) EnsureRun(ctx context.Context, scope Scope) (database.GrowthRu
 	if scope.TaskID == nil {
 		return database.GrowthRun{}, ErrNoTask
 	}
+	if run, err := s.db.GetGrowthRunByTask(ctx, scope.taskID()); err == nil {
+		return run, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return run, fmt.Errorf("failed to load the round of task %d: %w", *scope.TaskID, err)
+	}
+	if scope.FlowID != 0 {
+		run, err := s.db.AdoptGrowthRun(ctx, database.AdoptGrowthRunParams{
+			UserID: scope.UserID, FlowID: scope.flowID(), TaskID: scope.taskID(),
+		})
+		if err == nil {
+			return run, nil
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return run, fmt.Errorf("failed to adopt the scheduled round of task %d: %w", *scope.TaskID, err)
+		}
+	}
 	run, err := s.db.EnsureGrowthRun(ctx, database.EnsureGrowthRunParams{
 		UserID: scope.UserID,
 		FlowID: scope.flowID(),
@@ -162,6 +177,9 @@ func (s *Service) ProgressSince(ctx context.Context, scope Scope, since time.Tim
 type DeliverOptions struct {
 	AllowPartial bool
 	HasContact   bool
+
+	// atDeadline closes a scheduled round at its end time, which its email says.
+	atDeadline bool
 }
 
 func (s *Service) sourceStats(ctx context.Context, userID int64) (SourceStats, error) {
@@ -187,11 +205,15 @@ func (s *Service) sourceStats(ctx context.Context, userID int64) (SourceStats, e
 // exhausted), in which case it delivers what there is. Calling it again tops a partial
 // round up and returns a completed round's delivery unchanged.
 func (s *Service) Deliver(ctx context.Context, scope Scope, opt DeliverOptions) (Delivery, error) {
-	allowPartial := opt.AllowPartial
 	run, err := s.EnsureRun(ctx, scope)
 	if err != nil {
 		return Delivery{}, err
 	}
+	return s.deliverRun(ctx, scope, run, opt)
+}
+
+func (s *Service) deliverRun(ctx context.Context, scope Scope, run database.GrowthRun, opt DeliverOptions) (Delivery, error) {
+	allowPartial := opt.AllowPartial
 	target := int(run.Target)
 	runID := sql.NullInt64{Int64: run.ID, Valid: true}
 
@@ -279,7 +301,11 @@ func (s *Service) Deliver(ctx context.Context, scope Scope, opt DeliverOptions) 
 		Progress:  p,
 	}
 	if newlyDelivered {
-		d.Email = s.notifyDelivery(ctx, scope, run, views, target)
+		var deadline time.Time
+		if opt.atDeadline {
+			deadline = run.DeadlineAt.Time
+		}
+		d.Email = s.notifyDelivery(ctx, scope, run, views, target, deadline)
 	}
 	return d, nil
 }

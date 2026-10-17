@@ -1006,15 +1006,19 @@ func (f *fakeGrowthBackend) ListLeads(_ context.Context, _ int64, filter growth.
 }
 
 // flowLanguageDB answers GetFlow with a flow in lang, for the lines the executor writes
-// in the flow's language.
+// in the flow's language. A non-nil reads counts the calls.
 type flowLanguageDB struct {
 	database.Querier
-	lang string
+	lang  string
+	reads *int
 }
 
 func (q flowLanguageDB) GetFlow(ctx context.Context, id int64) (database.Flow, error) {
 	if err := ctx.Err(); err != nil {
 		return database.Flow{}, err
+	}
+	if q.reads != nil {
+		*q.reads++
 	}
 	return database.Flow{ID: id, Language: q.lang}, nil
 }

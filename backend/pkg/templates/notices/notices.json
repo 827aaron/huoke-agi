@@ -13,5 +13,10 @@
     "english": "Stopped before it finished.",
     "chinese": "未完成就已停止。",
     "traditional chinese": "未完成就已停止。"
+  },
+  "deadline_delivered": {
+    "english": "The end time %s was reached: %d of the target %d leads were delivered, and the task was stopped.",
+    "chinese": "已到结束时间 %s：交付 %d 条（目标 %d 条），任务已停止。",
+    "traditional chinese": "已到結束時間 %s：交付 %d 條（目標 %d 條），任務已停止。"
   }
 }

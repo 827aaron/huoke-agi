@@ -460,6 +460,37 @@ func TestExecutor_Execute_ClosesTheToolCallAndItsMessageEvenAfterTheFlowStops(t 
 	}
 }
 
+func TestExecutor_Execute_ReadsTheFlowLanguageOnceForItsNotices(t *testing.T) {
+	reads := 0
+	mlp := &executorMsgLog{}
+	ce := &customExecutor{
+		flowID:   1,
+		db:       flowLanguageDB{lang: "Chinese", reads: &reads},
+		mlp:      mlp,
+		tclp:     &executorToolCallLog{},
+		replacer: identityReplacer{},
+		handlers: map[string]ExecutorHandler{
+			TerminalToolName: func(context.Context, string, json.RawMessage) (string, error) {
+				return "", errors.New("docker daemon is not reachable")
+			},
+		},
+	}
+	args := mustJSON(map[string]any{"input": "id", "message": "checking the user"})
+
+	for range 2 {
+		_, err := ce.Execute(t.Context(), 1, "call-1", TerminalToolName, TerminalToolName, "", args)
+		if err == nil {
+			t.Fatal("the handler failed, so the call must fail")
+		}
+		if mlp.result != "失败：failed to execute handler: docker daemon is not reachable" {
+			t.Fatalf("the message reads %q", mlp.result)
+		}
+	}
+	if reads != 1 {
+		t.Fatalf("the flow was read %d times, want once", reads)
+	}
+}
+
 func TestExecutor_Execute_CleansTheHandlersOutputOfBytesPostgresRejects(t *testing.T) {
 	tclp, mlp := &executorToolCallLog{}, &executorMsgLog{}
 	ce := &customExecutor{
