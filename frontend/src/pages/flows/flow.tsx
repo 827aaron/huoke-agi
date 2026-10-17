@@ -415,7 +415,7 @@ function Flow() {
                     sheetTitle={copy.flows.title}
                 />
             )}
-            <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-1 flex-col">
+            <div className="relative flex h-[calc(100dvh-3rem)] w-full max-w-full flex-col">
                 <GrowthProgressBar />
                 {isFlowLoading && (
                     <div className="bg-background/50 absolute inset-0 z-50 flex items-center justify-center">

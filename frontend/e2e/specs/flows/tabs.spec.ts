@@ -27,6 +27,25 @@ test.describe('flow detail tabs', { tag: '@flows' }, () => {
         expectCleanPage(pageErrorLog);
     });
 
+    test('keeps both tab strips in place while a panel scrolls', async ({ page, pageErrorLog }) => {
+        await page.setViewportSize({ height: 700, width: 1500 });
+        await page.goto('/flows/5');
+        await page.getByRole('tab', { name: '潜客' }).click();
+        await expect(page.getByRole('row', { name: /阿杰 Jay/ })).toBeVisible();
+
+        const strips = page.getByRole('tablist');
+        const tops = async () => strips.evaluateAll((lists) => lists.map((list) => list.getBoundingClientRect().top));
+        const before = await tops();
+
+        await page.getByRole('row', { name: /阿杰 Jay/ }).hover();
+        await page.mouse.wheel(0, 2000);
+
+        await expect.poll(() => page.evaluate(() => document.scrollingElement?.scrollTop)).toBe(0);
+        expect(await tops()).toEqual(before);
+
+        expectCleanPage(pageErrorLog);
+    });
+
     test('the screenshot image decodes from its REST endpoint', async ({ page, pageErrorLog }) => {
         await page.goto('/flows/5');
         await expect(page.locator('header').getByRole('button', { name: '收藏 / 取消收藏' })).toBeEnabled();
