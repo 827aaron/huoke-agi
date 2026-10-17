@@ -318,6 +318,11 @@ definitions:
     type: object
   growth.ProfilePreset:
     properties:
+      default:
+        description: |-
+          Default marks the preset the form starts from and leads are judged by while the
+          owner has saved no profile.
+        type: boolean
       id:
         type: string
       profile:

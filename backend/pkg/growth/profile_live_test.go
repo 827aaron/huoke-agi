@@ -244,3 +244,39 @@ func TestProfile_SaveProfile_DropsTheMessageScoresWhenTheAudienceChanges(t *test
 	require.NoError(t, err)
 	assert.Equal(t, 0, scored(), "new weights drop the scores too")
 }
+
+var errProfileRead = errors.New("connection reset")
+
+type failingProfileRead struct{ database.Querier }
+
+func (failingProfileRead) GetGrowthProfile(context.Context, int64) (database.GrowthProfile, error) {
+	return database.GrowthProfile{}, errProfileRead
+}
+
+func TestProfile_SaveProfile_DropsScoresOnlyWhenThePreviousProfileWasRead(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	src := w.mustAddTelegramGroup(t, w.seedTask(t), tgGroup("906", "rpg_chat", "RPG"))
+	w.judgeAsAGamePublisher(t)
+	require.NoError(t, w.svc.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
+		UserID: w.user, SourceID: src, MessageID: "m1", Score: 8, Signals: "player+3",
+	}))
+	scored := func() int {
+		rows, err := w.svc.db.GetMessageScores(ctx, database.GetMessageScoresParams{UserID: w.user, SourceID: src, MessageIds: []string{"m1"}})
+		require.NoError(t, err)
+		return len(rows)
+	}
+
+	db := w.svc.db
+	w.svc.db = failingProfileRead{db}
+	_, err := w.svc.SaveProfile(ctx, w.user, DefaultProfile())
+	w.svc.db = db
+	require.ErrorIs(t, err, errProfileRead)
+	assert.Equal(t, 1, scored(), "a failed read keeps the scores")
+
+	_, err = w.db.Exec(`UPDATE growth_profiles SET profile = '"unreadable"' WHERE user_id = $1`, w.user)
+	require.NoError(t, err)
+	_, err = w.svc.SaveProfile(ctx, w.user, gameProfile())
+	require.NoError(t, err, "an unreadable profile can be saved over")
+	assert.Equal(t, 0, scored(), "it was judged as the default, which differs")
+}

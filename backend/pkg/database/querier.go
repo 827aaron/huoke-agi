@@ -65,7 +65,6 @@ type Querier interface {
 	DeleteFlowTemplate(ctx context.Context, arg DeleteFlowTemplateParams) error
 	// Delete a knowledge document by UUID (admin — no user_id check).
 	DeleteKnowledgeDocument(ctx context.Context, uuid sql.NullString) error
-	DeleteMessageScores(ctx context.Context, userID int64) error
 	DeletePrompt(ctx context.Context, id int64) error
 	DeleteProvider(ctx context.Context, id int64) (Provider, error)
 	DeleteSubtask(ctx context.Context, id int64) error
@@ -319,6 +318,8 @@ type Querier interface {
 	RecordGrowthScheduleStart(ctx context.Context, arg RecordGrowthScheduleStartParams) error
 	RecordSourceRead(ctx context.Context, arg RecordSourceReadParams) (GrowthSource, error)
 	RefreshSourceYield(ctx context.Context, ids []int64) error
+	// One statement, so the profile and the scores it outdates change together.
+	ReplaceGrowthProfileDroppingScores(ctx context.Context, arg ReplaceGrowthProfileDroppingScoresParams) (GrowthProfile, error)
 	ResolveGrowthSource(ctx context.Context, arg ResolveGrowthSourceParams) (GrowthSource, error)
 	SaveAssistantLog(ctx context.Context, arg SaveAssistantLogParams) error
 	SaveAssistantLogContent(ctx context.Context, arg SaveAssistantLogContentParams) error
