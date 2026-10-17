@@ -25,6 +25,19 @@ jobs:
   lint-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pentagi_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -139,6 +152,19 @@ jobs:
       - name: Backend - Test
         working-directory: backend
         run: go test ./... -race -v
+
+      # The postgres-tagged tier is invisible to the plain run above, so a signature change can
+      # leave it uncompilable without anything turning red. Vet compiles it everywhere.
+      - name: Backend - Vet postgres-tagged tests
+        working-directory: backend
+        run: go vet -tags postgres ./...
+
+      # -p 1: each package migrates into its own schema of one database.
+      - name: Backend - Test postgres tier
+        working-directory: backend
+        env:
+          PENTAGI_TEST_DSN: postgres://postgres:postgres@localhost:5432/pentagi_test?sslmode=disable
+        run: go test -p 1 -count=1 -tags postgres ./pkg/database/... ./pkg/timezone/... ./pkg/growth/ ./migrations/
 
       - name: Backend - Test Build
         working-directory: backend
