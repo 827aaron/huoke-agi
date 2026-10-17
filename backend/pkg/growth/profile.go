@@ -250,6 +250,8 @@ func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (Pro
 		if err := s.db.DeleteMessageScores(ctx, userID); err != nil {
 			return ProfileView{}, fmt.Errorf("failed to drop the message scores of the previous profile: %w", err)
 		}
+		logrus.WithContext(ctx).WithField("user_id", userID).
+			Info("business profile changed what leads are judged by; stored message scores dropped")
 	}
 	if err := s.writeProfileResource(ctx, userID, p); err != nil {
 		return ProfileView{}, err
