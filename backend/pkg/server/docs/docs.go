@@ -10577,6 +10577,10 @@ const docTemplate = `{
         "growth.ProfilePreset": {
             "type": "object",
             "properties": {
+                "default": {
+                    "description": "Default marks the preset the form starts from and leads are judged by while the\nowner has saved no profile.",
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "string"
                 },

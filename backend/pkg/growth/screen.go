@@ -123,7 +123,10 @@ func (s *Service) screen(
 	if len(msgs) == 0 {
 		return msgs, nil
 	}
-	profile := s.judgingProfile(ctx, userID)
+	profile, err := s.judgingProfile(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 	scoring := profile.ScoringOrDefault()
 	business := businessSummary(profile)
 	kept := make([]MessageView, 0, len(msgs))
@@ -188,7 +191,10 @@ func (s *Service) judgeEvidence(
 	src database.GrowthSource,
 	in LeadInput,
 ) (int, bool, error) {
-	profile := s.judgingProfile(ctx, userID)
+	profile, err := s.judgingProfile(ctx, userID)
+	if err != nil {
+		return 0, false, err
+	}
 	scoring := profile.ScoringOrDefault()
 	who := strings.TrimSpace(strings.TrimPrefix(in.Username, "@"))
 	if who != "" {

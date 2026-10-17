@@ -41,6 +41,7 @@ const (
 var (
 	ErrInvalidProfile = errors.New("invalid business profile")
 	ErrNoProfile      = errors.New("no business profile is saved")
+	errCorruptProfile = errors.New("stored business profile is corrupt")
 
 	profileBlock = regexp.MustCompile(`(?s)<business_profile>.*?</business_profile>\s*`)
 )
@@ -206,7 +207,7 @@ func (s *Service) GetProfile(ctx context.Context, userID int64) (ProfileView, er
 func profileView(row database.GrowthProfile) (ProfileView, error) {
 	v := ProfileView{ID: row.UserID, UpdatedAt: nullTime(row.UpdatedAt.Time, row.UpdatedAt.Valid)}
 	if err := json.Unmarshal(row.Profile, &v.Profile); err != nil {
-		return ProfileView{}, fmt.Errorf("stored business profile is corrupt: %w", err)
+		return ProfileView{}, fmt.Errorf("%w: %w", errCorruptProfile, err)
 	}
 	v.normalize()
 	return v, nil
@@ -238,17 +239,22 @@ func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (Pro
 	if err != nil {
 		return ProfileView{}, err
 	}
-	prev := s.judgingProfile(ctx, userID)
-	row, err := s.db.UpsertGrowthProfile(ctx, database.UpsertGrowthProfileParams{UserID: userID, Profile: raw})
+	prev, err := s.judgingProfile(ctx, userID)
+	if err != nil {
+		return ProfileView{}, err
+	}
+	var row database.GrowthProfile
+	if businessSummary(prev) != businessSummary(p) || prev.ScoringOrDefault() != p.ScoringOrDefault() {
+		row, err = s.db.ReplaceGrowthProfileDroppingScores(ctx, database.ReplaceGrowthProfileDroppingScoresParams{UserID: userID, Profile: raw})
+		if err == nil {
+			logrus.WithContext(ctx).WithField("user_id", userID).
+				Info("business profile changed what leads are judged by; stored message scores dropped")
+		}
+	} else {
+		row, err = s.db.UpsertGrowthProfile(ctx, database.UpsertGrowthProfileParams{UserID: userID, Profile: raw})
+	}
 	if err != nil {
 		return ProfileView{}, fmt.Errorf("failed to store the business profile: %w", err)
-	}
-	if businessSummary(prev) != businessSummary(p) || prev.ScoringOrDefault() != p.ScoringOrDefault() {
-		if err := s.db.DeleteMessageScores(ctx, userID); err != nil {
-			return ProfileView{}, fmt.Errorf("failed to drop the message scores of the previous profile: %w", err)
-		}
-		logrus.WithContext(ctx).WithField("user_id", userID).
-			Info("business profile changed what leads are judged by; stored message scores dropped")
 	}
 	if err := s.writeProfileResource(ctx, userID, p); err != nil {
 		return ProfileView{}, err
@@ -489,13 +495,18 @@ func (s *Service) WithProfile(
 	return input, s.WithProfileResource(ctx, userID, res)
 }
 
-// judgingProfile is the profile leads are judged by: the owner's, or DefaultProfile
-// when they have none or it cannot be read.
-func (s *Service) judgingProfile(ctx context.Context, userID int64) Profile {
-	if v, err := s.GetProfile(ctx, userID); err == nil {
-		return v.Profile
+// judgingProfile is the profile leads are judged by: the owner's, or DefaultProfile when
+// they have none or it is unreadable. A failure to load is returned, so a passing
+// database error neither judges by the wrong profile nor drops scores.
+func (s *Service) judgingProfile(ctx context.Context, userID int64) (Profile, error) {
+	v, err := s.GetProfile(ctx, userID)
+	switch {
+	case errors.Is(err, ErrNoProfile), errors.Is(err, errCorruptProfile):
+		return DefaultProfile(), nil
+	case err != nil:
+		return Profile{}, err
 	}
-	return DefaultProfile()
+	return v.Profile, nil
 }
 
 // WithProfileResource adds the profile file to res unless it is there already.
