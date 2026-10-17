@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GrowthProfile } from '../growth-types';
@@ -70,6 +70,9 @@ const profile: GrowthProfile = {
     updated_at: '2026-10-16T00:00:00Z',
 };
 
+const contactMethods = () =>
+    within(screen.getByText('希望的联系方式').closest('[data-slot="form-item"]') as HTMLElement);
+
 const renderForm = () =>
     render(
         <GrowthProfileForm
@@ -100,6 +103,71 @@ describe('GrowthProfileForm', () => {
                 }),
             ),
         );
+    });
+
+    it('saves WhatsApp, Line and Telegram as separate contact methods', async () => {
+        renderForm();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Line' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Telegram' }));
+        fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+        await waitFor(() =>
+            expect(growthApi.updateProfile).toHaveBeenCalledWith(
+                3,
+                expect.objectContaining({ contact_types: ['platform_handle', 'line', 'telegram'] }),
+            ),
+        );
+        expect(screen.getByRole('button', { name: 'WhatsApp' })).toBeInTheDocument();
+    });
+
+    it('adds a named contact method under other and saves it as written', async () => {
+        renderForm();
+
+        expect(screen.queryByLabelText('其他联系方式名称')).not.toBeInTheDocument();
+        fireEvent.click(contactMethods().getByRole('button', { name: '其他' }));
+        fireEvent.change(screen.getByLabelText('其他联系方式名称'), { target: { value: ' Zalo ' } });
+        fireEvent.click(screen.getByRole('button', { name: '添加这个联系方式' }));
+        fireEvent.change(screen.getByLabelText('其他联系方式名称'), { target: { value: 'EMAIL' } });
+        fireEvent.click(screen.getByRole('button', { name: '添加这个联系方式' }));
+        fireEvent.change(screen.getByLabelText('其他联系方式名称'), { target: { value: '手机号' } });
+        fireEvent.click(screen.getByRole('button', { name: '添加这个联系方式' }));
+        fireEvent.change(screen.getByLabelText('其他联系方式名称'), { target: { value: 'zalo' } });
+        fireEvent.keyDown(screen.getByLabelText('其他联系方式名称'), { key: 'Enter' });
+
+        expect(screen.getAllByRole('button', { name: 'Zalo' })).toHaveLength(1);
+        expect(screen.getByLabelText('其他联系方式名称')).toHaveValue('');
+
+        fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+        await waitFor(() =>
+            expect(growthApi.updateProfile).toHaveBeenCalledWith(
+                3,
+                expect.objectContaining({ contact_types: ['platform_handle', 'other', 'Zalo', 'email', 'phone'] }),
+            ),
+        );
+    });
+
+    it('shows the named contact methods a saved profile carries', () => {
+        render(
+            <GrowthProfileForm
+                onSaved={() => {}}
+                profile={{ ...profile, contact_types: ['platform_handle', 'Zalo'] }}
+            />,
+        );
+
+        expect(screen.getByRole('button', { name: 'Zalo' })).toHaveAttribute('data-state', 'on');
+    });
+
+    it('refuses a contact method name longer than 30 characters', () => {
+        renderForm();
+
+        fireEvent.click(contactMethods().getByRole('button', { name: '其他' }));
+        fireEvent.change(screen.getByLabelText('其他联系方式名称'), { target: { value: 'x'.repeat(31) } });
+        fireEvent.click(screen.getByRole('button', { name: '添加这个联系方式' }));
+
+        expect(screen.getByText('名称最多 30 个字')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'x'.repeat(31) })).not.toBeInTheDocument();
     });
 
     it('refuses a qualified line the weights cannot reach', async () => {

@@ -98,7 +98,8 @@ export interface GrowthLead {
 }
 
 export interface GrowthLeadContact {
-    type: Exclude<GrowthContactType, 'platform_handle'>;
+    // A GrowthContactType, a name the owner added, or 'messenger' on leads delivered before the split.
+    type: string;
     value: string;
 }
 
@@ -148,7 +149,7 @@ export type GrowthPlatform = 'facebook' | 'instagram' | 'telegram' | 'tiktok' | 
 
 export const GROWTH_PLATFORMS: GrowthPlatform[] = ['telegram', 'facebook', 'instagram', 'tiktok', 'youtube', 'web'];
 
-export type GrowthContactType = 'email' | 'messenger' | 'other' | 'phone' | 'platform_handle';
+export type GrowthContactType = 'email' | 'line' | 'other' | 'phone' | 'platform_handle' | 'telegram' | 'whatsapp';
 
 // Stored as the server generated it; only these keys are shown.
 export interface GrowthFingerprint {
@@ -159,8 +160,8 @@ export interface GrowthFingerprint {
 
 export interface GrowthProfile {
     competitors: string[];
-    // Empty means the platform account alone.
-    contact_types?: GrowthContactType[];
+    // Empty means the platform account alone. Anything not a GrowthContactType is a name the owner added.
+    contact_types?: string[];
     default_target: number;
     excludes: string[];
     games: string[];

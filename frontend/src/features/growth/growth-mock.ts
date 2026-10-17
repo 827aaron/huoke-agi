@@ -237,7 +237,7 @@ const lead = (
     const points: Record<string, number> = { genre_match: 3, paying: 2, player: 3, recent: 2, switching: 3 };
 
     return {
-        contacts: id % 3 === 1 ? [{ type: 'messenger', value: `line: ${username ?? name}` }] : [],
+        contacts: id % 3 === 1 ? [{ type: 'line', value: username ?? name }] : [],
         delivered_at: delivered ? ago(5) : null,
         delivered_task_id: delivered ? 11 : null,
         display_name: name,
@@ -406,7 +406,7 @@ const profilePresets: GrowthProfilePreset[] = [
         id: 'licensed_casino',
         profile: {
             competitors: null,
-            contact_types: ['platform_handle'],
+            contact_types: ['platform_handle', 'whatsapp', 'line', 'telegram'],
             default_target: 50,
             excludes: [
                 'a stated age under 18',
@@ -509,7 +509,7 @@ let settings: GrowthSetting[] = [
     emptySetting('embedding'),
     {
         ...emptySetting('screening'),
-        fields: { api_key: '••••7c1e', api_url: '', model: '~typesafe/jev-latest', threshold: '0.6' },
+        fields: { api_key: '••••7c1e', api_url: '', model: '~typesafe/jev-latest' },
         provider: 'openrouter',
         source: 'database',
         status: 'connected',

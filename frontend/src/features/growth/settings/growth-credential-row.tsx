@@ -94,7 +94,6 @@ const FIELD_CHECKS: Record<string, (value: string) => boolean> = {
     port: (value) => /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535,
     private_joins_per_day: (value) => COUNT.test(value),
     read_interval_seconds: (value) => RANGE.test(value),
-    threshold: (value) => /^0?\.\d+$/.test(value) && Number(value) > 0 && Number(value) < 1,
     url: (value) => isProxyUrl(value),
 };
 
@@ -108,7 +107,7 @@ const MASKED_FIELDS = new Set([...SECRET_FIELDS, 'url']);
 const MULTILINE_FIELDS = new Set(['api_keys']);
 
 // Empty means "send to the sign-in email", the server's default, or Jev's latest model, so these are never required.
-const OPTIONAL_FIELDS = new Set(['notify_emails', 'threshold', ...PACE_FIELDS]);
+const OPTIONAL_FIELDS = new Set(['notify_emails', ...PACE_FIELDS]);
 
 // A catalogue provider already knows its model and endpoint; these only override them.
 const LLM_OVERRIDE_FIELDS = new Set(['model', 'server_url']);
@@ -182,12 +181,10 @@ const fieldsFor = (kind: GrowthSettingKind, provider: null | string, setting: Gr
         // A server without Jev routing reports no model field, and refuses one it does not know.
         case 'screening':
             if (!setting || !('model' in setting.fields)) {
-                return ['api_key', 'threshold'];
+                return ['api_key'];
             }
 
-            return provider === 'custom'
-                ? ['api_url', 'model', 'api_key', 'threshold']
-                : ['api_key', 'model', 'threshold'];
+            return provider === 'custom' ? ['api_url', 'model', 'api_key'] : ['api_key', 'model'];
         case 'telegram':
             return ['api_id', 'api_hash', ...PACE_FIELDS];
         case 'web_search':
@@ -233,6 +230,9 @@ const fieldPlaceholder = (kind: GrowthSettingKind, provider: null | string, fiel
     text.fieldByKind[`${kind}.${provider}.${field}`]?.placeholder ??
     text.fieldByKind[`${kind}.${field}`]?.placeholder ??
     text.field[field]?.placeholder;
+
+const fieldHelp = (kind: GrowthSettingKind, provider: null | string, field: string): string | undefined =>
+    text.fieldHelp[`${kind}.${provider}.${field}`] ?? text.fieldHelp[`${kind}.${field}`];
 
 const statusLine = (kind: GrowthSettingKind, setting: GrowthSetting | undefined): string => {
     switch (settingState(setting)) {
@@ -610,8 +610,8 @@ export function GrowthCredentialCard({
                 </div>
             </div>
             {renderInput(field)}
-            {text.fieldHelp[`${kind}.${field}`] && (
-                <p className="text-muted-foreground text-xs">{text.fieldHelp[`${kind}.${field}`]}</p>
+            {fieldHelp(kind, provider, field) && (
+                <p className="text-muted-foreground text-xs">{fieldHelp(kind, provider, field)}</p>
             )}
             {errors[field] && <p className="text-destructive text-xs">{errors[field]}</p>}
         </div>

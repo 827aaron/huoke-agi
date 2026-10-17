@@ -298,7 +298,6 @@ const zh = {
             read_interval_seconds: { label: '读群间隔（秒）', placeholder: '5-15' },
             risk_reminders: { label: '风控提醒', placeholder: '' },
             server_url: { label: '接口地址', placeholder: 'https://api.example.com/v1' },
-            threshold: { label: '意向判断线', placeholder: '0.6' },
             tls: { label: '加密方式', placeholder: '' },
             url: { label: '代理地址', placeholder: 'http://user:pass@host:port 或 socks5://host:port' },
             username: { label: '登录用户名', placeholder: '一般就是邮箱地址' },
@@ -314,8 +313,8 @@ const zh = {
             'screening.openrouter.api_key': { label: 'OpenRouter 密钥', placeholder: '粘贴 OpenRouter 的密钥' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
-            'screening.threshold':
-                '消息有购买意向的把握达到这个值才进入打分，0 到 1 之间，默认 0.6。调高更严、漏掉的多；调低更宽、要看的多。',
+            'embedding.openrouter.api_key': '留空则复用大模型的 OpenRouter 密钥；大模型用的不是 OpenRouter 时必须填。',
+            'embedding.openrouter.model': '推荐 openai/text-embedding-3-small，便宜够用；留空就用它。',
             'telegram.join_ramp': '从账号首次登录那天算起，每天最多加几个群，逗号分隔；排完后按“每天加群上限”。',
             'telegram.risk_reminders': '关闭后不再显示加群节奏的黄色提醒。',
             'web_search.api_keys': '可填多个，用完一个自动换下一个。',
@@ -337,7 +336,6 @@ const zh = {
             port: '端口是 1 到 65535 之间的数字',
             private_joins_per_day: '请填写 0 或正整数',
             read_interval_seconds: '请填写一个数字或范围，例如 5-15',
-            threshold: '请填写 0 到 1 之间的小数，例如 0.6',
             url: '代理地址格式应为 http://host:port 或 socks5://host:port',
         } as Record<string, string>,
         fieldRequired: (field: string) => `请填写 ${field}`,
@@ -1161,10 +1159,13 @@ const zh = {
         aiHint: '这些内容会自动带给 AI，不用改任何模板。',
         contactType: {
             email: '邮箱',
-            messenger: '即时通讯（WhatsApp、Line、Telegram 等）',
+            line: 'Line',
+            messenger: '即时通讯',
             other: '其他',
             phone: '手机号',
             platform_handle: '平台账号',
+            telegram: 'Telegram',
+            whatsapp: 'WhatsApp',
         } as Record<string, string>,
         defaultExcludes: ['竞品官方', '机器人', '广告和推销'],
         description: '告诉智能体你在做什么、想找谁。填一次，之后每次只要说一句“找 50 个客户”。',
@@ -1176,6 +1177,10 @@ const zh = {
                 placeholder: '例如：某某传奇、某某世界',
             },
             contactTypes: {
+                customAdd: '添加这个联系方式',
+                customLabel: '其他联系方式名称',
+                customPlaceholder: '填写联系方式名称，例如 Zalo，按 ➕ 添加',
+                customTooLong: (max: number) => `名称最多 ${max} 个字`,
                 help: '智能体会在公开发言和资料里留意这些联系方式；每个潜客都有平台账号',
                 label: '希望的联系方式',
                 placeholder: '',
@@ -1706,7 +1711,8 @@ const zh = {
             ai: 'AI 发现',
             manual: '手工添加',
         },
-        placeholder: '粘贴 Telegram 群或频道链接，一行一个，例如 https://t.me/xxxx 或 https://t.me/+邀请码',
+        placeholder:
+            '粘贴 Telegram 群/频道或论坛、网页链接，一行一个，例如 https://t.me/xxxx 或 https://forum.example.com/board',
         searchPlaceholder: '搜索群名或链接…',
         tooMany: '一次最多添加 100 个链接，请分批添加。',
         unresolved: (link: string) => `${link} 暂时无法解析，请稍后重试`,
@@ -2303,7 +2309,6 @@ const en: Copy = {
             read_interval_seconds: { label: 'Seconds between group reads', placeholder: '5-15' },
             risk_reminders: { label: 'Pace reminders', placeholder: '' },
             server_url: { label: 'Endpoint', placeholder: 'https://api.example.com/v1' },
-            threshold: { label: 'Intent threshold', placeholder: '0.6' },
             tls: { label: 'Encryption', placeholder: '' },
             url: { label: 'Proxy URL', placeholder: 'http://user:pass@host:port or socks5://host:port' },
             username: { label: 'Username', placeholder: 'Usually the email address' },
@@ -2319,8 +2324,10 @@ const en: Copy = {
             'screening.openrouter.api_key': { label: 'OpenRouter key', placeholder: 'Paste your OpenRouter key' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldHelp: {
-            'screening.threshold':
-                'How sure the model must be that a message shows buying intent before it is scored, between 0 and 1; 0.6 by default. Higher misses more, lower shows more.',
+            'embedding.openrouter.api_key':
+                'Empty reuses the OpenRouter key of the language model; required when the language model is not on OpenRouter.',
+            'embedding.openrouter.model':
+                'openai/text-embedding-3-small is recommended: cheap and good enough. Empty uses it.',
             'telegram.join_ramp':
                 'Most joins on each day from the account’s first sign-in, comma separated; after that, Joins per day applies.',
             'telegram.risk_reminders': 'Off hides the yellow join-pace reminders.',
@@ -2343,7 +2350,6 @@ const en: Copy = {
             port: 'The port is a number from 1 to 65535',
             private_joins_per_day: 'Enter 0 or a whole number',
             read_interval_seconds: 'Enter a number or a range such as 5-15',
-            threshold: 'Enter a decimal between 0 and 1, such as 0.6',
             url: 'Use http://host:port or socks5://host:port',
         },
         fieldRequired: (field) => `Please enter ${field}`,
@@ -3191,10 +3197,13 @@ const en: Copy = {
         aiHint: 'All of this is passed to the AI automatically; no template needs editing.',
         contactType: {
             email: 'Email',
-            messenger: 'Messenger (WhatsApp, Line, Telegram…)',
+            line: 'Line',
+            messenger: 'Messenger',
             other: 'Other',
             phone: 'Phone',
             platform_handle: 'Platform account',
+            telegram: 'Telegram',
+            whatsapp: 'WhatsApp',
         } as Record<string, string>,
         defaultExcludes: ['Official competitor accounts', 'Bots', 'Ads and promotion'],
         description:
@@ -3207,6 +3216,10 @@ const en: Copy = {
                 placeholder: 'e.g. Legend X, World Y',
             },
             contactTypes: {
+                customAdd: 'Add this contact method',
+                customLabel: 'Other contact method name',
+                customPlaceholder: 'Name a contact method, such as Zalo, and press ➕',
+                customTooLong: (max) => `At most ${max} characters`,
                 help: 'The agents look out for these in public posts and profiles; every lead has its platform account',
                 label: 'Preferred contact methods',
                 placeholder: '',
@@ -3759,7 +3772,7 @@ const en: Copy = {
             manual: 'Added by hand',
         },
         placeholder:
-            'Paste Telegram group or channel links, one per line, e.g. https://t.me/xxxx or https://t.me/+invite',
+            'Paste Telegram group or channel links, or forum and web page links, one per line, e.g. https://t.me/xxxx or https://forum.example.com/board',
         searchPlaceholder: 'Search name or link...',
         tooMany: 'At most 100 links at a time; please add them in batches.',
         unresolved: (link) => `${link} could not be resolved right now, try again later`,

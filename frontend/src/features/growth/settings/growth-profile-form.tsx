@@ -1,8 +1,9 @@
-import { Check, ChevronRight } from 'lucide-react';
+import { Check, ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import * as z from 'zod';
 
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { FormSubmitButton } from '@/components/ui/form-submit-button';
@@ -58,7 +59,19 @@ const languageFormValues = (languages: null | string[] = []) => {
     };
 };
 
-export const CONTACT_TYPES: GrowthContactType[] = ['platform_handle', 'phone', 'email', 'messenger', 'other'];
+export const CONTACT_TYPES: GrowthContactType[] = [
+    'platform_handle',
+    'phone',
+    'email',
+    'whatsapp',
+    'line',
+    'telegram',
+    'other',
+];
+
+const MAX_CUSTOM_CONTACT_LENGTH = 30;
+
+const isCustomContact = (type: string) => !CONTACT_TYPES.includes(type as GrowthContactType);
 
 const SCORING_SIGNALS: GrowthScoringSignal[] = ['player', 'pain', 'paying', 'active', 'match'];
 
@@ -148,7 +161,7 @@ const toFormValues = (profile: GrowthProfile | null): ProfileFormValues => ({
 
 const toInput = (values: ProfileFormValues): GrowthProfileInput => ({
     competitors: splitList(values.competitors),
-    contact_types: values.contactTypes as GrowthContactType[],
+    contact_types: values.contactTypes,
     default_target: Number(values.defaultTarget),
     excludes: splitList(values.excludes),
     games: splitList(values.games),
@@ -243,6 +256,44 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
     const [presets, setPresets] = useState<GrowthProfilePreset[]>([]);
     const [uncovered, setUncovered] = useState<Set<ProfileField>>(new Set());
     const [presetId, setPresetId] = useState('');
+    const [customContacts, setCustomContacts] = useState<string[]>(
+        () => profile?.contact_types?.filter(isCustomContact) ?? [],
+    );
+    const [customDraft, setCustomDraft] = useState('');
+    const [customError, setCustomError] = useState<null | string>(null);
+
+    const addCustomContact = () => {
+        const name = customDraft.trim();
+
+        if (!name) {
+            return;
+        }
+
+        if ([...name].length > MAX_CUSTOM_CONTACT_LENGTH) {
+            setCustomError(field.contactTypes.customTooLong(MAX_CUSTOM_CONTACT_LENGTH));
+
+            return;
+        }
+
+        const sameName = (other: string) => other.toLocaleLowerCase() === name.toLocaleLowerCase();
+        const existing =
+            CONTACT_TYPES.find((type) => sameName(type) || sameName(copy.profile.contactType[type] ?? '')) ??
+            customContacts.find(sameName);
+        const selected = form.getValues('contactTypes');
+
+        if (!existing) {
+            setCustomContacts((previous) => [...previous, name]);
+        }
+
+        const type = existing ?? name;
+
+        if (!selected.includes(type)) {
+            form.setValue('contactTypes', [...selected, type], { shouldDirty: true });
+        }
+
+        setCustomDraft('');
+        setCustomError(null);
+    };
 
     const fill = (preset: GrowthProfilePreset, keepTyped = false) => {
         const current = form.getValues();
@@ -464,18 +515,44 @@ export function GrowthProfileForm({ onSaved, profile }: GrowthProfileFormProps) 
                                     value={input.value}
                                     variant="outline"
                                 >
-                                    {CONTACT_TYPES.map((type) => (
+                                    {[...CONTACT_TYPES, ...customContacts].map((type) => (
                                         <ToggleGroupItem
                                             className="group data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90 data-[state=on]:hover:text-primary-foreground px-3"
                                             key={type}
                                             value={type}
                                         >
                                             <Check className="hidden size-3.5 group-data-[state=on]:block" />
-                                            {copy.profile.contactType[type]}
+                                            {copy.profile.contactType[type] ?? type}
                                         </ToggleGroupItem>
                                     ))}
                                 </ToggleGroup>
                             </FormControl>
+                            {input.value.includes('other') && (
+                                <div className="flex gap-2">
+                                    <Input
+                                        aria-label={field.contactTypes.customLabel}
+                                        onChange={(event) => setCustomDraft(event.target.value)}
+                                        onKeyDown={(event) => {
+                                            if (event.key === 'Enter') {
+                                                event.preventDefault();
+                                                addCustomContact();
+                                            }
+                                        }}
+                                        placeholder={field.contactTypes.customPlaceholder}
+                                        value={customDraft}
+                                    />
+                                    <Button
+                                        aria-label={field.contactTypes.customAdd}
+                                        onClick={addCustomContact}
+                                        size="icon"
+                                        type="button"
+                                        variant="outline"
+                                    >
+                                        <Plus />
+                                    </Button>
+                                </div>
+                            )}
+                            {customError && <p className="text-destructive text-sm">{customError}</p>}
                             <FormDescription>{field.contactTypes.help}</FormDescription>
                             {notCovered('contact_types')}
                             <FormMessage />

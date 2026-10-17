@@ -114,7 +114,7 @@ describe('GrowthCredentialCard', () => {
     it('asks a relay for its models with the saved key and offers them to pick', async () => {
         renderCard(
             setting({
-                fields: { api_key: '••••7c1e', api_url: '', model: '', threshold: '0.6' },
+                fields: { api_key: '••••7c1e', api_url: '', model: '' },
                 kind: 'screening',
                 provider: 'openrouter',
                 providers: ['typesafe', 'openrouter', 'custom'],
@@ -135,6 +135,17 @@ describe('GrowthCredentialCard', () => {
         );
         expect(await screen.findByRole('combobox', { name: '模型' })).toHaveTextContent('选择模型');
         expect(screen.getByLabelText('OpenRouter 密钥')).toHaveValue('');
+    });
+
+    it('recommends an OpenRouter embedding model and says when its key is needed', () => {
+        renderCard(
+            setting({ kind: 'embedding', provider: 'openrouter', providers: ['openai', 'openrouter', 'ollama'] }),
+        );
+
+        expect(screen.getByText('推荐 openai/text-embedding-3-small，便宜够用；留空就用它。')).toBeInTheDocument();
+        expect(
+            screen.getByText('留空则复用大模型的 OpenRouter 密钥；大模型用的不是 OpenRouter 时必须填。'),
+        ).toBeInTheDocument();
     });
 
     it('lists OpenRouter embedding models with the key the LLM card lends', async () => {
@@ -161,7 +172,7 @@ describe('GrowthCredentialCard', () => {
     it('saves the newest Jev alias in place of a pinned model', async () => {
         renderCard(
             setting({
-                fields: { api_key: '••••7c1e', api_url: '', model: 'typesafe/jev-1.13', threshold: '0.6' },
+                fields: { api_key: '••••7c1e', api_url: '', model: 'typesafe/jev-1.13' },
                 kind: 'screening',
                 provider: 'openrouter',
                 providers: ['typesafe', 'openrouter', 'custom'],
@@ -185,19 +196,18 @@ describe('GrowthCredentialCard', () => {
         );
     });
 
-    it('sends no model to a server whose Jev setting has none', async () => {
+    it('sends neither a model nor a threshold to a server whose Jev setting still reports one', async () => {
         renderCard(setting({ fields: { api_key: '', threshold: '0.6' }, kind: 'screening' }));
 
         expect(screen.getByText('未配置判断模型 Jev，任务无法筛选和打分。')).toHaveClass('text-destructive');
         expect(screen.queryByRole('button', { name: '获取模型' })).not.toBeInTheDocument();
 
         fireEvent.change(screen.getByLabelText('TypeSafe 密钥'), { target: { value: 'ts-0123456789' } });
-        fireEvent.change(screen.getByLabelText('意向判断线'), { target: { value: '0.7' } });
         fireEvent.click(screen.getByRole('button', { name: /保存/ }));
 
         await waitFor(() =>
             expect(growthApi.saveSetting).toHaveBeenCalledWith('screening', {
-                fields: { api_key: 'ts-0123456789', threshold: '0.7' },
+                fields: { api_key: 'ts-0123456789' },
                 provider: null,
             }),
         );
