@@ -94,7 +94,7 @@ installer:
   n: 1
   max_tokens: 6000
 
-# Pentester - security testing needs precision but also creative attack vectors
+# Researcher (pentester id) - needs precision but also some creativity
 pentester:
   model: "llama3.1:8b-instruct-q8_0"
   temperature: 0.25

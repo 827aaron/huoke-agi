@@ -262,7 +262,7 @@ Order matters — types before the door, because the door's constructor names th
 6. **Installer.** The screen id, menu row, screen construction and strings under `cmd/installer/wizard/`. Nothing fails the build if you skip it; the wizard simply never offers the provider.
 7. **GraphQL.** The `ProviderType` enum value plus fields in `ProvidersModelsList`, `ProvidersReadinessStatus` and `DefaultProvidersConfig`; re-run gqlgen and extend the per-type switches in `schema.resolvers.go`.
 8. **Frontend.** `providerLabels` in `pages/settings/settings-providers.tsx` (a `Record<ProviderType, …>`, so it will not compile without the new key), the icon in `components/icons/` registered in `provider-icon.tsx`, the fields in `frontend/graphql-schema.graphql`, then `pnpm run graphql:generate`, and the e2e cassette in `e2e/mocks/cassettes/settings-providers.ts`.
-9. **Docs.** The section every other provider has in `README.md`, `backend/docs/config.md` and `backend/docs/database.md`. `TestCatalog_ReadmeProviderSectionsMatchTheShippedConfig` in `pkg/providers/catalog_test.go` reads `README.md` — a provider or model missing from it turns that test red.
+9. **Docs.** The section every other provider has in `docs/providers.md`, `backend/docs/config.md` and `backend/docs/database.md`. `TestCatalog_ReadmeProviderSectionsMatchTheShippedConfig` in `pkg/providers/catalog_test.go` reads `docs/providers.md` — a provider or model missing from it turns that test red.
 
 Embeddings are a separate axis (`EMBEDDING_PROVIDER`, `pkg/providers/embeddings/`): adding a chat door does not add an embedder.
 
@@ -276,7 +276,7 @@ Engines are primitives under `backend/pkg/tools/searchers/`, orchestrated by the
 4. Attribution, if the engine needs a **new** `SearchengineType`: a goose migration rebuilding the enum, the constant in `pkg/database/models.go`, **and** the value in both the constant block and the `Valid()` switch in `pkg/server/models/searchlogs.go`. Reusing an existing value needs none of it.
 5. `<name>_test.go` in `searchers/` (the shared MITM proxy harness is in `fixtures_test.go`), and orchestrator coverage in `web_search_test.go` if behaviour changes.
 6. The installer wizard (`cmd/installer/wizard/`: the config field, the `GetVar`/`SetVar` pair, the descriptions and masked/critical lists, the labels, the form field) and `cmd/ftester` if you want to drive the engine in isolation.
-7. The prose that enumerates engines: `pkg/templates/prompts/searcher.tmpl` (what the agent is told exists), `backend/docs/config.md`, and `README.md`.
+7. The prose that enumerates engines: `pkg/templates/prompts/searcher.tmpl` (what the agent is told exists) and `backend/docs/config.md`.
 
 No frontend change is needed: it treats `SearchLog.engine` as an opaque string.
 

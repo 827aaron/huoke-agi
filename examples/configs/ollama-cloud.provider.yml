@@ -5,11 +5,9 @@
 # price blocks.
 #
 # Excluded from the available model list on purpose: `gemini-3-flash-preview` and
-# `gpt-oss:120b`/`gpt-oss:20b`. This product runs cybersecurity/pentesting
-# workloads, and Google/OpenAI-trained models (hosted or open-weight) carry
-# built-in safety alignment prone to false-positive refusals on legitimate
-# exploit-development and offensive security content - the same reasoning applied
-# when curating examples/configs/openrouter.provider.yml.
+# `gpt-oss:120b`/`gpt-oss:20b`: their built-in safety alignment is prone to
+# false-positive refusals in long agent runs - the same reasoning applied when
+# curating examples/configs/openrouter.provider.yml.
 #
 # Role assignments (from the models actually offered on this Ollama Cloud
 # account):

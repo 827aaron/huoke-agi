@@ -1,6 +1,6 @@
 # Fonts
 
-This directory contains fonts used by the PentAGI frontend application, including web UI and PDF report generation.
+This directory contains fonts used by the KeLai AGI frontend application, including web UI and PDF report generation.
 
 ## Inter
 
@@ -50,5 +50,5 @@ This directory contains fonts used by the PentAGI frontend application, includin
 ## Notes
 
 All fonts are open source and freely redistributable under their respective licenses (SIL OFL 1.1 and
-Apache 2.0), both compatible with the MIT license of the PentAGI product. Fonts are served from the
+Apache 2.0), both compatible with the MIT license of the KeLai AGI product. Fonts are served from the
 same origin as the application and never loaded from external servers.
