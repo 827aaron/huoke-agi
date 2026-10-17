@@ -41,6 +41,7 @@ export const LLM_PROVIDERS = [
 // The embedders PentAGI ships; the vector memory and the knowledge base depend on one of them.
 export const EMBEDDING_PROVIDERS = [
     'openai',
+    'openrouter',
     'ollama',
     'mistral',
     'jina',
@@ -132,7 +133,9 @@ const latestScreeningModel = (provider: null | string) =>
     provider === 'openrouter' ? 'typesafe/jev-latest' : 'jev-latest';
 
 const canListModels = (kind: GrowthSettingKind, provider: null | string) =>
-    (kind === 'llm' && provider === 'custom') || (kind === 'screening' && !!provider && provider !== 'typesafe');
+    (kind === 'llm' && provider === 'custom') ||
+    (kind === 'screening' && !!provider && provider !== 'typesafe') ||
+    (kind === 'embedding' && (provider === 'openai' || provider === 'openrouter'));
 
 // With the platform's SMTP server set in .env, a customer only names where the email goes.
 const usesPlatformSmtp = (kind: GrowthSettingKind, setting: GrowthSetting | undefined) =>
@@ -146,7 +149,7 @@ const isOverrideField = (
     setting: GrowthSetting | undefined,
 ) =>
     (kind === 'llm' && provider !== 'custom' && LLM_OVERRIDE_FIELDS.has(field)) ||
-    (kind === 'embedding' && LLM_OVERRIDE_FIELDS.has(field)) ||
+    (kind === 'embedding' && LLM_OVERRIDE_FIELDS.has(field) && !(provider === 'openrouter' && field === 'model')) ||
     (kind === 'telegram' && PACE_FIELDS.includes(field)) ||
     (usesPlatformSmtp(kind, setting) && SMTP_FIELDS.includes(field));
 
@@ -394,7 +397,7 @@ export function GrowthCredentialCard({
 
         try {
             if (kind === 'email') {
-                const result = await growthApi.testEmail();
+                const result = await growthApi.testEmail(text.mailLanguage);
 
                 if (result.sent) {
                     toast.success(text.testEmailSent(result.to.join(', ')));
@@ -425,7 +428,9 @@ export function GrowthCredentialCard({
                           provider,
                           server_url: values.server_url?.trim() ?? '',
                       }
-                    : { api_key: values.api_key?.trim() ?? '', api_url: values.api_url?.trim() ?? '', provider },
+                    : kind === 'embedding'
+                      ? { api_key: values.api_key?.trim() ?? '', provider, server_url: values.server_url?.trim() ?? '' }
+                      : { api_key: values.api_key?.trim() ?? '', api_url: values.api_url?.trim() ?? '', provider },
             );
 
             if (listed.length) {

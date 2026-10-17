@@ -899,8 +899,8 @@ they can overlap:
    **Select assistant** → the new-session entry. Then read `assistantLogs` for
    both ids: each session must hold only its own turns.
 
-Keep every prompt inside the sandbox container — this is a pentest product, and a
-prompt that names an outside host starts a real scan of it. "Print the kernel
+Keep every prompt inside the sandbox container — the agents act for real, and a
+prompt that names an outside site sends them to visit it. "Print the kernel
 version and the current user", "list the top-level directories with their sizes",
 "write a small script to /tmp and run it" are enough to produce a full run.
 

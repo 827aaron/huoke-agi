@@ -304,6 +304,11 @@ const zh = {
             username: { label: '登录用户名', placeholder: '一般就是邮箱地址' },
         } as Record<string, { label: string; placeholder: string }>,
         fieldByKind: {
+            'embedding.openrouter.api_key': {
+                label: 'OpenRouter 密钥',
+                placeholder: '留空则复用大模型的 OpenRouter 密钥',
+            },
+            'embedding.openrouter.model': { label: '模型', placeholder: '默认 openai/text-embedding-3-small' },
             'screening.api_key': { label: 'TypeSafe 密钥', placeholder: '粘贴 TypeSafe 给你的密钥' },
             'screening.model': { label: '模型', placeholder: '默认最新版，可填具体版本号' },
             'screening.openrouter.api_key': { label: 'OpenRouter 密钥', placeholder: '粘贴 OpenRouter 的密钥' },
@@ -351,6 +356,8 @@ const zh = {
             minimax: '登录 MiniMax 开放平台（platform.minimaxi.com），进入“接口密钥”页面。',
             mistral: '登录 Mistral La Plateforme（console.mistral.ai），进入 API Keys。',
             openai: '登录 OpenAI Platform（platform.openai.com），进入 API keys 页面，点“Create new secret key”。',
+            openrouter:
+                '登录 OpenRouter（openrouter.ai），进入 Keys 页面创建密钥。大模型也用 OpenRouter 时，这里留空即可共用同一把密钥。',
             perplexity: '登录 Perplexity 设置页的 API 板块（perplexity.ai/settings/api）生成密钥。',
             proxy: '向你的代理服务商要一个 HTTP 或 SOCKS5 地址填在这里。不填则直连。',
             qwen: '登录阿里云百炼（bailian.console.aliyun.com），进入“API-KEY”页面。',
@@ -381,6 +388,7 @@ const zh = {
         },
         llmTopUpNote: '新注册的账号请先在服务商后台充值，否则测试会提示额度不足。',
         loadFailed: '密钥状态加载失败，请刷新重试。',
+        mailLanguage: 'Chinese',
         modelsEmpty: '没有拿到模型列表，请手动填写模型名称',
         modelsFailed: '获取模型失败，请检查密钥和地址，或手动填写模型名称',
         modelsFetch: '获取模型',
@@ -2290,6 +2298,11 @@ const en: Copy = {
             username: { label: 'Username', placeholder: 'Usually the email address' },
         },
         fieldByKind: {
+            'embedding.openrouter.api_key': {
+                label: 'OpenRouter key',
+                placeholder: "Leave empty to reuse the LLM's OpenRouter key",
+            },
+            'embedding.openrouter.model': { label: 'Model', placeholder: 'Defaults to openai/text-embedding-3-small' },
             'screening.api_key': { label: 'TypeSafe key', placeholder: 'Paste the key TypeSafe gave you' },
             'screening.model': { label: 'Model', placeholder: 'Latest by default; enter a version to pin one' },
             'screening.openrouter.api_key': { label: 'OpenRouter key', placeholder: 'Paste your OpenRouter key' },
@@ -2338,6 +2351,8 @@ const en: Copy = {
             minimax: 'Sign in to the MiniMax platform (platform.minimaxi.com) and open the API keys page.',
             mistral: 'Sign in to Mistral La Plateforme (console.mistral.ai) and open API Keys.',
             openai: 'Sign in to the OpenAI Platform (platform.openai.com), open API keys and click “Create new secret key”.',
+            openrouter:
+                'Sign in to OpenRouter (openrouter.ai) and create a key on the Keys page. When the LLM also uses OpenRouter, leave this empty to share its key.',
             perplexity: 'Generate a key in the API section of Perplexity settings (perplexity.ai/settings/api).',
             proxy: 'Ask your proxy provider for an HTTP or SOCKS5 address. Leave empty to connect directly.',
             qwen: 'Sign in to Alibaba Cloud Bailian (bailian.console.aliyun.com) and open API-KEY.',
@@ -2369,6 +2384,7 @@ const en: Copy = {
         },
         llmTopUpNote: 'New accounts need a top-up first, or the test reports no quota.',
         loadFailed: 'Failed to load the key status. Please refresh.',
+        mailLanguage: 'English',
         modelsEmpty: 'No models came back; enter the model name by hand',
         modelsFailed: 'Could not fetch the models; check the key and URL, or enter the model name by hand',
         modelsFetch: 'Fetch models',

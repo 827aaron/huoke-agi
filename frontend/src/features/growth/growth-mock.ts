@@ -401,7 +401,7 @@ const runs: GrowthRun[] = [
 
 const providersOf: Record<GrowthSettingKind, string[]> = {
     email: [],
-    embedding: ['openai', 'ollama', 'mistral', 'jina', 'huggingface', 'googleai', 'voyageai'],
+    embedding: ['openai', 'openrouter', 'ollama', 'mistral', 'jina', 'huggingface', 'googleai', 'voyageai'],
     llm: ['openai', 'anthropic', 'gemini', 'deepseek', 'glm', 'kimi', 'qwen', 'minimax', 'mistral', 'xai', 'custom'],
     proxy: [],
     screening: ['typesafe', 'openrouter', 'custom'],
@@ -695,7 +695,9 @@ export const growthMock = {
             : delay(
                   (kind === 'screening'
                       ? ['typesafe/jev-latest', 'typesafe/jev-2026-09', 'typesafe/jev-2026-06']
-                      : ['openai/gpt-5.1-mini', 'deepseek/deepseek-chat', 'qwen/qwen3-max']
+                      : kind === 'embedding'
+                        ? ['openai/text-embedding-3-small', 'openai/text-embedding-3-large']
+                        : ['openai/gpt-5.1-mini', 'deepseek/deepseek-chat', 'qwen/qwen3-max']
                   ).map((id) => ({ id })),
               ),
     listProfiles: () => delay(profiles),

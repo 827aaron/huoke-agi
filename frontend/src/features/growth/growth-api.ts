@@ -108,7 +108,8 @@ const live = {
     testAccountProxy: async (id: number) =>
         unwrapApiResponse(await api.post<GrowthProxyTestResult>(`/growth/accounts/${id}/test-proxy`)),
     // Without `to` the server mails the notification addresses.
-    testEmail: async () => unwrapApiResponse(await api.post<GrowthEmailResult>('/growth/settings/test-email', {})),
+    testEmail: async (language: string) =>
+        unwrapApiResponse(await api.post<GrowthEmailResult>('/growth/settings/test-email', { language })),
     testSetting: async (kind: GrowthSettingKind) =>
         unwrapApiResponse(await api.post<GrowthSetting>(`/growth/settings/${kind}/test`)),
     updateProfile: async (id: number, input: GrowthProfileInput) =>

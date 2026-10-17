@@ -59,7 +59,7 @@ const createTunedMarked = () => {
 
     instance.use({
         tokenizer: {
-            // These marked tokenizers auto-convert literal text into markup, mangling Go-template / pentest
+            // These marked tokenizers auto-convert literal text into markup, mangling Go-template / agent
             // prose on round-trip. Returning `undefined` forces the char to stay literal text; `false` defers
             // to marked's default. Neutralise the lossy cases, keep what the toolbar emits:
             //   • del      — keep GFM `~~strike~~`, drop a lone `~…~` (else `~5~` / ranges become <del>)
@@ -516,7 +516,7 @@ const codeMarkOf = (node?: SerializedNode) =>
 // A code span is written between fences one backtick longer than the longest run inside it, or between the
 // ones it was written with (`written`) while no run inside is exactly that long — one backtick around
 // `` a``b `` closes only at one backtick. @tiptap/markdown's mark path cannot do either: it derives the fence
-// by rendering the mark against a placeholder, so a span that holds a backtick (`` `x` ``, common in pentest
+// by rendering the mark against a placeholder, so a span that holds a backtick (`` `x` ``, common in agent
 // write-ups) serialises to invalid `` ``x`` `` and degrades on every save. The code-mark renderMarkdown
 // override in markdown-editor-extensions.ts zeroes the placeholder fence so this is the ONLY fence emitted.
 // A span whose content begins or ends with a backtick needs a space between it and the fence. That space is
