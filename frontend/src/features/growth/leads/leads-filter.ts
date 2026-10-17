@@ -13,13 +13,14 @@ export interface LeadFilters {
     foundWithin: LeadFoundWithin;
     minScore: null | number;
     platform: GrowthPlatform | null;
+    round: null | number;
     search: string;
     sort: LeadSort;
     sourceId: null | number;
     tier: 'all' | GrowthLeadTier;
 }
 
-export type LeadFlag = 'competitor' | 'paying' | 'recent';
+export type LeadFlag = 'pain' | 'paying' | 'recent';
 
 // Calendar days in the browser's zone, today included.
 export type LeadFoundWithin = '7d' | '30d' | 'all' | 'today';
@@ -33,6 +34,7 @@ export const EMPTY_LEAD_FILTERS: LeadFilters = {
     foundWithin: 'all',
     minScore: null,
     platform: null,
+    round: null,
     search: '',
     sort: 'score',
     sourceId: null,
@@ -87,6 +89,10 @@ export function filterLeads(leads: GrowthLead[], filters: LeadFilters, now = Dat
             return false;
         }
 
+        if (filters.round !== null && lead.first_round !== filters.round) {
+            return false;
+        }
+
         if (filters.sourceId !== null && lead.source_id !== filters.sourceId) {
             return false;
         }
@@ -124,6 +130,8 @@ export interface LeadDayGroup {
     key: string;
     leads: GrowthLead[];
     qualified: number;
+    // The rounds that found the day's leads, ascending; a lead added by hand has none.
+    rounds: number[];
     watch: number;
 }
 
@@ -137,12 +145,20 @@ export function groupLeadsByDay(leads: GrowthLead[]): LeadDayGroup[] {
         let group = groups.get(key);
 
         if (!group) {
-            group = { day: startOfDay(created), key, leads: [], qualified: 0, watch: 0 };
+            group = { day: startOfDay(created), key, leads: [], qualified: 0, rounds: [], watch: 0 };
             groups.set(key, group);
         }
 
         group.leads.push(lead);
         group[lead.tier] += 1;
+
+        if (lead.first_round > 0 && !group.rounds.includes(lead.first_round)) {
+            group.rounds.push(lead.first_round);
+        }
+    }
+
+    for (const group of groups.values()) {
+        group.rounds.sort((a, b) => a - b);
     }
 
     return [...groups.values()].sort((a, b) => b.day.getTime() - a.day.getTime());

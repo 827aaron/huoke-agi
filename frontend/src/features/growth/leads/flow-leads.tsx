@@ -50,17 +50,20 @@ import {
 } from './leads-filter';
 
 const ALL = 'all';
-const FLAGS: LeadFlag[] = ['competitor', 'paying', 'recent'];
+const FLAGS: LeadFlag[] = ['pain', 'paying', 'recent'];
 const MIN_SCORES = [5, 7, 9];
 
 const dayTitle = (group: LeadDayGroup): string => {
     const date = copy.common.date(group.day);
+    const relative = isToday(group.day)
+        ? copy.leads.group.today
+        : isYesterday(group.day)
+          ? copy.leads.group.yesterday
+          : null;
 
-    if (isToday(group.day)) {
-        return `${date} · ${copy.leads.group.today}`;
-    }
-
-    return isYesterday(group.day) ? `${date} · ${copy.leads.group.yesterday}` : date;
+    return [date, relative, group.rounds.length ? copy.leads.group.rounds(group.rounds) : null]
+        .filter(Boolean)
+        .join(' · ');
 };
 
 const readFilters = (params: URLSearchParams): LeadFilters => {
@@ -115,6 +118,10 @@ function FlowLeads() {
         () => sources.filter((source) => leads.some((lead) => lead.source_id === source.id)),
         [leads, sources],
     );
+    const roundOptions = useMemo(
+        () => [...new Set(leads.map((lead) => lead.first_round).filter((round) => round > 0))].sort((a, b) => b - a),
+        [leads],
+    );
 
     const handleDelete = async () => {
         if (!pendingDelete) {
@@ -141,6 +148,7 @@ function FlowLeads() {
         filters.sourceId !== null ||
         filters.platform !== null ||
         filters.foundWithin !== 'all' ||
+        filters.round !== null ||
         filters.minScore !== null ||
         filters.flags.length > 0;
 
@@ -183,6 +191,28 @@ function FlowLeads() {
                         <SelectItem value="today">{copy.leads.filter.today}</SelectItem>
                         <SelectItem value="7d">{copy.leads.filter.last7Days}</SelectItem>
                         <SelectItem value="30d">{copy.leads.filter.last30Days}</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select
+                    onValueChange={(value) => update({ round: value === ALL ? null : Number(value) })}
+                    value={filters.round === null ? ALL : String(filters.round)}
+                >
+                    <SelectTrigger
+                        aria-label={copy.leads.filter.round}
+                        className="w-28"
+                    >
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={ALL}>{copy.leads.filter.allRounds}</SelectItem>
+                        {roundOptions.map((round) => (
+                            <SelectItem
+                                key={round}
+                                value={String(round)}
+                            >
+                                {copy.leads.filter.roundOption(round)}
+                            </SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
                 <Select

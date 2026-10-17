@@ -57,15 +57,13 @@ function GrowthProgressBar() {
                         >
                             {copy.progress.watch(run.watch)}
                         </button>
-                        {run.sources && (
-                            <button
-                                className="text-muted-foreground hover:text-foreground hidden hover:underline md:inline"
-                                onClick={() => openSources()}
-                                type="button"
-                            >
-                                {copy.progress.sources(run.sources)}
-                            </button>
-                        )}
+                        <button
+                            className="text-muted-foreground hover:text-foreground hidden hover:underline md:inline"
+                            onClick={() => openSources()}
+                            type="button"
+                        >
+                            {copy.progress.sources(run.sources)}
+                        </button>
                         <span className="text-muted-foreground ml-auto flex items-center gap-1.5 text-xs">
                             <span className="size-2 animate-pulse rounded-full bg-green-500" />
                             {copy.progress.running}

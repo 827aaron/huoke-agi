@@ -1095,6 +1095,7 @@ const zh = {
         filter: {
             allContacts: '全部联系方式',
             allDates: '全部日期',
+            allRounds: '全部轮次',
             allScores: '全部分数',
             allSources: '全部来源',
             allStatuses: '全部状态',
@@ -1108,6 +1109,8 @@ const zh = {
             minScoreOption: (n: number) => `${n} 分及以上`,
             notDelivered: '未交付',
             qualified: '合格',
+            round: '轮次',
+            roundOption: (n: number) => `第 ${n} 轮`,
             sort: '排序',
             sortNewest: '最新发现',
             sortScore: '分数从高到低',
@@ -1117,7 +1120,7 @@ const zh = {
             withoutContact: '仅平台账号',
         },
         flag: {
-            competitor: '提到竞品',
+            pain: '有痛点',
             paying: '成交迹象',
             recent: '7 天内活跃',
         },
@@ -1137,6 +1140,7 @@ const zh = {
         },
         foundIn: (project: string, round: number) => `${project} · 第 ${round} 轮`,
         group: {
+            rounds: (rounds: number[]) => `第 ${rounds.join('、')} 轮`,
             summary: (total: number, qualified: number, watch: number) =>
                 `${total} 位 · 合格 ${qualified} · 待观察 ${watch}`,
             today: '今天',
@@ -1147,12 +1151,11 @@ const zh = {
         saved: '潜客已保存',
         searchPlaceholder: '搜索昵称、用户名、原话…',
         signal: {
-            competitor: '提到竞品',
-            genre_match: '匹配客户业务',
+            active: '近期活跃',
+            match: '匹配客户业务',
+            pain: '有痛点',
             paying: '有成交迹象',
             player: '属于目标人群',
-            recent: '近期活跃',
-            switching: '想换新的',
         } as Record<string, string>,
         status: {
             delivered: (date: string) => `已交付 ${date}`,
@@ -1349,8 +1352,8 @@ const zh = {
         retry: '重试',
         retryText: '继续完成上一轮的目标',
         running: '进行中',
-        sources: (s: { joined: number; not_joined: number; pending: number; unjoinable: number }) =>
-            `来源 已加入 ${s.joined} · 待审批 ${s.pending} · 未加入 ${s.not_joined} · 不可加入 ${s.unjoinable}`,
+        sources: (s: { joined: number; not_joinable: number; pending: number; total: number }) =>
+            `来源 ${s.total} 个 · 已加入 ${s.joined} · 待审批 ${s.pending} · 无需加入 ${s.not_joinable}`,
         viewLeads: '查看名单',
         viewReport: '查看汇报',
         watch: (n: number) => `待观察 ${n}`,
@@ -3205,6 +3208,7 @@ const en: Copy = {
         filter: {
             allContacts: 'Any contact',
             allDates: 'All dates',
+            allRounds: 'All rounds',
             allScores: 'All scores',
             allSources: 'All sources',
             allStatuses: 'All statuses',
@@ -3218,6 +3222,8 @@ const en: Copy = {
             minScoreOption: (n) => `${n} and above`,
             notDelivered: 'Not delivered',
             qualified: 'Qualified',
+            round: 'Round',
+            roundOption: (n) => `Round ${n}`,
             sort: 'Sort',
             sortNewest: 'Newest first',
             sortScore: 'Highest score first',
@@ -3227,7 +3233,7 @@ const en: Copy = {
             withoutContact: 'Platform account only',
         },
         flag: {
-            competitor: 'Mentions a competitor',
+            pain: 'Has a pain point',
             paying: 'Deal intent',
             recent: 'Active in 7 days',
         },
@@ -3247,6 +3253,7 @@ const en: Copy = {
         },
         foundIn: (project, round) => `${project} · round ${round}`,
         group: {
+            rounds: (rounds) => `${rounds.length > 1 ? 'Rounds' : 'Round'} ${rounds.join(', ')}`,
             summary: (total, qualified, watch) => `${total} · ${qualified} qualified · ${watch} watch`,
             today: 'Today',
             yesterday: 'Yesterday',
@@ -3256,12 +3263,11 @@ const en: Copy = {
         saved: 'Prospect saved',
         searchPlaceholder: 'Search name, username, quote...',
         signal: {
-            competitor: 'Mentions a competitor',
-            genre_match: 'Fits the business',
+            active: 'Recently active',
+            match: 'Fits the business',
+            pain: 'Has a pain point',
             paying: 'Shows deal intent',
             player: 'In the audience',
-            recent: 'Recently active',
-            switching: 'Wants a change',
         },
         status: {
             delivered: (date) => `Delivered ${date}`,
@@ -3471,7 +3477,7 @@ const en: Copy = {
         retryText: 'Carry on with the previous round’s target',
         running: 'Running',
         sources: (s) =>
-            `Sources: joined ${s.joined} · pending ${s.pending} · not joined ${s.not_joined} · unavailable ${s.unjoinable}`,
+            `Sources ${s.total} · joined ${s.joined} · pending ${s.pending} · read without joining ${s.not_joinable}`,
         viewLeads: 'View list',
         viewReport: 'View report',
         watch: (n) => `Watch list ${n}`,

@@ -242,7 +242,7 @@ const lead = (
     activeMinutesAgo: number,
     delivered: boolean,
 ): GrowthLead => {
-    const points: Record<string, number> = { genre_match: 3, paying: 2, player: 3, recent: 2, switching: 3 };
+    const points: Record<string, number> = { active: 2, match: 3, pain: 3, paying: 2, player: 3 };
 
     return {
         contacts: id % 3 === 1 ? [{ type: 'line', value: username ?? name }] : [],
@@ -347,7 +347,7 @@ const leads: GrowthLead[] = [
         '阿杰 Jay',
         'jay_slg',
         10,
-        ['player', 'switching', 'paying', 'recent'],
+        ['player', 'pain', 'paying', 'active'],
         sea,
         '这游戏越来越氪了，想换个公平点的 SLG',
         90,
@@ -358,7 +358,7 @@ const leads: GrowthLead[] = [
         'Mina',
         'mina_plays',
         9,
-        ['player', 'switching', 'genre_match'],
+        ['player', 'pain', 'match'],
         sea,
         'Any new SLG worth trying? Bored of my current one',
         300,
@@ -369,7 +369,7 @@ const leads: GrowthLead[] = [
         '老K',
         null,
         8,
-        ['player', 'paying', 'recent', 'competitor'],
+        ['player', 'paying', 'active'],
         tw,
         '在某某世界充了不少，最近版本太烂准备退坑',
         1440,
@@ -380,14 +380,14 @@ const leads: GrowthLead[] = [
         'Arif',
         'arif_gaming',
         7,
-        ['player', 'switching', 'recent'],
+        ['player', 'pain', 'active'],
         sea,
         'Looking for a guild in a new server',
         2000,
         false,
     ),
-    lead(5, '小鱼', 'xiaoyu88', 5, ['player', 'recent'], tw, '最近在玩什么好玩的？', 4000, false),
-    lead(6, 'Thanh', null, 4, ['player', 'genre_match'], sea, 'SLG nào đang hot vậy mọi người', 9000, false),
+    lead(5, '小鱼', 'xiaoyu88', 5, ['player', 'active'], tw, '最近在玩什么好玩的？', 4000, false),
+    lead(6, 'Thanh', null, 4, ['player', 'match'], sea, 'SLG nào đang hot vậy mọi người', 9000, false),
 ];
 
 const runs: GrowthRun[] = [
@@ -402,7 +402,7 @@ const runs: GrowthRun[] = [
         notify_error: null,
         notify_status: null,
         round: 1,
-        sources: { joined: 2, not_joined: 1, pending: 1, unjoinable: 1 },
+        sources: { exhausted: 0, invalid: 0, joined: 2, not_joinable: 1, pending: 1, read: 2, total: 5, unresolved: 1 },
         started_at: ago(45),
         status: 'running',
         target: 50,

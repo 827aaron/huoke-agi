@@ -141,7 +141,7 @@ export interface GrowthLeadProfile {
     related_groups?: number;
 }
 
-export type GrowthLeadSignal = 'competitor' | 'genre_match' | 'paying' | 'player' | 'recent' | 'switching';
+export type GrowthLeadSignal = 'active' | 'match' | 'pain' | 'paying' | 'player';
 
 export type GrowthLeadTier = 'qualified' | 'watch';
 
@@ -252,8 +252,8 @@ export interface GrowthRun {
     notify_status: 'failed' | 'sent' | 'skipped' | null;
     round: number;
     schedule_id?: null | number;
-    // Null when the server does not report the join state of the sources.
-    sources: GrowthRunSources | null;
+    // The owner's whole pool as it is now, the same on every round.
+    sources: GrowthRunSources;
     started_at: string;
     status: GrowthRunStatus;
     target: null | number;
@@ -262,10 +262,14 @@ export interface GrowthRun {
 }
 
 export interface GrowthRunSources {
+    exhausted: number;
+    invalid: number;
     joined: number;
-    not_joined: number;
+    not_joinable: number;
     pending: number;
-    unjoinable: number;
+    read: number;
+    total: number;
+    unresolved: number;
 }
 
 export type GrowthRunStatus = 'delivered' | 'failed' | 'missed' | 'running' | 'waiting';

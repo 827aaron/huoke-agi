@@ -48,7 +48,13 @@ describe('filterLeads', () => {
             signals: ['paying'],
             username: 'ace',
         }),
-        lead(2, { last_active_at: '2026-10-14T00:00:00Z', platform: 'facebook', source_id: 2, tier: 'watch' }),
+        lead(2, {
+            first_round: 2,
+            last_active_at: '2026-10-14T00:00:00Z',
+            platform: 'facebook',
+            source_id: 2,
+            tier: 'watch',
+        }),
         lead(3, {
             evidence: [
                 {
@@ -63,7 +69,7 @@ describe('filterLeads', () => {
                 },
             ],
             last_active_at: '2026-09-01T00:00:00Z',
-            signals: ['competitor', 'paying'],
+            signals: ['pain', 'paying'],
         }),
     ];
 
@@ -76,7 +82,8 @@ describe('filterLeads', () => {
         ['platform', { platform: 'facebook' as const }, [2]],
         ['with a contact', { contact: 'with' as const }, [1]],
         ['platform account only', { contact: 'without' as const }, [2, 3]],
-        ['every flag must hold', { flags: ['paying' as const, 'competitor' as const] }, [3]],
+        ['every flag must hold', { flags: ['paying' as const, 'pain' as const] }, [3]],
+        ['round', { round: 2 }, [2]],
         ['recent means within seven days', { flags: ['recent' as const] }, [2]],
         ['search matches the username', { search: 'ACE' }, [1]],
         ['search matches a quote', { search: 'new slg' }, [3]],
@@ -108,21 +115,28 @@ describe('filterLeads by discovery date and score', () => {
 });
 
 describe('groupLeadsByDay', () => {
-    it('splits at local midnight, newest day first, and counts each tier', () => {
+    it('splits at local midnight, newest day first, and counts each tier and round', () => {
         const groups = groupLeadsByDay([
-            lead(1, { created_at: local(10, 15, 23, 55), tier: 'watch' }),
-            lead(2, { created_at: local(10, 16, 0, 5) }),
-            lead(3, { created_at: local(10, 15, 0, 0) }),
-            lead(4, { created_at: local(10, 16, 23, 59), tier: 'watch' }),
-            lead(5, { created_at: local(10, 1, 9, 0) }),
+            lead(1, { created_at: local(10, 15, 23, 55), first_round: 3, tier: 'watch' }),
+            lead(2, { created_at: local(10, 16, 0, 5), first_round: 4 }),
+            lead(3, { created_at: local(10, 15, 0, 0), first_round: 2 }),
+            lead(4, { created_at: local(10, 16, 23, 59), first_round: 4, tier: 'watch' }),
+            lead(5, { created_at: local(10, 1, 9, 0), first_round: 0 }),
         ]);
 
         expect(
-            groups.map(({ day, key, leads, qualified, watch }) => [key, day.getDate(), ids(leads), qualified, watch]),
+            groups.map(({ day, key, leads, qualified, rounds, watch }) => [
+                key,
+                day.getDate(),
+                ids(leads),
+                qualified,
+                watch,
+                rounds,
+            ]),
         ).toEqual([
-            ['2026-10-16', 16, [2, 4], 1, 1],
-            ['2026-10-15', 15, [1, 3], 1, 1],
-            ['2026-10-01', 1, [5], 1, 0],
+            ['2026-10-16', 16, [2, 4], 1, 1, [4]],
+            ['2026-10-15', 15, [1, 3], 1, 1, [2, 3]],
+            ['2026-10-01', 1, [5], 1, 0, []],
         ]);
     });
 });

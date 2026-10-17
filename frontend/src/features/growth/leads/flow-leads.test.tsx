@@ -70,9 +70,9 @@ describe('FlowLeads', () => {
         vi.useFakeTimers({ toFake: ['Date'] });
         vi.setSystemTime(new Date(2026, 9, 16, 12, 0));
         flow.leads = [
-            lead(1, 'Ace', { created_at: local(16, 9) }),
-            lead(2, 'Bea', { created_at: local(16, 8), score: 5, tier: 'watch' }),
-            lead(3, 'Cid', { created_at: local(14, 10), score: 8 }),
+            lead(1, 'Ace', { created_at: local(16, 9), first_round: 3 }),
+            lead(2, 'Bea', { created_at: local(16, 8), first_round: 2, score: 5, tier: 'watch' }),
+            lead(3, 'Cid', { created_at: local(14, 10), first_round: 1, score: 8 }),
         ];
     });
 
@@ -83,8 +83,8 @@ describe('FlowLeads', () => {
     it('opens the newest day and keeps an older one collapsed until clicked', () => {
         renderLeads();
 
-        const today = screen.getByRole('button', { name: /2026-10-16 · 今天/ });
-        const older = screen.getByRole('button', { name: /2026-10-14/ });
+        const today = screen.getByRole('button', { name: /2026-10-16 · 今天 · 第 2、3 轮/ });
+        const older = screen.getByRole('button', { name: /2026-10-14 · 第 1 轮/ });
 
         expect(today).toHaveAttribute('aria-expanded', 'true');
         expect(today).toHaveTextContent('2 位 · 合格 1 · 待观察 1');
@@ -120,12 +120,46 @@ describe('FlowLeads', () => {
         expect(screen.getByText('共 2 位潜客')).toBeInTheDocument();
     });
 
+    it('keeps only the prospects a round found', async () => {
+        renderLeads();
+
+        fireEvent.keyDown(screen.getByRole('combobox', { name: '轮次' }), { key: 'ArrowDown' });
+        fireEvent.click(await screen.findByRole('option', { name: '第 2 轮' }));
+
+        expect(screen.getByRole('button', { name: /2026-10-16 · 今天 · 第 2 轮/ })).toHaveTextContent(
+            '1 位 · 合格 0 · 待观察 1',
+        );
+        expect(screen.queryByText('Ace')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /2026-10-14/ })).not.toBeInTheDocument();
+        expect(screen.getByText('共 1 位潜客')).toBeInTheDocument();
+    });
+
+    it('shows the signals a prospect scored on and the points of each', async () => {
+        flow.leads = [
+            lead(1, 'Ace', {
+                score_breakdown: [
+                    { points: 3, signal: 'player' },
+                    { points: 2, signal: 'active' },
+                ],
+                signals: ['player', 'active'],
+            }),
+        ];
+        renderLeads();
+
+        fireEvent.click(screen.getByText('Ace'));
+        const sheet = await screen.findByRole('dialog');
+
+        expect(sheet).toHaveTextContent('属于目标人群 +3');
+        expect(sheet).toHaveTextContent('近期活跃 +2');
+    });
+
     it('names what each select’s first option covers', () => {
         renderLeads();
 
         expect(screen.getByRole('combobox', { name: '评分' })).toHaveTextContent('全部档位');
         expect(screen.getByRole('combobox', { name: '状态' })).toHaveTextContent('全部状态');
         expect(screen.getByRole('combobox', { name: '发现日期' })).toHaveTextContent('全部日期');
+        expect(screen.getByRole('combobox', { name: '轮次' })).toHaveTextContent('全部轮次');
         expect(screen.getByRole('combobox', { name: '最低分' })).toHaveTextContent('全部分数');
     });
 });
