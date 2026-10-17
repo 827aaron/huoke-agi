@@ -173,9 +173,7 @@ const fieldsFor = (kind: GrowthSettingKind, provider: null | string, setting: Gr
         case 'embedding':
             return ['api_key', 'model', 'server_url'];
         case 'llm':
-            return provider === 'custom'
-                ? ['server_url', 'protocol', 'model', 'api_key']
-                : ['api_key', 'model', 'server_url'];
+            return provider === 'custom' ? ['server_url', 'protocol', 'model', 'api_key'] : ['api_key', 'server_url'];
         case 'proxy':
             return ['url'];
         // A server without Jev routing reports no model field, and refuses one it does not know.
@@ -765,12 +763,17 @@ export function GrowthCredentialCard({
                 )}
 
                 {kind === 'llm' && (
-                    <Link
-                        className="self-start text-sm font-medium underline"
-                        to={routes.settings.providers}
-                    >
-                        {text.llmMode.rolesLink}
-                    </Link>
+                    <div className="flex flex-col gap-1">
+                        {provider !== 'custom' && (
+                            <p className="text-muted-foreground text-xs">{text.llmMode.rolesHint}</p>
+                        )}
+                        <Link
+                            className="self-start text-sm font-medium underline"
+                            to={routes.settings.providers}
+                        >
+                            {text.llmMode.rolesLink}
+                        </Link>
+                    </div>
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">

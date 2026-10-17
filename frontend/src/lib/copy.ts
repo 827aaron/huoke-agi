@@ -399,7 +399,8 @@ const zh = {
             customHint:
                 '适用于中转站、自建网关或任何 OpenAI / Anthropic 格式的接口，需填写接口地址、协议、模型名称和 API 密钥。',
             overrides: '自定义设置',
-            overridesHint: '留空则使用该服务商的默认模型和官方地址。',
+            overridesHint: '留空则使用官方地址。',
+            rolesHint: '这家服务商的模型按智能体角色自动分配，不用自己填；想换某个角色用的模型，点下面的链接。',
             rolesLink: '按角色分配模型',
         },
         llmTopUpNote: '新注册的账号请先在服务商后台充值，否则测试会提示额度不足。',
@@ -2431,7 +2432,9 @@ const en: Copy = {
             customHint:
                 'For relays, self-hosted gateways or any OpenAI- or Anthropic-format API: fill in the endpoint, protocol, model name and API key.',
             overrides: 'Custom settings',
-            overridesHint: 'Leave empty to use the provider’s default model and official endpoint.',
+            overridesHint: 'Leave empty to use the official endpoint.',
+            rolesHint:
+                'This provider’s models are assigned per agent role, so there is none to enter; to change the model of a role, follow the link below.',
             rolesLink: 'Assign models per role',
         },
         llmTopUpNote: 'New accounts need a top-up first, or the test reports no quota.',

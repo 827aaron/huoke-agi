@@ -213,6 +213,24 @@ describe('GrowthCredentialCard', () => {
         );
     });
 
+    it('asks for a model name only for a custom language model', () => {
+        const { unmount } = renderCard(
+            setting({ kind: 'llm', provider: 'deepseek', providers: ['custom', 'deepseek'] }),
+        );
+
+        fireEvent.click(screen.getByText('自定义设置'));
+
+        expect(screen.getByLabelText('接口地址')).toBeInTheDocument();
+        expect(screen.queryByLabelText('模型名称')).not.toBeInTheDocument();
+        expect(screen.getByText(/这家服务商的模型按智能体角色自动分配/)).toBeInTheDocument();
+        unmount();
+
+        renderCard(setting({ kind: 'llm', provider: 'custom', providers: ['custom', 'deepseek'] }));
+
+        expect(screen.getByLabelText('模型名称')).toBeInTheDocument();
+        expect(screen.queryByText(/这家服务商的模型按智能体角色自动分配/)).not.toBeInTheDocument();
+    });
+
     it('explains each pace field under the advanced toggle', () => {
         renderCard(setting({ fields: { api_hash: '', api_id: '' }, kind: 'telegram' }));
 
