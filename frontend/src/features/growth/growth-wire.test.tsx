@@ -23,26 +23,36 @@ vi.mock('@/providers/flow-provider', () => ({ useFlow: () => ({ flowData: null }
 const ok = (data: unknown) => ({ data, status: 'success' });
 
 // Payloads as backend/pkg/server/services/growth.go writes them for a flow in its second round.
+const pool = { exhausted: 0, invalid: 1, joined: 1, not_joinable: 1, pending: 1, read: 2, total: 6, unresolved: 2 };
+
 const runs = [
     {
         created_at: '2026-10-17T14:00:00Z',
         delivered_count: 2,
         finished_at: '2026-10-17T14:30:00Z',
         flow_id: 1,
+        found: 2,
         id: 7,
         notify_status: 'skipped',
+        round: 1,
+        sources: pool,
         status: 'partial',
         target: 5,
         task_id: 11,
+        watch: 0,
     },
     {
         created_at: '2026-10-17T14:39:37Z',
         delivered_count: 0,
         flow_id: 1,
+        found: 4,
         id: 9,
+        round: 2,
+        sources: pool,
         status: 'running',
         target: 50,
         task_id: 12,
+        watch: 3,
     },
 ];
 
@@ -77,6 +87,11 @@ const leads = [
         platform: 'telegram',
         platform_user_id: '9001',
         score: 9,
+        score_breakdown: [
+            { points: 3, signal: 'player' },
+            { points: 2, signal: 'active' },
+        ],
+        signals: ['player', 'active'],
         task_id: 11,
         tier: 'qualified',
         username: 'jay88',
@@ -90,6 +105,8 @@ const leads = [
         platform: 'web',
         platform_user_id: 'u-77',
         score: 5,
+        score_breakdown: [],
+        signals: [],
         task_id: 12,
         tier: 'watchlist',
     },
@@ -104,6 +121,8 @@ const leads = [
         platform: 'telegram',
         platform_user_id: '9003',
         score: 8,
+        score_breakdown: [],
+        signals: [],
         task_id: 12,
         tier: 'qualified',
     },
@@ -158,7 +177,7 @@ describe('growth wire', () => {
         serve({ leads, runs, sources });
     });
 
-    it('reads the rounds the server sends, counting the leads each one found', async () => {
+    it('reads the rounds with the number, lead counts and pool the server sends', async () => {
         expect(await growthApi.listRuns(1)).toEqual([
             {
                 current_action: null,
@@ -168,12 +187,12 @@ describe('growth wire', () => {
                 finished_at: '2026-10-17T14:30:00Z',
                 flood_wait_seconds: null,
                 flow_id: 1,
-                found: 1,
+                found: 2,
                 notify_error: null,
                 notify_status: 'skipped',
                 round: 1,
                 schedule_id: null,
-                sources: null,
+                sources: pool,
                 started_at: '2026-10-17T14:00:00Z',
                 status: 'missed',
                 target: 5,
@@ -188,29 +207,28 @@ describe('growth wire', () => {
                 finished_at: null,
                 flood_wait_seconds: null,
                 flow_id: 1,
-                found: 1,
+                found: 4,
                 notify_error: null,
                 notify_status: null,
                 round: 2,
                 schedule_id: null,
-                sources: null,
+                sources: pool,
                 started_at: '2026-10-17T14:39:37Z',
                 status: 'running',
                 target: 50,
                 task_id: 12,
-                watch: 1,
+                watch: 3,
             },
         ]);
         expect(server.get).toHaveBeenCalledWith('/growth/runs/', { params: { flow_id: 1 } });
-        expect(server.get).toHaveBeenCalledWith('/growth/leads/', { params: { flow_id: 1 } });
     });
 
     it('marks a round that reached its target as delivered and one without a target as having none', async () => {
         serve({
             leads: null,
             runs: [
-                { delivered_count: 5, id: 1, status: 'completed', target: 5, task_id: 3 },
-                { delivered_count: 0, id: 2, status: 'running', target: 0, task_id: 4 },
+                { ...runs[0], delivered_count: 5, id: 1, status: 'completed', target: 5 },
+                { ...runs[1], delivered_count: 0, id: 2, status: 'running', target: 0 },
             ],
             sources: null,
         });
@@ -268,8 +286,11 @@ describe('growth wire', () => {
             platform_user_id: '9001',
             profile: null,
             score: 9,
-            score_breakdown: [],
-            signals: [],
+            score_breakdown: [
+                { points: 3, signal: 'player' },
+                { points: 2, signal: 'active' },
+            ],
+            signals: ['player', 'active'],
             source_id: 4,
             source_title: 'myslots',
             tier: 'qualified',
@@ -415,9 +436,9 @@ describe('growth wire', () => {
             </MemoryRouter>,
         );
 
-        expect(screen.getByRole('progressbar', { name: '本轮已找到 1 / 50 位潜客' })).toBeInTheDocument();
-        expect(screen.getByText('待观察 1')).toBeInTheDocument();
-        expect(screen.queryByText(/已加入/)).not.toBeInTheDocument();
+        expect(screen.getByRole('progressbar', { name: '本轮已找到 4 / 50 位潜客' })).toBeInTheDocument();
+        expect(screen.getByText('待观察 3')).toBeInTheDocument();
+        expect(screen.getByText('来源 6 个 · 已加入 1 · 待审批 1 · 无需加入 1')).toBeInTheDocument();
     });
 
     it('sends an account proxy under the key the server binds and reads it back from the same key', async () => {

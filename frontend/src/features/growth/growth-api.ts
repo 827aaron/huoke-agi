@@ -33,7 +33,7 @@ import type {
 import { growthMock } from './growth-mock';
 import {
     fromWireLeads,
-    fromWireRuns,
+    fromWireRun,
     fromWireSource,
     fromWireSourceAddResult,
     toWireTier,
@@ -111,18 +111,14 @@ const live = {
     listLeads: async (flowId: number | string): Promise<GrowthLead[]> => {
         const [leads, runs, sources] = await Promise.all([getWireLeads(flowId), getWireRuns(flowId), getWireSources()]);
 
-        return fromWireLeads(leads, fromWireRuns(runs, leads), runs, (sources.sources ?? []).map(fromWireSource));
+        return fromWireLeads(leads, runs, (sources.sources ?? []).map(fromWireSource));
     },
     // Answers 502 Growth.ModelList when the relay does not list its models; the model is then typed by name.
     listModels: async (kind: GrowthSettingKind, input: GrowthModelsInput) =>
         unwrapApiResponse(await api.post<GrowthModelsResponse>(`/growth/settings/${kind}/models`, input)).models,
     listProfilePresets: async () => unwrapApiResponse(await api.get<GrowthProfilePreset[]>('/growth/profiles/presets')),
     listProfiles: async () => unwrapApiResponse(await api.get<GrowthProfile[]>('/growth/profiles')),
-    listRuns: async (flowId: number | string): Promise<GrowthRun[]> => {
-        const [runs, leads] = await Promise.all([getWireRuns(flowId), getWireLeads(flowId)]);
-
-        return fromWireRuns(runs, leads);
-    },
+    listRuns: async (flowId: number | string): Promise<GrowthRun[]> => (await getWireRuns(flowId)).map(fromWireRun),
     listSchedules: async (flowId: number | string) =>
         unwrapApiResponse(await api.get<GrowthSchedulesResponse>('/growth/schedules', { params: { flow_id: flowId } }))
             .schedules,

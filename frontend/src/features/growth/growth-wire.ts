@@ -1,9 +1,11 @@
 import type {
     GrowthLead,
     GrowthLeadEvidence,
+    GrowthLeadSignal,
     GrowthLeadTier,
     GrowthPlatform,
     GrowthRun,
+    GrowthRunSources,
     GrowthRunStatus,
     GrowthSource,
     GrowthSourceAddOutcome,
@@ -40,6 +42,8 @@ export interface WireLead {
     platform: string;
     platform_user_id: string;
     score: number;
+    score_breakdown: { points: number; signal: string }[];
+    signals: string[];
     task_id?: number;
     tier: string;
     username?: string;
@@ -51,13 +55,17 @@ export interface WireRun {
     delivered_count: number;
     finished_at?: string;
     flow_id?: number;
+    found: number;
     id: number;
     notify_error?: string;
     notify_status?: string;
+    round: number;
     schedule_id?: number;
+    sources: GrowthRunSources;
     status: string;
     target: number;
     task_id?: number;
+    watch: number;
 }
 
 export interface WireSource {
@@ -124,47 +132,31 @@ export const fromWireSourceAddResult = (result: WireSourceAddResult): GrowthSour
     source: result.source ? fromWireSource(result.source) : undefined,
 });
 
-// Rounds are numbered by their task, oldest first.
-export const fromWireRuns = (runs: WireRun[], leads: WireLead[]): GrowthRun[] => {
-    const rounds = new Map(
-        [...runs].sort((a, b) => (a.task_id ?? 0) - (b.task_id ?? 0)).map((run, index) => [run.id, index + 1]),
-    );
-
-    return runs.map((run) => {
-        const found = leads.filter((lead) => lead.task_id !== undefined && lead.task_id === run.task_id);
-
-        return {
-            current_action: null,
-            deadline_at: run.deadline_at ?? null,
-            delivered: run.delivered_count,
-            error: null,
-            finished_at: run.finished_at ?? null,
-            flood_wait_seconds: null,
-            flow_id: run.flow_id ?? 0,
-            found: found.filter((lead) => lead.tier === 'qualified').length,
-            notify_error: run.notify_error || null,
-            notify_status: (run.notify_status || null) as GrowthRun['notify_status'],
-            round: rounds.get(run.id) ?? 0,
-            schedule_id: run.schedule_id ?? null,
-            sources: null,
-            started_at: run.created_at ?? '',
-            status: RUN_STATUS[run.status] ?? (run.status as GrowthRunStatus),
-            target: run.target > 0 ? run.target : null,
-            task_id: run.task_id ?? 0,
-            watch: found.filter((lead) => lead.tier === 'watchlist').length,
-        };
-    });
-};
+export const fromWireRun = (run: WireRun): GrowthRun => ({
+    current_action: null,
+    deadline_at: run.deadline_at ?? null,
+    delivered: run.delivered_count,
+    error: null,
+    finished_at: run.finished_at ?? null,
+    flood_wait_seconds: null,
+    flow_id: run.flow_id ?? 0,
+    found: run.found,
+    notify_error: run.notify_error || null,
+    notify_status: (run.notify_status || null) as GrowthRun['notify_status'],
+    round: run.round,
+    schedule_id: run.schedule_id ?? null,
+    sources: run.sources,
+    started_at: run.created_at ?? '',
+    status: RUN_STATUS[run.status] ?? (run.status as GrowthRunStatus),
+    target: run.target > 0 ? run.target : null,
+    task_id: run.task_id ?? 0,
+    watch: run.watch,
+});
 
 // Runs and sources supply what a lead row names by id: the task of its delivery, its round, the source title.
-export const fromWireLeads = (
-    leads: WireLead[],
-    runs: GrowthRun[],
-    wireRuns: WireRun[],
-    sources: GrowthSource[],
-): GrowthLead[] => {
+export const fromWireLeads = (leads: WireLead[], runs: WireRun[], sources: GrowthSource[]): GrowthLead[] => {
     const titles = new Map(sources.map((source) => [source.id, source.title]));
-    const taskOfRun = new Map(wireRuns.map((run) => [run.id, run.task_id ?? null]));
+    const taskOfRun = new Map(runs.map((run) => [run.id, run.task_id ?? null]));
     const roundOfTask = new Map(runs.map((run) => [run.task_id, run.round]));
 
     return leads.map((lead) => {
@@ -204,8 +196,8 @@ export const fromWireLeads = (
             platform_user_id: lead.platform_user_id,
             profile: null,
             score: lead.score,
-            score_breakdown: [],
-            signals: [],
+            score_breakdown: lead.score_breakdown as GrowthLead['score_breakdown'],
+            signals: lead.signals as GrowthLeadSignal[],
             source_id: sourceId,
             source_title: titles.get(sourceId) ?? '',
             tier: TIER[lead.tier] ?? (lead.tier as GrowthLeadTier),
