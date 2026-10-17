@@ -511,6 +511,7 @@ definitions:
       provider:
         type: string
       providers:
+        description: Providers is empty, never absent, for a kind with a single provider.
         items:
           type: string
         type: array
@@ -2555,6 +2556,12 @@ definitions:
     type: object
   services.growthTestEmailRequest:
     properties:
+      language:
+        description: |-
+          Language names the language of the message, as the agents name it ("Chinese");
+          empty takes the language of the user's newest task.
+        example: Chinese
+        type: string
       to:
         type: string
     type: object

@@ -16,6 +16,7 @@ type Querier interface {
 	// AdvanceGrowthSchedule claims the start at handled_start_at by moving the schedule past
 	// it; zero rows means another pass has claimed it already.
 	AdvanceGrowthSchedule(ctx context.Context, arg AdvanceGrowthScheduleParams) (int64, error)
+	CloseGrowthRunDeadline(ctx context.Context, id int64) error
 	CountAPITokens(ctx context.Context) (int64, error)
 	CountActiveFlows(ctx context.Context) (int64, error)
 	CountAssistants(ctx context.Context) (int64, error)

@@ -130,8 +130,11 @@ var settingSpecs = map[string]settingSpec{
 			if provider == "custom" && v["model"] != "" {
 				c.LLMServerModel = v["model"]
 			}
-			if provider == "openai" {
+			switch {
+			case provider == "openai":
 				useOpenAIForEmbedding(c)
+			case provider == "custom" && isOpenRouter(v["server_url"]):
+				useOpenRouterForEmbedding(c, v["api_key"])
 			}
 		},
 	},
@@ -145,7 +148,21 @@ var settingSpecs = map[string]settingSpec{
 			{name: "server_url"},
 		},
 		apply: func(c *config.Config, provider string, v map[string]string) {
-			if provider != c.EmbeddingProvider {
+			if provider == embeddingOpenRouter {
+				key := v["api_key"]
+				if key == "" && isOpenRouter(c.EmbeddingURL) {
+					key = c.EmbeddingKey
+				}
+				useOpenRouterForEmbedding(c, key)
+				if v["model"] != "" {
+					c.EmbeddingModel = v["model"]
+				}
+				if v["server_url"] != "" {
+					c.EmbeddingURL = v["server_url"]
+				}
+				return
+			}
+			if provider != c.EmbeddingProvider || isOpenRouter(c.EmbeddingURL) {
 				c.EmbeddingModel, c.EmbeddingURL, c.EmbeddingKey = "", "", ""
 			}
 			c.EmbeddingProvider = provider
@@ -254,8 +271,27 @@ var settingKinds = []string{
 	SettingScreening,
 }
 
-// embeddingProviders are the EMBEDDING_PROVIDER values PentAGI's embedder implements.
-var embeddingProviders = []string{"googleai", "huggingface", "jina", "mistral", "ollama", "openai", "voyageai"}
+// embeddingProviders are the EMBEDDING_PROVIDER values PentAGI's embedder implements, and
+// openrouter, which is its openai embedder pointed at OpenRouter's compatible endpoint.
+var embeddingProviders = []string{"googleai", "huggingface", "jina", "mistral", "ollama", "openai", "openrouter", "voyageai"}
+
+const (
+	embeddingOpenRouter      = "openrouter"
+	OpenRouterEmbeddingURL   = "https://openrouter.ai/api/v1"
+	OpenRouterEmbeddingModel = "openai/text-embedding-3-small"
+)
+
+func isOpenRouter(rawURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	return err == nil && (u.Hostname() == "openrouter.ai" || strings.HasSuffix(u.Hostname(), ".openrouter.ai"))
+}
+
+// useOpenRouterForEmbedding points the openai embedder at OpenRouter with the cheapest
+// OpenAI embedding model it serves.
+func useOpenRouterForEmbedding(c *config.Config, key string) {
+	c.EmbeddingProvider, c.EmbeddingKey = "openai", key
+	c.EmbeddingURL, c.EmbeddingModel = OpenRouterEmbeddingURL, OpenRouterEmbeddingModel
+}
 
 // useOpenAIForEmbedding has the embedder take the customer's OpenAI key and URL, which
 // PentAGI's OpenAI embedder falls back to when EMBEDDING_KEY and EMBEDDING_URL are empty.
@@ -278,9 +314,10 @@ func sortedKeys[V any](m map[string]V) []string {
 // SettingView is a credential as the settings page shows it: secret fields masked to
 // their last four characters. Source says where the running value comes from.
 type SettingView struct {
-	Kind         string            `json:"kind"`
-	Provider     string            `json:"provider,omitempty"`
-	Providers    []string          `json:"providers,omitempty"`
+	Kind     string `json:"kind"`
+	Provider string `json:"provider,omitempty"`
+	// Providers is empty, never absent, for a kind with a single provider.
+	Providers    []string          `json:"providers"`
 	Fields       map[string]string `json:"fields"`
 	Source       string            `json:"source"`
 	Status       string            `json:"status"`
@@ -580,7 +617,7 @@ func (s *Service) settingView(row database.GrowthSetting, spec settingSpec, prov
 	v := SettingView{
 		Kind:         row.Kind,
 		Provider:     provider,
-		Providers:    spec.providers,
+		Providers:    spec.providerList(),
 		Fields:       maskFields(spec, values),
 		Source:       SettingSourceDatabase,
 		Configured:   true,
@@ -598,6 +635,13 @@ func (s *Service) markPlatformSMTP(v *SettingView) {
 		platform := s.cfg.SMTPHost != ""
 		v.PlatformSMTP = &platform
 	}
+}
+
+func (spec settingSpec) providerList() []string {
+	if spec.providers == nil {
+		return []string{}
+	}
+	return spec.providers
 }
 
 func maskFields(spec settingSpec, values map[string]string) map[string]string {
@@ -634,7 +678,7 @@ func maskSecret(v string) string {
 
 // envView reports a kind the customer has not saved: the provider .env configures, if any.
 func (s *Service) envView(kind string, spec settingSpec) SettingView {
-	v := SettingView{Kind: kind, Providers: spec.providers, Source: SettingSourceNone, Status: SettingStatusUntested}
+	v := SettingView{Kind: kind, Providers: spec.providerList(), Source: SettingSourceNone, Status: SettingStatusUntested}
 	provider, values := envValues(s.cfg, kind)
 	v.Fields = maskFields(spec, values)
 	if values["api_key"] != "" || values["api_keys"] != "" || values["api_hash"] != "" ||
@@ -673,6 +717,11 @@ func envValues(cfg *config.Config, kind string) (string, map[string]string) {
 			"api_key": cfg.TypeSafeAPIKey, "api_url": cfg.TypeSafeAPIURL, "model": cfg.TypeSafeModel,
 		}
 	case SettingEmbedding:
+		if cfg.EmbeddingProvider == "openai" && isOpenRouter(cfg.EmbeddingURL) {
+			return embeddingOpenRouter, map[string]string{
+				"api_key": cfg.EmbeddingKey, "model": cfg.EmbeddingModel, "server_url": cfg.EmbeddingURL,
+			}
+		}
 		return cfg.EmbeddingProvider, map[string]string{
 			"api_key": cfg.EmbeddingKey, "model": cfg.EmbeddingModel, "server_url": cfg.EmbeddingURL,
 		}

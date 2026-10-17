@@ -18,5 +18,60 @@
     "english": "The end time %s was reached: %d of the target %d leads were delivered, and the task was stopped.",
     "chinese": "已到结束时间 %s：交付 %d 条（目标 %d 条），任务已停止。",
     "traditional chinese": "已到結束時間 %s：交付 %d 條（目標 %d 條），任務已停止。"
+  },
+  "mail_subject": {
+    "english": "%s: %d leads delivered",
+    "chinese": "%s：已交付 %d 条线索",
+    "traditional chinese": "%s：已交付 %d 條線索"
+  },
+  "mail_default_business": {
+    "english": "Lead search",
+    "chinese": "获客任务",
+    "traditional chinese": "獲客任務"
+  },
+  "mail_business": {
+    "english": "Business: %s",
+    "chinese": "业务：%s",
+    "traditional chinese": "業務：%s"
+  },
+  "mail_delivered": {
+    "english": "Leads delivered: %d (target %d)",
+    "chinese": "已交付线索：%d 条（目标 %d 条）",
+    "traditional chinese": "已交付線索：%d 條（目標 %d 條）"
+  },
+  "mail_at_deadline": {
+    "english": "Delivered at the schedule's end time, %s UTC: %d of the target %d.",
+    "chinese": "已按定时结束时间 %s（UTC）交付：%d 条，目标 %d 条。",
+    "traditional chinese": "已按定時結束時間 %s（UTC）交付：%d 條，目標 %d 條。"
+  },
+  "mail_score_header": {
+    "english": "Score distribution:",
+    "chinese": "分数分布：",
+    "traditional chinese": "分數分佈："
+  },
+  "mail_score_line": {
+    "english": "  score %d: %d",
+    "chinese": "  %d 分：%d 条",
+    "traditional chinese": "  %d 分：%d 條"
+  },
+  "mail_attached": {
+    "english": "The full list with evidence is attached as CSV.",
+    "chinese": "完整名单和证据见附件 CSV。",
+    "traditional chinese": "完整名單和證據見附件 CSV。"
+  },
+  "mail_test_subject": {
+    "english": "Lead delivery email test",
+    "chinese": "线索交付邮件测试",
+    "traditional chinese": "線索交付郵件測試"
+  },
+  "mail_test_body": {
+    "english": "This is a test message. Lead lists will be delivered to this address when a round finishes.",
+    "chinese": "这是一封测试邮件。每轮任务结束时，线索名单会发到这个地址。",
+    "traditional chinese": "這是一封測試郵件。每輪任務結束時，線索名單會發到這個地址。"
+  },
+  "csv_platform_only": {
+    "english": "platform account only",
+    "chinese": "仅平台账号",
+    "traditional chinese": "僅平台帳號"
   }
 }

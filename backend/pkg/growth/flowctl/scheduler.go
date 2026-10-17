@@ -22,6 +22,7 @@ type Schedules interface {
 	StartedSchedule(ctx context.Context, st growth.ScheduledStart, flowID int64) error
 	FailedSchedule(ctx context.Context, st growth.ScheduledStart, cause error)
 	CloseOverdueRounds(ctx context.Context, now time.Time) ([]growth.ClosedRound, error)
+	DeadlineHandled(ctx context.Context, runID int64) error
 }
 
 // ProviderType resolves a provider name for its owner, as a client's createFlow does.
@@ -34,12 +35,16 @@ type Scheduler struct {
 	svc      Schedules
 	provider ProviderType
 	now      func() time.Time
+
+	// logged holds the rounds whose end-time line is written while their task has not
+	// been stopped yet, so a retry on the next tick does not write it twice.
+	logged map[int64]bool
 }
 
 // NewScheduler takes fc wrapped by Wrap, so a scheduled task starts with the business
 // profile as one a customer starts does.
 func NewScheduler(fc controller.FlowController, svc Schedules, prv ProviderType) *Scheduler {
-	return &Scheduler{fc: fc, svc: svc, provider: prv, now: time.Now}
+	return &Scheduler{fc: fc, svc: svc, provider: prv, now: time.Now, logged: make(map[int64]bool)}
 }
 
 func (s *Scheduler) Run(ctx context.Context) {
@@ -89,31 +94,48 @@ func (s *Scheduler) start(ctx context.Context, st growth.ScheduledStart) error {
 	if err != nil {
 		return err
 	}
-	return s.svc.StartedSchedule(ctx, st, flowID)
+	if err := s.svc.StartedSchedule(ctx, st, flowID); err != nil {
+		// Without its round the task would run past the end time, so it does not run at all.
+		if stopErr := s.fc.StopFlow(ctx, flowID); stopErr != nil {
+			return fmt.Errorf("%w; the task was left running: %v", err, stopErr)
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *Scheduler) stop(ctx context.Context, c growth.ClosedRound) {
 	logger := logrus.WithContext(ctx).WithFields(logrus.Fields{"flow_id": c.FlowID, "run_id": c.RunID})
-	if c.FlowID == 0 {
-		return
-	}
 	fw, err := s.fc.GetFlow(ctx, c.FlowID)
-	if err != nil || fw == nil {
-		logger.WithError(err).Info("round closed at its end time; its task is not running")
+	if c.FlowID == 0 || err != nil || fw == nil {
+		s.handled(ctx, c.RunID)
 		return
 	}
-	at := c.Deadline
-	if loc, err := time.LoadLocation(c.Timezone); err == nil {
-		at = at.In(loc)
-	}
-	text := fmt.Sprintf(templates.NoticeText(templates.NoticeDeadlineDelivered, c.Language),
-		at.Format("2006-01-02 15:04"), c.Delivered, c.Target)
-	if fc := fw.GetContext(); fc != nil && fc.MsgLog != nil {
-		if _, err := fc.MsgLog.PutFlowMsg(ctx, database.MsglogTypeReport, "", text); err != nil {
-			logger.WithError(err).Warn("failed to log the delivery at the end time")
+	if !s.logged[c.RunID] {
+		at := c.Deadline
+		if loc, err := time.LoadLocation(c.Timezone); err == nil {
+			at = at.In(loc)
 		}
+		text := fmt.Sprintf(templates.NoticeText(templates.NoticeDeadlineDelivered, c.Language),
+			at.Format("2006-01-02 15:04"), c.Delivered, c.Target)
+		if fc := fw.GetContext(); fc != nil && fc.MsgLog != nil {
+			if _, err := fc.MsgLog.PutFlowMsg(ctx, database.MsglogTypeReport, "", text); err != nil {
+				logger.WithError(err).Warn("failed to log the delivery at the end time")
+			}
+		}
+		s.logged[c.RunID] = true
 	}
 	if err := s.fc.StopFlow(ctx, c.FlowID); err != nil {
-		logger.WithError(err).Warn("failed to stop the task at its end time")
+		logger.WithError(err).Warn("failed to stop the task at its end time; retrying on the next tick")
+		return
 	}
+	s.handled(ctx, c.RunID)
+}
+
+func (s *Scheduler) handled(ctx context.Context, runID int64) {
+	if err := s.svc.DeadlineHandled(ctx, runID); err != nil {
+		logrus.WithContext(ctx).WithError(err).WithField("run_id", runID).Error("round stays open past its end time")
+		return
+	}
+	delete(s.logged, runID)
 }

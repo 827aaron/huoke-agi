@@ -21,6 +21,7 @@ import (
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
+	"pentagi/pkg/templates"
 )
 
 const (
@@ -234,8 +235,8 @@ func (s *Service) notifyRecipients(ctx context.Context, userID int64) ([]string,
 }
 
 // SendTestEmail mails a short message with the configuration the customer's deliveries use.
-// to overrides the recipients when non-empty.
-func (s *Service) SendTestEmail(ctx context.Context, userID int64, to string) ([]string, error) {
+// to overrides the recipients when non-empty; an empty lang is the customer's Language.
+func (s *Service) SendTestEmail(ctx context.Context, userID int64, to, lang string) ([]string, error) {
 	cfg, err := s.ConfigFor(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -249,8 +250,11 @@ func (s *Service) SendTestEmail(ctx context.Context, userID int64, to string) ([
 			return nil, err
 		}
 	}
-	err = sendMail(ctx, cfg, recipients, "Lead delivery email test",
-		"This is a test message. Lead lists will be delivered to this address when a round finishes.\n")
+	if lang == "" {
+		lang = s.Language(ctx, userID, 0)
+	}
+	err = sendMail(ctx, cfg, recipients, templates.NoticeText(templates.NoticeMailTestSubject, lang),
+		templates.NoticeText(templates.NoticeMailTestBody, lang)+"\n")
 	return recipients, err
 }
 
@@ -284,23 +288,39 @@ func (s *Service) notifyDelivery(ctx context.Context, scope Scope, run database.
 	return status
 }
 
+// Language is the language the customer's mails and files are written in: the flow's,
+// else that of their newest flow; empty, which reads as English, without one.
+func (s *Service) Language(ctx context.Context, userID, flowID int64) string {
+	if flowID != 0 {
+		if flow, err := s.db.GetFlow(ctx, flowID); err == nil && flow.UserID == userID {
+			return flow.Language
+		}
+	}
+	flows, err := s.db.GetUserFlows(ctx, userID)
+	if err != nil || len(flows) == 0 {
+		return ""
+	}
+	return flows[0].Language
+}
+
 func (s *Service) flowTitle(ctx context.Context, scope Scope) string {
 	if scope.FlowID == 0 {
 		return ""
 	}
 	flow, err := s.db.GetFlow(ctx, scope.FlowID)
-	if err != nil {
+	if err != nil || flow.UserID != scope.UserID {
 		return ""
 	}
 	return flow.Title
 }
 
 // deliverySummary: a non-zero deadline is the schedule's end time the round was closed at.
-func deliverySummary(business string, leads []LeadView, target int, deadline time.Time) (string, string) {
+func deliverySummary(business string, leads []LeadView, target int, deadline time.Time, lang string) (string, string) {
+	text := func(n templates.Notice) string { return templates.NoticeText(n, lang) }
 	if business == "" {
-		business = "Lead search"
+		business = text(templates.NoticeMailDefaultBusiness)
 	}
-	subject := fmt.Sprintf("%s: %d leads delivered", business, len(leads))
+	subject := fmt.Sprintf(text(templates.NoticeMailSubject), business, len(leads))
 
 	scores := make(map[int]int)
 	for _, l := range leads {
@@ -313,18 +333,16 @@ func deliverySummary(business string, leads []LeadView, target int, deadline tim
 	sort.Sort(sort.Reverse(sort.IntSlice(keys)))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "Business: %s\n", business)
-	fmt.Fprintf(&b, "Leads delivered: %d (target %d)\n", len(leads), target)
+	fmt.Fprintf(&b, text(templates.NoticeMailBusiness)+"\n", business)
+	fmt.Fprintf(&b, text(templates.NoticeMailDelivered)+"\n", len(leads), target)
 	if !deadline.IsZero() {
-		fmt.Fprintf(&b, "Delivered at the schedule's end time, %s UTC: %d of the target %d.\n",
-			deadline.UTC().Format("2006-01-02 15:04"), len(leads), target)
+		fmt.Fprintf(&b, text(templates.NoticeMailAtDeadline)+"\n", deadline.UTC().Format("2006-01-02 15:04"), len(leads), target)
 	}
-	b.WriteString("\n")
-	b.WriteString("Score distribution:\n")
+	b.WriteString("\n" + text(templates.NoticeMailScoreHeader) + "\n")
 	for _, k := range keys {
-		fmt.Fprintf(&b, "  score %d: %d\n", k, scores[k])
+		fmt.Fprintf(&b, text(templates.NoticeMailScoreLine)+"\n", k, scores[k])
 	}
-	b.WriteString("\nThe full list with evidence is attached as CSV.\n")
+	b.WriteString("\n" + text(templates.NoticeMailAttached) + "\n")
 	return subject, b.String()
 }
 
@@ -341,7 +359,8 @@ func (s *Service) mailLeads(
 	if err != nil {
 		return nil, err
 	}
-	subject, body := deliverySummary(s.flowTitle(ctx, scope), leads, target, deadline)
+	lang := s.Language(ctx, scope.UserID, scope.FlowID)
+	subject, body := deliverySummary(s.flowTitle(ctx, scope), leads, target, deadline, lang)
 	name := fmt.Sprintf("leads-flow-%d.csv", scope.FlowID)
 	if runID != 0 {
 		name = fmt.Sprintf("leads-round-%d.csv", runID)
@@ -349,7 +368,7 @@ func (s *Service) mailLeads(
 	return to, sendMail(ctx, cfg, to, subject, body, attachment{
 		name:        name,
 		contentType: "text/csv; charset=utf-8",
-		data:        LeadsCSV(leads),
+		data:        LeadsCSV(leads, lang),
 	})
 }
 

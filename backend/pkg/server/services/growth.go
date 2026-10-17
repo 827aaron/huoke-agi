@@ -397,7 +397,11 @@ func (s *GrowthService) ExportLeads(c *gin.Context) {
 	}
 
 	c.Header("Content-Disposition", `attachment; filename="leads.csv"`)
-	c.Data(http.StatusOK, "text/csv; charset=utf-8", growth.LeadsCSV(all))
+	var flowID int64
+	if filter.FlowID != nil {
+		flowID = *filter.FlowID
+	}
+	c.Data(http.StatusOK, "text/csv; charset=utf-8", growth.LeadsCSV(all, s.svc.Language(c, uid, flowID)))
 }
 
 type growthAccounts struct {
@@ -1030,6 +1034,9 @@ type growthModels struct {
 
 type growthTestEmailRequest struct {
 	To string `json:"to,omitempty"`
+	// Language names the language of the message, as the agents name it ("Chinese");
+	// empty takes the language of the user's newest task.
+	Language string `json:"language,omitempty" example:"Chinese"`
 }
 
 type growthTestEmailResult struct {
@@ -1215,7 +1222,7 @@ func (s *GrowthService) SendTestEmail(c *gin.Context) {
 		}
 	}
 
-	to, err := s.svc.SendTestEmail(c, uid, req.To)
+	to, err := s.svc.SendTestEmail(c, uid, req.To, req.Language)
 	if err != nil {
 		if errors.Is(err, growth.ErrInvalidSetting) {
 			response.Error(c, response.ErrGrowthInvalidRequest, err)
