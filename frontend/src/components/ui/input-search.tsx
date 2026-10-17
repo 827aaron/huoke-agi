@@ -6,6 +6,7 @@ import { useDebouncedCallback } from 'use-debounce';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 import { isMac } from '@/lib/utils/platform';
 
@@ -33,12 +34,12 @@ interface InputSearchProps {
  * through `handleClear`. A second `Escape` on an empty field collapses + blurs.
  */
 export function InputSearch({
-    ariaLabel = 'Search',
+    ariaLabel = copy.ui.search,
     className,
     hotkey = 'f',
     maxWidth = 140,
     onSearchChange,
-    placeholder = 'Search...',
+    placeholder = copy.ui.searchPlaceholder,
     searchQuery,
 }: InputSearchProps) {
     const [isExpanded, setIsExpanded] = useState(() => searchQuery.trim().length > 0);
@@ -247,7 +248,7 @@ export function InputSearch({
             {isExpanded && localValue ? (
                 <InputGroupAddon align="inline-end">
                     <InputGroupButton
-                        aria-label={`Clear ${ariaLabel.toLowerCase()}`}
+                        aria-label={copy.ui.clearField(ariaLabel)}
                         onClick={handleClear}
                         type="button"
                     >

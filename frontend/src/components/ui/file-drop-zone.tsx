@@ -1,6 +1,7 @@
 import { UploadCloudIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 export interface FileDropZoneProps {
@@ -30,14 +31,14 @@ export interface FileDropZoneProps {
  * `useResourcesUpload().openFilePicker`).
  */
 export function FileDropZone({
-    actionLabel = 'Browse files',
+    actionLabel = copy.ui.dropzoneAction,
     className,
-    description = 'or click the button to choose files from your computer',
+    description = copy.ui.dropzoneDescription,
     hint,
     isDragging = false,
     isUploading = false,
     onBrowse,
-    title = 'Drag and drop your files',
+    title = copy.ui.dropzoneTitle,
 }: FileDropZoneProps) {
     return (
         <div
@@ -56,7 +57,7 @@ export function FileDropZone({
                     isDragging && 'text-foreground scale-110',
                 )}
             />
-            <span className="text-sm font-medium">{isDragging ? 'Drop files here' : title}</span>
+            <span className="text-sm font-medium">{isDragging ? copy.ui.dropFiles : title}</span>
             <span className="text-muted-foreground mt-1 max-w-md text-xs">{description}</span>
             <Button
                 className="mt-4 h-7 text-xs"

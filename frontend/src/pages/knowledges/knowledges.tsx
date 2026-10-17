@@ -47,11 +47,11 @@ const docTypeBadgeVariant: Record<KnowledgeDocType, BadgeVariant> = {
 
 const docTypeSubtype = (k: Knowledge): null | string => {
     if (k.docType === KnowledgeDocType.Guide) {
-        return k.guideType ?? null;
+        return k.guideType ? (copy.knowledge.guideTypeLabel[k.guideType] ?? k.guideType) : null;
     }
 
     if (k.docType === KnowledgeDocType.Answer) {
-        return k.answerType ?? null;
+        return k.answerType ? (copy.knowledge.answerTypeLabel[k.answerType] ?? k.answerType) : null;
     }
 
     if (k.docType === KnowledgeDocType.Code) {
@@ -194,7 +194,7 @@ function Knowledges() {
                             className="shrink-0 whitespace-nowrap"
                             variant={docTypeBadgeVariant[docType]}
                         >
-                            {docType}
+                            {copy.knowledge.docTypeLabel[docType] ?? docType}
                         </Badge>
                         {subtype ? (
                             <span
@@ -470,7 +470,7 @@ function Knowledges() {
                 <DataTable
                     columns={columns}
                     data={knowledges}
-                    empty={{ entityName: 'knowledge documents' }}
+                    empty={{ entityName: copy.knowledge.list }}
                     filterPlaceholder={copy.knowledge.filter}
                     filterValue={filter}
                     label={copy.knowledge.list}

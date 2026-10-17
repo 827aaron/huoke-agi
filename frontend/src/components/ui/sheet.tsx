@@ -6,6 +6,7 @@ import { X } from 'lucide-react';
 import * as React from 'react';
 
 import { FocusReturn } from '@/components/ui/dialog';
+import { copy } from '@/lib/copy';
 import { cn } from '@/lib/utils';
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
@@ -94,7 +95,7 @@ function SheetContent({ children, className, container, overlay = true, side = '
                     <X className="h-4 w-4" />
                     {/* Not "Close": a sheet with its own footer Close button would
                         produce two identically named controls. */}
-                    <span className="sr-only">Dismiss sheet</span>
+                    <span className="sr-only">{copy.ui.dismissSheet}</span>
                 </SheetPrimitive.Close>
                 {children}
             </SheetPrimitive.Content>

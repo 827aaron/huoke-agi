@@ -188,7 +188,7 @@ function Flows() {
                     />
                 ),
                 maxSize: 110,
-                meta: { searchable: true },
+                meta: { columnMenuLabel: 'ID', searchable: true },
                 minSize: 80,
                 size: 90,
             },
@@ -224,7 +224,7 @@ function Flows() {
                         title={copy.flows.titleColumn}
                     />
                 ),
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.flows.titleColumn, searchable: true },
                 minSize: 200,
                 size: 240,
             },
@@ -251,7 +251,7 @@ function Flows() {
                     />
                 ),
                 maxSize: 130,
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.flows.status, searchable: true },
                 minSize: 80,
                 size: 100,
             },
@@ -277,7 +277,7 @@ function Flows() {
                 ),
                 id: 'provider',
                 maxSize: 240,
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.flows.provider, searchable: true },
                 minSize: 100,
                 size: 160,
                 sortingFn: (rowA, rowB) => {
@@ -342,7 +342,7 @@ function Flows() {
                 ),
                 id: 'terminals',
                 maxSize: 220,
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.flows.terminals, searchable: true },
                 minSize: 140,
                 size: 160,
                 sortingFn: (rowA, rowB) => {
@@ -661,7 +661,7 @@ function Flows() {
                 <DataTable<Flow>
                     columns={columns}
                     data={flows}
-                    empty={{ entityName: 'flows' }}
+                    empty={{ entityName: copy.flows.title }}
                     filterPlaceholder={copy.flows.filter}
                     filterValue={filter}
                     isVirtualized

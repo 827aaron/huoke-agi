@@ -75,7 +75,7 @@ test.describe('knowledges crud', { tag: '@crud' }, () => {
             await page.getByRole('textbox', { name: '问题' }).fill('What is the E2E answer?');
             await typeIntoEditor(page, '内容', 'E2E knowledge content');
             await page.getByRole('combobox', { name: '回答类型' }).click();
-            await page.getByRole('option', { name: 'other' }).click();
+            await page.getByRole('option', { name: '其他' }).click();
             await page.getByRole('button', { name: '创建' }).click();
 
             await expect(page).toHaveURL(/\/knowledges\/301$/);

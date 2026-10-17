@@ -17,7 +17,7 @@ test.describe('responsive', { tag: '@cross' }, () => {
         test('collapses to the mobile shell without horizontal overflow', async ({ page, pageErrorLog }) => {
             await page.goto('/flows');
 
-            await expect(page.getByRole('button', { name: 'Toggle Sidebar' })).toBeVisible();
+            await expect(page.getByRole('button', { name: '展开/收起侧边栏' })).toBeVisible();
             // Owned by the mobile shell: the sidebar collapses to an off-canvas sheet, so its
             // nav links are hidden until the trigger opens it (they are inline-visible on desktop).
             await expect(page.getByRole('link', { name: '概览' })).toBeHidden();

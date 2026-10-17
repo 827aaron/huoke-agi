@@ -123,7 +123,7 @@ test.describe('sidebar collapse', { tag: '@cross' }, () => {
         await page.goto('/flows');
         await expect(root(page)).toHaveAttribute('data-state', 'expanded');
 
-        const trigger = page.getByRole('button', { name: 'Toggle Sidebar' }).first();
+        const trigger = page.getByRole('button', { name: '展开/收起侧边栏' }).first();
 
         await trigger.click();
         await expect(root(page)).toHaveAttribute('data-state', 'collapsed');
@@ -145,7 +145,7 @@ test.describe('sidebar collapse', { tag: '@cross' }, () => {
 
     test('remembers the collapsed state across a reload', async ({ context, page }) => {
         await page.goto('/flows');
-        await page.getByRole('button', { name: 'Toggle Sidebar' }).first().click();
+        await page.getByRole('button', { name: '展开/收起侧边栏' }).first().click();
         await expect(root(page)).toHaveAttribute('data-state', 'collapsed');
 
         const cookie = (await context.cookies()).find((entry) => entry.name === 'sidebar:state');

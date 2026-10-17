@@ -472,7 +472,7 @@ function SettingsAPITokens() {
                         title={copy.provider.name}
                     />
                 ),
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.provider.name, searchable: true },
                 size: 300,
             },
             {
@@ -577,7 +577,7 @@ function SettingsAPITokens() {
                         title={copy.apiTokens.status}
                     />
                 ),
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.apiTokens.status, searchable: true },
                 size: 120,
             },
             {
@@ -641,6 +641,7 @@ function SettingsAPITokens() {
                         title={copy.apiTokens.expires}
                     />
                 ),
+                meta: { columnMenuLabel: copy.apiTokens.expires },
                 size: 150,
                 sortingFn: (rowA, rowB) => {
                     const expiresA = getTokenExpirationDate(rowA.original);
@@ -922,7 +923,7 @@ function SettingsAPITokens() {
                 <DataTable<APIToken>
                     columns={columns}
                     data={creatingToken ? [createNewTokenPlaceholder, ...tokens] : tokens}
-                    empty={{ entityName: 'API tokens' }}
+                    empty={{ entityName: copy.apiTokens.title }}
                     filterPlaceholder={copy.apiTokens.filter}
                     filterValue={filter}
                     label={copy.apiTokens.title}

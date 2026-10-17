@@ -153,7 +153,7 @@ function Templates() {
                     title={copy.templatePage.title}
                 />
             ),
-            meta: { searchable: true },
+            meta: { columnMenuLabel: copy.templatePage.title, searchable: true },
         },
         {
             accessorKey: 'text',
@@ -168,7 +168,7 @@ function Templates() {
                     title={copy.templatePage.text}
                 />
             ),
-            meta: { searchable: true },
+            meta: { columnMenuLabel: copy.templatePage.text, searchable: true },
         },
         {
             cell: ({ row }) => {
@@ -334,7 +334,7 @@ function Templates() {
                 <DataTable
                     columns={columns}
                     data={templates}
-                    empty={{ entityName: 'templates' }}
+                    empty={{ entityName: copy.templatePage.titles }}
                     filterPlaceholder={copy.templatePage.filter}
                     filterValue={filter}
                     label={copy.templatePage.titles}

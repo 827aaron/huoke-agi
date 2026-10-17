@@ -171,7 +171,7 @@ function SettingsProviders() {
                 ),
                 // Name flexes to fill remaining width — fixed `size` would push
                 // the Type column off-screen on narrow viewports (e.g. 375px).
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.provider.name, searchable: true },
             },
             {
                 accessorKey: 'type',
@@ -196,7 +196,7 @@ function SettingsProviders() {
                         title={copy.provider.type}
                     />
                 ),
-                meta: { searchable: true },
+                meta: { columnMenuLabel: copy.provider.type, searchable: true },
                 minSize: 110,
                 size: 160,
             },
@@ -235,6 +235,7 @@ function SettingsProviders() {
                         title={copy.providers.updated}
                     />
                 ),
+                meta: { columnMenuLabel: copy.providers.updated },
                 size: 120,
                 sortingFn: (rowA, rowB) => {
                     const dateA = new Date(rowA.getValue('updatedAt') as string);
@@ -482,7 +483,7 @@ function SettingsProviders() {
                 <DataTable<Provider>
                     columns={columns}
                     data={providers}
-                    empty={{ entityName: 'providers' }}
+                    empty={{ entityName: copy.providers.title }}
                     filterPlaceholder={copy.providers.filter}
                     filterValue={filter}
                     label={copy.providers.title}

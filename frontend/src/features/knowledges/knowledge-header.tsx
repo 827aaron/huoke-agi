@@ -62,7 +62,7 @@ const renderKnowledgeItem = (item: Knowledge, isCurrent: boolean): ReactNode => 
             className="shrink-0 text-[10px] whitespace-nowrap"
             variant="outline"
         >
-            {item.docType}
+            {copy.knowledge.docTypeLabel[item.docType] ?? item.docType}
         </Badge>
         <span className={cn('min-w-0 flex-1 truncate', isCurrent && 'font-medium')}>{item.question}</span>
     </>

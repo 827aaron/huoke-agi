@@ -170,7 +170,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                             key={value}
                                             value={value}
                                         >
-                                            {value}
+                                            {copy.knowledge.docTypeLabel[value] ?? value}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -203,7 +203,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                                 key={value}
                                                 value={value}
                                             >
-                                                {value}
+                                                {copy.knowledge.guideTypeLabel[value] ?? value}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -237,7 +237,7 @@ export function KnowledgeMetaFields({ control, isNew, isSaving }: KnowledgeMetaF
                                                 key={value}
                                                 value={value}
                                             >
-                                                {value}
+                                                {copy.knowledge.answerTypeLabel[value] ?? value}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

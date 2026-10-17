@@ -850,7 +850,7 @@ function SettingsPrompts() {
                         <DataTable<AgentPromptTableData>
                             columns={agentColumns}
                             data={agentPrompts}
-                            empty={{ entityName: 'agent prompts' }}
+                            empty={{ entityName: copy.prompts.agentPrompts }}
                             filterPlaceholder={copy.prompts.filterAgents}
                             initialPageSize={1000}
                             label={copy.prompts.agentPrompts}
@@ -872,7 +872,7 @@ function SettingsPrompts() {
                         <DataTable<ToolPromptTableData>
                             columns={toolColumns}
                             data={toolPrompts}
-                            empty={{ entityName: 'tool prompts' }}
+                            empty={{ entityName: copy.prompts.toolPrompts }}
                             filterPlaceholder={copy.prompts.filterTools}
                             initialPageSize={1000}
                             label={copy.prompts.toolPrompts}

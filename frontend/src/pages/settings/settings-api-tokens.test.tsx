@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { addDays, differenceInCalendarMonths, format, startOfDay } from 'date-fns';
+import { zhCN } from 'date-fns/locale';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -151,7 +152,7 @@ describe('the create row date picker', () => {
 
     const dayButton = (date: Date) => {
         const step = differenceInCalendarMonths(date, shownMonth);
-        const label = step < 0 ? 'Go to the Previous Month' : 'Go to the Next Month';
+        const label = step < 0 ? '前往上个月' : '前往下个月';
 
         for (let months = Math.abs(step); months > 0; months--) {
             fireEvent.click(screen.getByRole('button', { name: label }));
@@ -159,7 +160,7 @@ describe('the create row date picker', () => {
 
         shownMonth = date;
 
-        return within(screen.getByRole('grid')).getByRole('button', { name: format(date, 'PPPP') });
+        return within(screen.getByRole('grid')).getByRole('button', { name: format(date, 'PPPP', { locale: zhCN }) });
     };
 
     const submitButton = () => screen.getByRole('button', { name: '提交' });
@@ -302,7 +303,7 @@ describe('creating the very first token', () => {
         fireEvent.click(screen.getByRole('button', { name: '选择日期' }));
         fireEvent.click(
             within(screen.getByRole('grid')).getByRole('button', {
-                name: format(addDays(new Date('2026-09-01T12:00:00'), 7), 'PPPP'),
+                name: format(addDays(new Date('2026-09-01T12:00:00'), 7), 'PPPP', { locale: zhCN }),
             }),
         );
 
