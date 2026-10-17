@@ -1861,7 +1861,7 @@ These settings control HTTP proxy, SSL configuration, and network timeouts for o
 | ProxyURL            | `PROXY_URL`             | *(none)*      | URL for HTTP proxy (e.g., `http://user:pass@proxy:8080`)         |
 | ExternalSSLCAPath   | `EXTERNAL_SSL_CA_PATH`  | *(none)*      | Path to trusted CA certificate for external LLM SSL connections  |
 | ExternalSSLInsecure | `EXTERNAL_SSL_INSECURE` | `false`       | Skip SSL certificate verification for external connections       |
-| HTTPClientTimeout   | `HTTP_CLIENT_TIMEOUT`   | `600`         | Timeout in seconds for external API calls (0 = no timeout)       |
+| HTTPClientTimeout   | `HTTP_CLIENT_TIMEOUT`   | `600`         | Timeout in seconds for external API calls (0 = no timeout). The shipped `docker-compose.yml` sets `300` |
 
 ### Usage Details
 
