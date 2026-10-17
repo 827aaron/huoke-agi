@@ -15,6 +15,7 @@ import { GrowthCredentialCard, REQUIRED_KINDS, settingState } from '@/features/g
 import { useGrowthAccounts, useGrowthSettings } from '@/features/growth/use-growth-data';
 import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
+import { useProviders } from '@/providers/providers-provider';
 
 const text = copy.credentials;
 
@@ -23,6 +24,7 @@ const CARD_ORDER: GrowthSettingKind[] = ['llm', 'screening', 'telegram', 'web_se
 function SettingsCredentials() {
     const { data, error, isLoading } = useGrowthSettings();
     const { data: accounts } = useGrowthAccounts();
+    const { refreshProviders } = useProviders();
 
     const [settings, setSettings] = useState<GrowthSetting[] | null>(null);
     const [seededFrom, setSeededFrom] = useState<GrowthSetting[] | undefined>(undefined);
@@ -66,12 +68,17 @@ function SettingsCredentials() {
 
     const byKind = (kind: GrowthSettingKind) => settings?.find((item) => item.kind === kind);
 
-    const handleChange = (kind: GrowthSettingKind, next: GrowthSetting | null) =>
+    const handleChange = (kind: GrowthSettingKind, next: GrowthSetting | null) => {
         setSettings((previous) => {
             const rest = (previous ?? []).filter((item) => item.kind !== kind);
 
             return next ? [...rest, next] : rest;
         });
+
+        if (kind === 'llm') {
+            refreshProviders();
+        }
+    };
 
     const isTelegramSignedIn = !!accounts?.some(isAccountSignedIn);
     const isReady = REQUIRED_KINDS.every((kind) => settingState(byKind(kind)) === 'connected');

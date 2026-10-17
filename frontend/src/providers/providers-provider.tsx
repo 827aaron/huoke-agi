@@ -19,6 +19,8 @@ const APPLIED_LLM_TYPE_KEY = 'selectedProviderLlmType';
 
 interface ProvidersContextValue {
     providers: Provider[];
+    // A key saved on the growth LLM card adds a provider no subscription announces.
+    refreshProviders: () => void;
     selectedProvider: null | Provider;
     setSelectedProvider: (provider: Provider) => void;
 }
@@ -62,7 +64,7 @@ export function ProvidersProvider({ children }: ProvidersProviderProps) {
         return localStorage.getItem(SELECTED_PROVIDER_KEY);
     });
 
-    const { data: growthSettings } = useGrowthPoll(
+    const { data: growthSettings, refetch: refetchGrowthSettings } = useGrowthPoll(
         isAuthenticated() ? 'settings:default-provider' : null,
         () => growthApi.listSettings(),
         null,
@@ -98,6 +100,15 @@ export function ProvidersProvider({ children }: ProvidersProviderProps) {
         return savedProvider ?? pickDefaultProvider(providers, llmProviderType);
     }, [llmProviderType, providers, selectedProviderName]);
 
+    const refreshProviders = useCallback(() => {
+        if (!isAuthenticated()) {
+            return;
+        }
+
+        void refetchProviders();
+        void refetchGrowthSettings();
+    }, [isAuthenticated, refetchGrowthSettings, refetchProviders]);
+
     const setSelectedProvider = useCallback((provider: Provider) => {
         setSelectedProviderName(provider.name);
     }, []);
@@ -105,10 +116,11 @@ export function ProvidersProvider({ children }: ProvidersProviderProps) {
     const value = useMemo(
         () => ({
             providers,
+            refreshProviders,
             selectedProvider,
             setSelectedProvider,
         }),
-        [providers, selectedProvider, setSelectedProvider],
+        [providers, refreshProviders, selectedProvider, setSelectedProvider],
     );
 
     return <ProvidersContext.Provider value={value}>{children}</ProvidersContext.Provider>;
