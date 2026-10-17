@@ -98,36 +98,31 @@ test.describe('growth keys and connections', { tag: '@settings' }, () => {
         expectCleanPage(pageErrorLog);
     });
 
-    test('requires every email field before saving', async ({ page, pageErrorLog }) => {
+    test('asks only for the recipient while the platform sends the mail', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/credentials');
 
         const email = card(page, '邮件通知');
 
-        await email.getByLabel('发信服务器（SMTP）').fill('smtp.example.com');
-        await email.getByLabel('端口').fill('70000');
+        await expect(email.getByText('由平台代发，无需配置发信服务器，填好接收邮箱即可。')).toBeVisible();
+        await expect(email.getByLabel('发信服务器（SMTP）')).toHaveCount(0);
+
+        await email.getByLabel('接收名单的邮箱').fill('not-an-email');
         await email.getByRole('button', { name: '保存并测试' }).click();
 
-        await expect(email.getByText('端口是 1 到 65535 之间的数字')).toBeVisible();
-        await expect(email.getByText('请填写 登录用户名')).toBeVisible();
+        await expect(email.getByText('请填写正确的邮箱，多个用逗号分隔')).toBeVisible();
 
         expectCleanPage(pageErrorLog);
     });
 
-    test('saves the email settings, then sends a test email to the chosen address', async ({ page, pageErrorLog }) => {
+    test('saves the recipient, then sends a test email to it', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/credentials');
 
         const email = card(page, '邮件通知');
 
-        await email.getByLabel('发信服务器（SMTP）').fill('smtp.example.com');
-        await email.getByLabel('端口').fill('465');
-        await email.getByLabel('登录用户名').fill('ops@example.com');
-        await email.getByLabel('密码或授权码').fill('app-password-123456');
-        await email.getByLabel('发件人地址').fill('ops@example.com');
         await email.getByLabel('接收名单的邮箱').fill('boss@example.com');
         await email.getByRole('button', { name: '保存并测试' }).click();
 
         await expect(page.getByText('邮件通知已保存并通过测试')).toBeVisible();
-        await expect(email.getByText('app-password-123456')).toHaveCount(0);
 
         await email.getByRole('button', { name: '发送测试邮件' }).click();
 
