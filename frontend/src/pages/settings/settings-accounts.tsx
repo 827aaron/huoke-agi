@@ -21,6 +21,7 @@ import {
     formatClock,
     proxyRouteText,
 } from '@/features/growth/account-health';
+import AccountDetailSheet from '@/features/growth/accounts/account-detail-sheet';
 import AccountProxyDialog from '@/features/growth/accounts/account-proxy-dialog';
 import RemoteLoginDialog, { fingerprintSummary } from '@/features/growth/accounts/remote-login-dialog';
 import TelegramLoginDialog from '@/features/growth/accounts/telegram-login-dialog';
@@ -74,6 +75,7 @@ function SettingsAccounts() {
     const [busyIds, setBusyIds] = useState<Set<number>>(new Set());
     const [login, setLogin] = useState<LoginTarget | null>(null);
     const [proxyAccount, setProxyAccount] = useState<GrowthAccount | null>(null);
+    const [detailAccount, setDetailAccount] = useState<GrowthAccount | null>(null);
     const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
@@ -191,6 +193,14 @@ function SettingsAccounts() {
                                 </TableCell>
                                 <TableCell>
                                     <div className="flex justify-end gap-1">
+                                        <Button
+                                            aria-label={`${text.detail.open} ${accountLabel(account)}`}
+                                            onClick={() => setDetailAccount(account)}
+                                            size="sm"
+                                            variant="ghost"
+                                        >
+                                            {text.detail.open}
+                                        </Button>
                                         {account.status === 'needs_login' && (
                                             <Button
                                                 disabled={isBusy}
@@ -337,6 +347,10 @@ function SettingsAccounts() {
                     platform={login.platform}
                 />
             )}
+            <AccountDetailSheet
+                account={detailAccount}
+                onOpenChange={(isOpen) => !isOpen && setDetailAccount(null)}
+            />
             {proxyAccount && (
                 <AccountProxyDialog
                     account={proxyAccount}
