@@ -223,7 +223,8 @@ export interface GrowthRun {
     notify_status: 'failed' | 'sent' | 'skipped' | null;
     round: number;
     schedule_id?: null | number;
-    sources: GrowthRunSources;
+    // Null when the server does not report the join state of the sources.
+    sources: GrowthRunSources | null;
     started_at: string;
     status: GrowthRunStatus;
     target: null | number;

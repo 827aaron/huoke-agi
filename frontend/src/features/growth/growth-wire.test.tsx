@@ -1,0 +1,360 @@
+import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { GrowthRun } from './growth-types';
+
+import { growthApi } from './growth-api';
+import GrowthProgressBar from './progress/growth-progress-bar';
+
+const server = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+const flow = vi.hoisted(() => ({ run: null as GrowthRun | null }));
+
+vi.mock('@/lib/axios', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/lib/axios')>()),
+    api: server,
+}));
+vi.mock('./growth-flow-provider', () => ({ useGrowthFlow: () => ({ accounts: [], run: flow.run }) }));
+vi.mock('@/providers/flow-provider', () => ({ useFlow: () => ({ flowData: null }) }));
+
+const ok = (data: unknown) => ({ data, status: 'success' });
+
+// Payloads as backend/pkg/server/services/growth.go writes them for a flow in its second round.
+const runs = [
+    {
+        created_at: '2026-10-17T14:00:00Z',
+        delivered_count: 2,
+        finished_at: '2026-10-17T14:30:00Z',
+        flow_id: 1,
+        id: 7,
+        notify_status: 'skipped',
+        status: 'partial',
+        target: 5,
+        task_id: 11,
+    },
+    {
+        created_at: '2026-10-17T14:39:37Z',
+        delivered_count: 0,
+        flow_id: 1,
+        id: 9,
+        status: 'running',
+        target: 50,
+        task_id: 12,
+    },
+];
+
+const leads = [
+    {
+        contacts: [{ type: 'line', value: 'jay88' }],
+        created_at: '2026-10-17T14:10:00Z',
+        delivered_at: '2026-10-17T14:30:00Z',
+        delivered_run_id: 7,
+        display_name: 'Jay',
+        evidence: [
+            {
+                captured_at: '2026-10-17T14:10:00Z',
+                excerpt: 'any slot site paying fast?',
+                message_id: '501',
+                message_time: '2026-10-16T09:00:00Z',
+                source_id: 3,
+            },
+            {
+                captured_at: '2026-10-17T14:12:00Z',
+                excerpt: 'need a new site',
+                match_reason: 'asks for a new site',
+                message_id: '502',
+                message_link: 'https://t.me/myslots/502',
+                message_time: '2026-10-17T08:00:00Z',
+                source_id: 4,
+            },
+        ],
+        flow_id: 1,
+        lead_id: 21,
+        match_reason: 'wants a site that pays out',
+        platform: 'telegram',
+        platform_user_id: '9001',
+        score: 9,
+        task_id: 11,
+        tier: 'qualified',
+        username: 'jay88',
+    },
+    {
+        contacts: null,
+        created_at: '2026-10-17T14:40:00Z',
+        evidence: null,
+        flow_id: 1,
+        lead_id: 22,
+        platform: 'web',
+        platform_user_id: 'u-77',
+        score: 5,
+        task_id: 12,
+        tier: 'watchlist',
+    },
+    {
+        contacts: [],
+        created_at: '2026-10-17T14:41:00Z',
+        evidence: [],
+        flow_id: 1,
+        lead_id: 23,
+        platform: 'telegram',
+        platform_user_id: '9003',
+        score: 8,
+        task_id: 12,
+        tier: 'qualified',
+    },
+];
+
+const sources = [
+    {
+        join_status: 'not_joinable',
+        kind: 'forum',
+        link: 'https://forum.example.my/slots',
+        origin: 'manual',
+        platform: 'web',
+        qualified_leads: 0,
+        source_id: 3,
+        title: 'MY slots forum',
+    },
+    {
+        join_status: 'pending',
+        kind: 'group',
+        last_synced_at: '2026-10-17T14:12:00Z',
+        link: 'https://t.me/myslots',
+        member_count: 1200,
+        origin: 'ai',
+        platform: 'telegram',
+        qualified_leads: 1,
+        source_id: 4,
+        username: 'myslots',
+    },
+];
+
+const serve = (body: { leads: unknown; runs: unknown; sources: unknown }) =>
+    server.get.mockImplementation(async (url: string) => {
+        if (url === '/growth/leads/') {
+            return ok({ leads: body.leads, total: 0 });
+        }
+
+        if (url === '/growth/runs/') {
+            return ok({ runs: body.runs, total: 0 });
+        }
+
+        if (url === '/growth/sources/') {
+            return ok({ sources: body.sources, total: 0, warnings: null });
+        }
+
+        throw new Error(url);
+    });
+
+describe('growth wire', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        serve({ leads, runs, sources });
+    });
+
+    it('reads the rounds the server sends, counting the leads each one found', async () => {
+        expect(await growthApi.listRuns(1)).toEqual([
+            {
+                current_action: null,
+                deadline_at: null,
+                delivered: 2,
+                error: null,
+                finished_at: '2026-10-17T14:30:00Z',
+                flood_wait_seconds: null,
+                flow_id: 1,
+                found: 1,
+                notify_error: null,
+                notify_status: 'skipped',
+                round: 1,
+                schedule_id: null,
+                sources: null,
+                started_at: '2026-10-17T14:00:00Z',
+                status: 'missed',
+                target: 5,
+                task_id: 11,
+                watch: 0,
+            },
+            {
+                current_action: null,
+                deadline_at: null,
+                delivered: 0,
+                error: null,
+                finished_at: null,
+                flood_wait_seconds: null,
+                flow_id: 1,
+                found: 1,
+                notify_error: null,
+                notify_status: null,
+                round: 2,
+                schedule_id: null,
+                sources: null,
+                started_at: '2026-10-17T14:39:37Z',
+                status: 'running',
+                target: 50,
+                task_id: 12,
+                watch: 1,
+            },
+        ]);
+        expect(server.get).toHaveBeenCalledWith('/growth/runs/', { params: { flow_id: 1 } });
+        expect(server.get).toHaveBeenCalledWith('/growth/leads/', { params: { flow_id: 1 } });
+    });
+
+    it('marks a round that reached its target as delivered and one without a target as having none', async () => {
+        serve({
+            leads: null,
+            runs: [
+                { delivered_count: 5, id: 1, status: 'completed', target: 5, task_id: 3 },
+                { delivered_count: 0, id: 2, status: 'running', target: 0, task_id: 4 },
+            ],
+            sources: null,
+        });
+
+        const [reached, question] = await growthApi.listRuns(1);
+
+        expect([reached?.status, reached?.target, question?.status, question?.target]).toEqual([
+            'delivered',
+            5,
+            'running',
+            null,
+        ]);
+    });
+
+    it('reads the leads with their delivery round and the titles of their sources', async () => {
+        const [jay, watched, bare] = await growthApi.listLeads(1);
+
+        expect(jay).toEqual({
+            contacts: [{ type: 'line', value: 'jay88' }],
+            delivered_at: '2026-10-17T14:30:00Z',
+            delivered_task_id: 11,
+            display_name: 'Jay',
+            evidence: [
+                {
+                    excerpt: 'any slot site paying fast?',
+                    id: 0,
+                    message_id: '501',
+                    message_url: '',
+                    posted_at: '2026-10-16T09:00:00Z',
+                    reason: 'wants a site that pays out',
+                    source_id: 3,
+                    source_title: 'MY slots forum',
+                },
+                {
+                    excerpt: 'need a new site',
+                    id: 1,
+                    message_id: '502',
+                    message_url: 'https://t.me/myslots/502',
+                    posted_at: '2026-10-17T08:00:00Z',
+                    reason: 'asks for a new site',
+                    source_id: 4,
+                    source_title: 'myslots',
+                },
+            ],
+            first_flow_id: 1,
+            first_flow_title: '',
+            first_round: 1,
+            first_task_id: 11,
+            id: 21,
+            last_active_at: '2026-10-17T08:00:00Z',
+            platform: 'telegram',
+            platform_user_id: '9001',
+            profile: null,
+            score: 9,
+            score_breakdown: [],
+            signals: [],
+            source_id: 4,
+            source_title: 'myslots',
+            tier: 'qualified',
+            username: 'jay88',
+        });
+        expect(watched).toMatchObject({
+            contacts: [],
+            delivered_at: null,
+            delivered_task_id: null,
+            display_name: 'u-77',
+            evidence: [],
+            first_round: 2,
+            last_active_at: null,
+            source_title: '',
+            tier: 'watch',
+            username: null,
+        });
+        expect(bare?.id).toBe(23);
+    });
+
+    it('reads the sources with the join states the pages know', async () => {
+        expect(await growthApi.listSources()).toEqual({
+            sources: [
+                {
+                    created_at: '',
+                    id: 3,
+                    join_status: 'unjoinable',
+                    kind: 'group',
+                    last_read_at: null,
+                    leads_count: 0,
+                    link: 'https://forum.example.my/slots',
+                    members_count: null,
+                    origin: 'manual',
+                    platform: 'web',
+                    source_id: 'https://forum.example.my/slots',
+                    title: 'MY slots forum',
+                },
+                {
+                    created_at: '',
+                    id: 4,
+                    join_status: 'pending_approval',
+                    kind: 'group',
+                    last_read_at: '2026-10-17T14:12:00Z',
+                    leads_count: 1,
+                    link: 'https://t.me/myslots',
+                    members_count: 1200,
+                    origin: 'ai',
+                    platform: 'telegram',
+                    source_id: 'myslots',
+                    title: 'myslots',
+                },
+            ],
+            total: 0,
+            warnings: null,
+        });
+    });
+
+    it('reads an empty pool the server sends as null', async () => {
+        serve({ leads: null, runs: null, sources: null });
+
+        expect(await growthApi.listSources()).toEqual({ sources: [], total: 0, warnings: null });
+        expect(await growthApi.listLeads(1)).toEqual([]);
+        expect(await growthApi.listRuns(1)).toEqual([]);
+    });
+
+    it('reads what became of each added link', async () => {
+        server.post.mockResolvedValue(
+            ok({
+                results: [
+                    { input: 'https://t.me/myslots', result: 'existing', source: sources[1] },
+                    { input: 'not a link', reason: 'no platform', result: 'invalid' },
+                ],
+            }),
+        );
+
+        const { results } = await growthApi.addSources(['https://t.me/myslots', 'not a link']);
+
+        expect(results.map(({ link, outcome, source }) => [link, outcome, source?.id])).toEqual([
+            ['https://t.me/myslots', 'existing', 4],
+            ['not a link', 'invalid', undefined],
+        ]);
+    });
+
+    it('shows a running round from the server on the progress bar', async () => {
+        flow.run = (await growthApi.listRuns(1))[1] ?? null;
+
+        render(
+            <MemoryRouter>
+                <GrowthProgressBar />
+            </MemoryRouter>,
+        );
+
+        expect(screen.getByRole('progressbar', { name: '本轮已找到 1 / 50 位潜客' })).toBeInTheDocument();
+        expect(screen.getByText('待观察 1')).toBeInTheDocument();
+        expect(screen.queryByText(/已加入/)).not.toBeInTheDocument();
+    });
+});
