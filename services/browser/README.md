@@ -24,6 +24,7 @@ Every pacing value is a default an operator can change, not a quota.
 | `BROWSER_HEADLESS` | `true` | Set `false` under Xvfb to run a headed browser |
 | `BROWSER_LOCALE`, `BROWSER_TIMEZONE` | `en-US`, `America/New_York` | Locale and timezone of a new fingerprint whose region is unknown |
 | `BROWSER_PROXY` | none | Proxy for accounts that were never given one |
+| `BROWSER_GEO_LOOKUP_URL` | `https://ipinfo.io/json` | Where an account's exit IP is placed, asked through its proxy; ipinfo.io, ip-api.com and ipapi.co answers are read |
 | `BROWSER_ACTION_DELAY_MIN_MS` / `_MAX_MS` | 1500 / 4500 | Random pause before every agent action |
 | `BROWSER_PACE_FACTOR_<PLATFORM>` | from the platform file | Multiplies the pause for one platform, e.g. `BROWSER_PACE_FACTOR_TIKTOK=1`; TikTok's file sets 2 |
 | `BROWSER_WARMUP_DAYS`, `BROWSER_WARMUP_FACTOR` | 7, 2.5 | For this many days after a login the pauses are this many times longer |
@@ -71,6 +72,7 @@ Every POST made with the service token may carry account settings; they are stor
 - `proxy`: `http://`, `https://` or `socks5://` with optional `user:pass@`; empty means a direct connection, and an account never given one uses `BROWSER_PROXY`. Chromium cannot authenticate to SOCKS5, so a socks5 proxy with credentials is refused.
 - `region`: the proxy's ISO country. It only shapes the first fingerprint.
 - `fingerprint`: generated once, when the account first launches, and kept. [fingerprint-suite](https://github.com/apify/fingerprint-suite) (Apache-2.0) draws a desktop Chrome of the engine's own version for the account's OS and locale, with the screen, cores, memory, WebGL card, codecs and fonts seen together on real devices, and injects it into every page (`version: 2`, the drawn set under `suite`). When its data has no device for the engine version, a small built-in table is used instead (`version: 1`). The top-level fields (`user_agent`, `platform`, `locale`, `timezone`, `viewport`, `screen`, `device_scale_factor`, `hardware_concurrency`) win over the suite's copies, so a fingerprint the backend edited is what the page sees. Locale and timezone follow `region` when it is in the table in `src/profile.js`. The backend stores the generated one from the account record and may send it back to restore it.
+- `geolocation`: with a proxy, the exit IP is looked up through that proxy on the first launch and the account is placed 20–80 m from where the lookup puts it, at a random bearing, and kept in `meta.json` until the proxy changes. A page that asks for the position gets it without a prompt. Without a proxy no position is claimed, and a failed lookup leaves it unset until the next launch. Timezone and locale still follow `region`.
 - `external_browser_ws`: a CDP endpoint of a fingerprint browser (AdsPower, BitBrowser local API). The service connects to it instead of launching Chromium and applies none of its own proxy or fingerprint settings, since that browser owns them. Closing the account disconnects without closing that browser. Empty switches back to the built-in browser.
 
 ## Platforms
