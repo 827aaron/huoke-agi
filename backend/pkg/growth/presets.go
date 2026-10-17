@@ -32,24 +32,25 @@ func ProfilePresets() []ProfilePreset {
 		{
 			ID: "licensed_casino",
 			Profile: Profile{
-				Pitch: "A licensed online casino and sportsbook looking for adult players who already play online " +
-					"and are open to trying a new site.",
-				Games:         []string{"online slots", "live casino", "sports betting"},
-				Genre:         "Licensed online casino and sportsbook",
+				Pitch: "A licensed, regulated online gaming operator (casino games and sports) serving the regions " +
+					"its license covers. Leads are adult players who already discuss online gaming platforms in " +
+					"public and say what they want from one; they are delivered to the operator, and nobody is " +
+					"contacted on its behalf.",
+				Games:         []string{"casino games", "live dealer games", "sports"},
+				Genre:         "Licensed online gaming platform",
 				DefaultTarget: 50,
 				Signals: []string{
-					"deposit", "withdrawal", "payout", "slow to pay", "bonus", "free spins", "cashback", "rebate",
-					"VIP", "odds", "which site is legit", "looking for a new site", "recommend a site",
+					"deposit experience", "withdrawal speed", "bonus terms", "cashback", "VIP program", "odds",
+					"platform reliability", "looking for a new platform", "platform recommendation",
 				},
 				Excludes: []string{
-					"minors or anyone who says they are under 18",
-					"people asking for help to stop gambling, self-exclusion or addiction support",
-					"people outside the regions the license covers",
-					"agents and affiliates advertising other sites", "bots and spam",
+					"a stated age under 18",
+					"an explicit request for help to stop gambling, or a stated self-exclusion",
+					"a stated location outside the licensed regions",
+					"affiliates and agents promoting other platforms", "bots and spam",
 				},
-				Notes: "Adults only, and only in the regions the license covers; fill those in under Regions. " +
-					"Someone who says they are losing control or want to quit is not a customer. Exclusions apply " +
-					"only on explicit evidence in the message; never infer them from style, age cues or platform.",
+				Notes: "The licensed regions are the ones under Regions. Exclusions apply only on explicit evidence in " +
+					"the message; never infer them from style, age cues or platform.",
 				Scoring: &Scoring{
 					Weights:   ScoringWeights{Player: 3, Pain: 3, Paying: 3, Active: 2, Match: 3},
 					Qualified: 8,
