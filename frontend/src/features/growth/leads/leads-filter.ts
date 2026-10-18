@@ -20,7 +20,7 @@ export interface LeadFilters {
     tier: 'all' | GrowthLeadTier;
 }
 
-export type LeadFlag = 'pain' | 'paying' | 'recent';
+export type LeadFlag = 'pain' | 'paying' | 'recent' | 'unwanted';
 
 // Calendar days in the browser's zone, today included.
 export type LeadFoundWithin = '7d' | '30d' | 'all' | 'today';
@@ -51,6 +51,10 @@ const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 const hasFlag = (lead: GrowthLead, flag: LeadFlag, now: number): boolean => {
     if (flag === 'recent') {
         return !!lead.last_active_at && now - new Date(lead.last_active_at).getTime() <= RECENT_MS;
+    }
+
+    if (flag === 'unwanted') {
+        return !!lead.flags?.includes('unwanted');
     }
 
     return lead.signals.includes(flag);

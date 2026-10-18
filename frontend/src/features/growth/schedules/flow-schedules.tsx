@@ -18,6 +18,8 @@ import { copy } from '@/lib/copy';
 import type { GrowthSchedule, GrowthScheduleDays, GrowthScheduleInput } from '../growth-types';
 
 import { growthApi } from '../growth-api';
+import { useGrowthFlow } from '../growth-flow-provider';
+import { GrowthProfileSelect } from '../profiles/growth-profile-select';
 import { useGrowthPoll } from '../use-growth-poll';
 
 const text = copy.schedules;
@@ -37,17 +39,28 @@ interface ScheduleDraft {
     days: GrowthScheduleDays;
     end: string;
     input: string;
+    // Empty keeps what the schedule has, or takes the task's profile for a new one.
+    profileId: string;
     start: string;
     weekdays: string[];
 }
 
-const EMPTY_DRAFT: ScheduleDraft = { date: '', days: 'daily', end: '18:00', input: '', start: '09:00', weekdays: [] };
+const EMPTY_DRAFT: ScheduleDraft = {
+    date: '',
+    days: 'daily',
+    end: '18:00',
+    input: '',
+    profileId: '',
+    start: '09:00',
+    weekdays: [],
+};
 
 const toDraft = (schedule: GrowthSchedule): ScheduleDraft => ({
     date: schedule.date ?? '',
     days: schedule.days,
     end: schedule.end_time,
     input: schedule.input,
+    profileId: schedule.profile_id ? String(schedule.profile_id) : '',
     start: schedule.start_time,
     weekdays: (schedule.weekdays ?? []).map(String),
 });
@@ -292,7 +305,12 @@ export function FlowSchedules({ flowId }: { flowId: number }) {
 }
 
 function ScheduleForm({ flowId, onDone, schedule }: ScheduleFormProps) {
-    const [draft, setDraft] = useState<ScheduleDraft>(schedule ? toDraft(schedule) : EMPTY_DRAFT);
+    const { flowProfile } = useGrowthFlow();
+    const [draft, setDraft] = useState<ScheduleDraft>(() =>
+        schedule
+            ? toDraft(schedule)
+            : { ...EMPTY_DRAFT, profileId: flowProfile?.profile_id ? String(flowProfile.profile_id) : '' },
+    );
     const [error, setError] = useState<null | string>(null);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -313,6 +331,7 @@ function ScheduleForm({ flowId, onDone, schedule }: ScheduleFormProps) {
             end_time: toClock(draft.end),
             flow_id: flowId,
             input: draft.input.trim(),
+            ...(draft.profileId && { profile_id: Number(draft.profileId) }),
             start_time: toClock(draft.start),
             timezone,
             ...(draft.days === 'weekly' && { weekdays: draft.weekdays.map(Number).sort((a, b) => a - b) }),
@@ -418,6 +437,12 @@ function ScheduleForm({ flowId, onDone, schedule }: ScheduleFormProps) {
                 {text.timezone(timezone)}
                 {draft.start && draft.end && draft.end < draft.start && ` · ${text.overnight}`}
             </p>
+
+            <GrowthProfileSelect
+                id="schedule-profile"
+                onChange={(profileId) => update({ profileId })}
+                value={draft.profileId}
+            />
 
             <div className="flex flex-col gap-1.5">
                 <Label htmlFor="schedule-input">{text.input}</Label>

@@ -278,6 +278,7 @@ describe('growth wire', () => {
             first_flow_title: '',
             first_round: 1,
             first_task_id: 11,
+            flags: [],
             id: 21,
             last_active_at: '2026-10-17T08:00:00Z',
             note: '',

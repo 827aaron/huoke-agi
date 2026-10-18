@@ -46,6 +46,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import FlowCentralTabs from '@/features/flows/flow-central-tabs';
 import FlowTabs from '@/features/flows/flow-tabs';
 import { useFlowDetailNavigation } from '@/features/flows/use-flow-detail-navigation';
+import { GrowthFlowProfileBadge } from '@/features/growth/profiles/growth-flow-profile-badge';
 import GrowthProgressBar from '@/features/growth/progress/growth-progress-bar';
 import { FlowScheduleButton } from '@/features/growth/schedules/flow-schedules';
 import { RenameFlowDocument, ResultType, StatusType } from '@/graphql/types';
@@ -285,6 +286,7 @@ function Flow() {
                     </Breadcrumb>
                 </AppHeaderContent>
                 <AppHeaderActions>
+                    {flowId && !isMobile && <GrowthFlowProfileBadge />}
                     {flowId && <FlowScheduleButton flowId={Number(flowId)} />}
                     {!!(flowData?.tasks ?? [])?.length && <FlowReportDropdown />}
                     {!isMobile && (

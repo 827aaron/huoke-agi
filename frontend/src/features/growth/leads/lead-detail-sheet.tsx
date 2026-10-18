@@ -10,6 +10,7 @@ import type { GrowthLead } from '../growth-types';
 import { languageLabel } from '../languages';
 import LeadScoreBadge from './lead-score-badge';
 import { contactsText } from './leads-csv';
+import { useSignalLabel } from './use-signal-label';
 
 interface LeadDetailSheetProps {
     lead: GrowthLead | null;
@@ -19,6 +20,7 @@ interface LeadDetailSheetProps {
 }
 
 function LeadDetailSheet({ lead, onDelete, onEdit, onOpenChange }: LeadDetailSheetProps) {
+    const signalLabel = useSignalLabel();
     const profile = lead?.profile;
     const hasProfile =
         !!profile &&
@@ -108,7 +110,7 @@ function LeadDetailSheet({ lead, onDelete, onEdit, onOpenChange }: LeadDetailShe
                                                 key={signal}
                                                 variant="outline"
                                             >
-                                                {copy.leads.signal[signal] ?? signal} +{points}
+                                                {signalLabel(signal)} +{points}
                                             </Badge>
                                         ))}
                                     </div>

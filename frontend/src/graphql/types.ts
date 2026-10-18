@@ -1086,6 +1086,7 @@ export type CreateFlowMutationVariables = Exact<{
     modelProvider: string;
     input: string;
     resourceIds?: Array<string | number> | string | number | null | undefined;
+    profileId?: string | number | null | undefined;
 }>;
 
 export type CreateFlowMutation = { createFlow: FlowFragmentFragment };
@@ -1130,6 +1131,7 @@ export type CreateAssistantMutationVariables = Exact<{
     input: string;
     useAgents: boolean;
     resourceIds?: Array<string | number> | string | number | null | undefined;
+    profileId?: string | number | null | undefined;
 }>;
 
 export type CreateAssistantMutation = {
@@ -7903,6 +7905,11 @@ export const CreateFlowDocument = {
                         type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
                     },
                 },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'profileId' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } },
+                },
             ],
             selectionSet: {
                 kind: 'SelectionSet',
@@ -7925,6 +7932,11 @@ export const CreateFlowDocument = {
                                 kind: 'Argument',
                                 name: { kind: 'Name', value: 'resourceIds' },
                                 value: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'profileId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'profileId' } },
                             },
                         ],
                         selectionSet: {
@@ -8244,6 +8256,11 @@ export const CreateAssistantDocument = {
                         type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } } },
                     },
                 },
+                {
+                    kind: 'VariableDefinition',
+                    variable: { kind: 'Variable', name: { kind: 'Name', value: 'profileId' } },
+                    type: { kind: 'NamedType', name: { kind: 'Name', value: 'ID' } },
+                },
             ],
             selectionSet: {
                 kind: 'SelectionSet',
@@ -8276,6 +8293,11 @@ export const CreateAssistantDocument = {
                                 kind: 'Argument',
                                 name: { kind: 'Name', value: 'resourceIds' },
                                 value: { kind: 'Variable', name: { kind: 'Name', value: 'resourceIds' } },
+                            },
+                            {
+                                kind: 'Argument',
+                                name: { kind: 'Name', value: 'profileId' },
+                                value: { kind: 'Variable', name: { kind: 'Name', value: 'profileId' } },
                             },
                         ],
                         selectionSet: {

@@ -1,10 +1,11 @@
-import { api, unwrapApiResponse } from '@/lib/axios';
+import { api, getApiErrorStatusCode, unwrapApiResponse } from '@/lib/axios';
 
 import type {
     GrowthAccount,
     GrowthAccountDetail,
     GrowthAccountsResponse,
     GrowthEmailResult,
+    GrowthFlowProfile,
     GrowthJoinWarning,
     GrowthLead,
     GrowthLeadInput,
@@ -12,6 +13,8 @@ import type {
     GrowthModelsInput,
     GrowthModelsResponse,
     GrowthProfile,
+    GrowthProfileDraft,
+    GrowthProfileDraftSave,
     GrowthProfileInput,
     GrowthProfilePreset,
     GrowthProxyTestResult,
@@ -103,6 +106,10 @@ const live = {
     deleteLead: async (id: number) => {
         await api.delete(`/growth/leads/${id}`);
     },
+    // The oldest remaining profile becomes the default when the default is deleted.
+    deleteProfile: async (id: number) => {
+        await api.delete(`/growth/profiles/${id}`);
+    },
     deleteSchedule: async (id: number) => {
         await api.delete(`/growth/schedules/${id}`);
     },
@@ -110,10 +117,27 @@ const live = {
     deleteSource: async (id: number) => {
         await api.delete(`/growth/sources/${id}`);
     },
+    discardProfileDraft: async (flowId: number | string) => {
+        await api.delete(`/growth/flows/${flowId}/profile-draft`);
+    },
     finishRemoteLogin: async (sessionId: string) =>
         unwrapApiResponse(await api.post<GrowthAccount>(`/growth/accounts/remote-login/${sessionId}/finish`)),
     getAccountDetail: async (id: number) =>
         unwrapApiResponse(await api.get<GrowthAccountDetail>(`/growth/accounts/${id}/detail`)),
+    getFlowProfile: async (flowId: number | string) =>
+        unwrapApiResponse(await api.get<GrowthFlowProfile>(`/growth/flows/${flowId}/profile`)),
+    // Null while the task has no unsaved draft.
+    getProfileDraft: async (flowId: number | string): Promise<GrowthProfileDraft | null> => {
+        try {
+            return unwrapApiResponse(await api.get<GrowthProfileDraft>(`/growth/flows/${flowId}/profile-draft`));
+        } catch (error) {
+            if (getApiErrorStatusCode(error) === 404) {
+                return null;
+            }
+
+            throw error;
+        }
+    },
     listAccounts: async () => unwrapApiResponse(await api.get<GrowthAccountsResponse>('/growth/accounts/')).accounts,
     listLeads: async (flowId: number | string): Promise<GrowthLead[]> => {
         const [leads, runs, sources] = await Promise.all([getWireLeads(flowId), getWireRuns(flowId), getWireSources()]);
@@ -135,6 +159,9 @@ const live = {
 
         return { sources: (sources ?? []).map(fromWireSource), total, warnings };
     },
+    // Saves over the profile the draft changes unless as_new, and discards the draft.
+    saveProfileDraft: async (flowId: number | string, options: GrowthProfileDraftSave) =>
+        unwrapApiResponse(await api.post<GrowthProfile>(`/growth/flows/${flowId}/profile-draft/save`, options)),
     // Answers 503 Growth.NoSecretKey while the server has no key to encrypt secrets with.
     saveSetting: async (kind: GrowthSettingKind, input: GrowthSettingInput) =>
         unwrapApiResponse(await api.put<GrowthSetting>(`/growth/settings/${kind}`, input)),
@@ -151,6 +178,12 @@ const live = {
     // An empty string clears the account's own proxy, so it falls back to the default one.
     setAccountProxy: async (id: number, proxyUrl: null | string) =>
         unwrapApiResponse(await api.put<GrowthAccount>(`/growth/accounts/${id}`, { proxy: proxyUrl ?? '' })),
+    setDefaultProfile: async (id: number) =>
+        unwrapApiResponse(await api.post<GrowthProfile>(`/growth/profiles/${id}/default`)),
+    setFlowProfile: async (flowId: number | string, profileId: number) =>
+        unwrapApiResponse(
+            await api.put<GrowthFlowProfile>(`/growth/flows/${flowId}/profile`, { profile_id: profileId }),
+        ),
     startRemoteLogin: async (input: RemoteLoginInput) =>
         unwrapApiResponse(await api.post<GrowthRemoteLogin>('/growth/accounts/remote-login', input)),
     startTelegramLogin: async (input: StartLoginInput & { phone: string }) =>

@@ -20,8 +20,9 @@ import { Log } from '@/lib/log';
 export type Flow = FlowFragmentFragment;
 
 interface FlowsContextValue {
-    createFlow: (values: FlowFormValues) => Promise<null | string>;
-    createFlowWithAssistant: (values: FlowFormValues) => Promise<null | string>;
+    // Without a profile id the server uses the owner's default profile.
+    createFlow: (values: FlowFormValues, profileId?: string) => Promise<null | string>;
+    createFlowWithAssistant: (values: FlowFormValues, profileId?: string) => Promise<null | string>;
     deleteFlow: (flow: Flow) => Promise<boolean>;
     finishFlow: (flow: Flow) => Promise<boolean>;
     flows: Array<Flow>;
@@ -63,7 +64,7 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
     const [finishFlowMutation] = useMutation(FinishFlowDocument);
 
     const createFlow = useCallback(
-        async (values: FlowFormValues) => {
+        async (values: FlowFormValues, profileId?: string) => {
             const { message, providerName, resourceIds } = values;
 
             const input = message.trim();
@@ -78,6 +79,7 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
                     variables: {
                         input,
                         modelProvider,
+                        profileId,
                         resourceIds: resourceIds?.length ? resourceIds : undefined,
                     },
                 });
@@ -101,7 +103,7 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
     );
 
     const createFlowWithAssistant = useCallback(
-        async (values: FlowFormValues) => {
+        async (values: FlowFormValues, profileId?: string) => {
             const { message, providerName, resourceIds, useAgents } = values;
 
             const input = message.trim();
@@ -117,6 +119,7 @@ export function FlowsProvider({ children }: FlowsProviderProps) {
                         flowId: '0',
                         input,
                         modelProvider,
+                        profileId,
                         resourceIds: resourceIds?.length ? resourceIds : undefined,
                         useAgents,
                     },

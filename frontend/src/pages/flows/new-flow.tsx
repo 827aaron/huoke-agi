@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FlowForm, type FlowFormValues } from '@/features/flows/flow-form';
 import GrowthSetupHints from '@/features/growth/growth-setup-hints';
+import { GrowthProfileSelect } from '@/features/growth/profiles/growth-profile-select';
 import { copy } from '@/lib/copy';
 import { routes } from '@/lib/routes';
 import { useFlows } from '@/providers/flows-provider';
@@ -24,6 +25,7 @@ function NewFlow() {
     const [flowType, setFlowType] = useState<'assistant' | 'automation'>('automation');
     // A chip fills the input by remounting the form with the chip's sentence; it never submits.
     const [draft, setDraft] = useState({ key: 0, message: '' });
+    const [profileId, setProfileId] = useState('');
 
     const shouldUseAgents = useMemo(() => {
         return settings?.assistantUseAgents ?? true;
@@ -37,7 +39,11 @@ function NewFlow() {
         setIsLoading(true);
 
         try {
-            const flowId = flowType === 'automation' ? await createFlow(values) : await createFlowWithAssistant(values);
+            const chosen = profileId || undefined;
+            const flowId =
+                flowType === 'automation'
+                    ? await createFlow(values, chosen)
+                    : await createFlowWithAssistant(values, chosen);
 
             if (!flowId) {
                 return false;
@@ -88,6 +94,11 @@ function NewFlow() {
                         <p className="text-muted-foreground -mt-2 text-center text-xs">
                             {flowType === 'automation' ? copy.newFlow.automationHint : copy.newFlow.assistantHint}
                         </p>
+                        <GrowthProfileSelect
+                            disabled={isLoading}
+                            onChange={setProfileId}
+                            value={profileId}
+                        />
                         <FlowForm
                             defaultValues={{
                                 message: draft.message,

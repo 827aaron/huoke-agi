@@ -3,12 +3,15 @@ import type {
     GrowthAccount,
     GrowthAccountDetail,
     GrowthEmailResult,
+    GrowthFlowProfile,
     GrowthLead,
     GrowthLeadInput,
     GrowthLeadUpdate,
     GrowthModelOption,
     GrowthModelsInput,
     GrowthProfile,
+    GrowthProfileDraft,
+    GrowthProfileDraftSave,
     GrowthProfileInput,
     GrowthProfilePreset,
     GrowthProxyTestResult,
@@ -33,6 +36,20 @@ const now = Date.now();
 const ago = (minutes: number) => new Date(now - minutes * 60_000).toISOString();
 
 let profiles: GrowthProfile[] = [];
+const flowProfiles = new Map<string, number>();
+const profileDrafts = new Map<string, GrowthProfileDraft>();
+
+const flowProfileOf = (flowId: number | string): GrowthFlowProfile => {
+    const bound = profiles.find((item) => item.id === flowProfiles.get(String(flowId)));
+    const profile = bound ?? profiles.find((item) => item.default);
+
+    return {
+        fallback: flowProfiles.has(String(flowId)) && !bound,
+        flow_id: Number(flowId),
+        profile_id: profile?.id ?? null,
+        title: profile?.title ?? '',
+    };
+};
 
 let accounts: GrowthAccount[] = [
     {
@@ -420,13 +437,6 @@ const profilePresets: GrowthProfilePreset[] = [
             competitors: null,
             contact_types: ['platform_handle', 'whatsapp', 'line', 'telegram'],
             default_target: 50,
-            excludes: [
-                'a stated age under 18',
-                'an explicit request for help to stop gambling, or a stated self-exclusion',
-                'a stated location outside the licensed regions',
-                'affiliates and agents promoting other platforms',
-                'bots and spam',
-            ],
             games: ['casino games', 'live dealer games', 'sports'],
             genre: 'Licensed online gaming platform',
             languages: null,
@@ -434,7 +444,37 @@ const profilePresets: GrowthProfilePreset[] = [
             notes: 'The licensed regions are the ones under Regions. Exclusions apply only on explicit evidence in the message; never infer them from style, age cues or platform.',
             pitch: 'A licensed, regulated online gaming operator (casino games and sports) serving the regions its license covers. Leads are adult players who already discuss online gaming platforms in public and say what they want from one; they are delivered to the operator, and nobody is contacted on its behalf.',
             regions: null,
-            scoring: { qualified: 8, watchlist: 4, weights: { active: 2, match: 3, pain: 3, paying: 3, player: 3 } },
+            scoring: {
+                dimensions: [
+                    {
+                        description: 'The sender plays or follows online casino games or sports betting.',
+                        key: 'player',
+                        name: 'Audience',
+                        points: 3,
+                    },
+                    {
+                        description: 'The sender complains about a platform or wants to switch.',
+                        key: 'pain',
+                        name: 'Pain or switching',
+                        points: 3,
+                    },
+                    {
+                        description: 'The sender deposits, tops up or bets money.',
+                        key: 'paying',
+                        name: 'Paying',
+                        points: 3,
+                    },
+                    {
+                        description: 'The region, language or product fits the profile.',
+                        key: 'match',
+                        name: 'Fit',
+                        points: 3,
+                    },
+                ],
+                qualified: 8,
+                recent: { points: 2 },
+                watchlist: 4,
+            },
             signals: [
                 'deposit experience',
                 'withdrawal speed',
@@ -446,6 +486,13 @@ const profilePresets: GrowthProfilePreset[] = [
                 'looking for a new platform',
                 'platform recommendation',
             ],
+            title: '',
+            unwanted: [
+                'a stated location outside the licensed regions',
+                'affiliates and agents promoting other platforms',
+                'bots and spam',
+            ],
+            unwanted_penalty: null,
         },
     },
     {
@@ -455,11 +502,6 @@ const profilePresets: GrowthProfilePreset[] = [
             competitors: null,
             contact_types: ['platform_handle'],
             default_target: 50,
-            excludes: [
-                'accounts selling or boosting services',
-                'bots and spam',
-                'developers advertising their own game',
-            ],
             games: null,
             genre: 'Mobile and PC games',
             languages: null,
@@ -479,6 +521,13 @@ const profilePresets: GrowthProfilePreset[] = [
                 'build',
                 'rank',
             ],
+            title: '',
+            unwanted: [
+                'accounts selling or boosting services',
+                'bots and spam',
+                'developers advertising their own game',
+            ],
+            unwanted_penalty: null,
         },
     },
 ];
@@ -766,8 +815,14 @@ export const growthMock = {
         await delay(null);
     },
     createProfile: (input: GrowthProfileInput): Promise<GrowthProfile> => {
-        const profile = { ...input, id: 1, updated_at: new Date().toISOString() };
-        profiles = [profile];
+        const profile = {
+            ...input,
+            default: !profiles.length,
+            id: Math.max(0, ...profiles.map((item) => item.id)) + 1,
+            title: input.title || input.name,
+            updated_at: new Date().toISOString(),
+        };
+        profiles = [...profiles, profile];
 
         return delay(profile);
     },
@@ -791,6 +846,16 @@ export const growthMock = {
 
         await delay(null);
     },
+    deleteProfile: async (id: number) => {
+        const wasDefault = profiles.find((item) => item.id === id)?.default;
+        profiles = profiles.filter((item) => item.id !== id);
+
+        if (wasDefault && profiles[0]) {
+            profiles = profiles.map((item, index) => ({ ...item, default: index === 0 }));
+        }
+
+        await delay(undefined);
+    },
     deleteSchedule: async (id: number) => {
         schedules = schedules.filter((item) => item.id !== id);
         await delay(null);
@@ -803,6 +868,10 @@ export const growthMock = {
         }
 
         await delay(null);
+    },
+    discardProfileDraft: async (flowId: number | string) => {
+        profileDrafts.delete(String(flowId));
+        await delay(undefined);
     },
     finishRemoteLogin: (sessionId: string): Promise<GrowthAccount> => {
         const pending = remoteLogins.get(sessionId);
@@ -847,6 +916,8 @@ export const growthMock = {
             joined_groups_count: groups.length,
         });
     },
+    getFlowProfile: (flowId: number | string) => delay(flowProfileOf(flowId)),
+    getProfileDraft: (flowId: number | string) => delay(profileDrafts.get(String(flowId)) ?? null),
     listAccounts: () => delay(accounts),
     // Every flow sees the same sample leads so any flow opened in development has something to show.
     listLeads: () => delay(leads),
@@ -862,12 +933,33 @@ export const growthMock = {
                   ).map((id) => ({ id })),
               ),
     listProfilePresets: () => delay(profilePresets),
-    listProfiles: () => delay(profiles),
+    listProfiles: () => delay([...profiles].sort((a, b) => Number(b.default) - Number(a.default))),
     listRuns: (flowId: number | string) => delay(runs.map((run) => ({ ...run, flow_id: Number(flowId) }))),
     listSchedules: (flowId: number | string) =>
         delay(schedules.map((schedule) => ({ ...schedule, flow_id: Number(flowId) }))),
     listSettings: () => delay(settings.map(onWire)),
     listSources: () => delay({ sources, total: sources.length, warnings: [] }),
+    saveProfileDraft: async (flowId: number | string, options: GrowthProfileDraftSave): Promise<GrowthProfile> => {
+        const draft = profileDrafts.get(String(flowId));
+
+        if (!draft) {
+            return Promise.reject(new Error('no profile draft for this task'));
+        }
+
+        const input = { ...draft.profile, title: draft.title };
+        const saved =
+            draft.base_profile_id && !options.as_new
+                ? await growthMock.updateProfile(draft.base_profile_id, input)
+                : await growthMock.createProfile(input);
+
+        if (options.use_for_flow) {
+            flowProfiles.set(String(flowId), saved.id);
+        }
+
+        profileDrafts.delete(String(flowId));
+
+        return options.make_default ? growthMock.setDefaultProfile(saved.id) : saved;
+    },
     saveSetting: (kind: GrowthSettingKind, input: GrowthSettingInput): Promise<GrowthSetting> => {
         const current = findSetting(kind);
         const kept = current.provider === input.provider ? (storedValues.get(kind) ?? {}) : {};
@@ -906,6 +998,16 @@ export const growthMock = {
         accounts = accounts.map((account) => (account.id === id ? { ...account, ...proxyFields(proxyUrl) } : account));
 
         return delay(accounts.find((account) => account.id === id) as GrowthAccount);
+    },
+    setDefaultProfile: (id: number): Promise<GrowthProfile> => {
+        profiles = profiles.map((item) => ({ ...item, default: item.id === id }));
+
+        return delay(profiles.find((item) => item.id === id) as GrowthProfile);
+    },
+    setFlowProfile: (flowId: number | string, profileId: number) => {
+        flowProfiles.set(String(flowId), profileId);
+
+        return delay(flowProfileOf(flowId));
     },
     startRemoteLogin: (input: RemoteLoginInput): Promise<GrowthRemoteLogin> => {
         const sessionId = `rl-${Date.now()}`;
@@ -985,8 +1087,20 @@ export const growthMock = {
         await delay(null);
     },
     updateProfile: (id: number, input: GrowthProfileInput): Promise<GrowthProfile> => {
-        const profile = { ...input, id, updated_at: new Date().toISOString() };
-        profiles = [profile];
+        const current = profiles.find((item) => item.id === id);
+
+        if (!current) {
+            return Promise.reject(new Error('business profile not found'));
+        }
+
+        const profile = {
+            ...input,
+            default: current.default,
+            id,
+            title: input.title || input.name,
+            updated_at: new Date().toISOString(),
+        };
+        profiles = profiles.map((item) => (item.id === id ? profile : item));
 
         return delay(profile);
     },

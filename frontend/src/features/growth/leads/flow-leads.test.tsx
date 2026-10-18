@@ -8,7 +8,7 @@ import type { GrowthLead } from '../growth-types';
 
 import FlowLeads from './flow-leads';
 
-const flow = vi.hoisted(() => ({ leads: [] as unknown[] }));
+const flow = vi.hoisted(() => ({ leads: [] as unknown[], profiles: [] as unknown[] }));
 
 vi.mock('../growth-flow-provider', () => ({
     useGrowthFlow: () => ({
@@ -135,22 +135,30 @@ describe('FlowLeads', () => {
     });
 
     it('shows the signals a prospect scored on and the points of each', async () => {
+        flow.profiles = [
+            { scoring: { dimensions: [{ description: '', key: 'agency', name: '代理经验', points: 5 }] } },
+        ];
         flow.leads = [
             lead(1, 'Ace', {
+                flags: ['unwanted'],
                 score_breakdown: [
                     { points: 3, signal: 'player' },
+                    { points: 5, signal: 'agency' },
                     { points: 2, signal: 'active' },
                 ],
-                signals: ['player', 'active'],
+                signals: ['player', 'agency', 'active'],
             }),
         ];
         renderLeads();
 
+        expect(screen.getByText('不想要')).toBeInTheDocument();
         fireEvent.click(screen.getByText('Ace'));
         const sheet = await screen.findByRole('dialog');
 
         expect(sheet).toHaveTextContent('属于目标人群 +3');
+        expect(sheet).toHaveTextContent('代理经验 +5');
         expect(sheet).toHaveTextContent('近期活跃 +2');
+        flow.profiles = [];
     });
 
     it('names what each select’s first option covers', () => {

@@ -1,7 +1,6 @@
 import type {
     GrowthLead,
     GrowthLeadEvidence,
-    GrowthLeadSignal,
     GrowthLeadTier,
     GrowthPlatform,
     GrowthRun,
@@ -34,6 +33,7 @@ export interface WireLead {
     delivered_run_id?: number;
     display_name?: string;
     evidence: null | WireEvidence[];
+    flags?: null | string[];
     flow_id?: number;
     lead_id: number;
     match_reason?: string;
@@ -188,6 +188,7 @@ export const fromWireLeads = (leads: WireLead[], runs: WireRun[], sources: Growt
             first_flow_title: '',
             first_round: lead.task_id === undefined ? 0 : (roundOfTask.get(lead.task_id) ?? 0),
             first_task_id: lead.task_id ?? 0,
+            flags: lead.flags ?? [],
             id: lead.lead_id,
             last_active_at: newest?.posted_at ?? null,
             note: lead.note ?? '',
@@ -196,8 +197,8 @@ export const fromWireLeads = (leads: WireLead[], runs: WireRun[], sources: Growt
             platform_user_id: lead.platform_user_id,
             profile: null,
             score: lead.score,
-            score_breakdown: lead.score_breakdown as GrowthLead['score_breakdown'],
-            signals: lead.signals as GrowthLeadSignal[],
+            score_breakdown: lead.score_breakdown,
+            signals: lead.signals,
             source_id: sourceId,
             source_title: titles.get(sourceId) ?? '',
             tier: TIER[lead.tier] ?? (lead.tier as GrowthLeadTier),
