@@ -51,9 +51,10 @@ func TestProfileDraft_ApplyProfileDraft_SavesTheDraftAndBindsTheTask(t *testing.
 
 	_, err = w.svc.SaveProfileDraft(ctx, scope, "agents v2", &base.ID, agents)
 	require.NoError(t, err)
-	over, err := w.svc.ApplyProfileDraft(ctx, w.user, scope.FlowID, ApplyDraftOptions{MakeDefault: true})
+	over, err := w.svc.ApplyProfileDraft(ctx, w.user, scope.FlowID, ApplyDraftOptions{Title: " agents MY ", MakeDefault: true})
 	require.NoError(t, err)
 	assert.Equal(t, base.ID, over.ID, "without as_new the draft saves over its base")
+	assert.Equal(t, "agents MY", over.Title, "a title given on save replaces the draft's")
 	assert.Equal(t, "MY agents", over.Name)
 	assert.True(t, over.Default)
 	fp, err = w.svc.FlowProfile(ctx, w.user, scope.FlowID)

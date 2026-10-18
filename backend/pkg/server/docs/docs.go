@@ -11201,6 +11201,9 @@ const docTemplate = `{
                 "make_default": {
                     "type": "boolean"
                 },
+                "title": {
+                    "type": "string"
+                },
                 "use_for_flow": {
                     "type": "boolean"
                 }

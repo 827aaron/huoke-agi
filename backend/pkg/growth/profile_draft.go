@@ -1,11 +1,13 @@
 package growth
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"pentagi/pkg/database"
@@ -84,12 +86,14 @@ func (s *Service) DiscardProfileDraft(ctx context.Context, userID, flowID int64)
 	return nil
 }
 
-// ApplyDraftOptions say how a draft is saved. AsNew saves a new profile even when the
-// draft changes a saved one; UseForFlow makes the draft's flow use the saved profile.
+// ApplyDraftOptions say how a draft is saved. Title, when set, replaces the draft's;
+// AsNew saves a new profile even when the draft changes a saved one; UseForFlow makes the
+// draft's flow use the saved profile.
 type ApplyDraftOptions struct {
-	AsNew       bool `json:"as_new"`
-	UseForFlow  bool `json:"use_for_flow"`
-	MakeDefault bool `json:"make_default"`
+	Title       string `json:"title,omitempty"`
+	AsNew       bool   `json:"as_new"`
+	UseForFlow  bool   `json:"use_for_flow"`
+	MakeDefault bool   `json:"make_default"`
 }
 
 // ApplyProfileDraft saves the flow's draft as a profile and discards the draft.
@@ -98,7 +102,7 @@ func (s *Service) ApplyProfileDraft(ctx context.Context, userID, flowID int64, o
 	if err != nil {
 		return ProfileView{}, err
 	}
-	in := ProfileInput{Title: d.Title, Profile: d.Profile}
+	in := ProfileInput{Title: cmp.Or(strings.TrimSpace(opt.Title), d.Title), Profile: d.Profile}
 	var v ProfileView
 	if d.BaseProfileID != nil && !opt.AsNew {
 		v, err = s.UpdateProfile(ctx, userID, *d.BaseProfileID, in)
