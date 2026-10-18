@@ -319,6 +319,12 @@ type RemoteLogin interface {
 	Cancel(ctx context.Context, cfg *config.Config, account Account) error
 }
 
+// ProfileForgetter is a RemoteLogin whose sign-in lives outside the account row, so
+// deleting the account must remove it there too.
+type ProfileForgetter interface {
+	Forget(ctx context.Context, cfg *config.Config, account Account) error
+}
+
 var (
 	phoneLogins  = map[Platform]PhoneLogin{}
 	remoteLogins = map[Platform]RemoteLogin{}

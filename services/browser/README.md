@@ -56,6 +56,7 @@ All bodies are JSON. Every response to an account route carries `account`, the h
 | `POST /sessions/{id}/login/cancel` | | the account record, unchanged; the login link stops working and the browser closes |
 | `POST /sessions/{id}/config` | `platform`, account settings | the account record |
 | `POST /sessions/{id}/close` | | the account record |
+| `DELETE /sessions/{id}` | | `204`; the browser closes and the profile directory goes, fingerprint and position with it; an account the service never held is `204` too. Service token only |
 
 `captures` are the JSON responses the page fetched from the platform's own API (Facebook `/api/graphql/`, Instagram `/api/v1/` and `/graphql/query`, TikTok `/api/search/`, `/api/comment/list/`, `/api/post/item_list/`), which the connectors parse instead of the DOM.
 

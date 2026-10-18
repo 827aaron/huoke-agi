@@ -121,6 +121,12 @@ export function createServer(cfg, manager) {
       const accountId = parts[1];
       const action = parts.slice(2).join('/');
 
+      if (req.method === 'DELETE' && action === '') {
+        await manager.remove(accountId);
+        res.writeHead(204);
+        return res.end();
+      }
+
       if (req.method === 'GET') {
         session = await manager.get(accountId, url.searchParams.get('platform') || undefined);
         if (action === '') return sendJSON(res, 200, session.describe());
