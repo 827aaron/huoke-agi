@@ -1878,6 +1878,11 @@ const zh = {
             relogin: '重新登录',
             reloginLink: '去重新登录',
             remoteBrowserPending: '远程浏览器登录还在接入中，接好后点这里即可登录。',
+            remove: '删除',
+            removeConfirm: (a: string) =>
+                `删除账号 ${a} 后，系统会断开它的登录、清掉保存的登录信息，并把它从列表中移除。它加入过的群仍留在来源池里（改为未加入），已找到的潜客不受影响。以后要用需重新登录添加。此操作无法撤销。`,
+            removed: (a: string) => `账号 ${a} 已删除。`,
+            removeTitle: '删除账号',
             signedOutNoBackup: (a: string) =>
                 `账号 ${a} 登录已失效，没有其他可用账号，进行中的项目已暂停。请重新登录。`,
             signedOutSwitched: (a: string, b: string) => `账号 ${a} 登录已失效，已改用账号 ${b}。请尽快重新登录 ${a}。`,
@@ -4033,6 +4038,11 @@ const en: Copy = {
             relogin: 'Sign in again',
             reloginLink: 'Sign in again',
             remoteBrowserPending: 'Remote browser sign-in is not connected yet; this button will open it once it is.',
+            remove: 'Delete',
+            removeConfirm: (a) =>
+                `Deleting ${a} signs it out, clears its saved sign-in and removes it from the list. The groups it joined stay in the source pool as not joined, and the prospects already found are kept. To use it again, sign it in as a new account. This cannot be undone.`,
+            removed: (a) => `${a} deleted.`,
+            removeTitle: 'Delete account',
             signedOutNoBackup: (a) => `${a} signed out and no other account is available. Running projects are paused.`,
             signedOutSwitched: (a, b) => `${a} signed out; using ${b}. Please sign in again.`,
             status: {

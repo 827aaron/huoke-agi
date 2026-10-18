@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { GrowthAccount, GrowthAccountPlatform, GrowthAccountStatus } from '@/features/growth/growth-types';
 
 import { AppHeader, AppHeaderContent, AppHeaderTitle } from '@/components/layouts/app/app-header';
+import ConfirmationDialog from '@/components/shared/confirmation-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge, type BadgeVariant } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -76,6 +77,7 @@ function SettingsAccounts() {
     const [login, setLogin] = useState<LoginTarget | null>(null);
     const [proxyAccount, setProxyAccount] = useState<GrowthAccount | null>(null);
     const [detailAccount, setDetailAccount] = useState<GrowthAccount | null>(null);
+    const [pendingRemoval, setPendingRemoval] = useState<GrowthAccount | null>(null);
     const [now, setNow] = useState(() => Date.now());
 
     useEffect(() => {
@@ -103,6 +105,24 @@ function SettingsAccounts() {
                 ? rest.map((item) => (item.id === next.id ? next : item))
                 : [...rest, next];
         });
+
+    const removeAccount = async () => {
+        if (!pendingRemoval) {
+            return;
+        }
+
+        const account = pendingRemoval;
+
+        try {
+            await growthApi.deleteAccount(account.id);
+            setAccounts((previous) => (previous ?? []).filter((item) => item.id !== account.id));
+            toast.success(health.removed(accountName(account)));
+        } catch (actionError) {
+            toast.error(getApiErrorMessage(actionError, health.actionFailed));
+        } finally {
+            setPendingRemoval(null);
+        }
+    };
 
     const toggleDisabled = async (account: GrowthAccount) => {
         const isDisabling = account.status !== 'disabled';
@@ -229,6 +249,16 @@ function SettingsAccounts() {
                                         >
                                             {account.status === 'disabled' ? health.enable : health.disable}
                                         </Button>
+                                        <Button
+                                            aria-label={`${health.remove} ${accountLabel(account)}`}
+                                            className="text-destructive hover:text-destructive"
+                                            disabled={isBusy}
+                                            onClick={() => setPendingRemoval(account)}
+                                            size="sm"
+                                            variant="ghost"
+                                        >
+                                            {health.remove}
+                                        </Button>
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -347,6 +377,15 @@ function SettingsAccounts() {
                     platform={login.platform}
                 />
             )}
+            <ConfirmationDialog
+                confirmText={health.remove}
+                confirmVariant="destructive"
+                description={pendingRemoval ? health.removeConfirm(accountName(pendingRemoval)) : undefined}
+                handleConfirm={removeAccount}
+                handleOpenChange={(isOpen) => !isOpen && setPendingRemoval(null)}
+                isOpen={!!pendingRemoval}
+                title={health.removeTitle}
+            />
             <AccountDetailSheet
                 account={detailAccount}
                 onOpenChange={(isOpen) => !isOpen && setDetailAccount(null)}

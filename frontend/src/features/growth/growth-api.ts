@@ -96,6 +96,10 @@ const live = {
     createSchedule: async (input: GrowthScheduleInput) =>
         unwrapApiResponse(await api.post<GrowthSchedule>('/growth/schedules', input)),
     // Removes the lead with its evidence and scores, delivered or not.
+    // Signs the account out and removes it.
+    deleteAccount: async (id: number) => {
+        await api.delete(`/growth/accounts/${id}`);
+    },
     deleteLead: async (id: number) => {
         await api.delete(`/growth/leads/${id}`);
     },
