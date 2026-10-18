@@ -401,6 +401,7 @@ WHERE user_id = sqlc.arg(user_id)
   AND (sqlc.narg(delivered)::boolean IS NULL OR (delivered_at IS NOT NULL) = sqlc.narg(delivered)::boolean)
   AND (sqlc.narg(since)::timestamptz IS NULL OR created_at >= sqlc.narg(since)::timestamptz)
   AND (sqlc.narg(has_contact)::boolean IS NULL OR (jsonb_array_length(contacts) > 0) = sqlc.narg(has_contact)::boolean)
+  AND (sqlc.narg(flagged)::boolean IS NULL OR (cardinality(flags) > 0) = sqlc.narg(flagged)::boolean)
 ORDER BY score DESC, updated_at DESC, id DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
@@ -476,33 +477,81 @@ UPDATE growth_runs
 SET notify_status = sqlc.arg(notify_status), notify_error = sqlc.arg(notify_error), notified_at = now()
 WHERE id = sqlc.arg(id);
 
--- name: GetGrowthProfile :one
-SELECT * FROM growth_profiles WHERE user_id = sqlc.arg(user_id);
+-- name: GetUserGrowthProfile :one
+SELECT * FROM growth_profiles WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
--- name: UpsertGrowthProfile :one
-INSERT INTO growth_profiles (user_id, profile) VALUES (sqlc.arg(user_id), sqlc.arg(profile))
-ON CONFLICT (user_id) DO UPDATE SET profile = EXCLUDED.profile
+-- name: GetDefaultGrowthProfile :one
+SELECT * FROM growth_profiles WHERE user_id = sqlc.arg(user_id) AND is_default;
+
+-- name: GetUserGrowthProfiles :many
+SELECT * FROM growth_profiles WHERE user_id = sqlc.arg(user_id) ORDER BY is_default DESC, id;
+
+-- A customer's first profile is their default.
+-- name: CreateGrowthProfile :one
+INSERT INTO growth_profiles (user_id, title, profile, is_default)
+VALUES (
+  sqlc.arg(user_id), sqlc.arg(title), sqlc.arg(profile),
+  NOT EXISTS (SELECT 1 FROM growth_profiles WHERE user_id = sqlc.arg(user_id))
+)
 RETURNING *;
 
--- name: UpsertUserResourceFile :one
-INSERT INTO user_resources (user_id, hash, name, path, size, is_dir)
-VALUES (sqlc.arg(user_id), sqlc.arg(hash), sqlc.arg(name), sqlc.arg(path), sqlc.arg(size), false)
-ON CONFLICT (user_id, path) DO UPDATE
-SET hash = EXCLUDED.hash, size = EXCLUDED.size, is_dir = false
+-- name: UpdateGrowthProfile :one
+UPDATE growth_profiles SET title = sqlc.arg(title), profile = sqlc.arg(profile)
+WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
 RETURNING *;
 
--- name: GetUserResourceByPath :one
-SELECT * FROM user_resources WHERE user_id = sqlc.arg(user_id) AND path = sqlc.arg(path);
+-- name: SetDefaultGrowthProfile :execrows
+UPDATE growth_profiles SET is_default = (id = sqlc.arg(id)::bigint)
+WHERE user_id = sqlc.arg(user_id)::bigint AND (is_default OR id = sqlc.arg(id)::bigint)
+  AND EXISTS (SELECT 1 FROM growth_profiles p WHERE p.id = sqlc.arg(id)::bigint AND p.user_id = sqlc.arg(user_id)::bigint);
+
+-- name: DeleteGrowthProfile :one
+WITH dropped AS (
+  DELETE FROM growth_message_scores WHERE user_id = sqlc.arg(user_id)::bigint AND profile_id = sqlc.arg(id)::bigint
+)
+DELETE FROM growth_profiles WHERE id = sqlc.arg(id)::bigint AND user_id = sqlc.arg(user_id)::bigint
+RETURNING *;
+
+-- PromoteGrowthProfile makes the oldest profile the default when the customer has none.
+-- name: PromoteGrowthProfile :one
+UPDATE growth_profiles SET is_default = TRUE
+WHERE id = (SELECT p.id FROM growth_profiles p WHERE p.user_id = sqlc.arg(user_id) ORDER BY p.id LIMIT 1)
+  AND NOT EXISTS (SELECT 1 FROM growth_profiles d WHERE d.user_id = sqlc.arg(user_id) AND d.is_default)
+RETURNING *;
+
+-- name: UpsertGrowthFlowProfile :exec
+INSERT INTO growth_flow_profiles (flow_id, profile_id, title)
+VALUES (sqlc.arg(flow_id), sqlc.narg(profile_id), sqlc.arg(title))
+ON CONFLICT (flow_id) DO UPDATE SET profile_id = EXCLUDED.profile_id, title = EXCLUDED.title;
+
+-- name: UpsertGrowthProfileDraft :one
+INSERT INTO growth_profile_drafts (flow_id, user_id, base_profile_id, title, profile)
+VALUES (sqlc.arg(flow_id), sqlc.arg(user_id), sqlc.narg(base_profile_id), sqlc.arg(title), sqlc.arg(profile))
+ON CONFLICT (flow_id) DO UPDATE
+SET base_profile_id = EXCLUDED.base_profile_id, title = EXCLUDED.title, profile = EXCLUDED.profile
+RETURNING *;
+
+-- name: GetGrowthProfileDraft :one
+SELECT * FROM growth_profile_drafts WHERE flow_id = sqlc.arg(flow_id) AND user_id = sqlc.arg(user_id);
+
+-- name: DeleteGrowthProfileDraft :execrows
+DELETE FROM growth_profile_drafts WHERE flow_id = sqlc.arg(flow_id) AND user_id = sqlc.arg(user_id);
+
+-- name: GetGrowthFlowProfile :one
+SELECT * FROM growth_flow_profiles WHERE flow_id = sqlc.arg(flow_id);
 
 -- name: UpsertMessageScore :exec
-INSERT INTO growth_message_scores (user_id, source_id, message_id, score, signals)
-VALUES (sqlc.arg(user_id), sqlc.arg(source_id), sqlc.arg(message_id), sqlc.arg(score), sqlc.arg(signals))
-ON CONFLICT (user_id, source_id, message_id) DO UPDATE
+INSERT INTO growth_message_scores (user_id, profile_id, source_id, message_id, score, signals)
+VALUES (
+  sqlc.arg(user_id), sqlc.arg(profile_id), sqlc.arg(source_id), sqlc.arg(message_id), sqlc.arg(score), sqlc.arg(signals)
+)
+ON CONFLICT (user_id, profile_id, source_id, message_id) DO UPDATE
 SET score = EXCLUDED.score, signals = EXCLUDED.signals;
 
 -- name: GetMessageScores :many
 SELECT * FROM growth_message_scores
-WHERE user_id = sqlc.arg(user_id) AND source_id = sqlc.arg(source_id) AND message_id = ANY(sqlc.arg(message_ids)::text[]);
+WHERE user_id = sqlc.arg(user_id) AND profile_id = sqlc.arg(profile_id) AND source_id = sqlc.arg(source_id)
+  AND message_id = ANY(sqlc.arg(message_ids)::text[]);
 
 -- name: AdoptGrowthRun :one
 UPDATE growth_runs SET task_id = sqlc.arg(task_id)
@@ -530,10 +579,12 @@ UPDATE growth_runs SET deadline_closed_at = now() WHERE id = sqlc.arg(id) AND de
 
 -- name: CreateGrowthSchedule :one
 INSERT INTO growth_schedules (
-  user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at
+  user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at,
+  profile_id
 ) VALUES (
   sqlc.arg(user_id), sqlc.arg(flow_id), sqlc.arg(input), sqlc.arg(provider_name), sqlc.arg(days), sqlc.arg(weekdays),
-  sqlc.arg(date), sqlc.arg(start_time), sqlc.arg(end_time), sqlc.arg(timezone), sqlc.arg(enabled), sqlc.arg(next_start_at)
+  sqlc.arg(date), sqlc.arg(start_time), sqlc.arg(end_time), sqlc.arg(timezone), sqlc.arg(enabled), sqlc.arg(next_start_at),
+  sqlc.narg(profile_id)
 )
 RETURNING *;
 
@@ -541,7 +592,8 @@ RETURNING *;
 UPDATE growth_schedules
 SET input = sqlc.arg(input), days = sqlc.arg(days), weekdays = sqlc.arg(weekdays), date = sqlc.arg(date),
     start_time = sqlc.arg(start_time), end_time = sqlc.arg(end_time), timezone = sqlc.arg(timezone),
-    enabled = sqlc.arg(enabled), next_start_at = sqlc.arg(next_start_at), last_error = ''
+    enabled = sqlc.arg(enabled), next_start_at = sqlc.arg(next_start_at), profile_id = sqlc.narg(profile_id),
+    last_error = ''
 WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id)
 RETURNING *;
 
@@ -575,10 +627,10 @@ SET last_run_id = COALESCE(sqlc.narg(last_run_id), last_run_id), last_error = sq
 WHERE id = sqlc.arg(id);
 
 -- One statement, so the profile and the scores it outdates change together.
--- name: ReplaceGrowthProfileDroppingScores :one
+-- name: UpdateGrowthProfileDroppingScores :one
 WITH dropped AS (
-  DELETE FROM growth_message_scores WHERE user_id = sqlc.arg(user_id)
+  DELETE FROM growth_message_scores WHERE user_id = sqlc.arg(user_id)::bigint AND profile_id = sqlc.arg(id)::bigint
 )
-INSERT INTO growth_profiles (user_id, profile) VALUES (sqlc.arg(user_id), sqlc.arg(profile))
-ON CONFLICT (user_id) DO UPDATE SET profile = EXCLUDED.profile
+UPDATE growth_profiles SET title = sqlc.arg(title)::text, profile = sqlc.arg(profile)::jsonb
+WHERE id = sqlc.arg(id)::bigint AND user_id = sqlc.arg(user_id)::bigint
 RETURNING *;

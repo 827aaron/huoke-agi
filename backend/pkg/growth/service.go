@@ -63,7 +63,7 @@ type Service struct {
 
 	mu    sync.Mutex
 	conns map[int64]connectors.Connector
-	// knowledge takes the long lists of business profiles; nil until the router sets it.
+	// knowledge takes the long lists of the default business profile; nil until the router sets it.
 	knowledge ProfileKnowledge
 
 	logins loginRegistry

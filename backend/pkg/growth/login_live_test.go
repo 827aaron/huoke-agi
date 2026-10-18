@@ -5,6 +5,7 @@ package growth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -70,6 +71,8 @@ type remoteFake struct {
 	finishes  int
 	cancelled []int64
 	started   []connectors.Account
+	forgotten []int64
+	forgetErr error
 }
 
 func (r *remoteFake) Start(ctx context.Context, _ *config.Config, a connectors.Account) (connectors.RemoteLoginView, error) {
@@ -87,6 +90,14 @@ func (r *remoteFake) Finish(ctx context.Context, _ *config.Config, _ connectors.
 		return false, "checkpoint page", ctx.Err()
 	}
 	return true, "", ctx.Err()
+}
+
+func (r *remoteFake) Forget(ctx context.Context, _ *config.Config, a connectors.Account) error {
+	r.forgotten = append(r.forgotten, a.ID)
+	if r.forgetErr != nil {
+		return r.forgetErr
+	}
+	return ctx.Err()
 }
 
 func (r *remoteFake) Cancel(ctx context.Context, _ *config.Config, a connectors.Account) error {
@@ -214,4 +225,74 @@ func TestLogin_SetAccountEnabled_ReturnsANeverSignedInAccountToNeedsLogin(t *tes
 	v, err = w.svc.SetAccountEnabled(ctx, w.user, worked, true)
 	require.NoError(t, err)
 	assert.Equal(t, AccountStatusActive, v.Status)
+}
+
+// closeCountingConnector reports how often the service closed it.
+type closeCountingConnector struct {
+	*MemoryConnector
+	closed *int
+}
+
+func (c closeCountingConnector) Close() error {
+	*c.closed++
+	return nil
+}
+
+func TestLogin_DeleteAccount_RemovesTheAccountAndItsJoinsButKeepsTheSource(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	joined := w.mustAddTelegramGroup(t, scope, tgGroup("940", "joined_then_gone", "Joined Then Gone"))
+	_, err := w.svc.JoinSources(ctx, scope, []int64{joined})
+	require.NoError(t, err)
+	accountID := w.firstAccount(t)
+	closed := 0
+	w.svc.SetConnector(accountID, closeCountingConnector{MemoryConnector: w.tg, closed: &closed})
+
+	assert.ErrorIs(t, w.svc.DeleteAccount(ctx, seedUser(t, w.db, "b@example.test"), accountID), ErrAccountNotFound)
+	_, err = w.svc.userAccount(ctx, w.user, accountID)
+	require.NoError(t, err, "another customer cannot delete it")
+
+	require.NoError(t, w.svc.DeleteAccount(ctx, w.user, accountID))
+
+	_, err = w.svc.userAccount(ctx, w.user, accountID)
+	assert.ErrorIs(t, err, ErrAccountNotFound)
+	assert.Equal(t, 1, closed, "its live connection is closed")
+	var joins int
+	require.NoError(t, w.db.QueryRow(`SELECT count(*) FROM account_sources WHERE account_id = $1`, accountID).Scan(&joins))
+	assert.Zero(t, joins)
+	sources, err := w.svc.ListSources(ctx, w.user)
+	require.NoError(t, err)
+	require.Len(t, sources, 1)
+	assert.Equal(t, joined, sources[0].ID)
+	assert.Equal(t, "not_joined", sources[0].JoinStatus)
+	assert.ErrorIs(t, w.svc.DeleteAccount(ctx, w.user, accountID), ErrAccountNotFound)
+}
+
+func TestLogin_DeleteAccount_RemovesTheBrowserProfileAndDeletesEvenWhenThatFails(t *testing.T) {
+	const platform = "remote_forget_fake"
+	fake := &remoteFake{}
+	connectors.RegisterRemoteLogin(platform, fake)
+	w := newWorld(t)
+	ctx := context.Background()
+
+	first, err := w.svc.StartRemoteLogin(ctx, w.user, LoginStart{Platform: platform})
+	require.NoError(t, err)
+	second, err := w.svc.StartRemoteLogin(ctx, w.user, LoginStart{Platform: platform})
+	require.NoError(t, err)
+	require.Len(t, fake.started, 2)
+	firstID, secondID := fake.started[0].ID, fake.started[1].ID
+
+	require.NoError(t, w.svc.DeleteAccount(ctx, w.user, firstID))
+	assert.Equal(t, []int64{firstID}, fake.forgotten)
+	_, err = w.svc.FinishRemoteLogin(ctx, w.user, first.SessionID)
+	assert.ErrorIs(t, err, ErrLoginNotFound, "its open sign-in ends with it")
+
+	fake.forgetErr = errors.New("browser service unreachable")
+	require.NoError(t, w.svc.DeleteAccount(ctx, w.user, secondID))
+	assert.Equal(t, []int64{firstID, secondID}, fake.forgotten)
+	_, err = w.svc.userAccount(ctx, w.user, secondID)
+	assert.ErrorIs(t, err, ErrAccountNotFound)
+	_, err = w.svc.FinishRemoteLogin(ctx, w.user, second.SessionID)
+	assert.ErrorIs(t, err, ErrLoginNotFound)
 }

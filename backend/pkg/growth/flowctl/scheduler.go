@@ -90,6 +90,9 @@ func (s *Scheduler) start(ctx context.Context, st growth.ScheduledStart) error {
 	if err != nil {
 		return fmt.Errorf("provider %q of the task is unavailable: %w", st.ProviderName, err)
 	}
+	if st.ProfileID != nil {
+		ctx = growth.WithSelectedProfile(ctx, *st.ProfileID)
+	}
 	flowID, err := s.fc.CreateFlow(ctx, st.UserID, st.Input, prv.Name(), prv.Type(), nil, nil)
 	if err != nil {
 		return err

@@ -220,7 +220,7 @@ func TestBrowser_SetProfile_EveryCallForTheAccountCarriesIt(t *testing.T) {
 	assert.NotContains(t, bodies["/sessions/other/navigate"], "proxy", "another account keeps its own settings")
 }
 
-func TestBrowser_RemoteLogin_StartFinishCancelDriveTheAccountsBrowser(t *testing.T) {
+func TestBrowser_RemoteLogin_DrivesAndForgetsTheAccountsBrowser(t *testing.T) {
 	var mu sync.Mutex
 	var seen []string
 	var startBody map[string]any
@@ -230,6 +230,11 @@ func TestBrowser_RemoteLogin_StartFinishCancelDriveTheAccountsBrowser(t *testing
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		mu.Lock()
 		defer mu.Unlock()
+		if r.Method == http.MethodDelete {
+			seen = append(seen, "DELETE "+r.URL.Path)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		seen = append(seen, r.URL.Path)
 		switch r.URL.Path {
 		case "/sessions/instagram-7/login/start":
@@ -277,8 +282,17 @@ func TestBrowser_RemoteLogin_StartFinishCancelDriveTheAccountsBrowser(t *testing
 	assert.Empty(t, reason)
 
 	require.NoError(t, login.Cancel(context.Background(), nil, acc))
-	assert.Equal(t, []string{"/sessions/instagram-7/login/start", "/sessions/instagram-7/login/confirm", "/sessions/instagram-7/login/confirm", "/sessions/instagram-7/login/cancel"}, seen)
+	require.Implements(t, (*ProfileForgetter)(nil), login)
+	require.NoError(t, login.(ProfileForgetter).Forget(context.Background(), nil, acc))
+	assert.Equal(t, []string{"/sessions/instagram-7/login/start", "/sessions/instagram-7/login/confirm", "/sessions/instagram-7/login/confirm", "/sessions/instagram-7/login/cancel", "DELETE /sessions/instagram-7"}, seen)
+	browser, err := browserFor(nil)
+	require.NoError(t, err)
+	_, kept := browser.profile("instagram-7")
+	assert.False(t, kept, "a deleted account's proxy and fingerprint are not sent again")
 
-	_, ok = LookupRemoteLogin(PlatformFacebook)
-	assert.True(t, ok)
+	for _, p := range []Platform{PlatformFacebook, PlatformTikTok} {
+		other, ok := LookupRemoteLogin(p)
+		require.True(t, ok, p)
+		assert.Implements(t, (*ProfileForgetter)(nil), other, p)
+	}
 }

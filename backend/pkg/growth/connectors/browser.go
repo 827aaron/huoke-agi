@@ -410,6 +410,15 @@ func (c *BrowserClient) Close(ctx context.Context, account string) error {
 	return c.post(ctx, account, "close", map[string]any{}, nil)
 }
 
+// Delete closes the account's browser and removes its profile, fingerprint and position
+// from the service. An account the service does not hold is not an error.
+func (c *BrowserClient) Delete(ctx context.Context, account string) error {
+	c.mu.Lock()
+	delete(c.profiles, account)
+	c.mu.Unlock()
+	return c.call(ctx, http.MethodDelete, account, "", nil, nil)
+}
+
 // LoginURL is the operator page authorised by the service token itself. Prefer
 // StartLogin, whose link holds a short-lived ticket instead.
 func (c *BrowserClient) LoginURL(account string, platform Platform) string {
@@ -765,6 +774,14 @@ func (l browserRemoteLogin) Finish(ctx context.Context, cfg *config.Config, acc 
 		reason = res.StateReason
 	}
 	return false, reason, nil
+}
+
+func (l browserRemoteLogin) Forget(ctx context.Context, cfg *config.Config, acc Account) error {
+	browser, name, err := l.client(cfg, acc)
+	if err != nil {
+		return err
+	}
+	return browser.Delete(ctx, name)
 }
 
 func (l browserRemoteLogin) Cancel(ctx context.Context, cfg *config.Config, acc Account) error {

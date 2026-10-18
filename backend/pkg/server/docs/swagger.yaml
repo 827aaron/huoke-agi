@@ -189,6 +189,17 @@ definitions:
       source:
         $ref: '#/definitions/growth.SourceView'
     type: object
+  growth.ApplyDraftOptions:
+    properties:
+      as_new:
+        type: boolean
+      make_default:
+        type: boolean
+      title:
+        type: string
+      use_for_flow:
+        type: boolean
+    type: object
   growth.Contact:
     properties:
       type:
@@ -212,6 +223,17 @@ definitions:
         type: string
       source_id:
         type: integer
+    type: object
+  growth.FlowProfileView:
+    properties:
+      fallback:
+        type: boolean
+      flow_id:
+        type: integer
+      profile_id:
+        type: integer
+      title:
+        type: string
     type: object
   growth.JoinWarning:
     properties:
@@ -254,6 +276,13 @@ definitions:
       evidence:
         items:
           $ref: '#/definitions/growth.EvidenceView'
+        type: array
+      flags:
+        description: |-
+          Flags mark what the score does not show; LeadFlagUnwanted is a match of the
+          profile's unwanted list.
+        items:
+          type: string
         type: array
       flow_id:
         type: integer
@@ -355,6 +384,9 @@ definitions:
       default_target:
         type: integer
       excludes:
+        description: |-
+          LegacyExcludes is the field Unwanted replaced; a stored profile or an older page may
+          still carry it, and normalize moves it over.
         items:
           type: string
         type: array
@@ -386,6 +418,92 @@ definitions:
         items:
           type: string
         type: array
+      unwanted:
+        description: |-
+          Unwanted lowers a lead's score by UnwantedPenalty and flags it instead of dropping it;
+          ComplianceExcludes, which do drop, are not part of a profile.
+        items:
+          type: string
+        type: array
+      unwanted_penalty:
+        description: UnwantedPenalty is in points; 0 is DefaultUnwantedPenalty.
+        type: integer
+    type: object
+  growth.ProfileDraftView:
+    properties:
+      base_profile_id:
+        type: integer
+      flow_id:
+        type: integer
+      profile:
+        $ref: '#/definitions/growth.Profile'
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  growth.ProfileInput:
+    properties:
+      competitors:
+        items:
+          type: string
+        type: array
+      contact_types:
+        description: |-
+          ContactTypes are the contacts a lead is looked for with: values of ContactTypes or
+          names the owner chose, up to 30 characters each; empty means the platform handle alone.
+        items:
+          type: string
+        type: array
+      default_target:
+        type: integer
+      excludes:
+        description: |-
+          LegacyExcludes is the field Unwanted replaced; a stored profile or an older page may
+          still carry it, and normalize moves it over.
+        items:
+          type: string
+        type: array
+      games:
+        items:
+          type: string
+        type: array
+      genre:
+        type: string
+      languages:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      notes:
+        type: string
+      pitch:
+        type: string
+      regions:
+        items:
+          type: string
+        type: array
+      scoring:
+        $ref: '#/definitions/growth.Scoring'
+        description: Scoring turns the judgement model's answers into a lead score;
+          nil is DefaultScoring.
+      signals:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      unwanted:
+        description: |-
+          Unwanted lowers a lead's score by UnwantedPenalty and flags it instead of dropping it;
+          ComplianceExcludes, which do drop, are not part of a profile.
+        items:
+          type: string
+        type: array
+      unwanted_penalty:
+        description: UnwantedPenalty is in points; 0 is DefaultUnwantedPenalty.
+        type: integer
     type: object
   growth.ProfilePreset:
     properties:
@@ -412,9 +530,14 @@ definitions:
         items:
           type: string
         type: array
+      default:
+        type: boolean
       default_target:
         type: integer
       excludes:
+        description: |-
+          LegacyExcludes is the field Unwanted replaced; a stored profile or an older page may
+          still carry it, and normalize moves it over.
         items:
           type: string
         type: array
@@ -450,6 +573,18 @@ definitions:
         items:
           type: string
         type: array
+      title:
+        type: string
+      unwanted:
+        description: |-
+          Unwanted lowers a lead's score by UnwantedPenalty and flags it instead of dropping it;
+          ComplianceExcludes, which do drop, are not part of a profile.
+        items:
+          type: string
+        type: array
+      unwanted_penalty:
+        description: UnwantedPenalty is in points; 0 is DefaultUnwantedPenalty.
+        type: integer
       updated_at:
         type: string
     type: object
@@ -465,6 +600,11 @@ definitions:
         type: string
       source:
         type: string
+    type: object
+  growth.RecentDimension:
+    properties:
+      points:
+        type: integer
     type: object
   growth.RemoteLoginView:
     properties:
@@ -497,6 +637,11 @@ definitions:
         type: integer
       input:
         type: string
+      profile_id:
+        description: |-
+          ProfileID is the business profile each start uses; on create nil takes the flow's,
+          on update nil keeps the saved one, and 0 means the default at each start.
+        type: integer
       start_time:
         example: "02:00"
         type: string
@@ -543,6 +688,8 @@ definitions:
         $ref: '#/definitions/growth.ScheduleRun'
       next_start_at:
         type: string
+      profile_id:
+        type: integer
       start_time:
         type: string
       timezone:
@@ -561,12 +708,32 @@ definitions:
     type: object
   growth.Scoring:
     properties:
+      dimensions:
+        items:
+          $ref: '#/definitions/growth.ScoringDimension'
+        type: array
       qualified:
         type: integer
+      recent:
+        $ref: '#/definitions/growth.RecentDimension'
+        description: Recent is judged by the message time, not asked of the model;
+          nil adds nothing.
       watchlist:
         type: integer
       weights:
         $ref: '#/definitions/growth.ScoringWeights'
+        description: LegacyWeights is the fixed five-signal form Dimensions replaced.
+    type: object
+  growth.ScoringDimension:
+    properties:
+      description:
+        type: string
+      key:
+        type: string
+      name:
+        type: string
+      points:
+        type: integer
     type: object
   growth.ScoringWeights:
     properties:
@@ -2533,6 +2700,13 @@ definitions:
         type: string
     required:
     - platform
+    type: object
+  services.growthFlowProfileRequest:
+    properties:
+      profile_id:
+        type: integer
+    required:
+    - profile_id
     type: object
   services.growthLeads:
     properties:
@@ -5903,6 +6077,42 @@ paths:
       tags:
       - Growth
   /growth/accounts/{accountID}:
+    delete:
+      parameters:
+      - description: account id
+        in: path
+        name: accountID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: account deleted successful
+          schema:
+            $ref: '#/definitions/SuccessResponse'
+        "400":
+          description: invalid account id
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: deleting accounts not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: account not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting the account
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove an account with its session or browser profile and its join
+        records; sources and leads are kept
+      tags:
+      - Growth
     put:
       consumes:
       - application/json
@@ -6424,6 +6634,213 @@ paths:
       summary: Pass on the two-step verification password; next is done
       tags:
       - Growth
+  /growth/flows/{flowID}/profile:
+    get:
+      parameters:
+      - description: task id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: profile received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.FlowProfileView'
+              type: object
+        "403":
+          description: getting the profile not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: task not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting the profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the business profile a task uses; fallback is true when the
+        default stands in
+      tags:
+      - Growth
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: task id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: profile
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/services.growthFlowProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: profile set successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.FlowProfileView'
+              type: object
+        "400":
+          description: invalid request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: setting the profile not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: task or profile not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on setting the profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Make a task use another business profile from its next judgement and
+        its next step on
+      tags:
+      - Growth
+  /growth/flows/{flowID}/profile-draft:
+    delete:
+      parameters:
+      - description: task id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: draft discarded successful
+        "403":
+          description: discarding the draft not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: the task has no draft
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on discarding the draft
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Discard a task's profile draft
+      tags:
+      - Growth
+    get:
+      parameters:
+      - description: task id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: draft received successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.ProfileDraftView'
+              type: object
+        "403":
+          description: getting the draft not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: the task has no draft
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on getting the draft
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Retrieve the profile draft of a task's assistant, not saved yet
+      tags:
+      - Growth
+  /growth/flows/{flowID}/profile-draft/save:
+    post:
+      consumes:
+      - application/json
+      description: A draft of a saved profile overwrites it unless as_new; use_for_flow
+        makes the task use the saved profile.
+      parameters:
+      - description: task id
+        in: path
+        minimum: 0
+        name: flowID
+        required: true
+        type: integer
+      - description: how to save
+        in: body
+        name: json
+        required: true
+        schema:
+          $ref: '#/definitions/growth.ApplyDraftOptions'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: draft saved successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.ProfileView'
+              type: object
+        "400":
+          description: invalid draft
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "403":
+          description: saving the draft not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: the task has no draft
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on saving the draft
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Save a task's profile draft as a profile and discard the draft
+      tags:
+      - Growth
   /growth/leads/:
     get:
       parameters:
@@ -6446,6 +6863,11 @@ paths:
       - description: true for delivered leads, false for undelivered
         in: query
         name: delivered
+        type: boolean
+      - description: true for leads with a flag, such as a match of the profile's
+          unwanted list
+        in: query
+        name: flagged
         type: boolean
       - description: page size, default 100, at most 500
         in: query
@@ -6750,7 +7172,6 @@ paths:
       - Growth
   /growth/profiles:
     get:
-      description: A user has at most one profile, so the list is empty or holds one.
       produces:
       - application/json
       responses:
@@ -6766,31 +7187,30 @@ paths:
                   type: array
               type: object
         "403":
-          description: getting the profile not permitted
+          description: getting the profiles not permitted
           schema:
             $ref: '#/definitions/ErrorResponse'
         "500":
-          description: internal error on getting the profile
+          description: internal error on getting the profiles
           schema:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Retrieve the business profile every task of the current user starts
-        from
+      summary: Retrieve the business profiles of the current user, the default first
       tags:
       - Growth
     post:
       consumes:
       - application/json
-      description: 'Saving when a profile exists replaces it. knowledge says whether
-        the lists reached the knowledge store: seeded, or skipped with the reason.'
+      description: 'knowledge says whether the lists of a default profile reached
+        the knowledge store: seeded, or skipped with the reason.'
       parameters:
       - description: business profile
         in: body
         name: json
         required: true
         schema:
-          $ref: '#/definitions/growth.Profile'
+          $ref: '#/definitions/growth.ProfileInput'
       produces:
       - application/json
       responses:
@@ -6817,10 +7237,39 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Save the business profile; new tasks start with it
+      summary: Save a new business profile; the first one becomes the default
       tags:
       - Growth
   /growth/profiles/{profileID}:
+    delete:
+      parameters:
+      - description: profile id
+        in: path
+        minimum: 0
+        name: profileID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: profile deleted successful
+        "403":
+          description: deleting the profile not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: profile not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on deleting the profile
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a business profile; when it was the default the oldest remaining
+        one becomes the default
+      tags:
+      - Growth
     put:
       consumes:
       - application/json
@@ -6836,7 +7285,7 @@ paths:
         name: json
         required: true
         schema:
-          $ref: '#/definitions/growth.Profile'
+          $ref: '#/definitions/growth.ProfileInput'
       produces:
       - application/json
       responses:
@@ -6867,7 +7316,46 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Change the business profile; new tasks start with it
+      summary: Change a business profile and its title; tasks that use it take the
+        change from their next step
+      tags:
+      - Growth
+  /growth/profiles/{profileID}/default:
+    post:
+      parameters:
+      - description: profile id
+        in: path
+        minimum: 0
+        name: profileID
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: default set successful
+          schema:
+            allOf:
+            - $ref: '#/definitions/SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/growth.ProfileView'
+              type: object
+        "403":
+          description: setting the default not permitted
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: profile not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: internal error on setting the default
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Make a business profile the one new tasks start with when none is chosen
       tags:
       - Growth
   /growth/profiles/presets:
@@ -6892,8 +7380,8 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Retrieve the starting profiles, one per kind of customer, to copy into
-        the profile form
+      summary: Retrieve the starting profiles, one per kind of customer, that a new
+        profile is drafted from
       tags:
       - Growth
   /growth/runs/:

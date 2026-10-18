@@ -777,6 +777,11 @@ export const growthMock = {
 
         return delay(schedule);
     },
+    deleteAccount: (id: number): Promise<void> => {
+        accounts = accounts.filter((account) => account.id !== id);
+
+        return delay(undefined);
+    },
     deleteLead: async (id: number) => {
         const index = leads.findIndex((item) => item.id === id);
 

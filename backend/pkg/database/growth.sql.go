@@ -168,14 +168,47 @@ func (q *Queries) CountUserLeads(ctx context.Context, arg CountUserLeadsParams) 
 	return i, err
 }
 
+const createGrowthProfile = `-- name: CreateGrowthProfile :one
+INSERT INTO growth_profiles (user_id, title, profile, is_default)
+VALUES (
+  $1, $2, $3,
+  NOT EXISTS (SELECT 1 FROM growth_profiles WHERE user_id = $1)
+)
+RETURNING user_id, profile, created_at, updated_at, id, title, is_default
+`
+
+type CreateGrowthProfileParams struct {
+	UserID  int64           `json:"user_id"`
+	Title   string          `json:"title"`
+	Profile json.RawMessage `json:"profile"`
+}
+
+// A customer's first profile is their default.
+func (q *Queries) CreateGrowthProfile(ctx context.Context, arg CreateGrowthProfileParams) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, createGrowthProfile, arg.UserID, arg.Title, arg.Profile)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Title,
+		&i.IsDefault,
+	)
+	return i, err
+}
+
 const createGrowthSchedule = `-- name: CreateGrowthSchedule :one
 INSERT INTO growth_schedules (
-  user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at
+  user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at,
+  profile_id
 ) VALUES (
   $1, $2, $3, $4, $5, $6,
-  $7, $8, $9, $10, $11, $12
+  $7, $8, $9, $10, $11, $12,
+  $13
 )
-RETURNING id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at
+RETURNING id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at, profile_id
 `
 
 type CreateGrowthScheduleParams struct {
@@ -191,6 +224,7 @@ type CreateGrowthScheduleParams struct {
 	Timezone     string        `json:"timezone"`
 	Enabled      bool          `json:"enabled"`
 	NextStartAt  sql.NullTime  `json:"next_start_at"`
+	ProfileID    sql.NullInt64 `json:"profile_id"`
 }
 
 func (q *Queries) CreateGrowthSchedule(ctx context.Context, arg CreateGrowthScheduleParams) (GrowthSchedule, error) {
@@ -207,6 +241,7 @@ func (q *Queries) CreateGrowthSchedule(ctx context.Context, arg CreateGrowthSche
 		arg.Timezone,
 		arg.Enabled,
 		arg.NextStartAt,
+		arg.ProfileID,
 	)
 	var i GrowthSchedule
 	err := row.Scan(
@@ -227,8 +262,54 @@ func (q *Queries) CreateGrowthSchedule(ctx context.Context, arg CreateGrowthSche
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProfileID,
 	)
 	return i, err
+}
+
+const deleteGrowthProfile = `-- name: DeleteGrowthProfile :one
+WITH dropped AS (
+  DELETE FROM growth_message_scores WHERE user_id = $2::bigint AND profile_id = $1::bigint
+)
+DELETE FROM growth_profiles WHERE id = $1::bigint AND user_id = $2::bigint
+RETURNING user_id, profile, created_at, updated_at, id, title, is_default
+`
+
+type DeleteGrowthProfileParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteGrowthProfile(ctx context.Context, arg DeleteGrowthProfileParams) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, deleteGrowthProfile, arg.ID, arg.UserID)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Title,
+		&i.IsDefault,
+	)
+	return i, err
+}
+
+const deleteGrowthProfileDraft = `-- name: DeleteGrowthProfileDraft :execrows
+DELETE FROM growth_profile_drafts WHERE flow_id = $1 AND user_id = $2
+`
+
+type DeleteGrowthProfileDraftParams struct {
+	FlowID int64 `json:"flow_id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteGrowthProfileDraft(ctx context.Context, arg DeleteGrowthProfileDraftParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteGrowthProfileDraft, arg.FlowID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const deleteUserChannelAccount = `-- name: DeleteUserChannelAccount :execrows
@@ -336,7 +417,7 @@ WITH evidence AS (
   WHERE s.user_id = $2::bigint AND s.source_id = evidence.source_id AND s.message_id = evidence.message_id
 )
 DELETE FROM leads WHERE id = $1::bigint AND user_id = $2::bigint
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags
 `
 
 type DeleteUserLeadParams struct {
@@ -371,6 +452,7 @@ func (q *Queries) DeleteUserLead(ctx context.Context, arg DeleteUserLeadParams) 
 		&i.Contacts,
 		&i.Note,
 		&i.Origin,
+		pq.Array(&i.Flags),
 	)
 	return i, err
 }
@@ -549,8 +631,27 @@ func (q *Queries) GetChannelAccountSession(ctx context.Context, id int64) ([]byt
 	return session, err
 }
 
+const getDefaultGrowthProfile = `-- name: GetDefaultGrowthProfile :one
+SELECT user_id, profile, created_at, updated_at, id, title, is_default FROM growth_profiles WHERE user_id = $1 AND is_default
+`
+
+func (q *Queries) GetDefaultGrowthProfile(ctx context.Context, userID int64) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, getDefaultGrowthProfile, userID)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Title,
+		&i.IsDefault,
+	)
+	return i, err
+}
+
 const getDeliverableLeads = `-- name: GetDeliverableLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags FROM leads
 WHERE user_id = $1 AND last_flow_id = $2
   AND tier = 'qualified' AND delivered_at IS NULL
   AND (NOT $3::boolean OR jsonb_array_length(contacts) > 0)
@@ -601,6 +702,7 @@ func (q *Queries) GetDeliverableLeads(ctx context.Context, arg GetDeliverableLea
 			&i.Contacts,
 			&i.Note,
 			&i.Origin,
+			pq.Array(&i.Flags),
 		); err != nil {
 			return nil, err
 		}
@@ -616,7 +718,7 @@ func (q *Queries) GetDeliverableLeads(ctx context.Context, arg GetDeliverableLea
 }
 
 const getDueGrowthSchedules = `-- name: GetDueGrowthSchedules :many
-SELECT id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at FROM growth_schedules
+SELECT id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at, profile_id FROM growth_schedules
 WHERE enabled AND next_start_at IS NOT NULL AND next_start_at <= $1::timestamptz
 ORDER BY next_start_at, id
 `
@@ -648,6 +750,7 @@ func (q *Queries) GetDueGrowthSchedules(ctx context.Context, now time.Time) ([]G
 			&i.LastError,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ProfileID,
 		); err != nil {
 			return nil, err
 		}
@@ -662,15 +765,39 @@ func (q *Queries) GetDueGrowthSchedules(ctx context.Context, now time.Time) ([]G
 	return items, nil
 }
 
-const getGrowthProfile = `-- name: GetGrowthProfile :one
-SELECT user_id, profile, created_at, updated_at FROM growth_profiles WHERE user_id = $1
+const getGrowthFlowProfile = `-- name: GetGrowthFlowProfile :one
+SELECT flow_id, profile_id, title, created_at FROM growth_flow_profiles WHERE flow_id = $1
 `
 
-func (q *Queries) GetGrowthProfile(ctx context.Context, userID int64) (GrowthProfile, error) {
-	row := q.db.QueryRowContext(ctx, getGrowthProfile, userID)
-	var i GrowthProfile
+func (q *Queries) GetGrowthFlowProfile(ctx context.Context, flowID int64) (GrowthFlowProfile, error) {
+	row := q.db.QueryRowContext(ctx, getGrowthFlowProfile, flowID)
+	var i GrowthFlowProfile
 	err := row.Scan(
+		&i.FlowID,
+		&i.ProfileID,
+		&i.Title,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getGrowthProfileDraft = `-- name: GetGrowthProfileDraft :one
+SELECT flow_id, user_id, base_profile_id, title, profile, created_at, updated_at FROM growth_profile_drafts WHERE flow_id = $1 AND user_id = $2
+`
+
+type GetGrowthProfileDraftParams struct {
+	FlowID int64 `json:"flow_id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetGrowthProfileDraft(ctx context.Context, arg GetGrowthProfileDraftParams) (GrowthProfileDraft, error) {
+	row := q.db.QueryRowContext(ctx, getGrowthProfileDraft, arg.FlowID, arg.UserID)
+	var i GrowthProfileDraft
+	err := row.Scan(
+		&i.FlowID,
 		&i.UserID,
+		&i.BaseProfileID,
+		&i.Title,
 		&i.Profile,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -820,7 +947,7 @@ func (q *Queries) GetGrowthSourceByKey(ctx context.Context, arg GetGrowthSourceB
 }
 
 const getLeadByPlatformUser = `-- name: GetLeadByPlatformUser :one
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags FROM leads
 WHERE user_id = $1 AND platform = $2 AND platform_user_id = $3
 `
 
@@ -855,6 +982,7 @@ func (q *Queries) GetLeadByPlatformUser(ctx context.Context, arg GetLeadByPlatfo
 		&i.Contacts,
 		&i.Note,
 		&i.Origin,
+		pq.Array(&i.Flags),
 	)
 	return i, err
 }
@@ -941,18 +1069,25 @@ func (q *Queries) GetLeadsEvidence(ctx context.Context, leadIds []int64) ([]Lead
 }
 
 const getMessageScores = `-- name: GetMessageScores :many
-SELECT id, user_id, source_id, message_id, score, signals, created_at FROM growth_message_scores
-WHERE user_id = $1 AND source_id = $2 AND message_id = ANY($3::text[])
+SELECT id, user_id, source_id, message_id, score, signals, created_at, profile_id FROM growth_message_scores
+WHERE user_id = $1 AND profile_id = $2 AND source_id = $3
+  AND message_id = ANY($4::text[])
 `
 
 type GetMessageScoresParams struct {
 	UserID     int64    `json:"user_id"`
+	ProfileID  int64    `json:"profile_id"`
 	SourceID   int64    `json:"source_id"`
 	MessageIds []string `json:"message_ids"`
 }
 
 func (q *Queries) GetMessageScores(ctx context.Context, arg GetMessageScoresParams) ([]GrowthMessageScore, error) {
-	rows, err := q.db.QueryContext(ctx, getMessageScores, arg.UserID, arg.SourceID, pq.Array(arg.MessageIds))
+	rows, err := q.db.QueryContext(ctx, getMessageScores,
+		arg.UserID,
+		arg.ProfileID,
+		arg.SourceID,
+		pq.Array(arg.MessageIds),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -968,6 +1103,7 @@ func (q *Queries) GetMessageScores(ctx context.Context, arg GetMessageScoresPara
 			&i.Score,
 			&i.Signals,
 			&i.CreatedAt,
+			&i.ProfileID,
 		); err != nil {
 			return nil, err
 		}
@@ -1029,7 +1165,7 @@ func (q *Queries) GetOverdueGrowthRuns(ctx context.Context, now time.Time) ([]Gr
 }
 
 const getRunDeliveredLeads = `-- name: GetRunDeliveredLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads WHERE delivered_run_id = $1 ORDER BY score DESC, id ASC
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags FROM leads WHERE delivered_run_id = $1 ORDER BY score DESC, id ASC
 `
 
 func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64) ([]Lead, error) {
@@ -1063,6 +1199,7 @@ func (q *Queries) GetRunDeliveredLeads(ctx context.Context, runID sql.NullInt64)
 			&i.Contacts,
 			&i.Note,
 			&i.Origin,
+			pq.Array(&i.Flags),
 		); err != nil {
 			return nil, err
 		}
@@ -1370,6 +1507,65 @@ func (q *Queries) GetUserChannelAccounts(ctx context.Context, userID int64) ([]C
 	return items, nil
 }
 
+const getUserGrowthProfile = `-- name: GetUserGrowthProfile :one
+SELECT user_id, profile, created_at, updated_at, id, title, is_default FROM growth_profiles WHERE id = $1 AND user_id = $2
+`
+
+type GetUserGrowthProfileParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) GetUserGrowthProfile(ctx context.Context, arg GetUserGrowthProfileParams) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, getUserGrowthProfile, arg.ID, arg.UserID)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Title,
+		&i.IsDefault,
+	)
+	return i, err
+}
+
+const getUserGrowthProfiles = `-- name: GetUserGrowthProfiles :many
+SELECT user_id, profile, created_at, updated_at, id, title, is_default FROM growth_profiles WHERE user_id = $1 ORDER BY is_default DESC, id
+`
+
+func (q *Queries) GetUserGrowthProfiles(ctx context.Context, userID int64) ([]GrowthProfile, error) {
+	rows, err := q.db.QueryContext(ctx, getUserGrowthProfiles, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GrowthProfile
+	for rows.Next() {
+		var i GrowthProfile
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Profile,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ID,
+			&i.Title,
+			&i.IsDefault,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserGrowthRun = `-- name: GetUserGrowthRun :one
 SELECT id, user_id, flow_id, task_id, target, status, delivered_count, finished_at, notify_status, notify_error, notified_at, created_at, updated_at, deadline_at, schedule_id, deadline_closed_at FROM growth_runs WHERE id = $1 AND user_id = $2
 `
@@ -1456,7 +1652,7 @@ func (q *Queries) GetUserGrowthRuns(ctx context.Context, arg GetUserGrowthRunsPa
 }
 
 const getUserGrowthSchedule = `-- name: GetUserGrowthSchedule :one
-SELECT id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at FROM growth_schedules WHERE id = $1 AND user_id = $2
+SELECT id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at, profile_id FROM growth_schedules WHERE id = $1 AND user_id = $2
 `
 
 type GetUserGrowthScheduleParams struct {
@@ -1485,12 +1681,13 @@ func (q *Queries) GetUserGrowthSchedule(ctx context.Context, arg GetUserGrowthSc
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProfileID,
 	)
 	return i, err
 }
 
 const getUserGrowthSchedules = `-- name: GetUserGrowthSchedules :many
-SELECT id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at FROM growth_schedules
+SELECT id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at, profile_id FROM growth_schedules
 WHERE user_id = $1
   AND ($2::bigint IS NULL OR flow_id = $2::bigint)
 ORDER BY id
@@ -1528,6 +1725,7 @@ func (q *Queries) GetUserGrowthSchedules(ctx context.Context, arg GetUserGrowthS
 			&i.LastError,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ProfileID,
 		); err != nil {
 			return nil, err
 		}
@@ -1709,7 +1907,7 @@ func (q *Queries) GetUserGrowthSources(ctx context.Context, userID int64) ([]Gro
 }
 
 const getUserLead = `-- name: GetUserLead :one
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads WHERE id = $1 AND user_id = $2
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags FROM leads WHERE id = $1 AND user_id = $2
 `
 
 type GetUserLeadParams struct {
@@ -1742,12 +1940,13 @@ func (q *Queries) GetUserLead(ctx context.Context, arg GetUserLeadParams) (Lead,
 		&i.Contacts,
 		&i.Note,
 		&i.Origin,
+		pq.Array(&i.Flags),
 	)
 	return i, err
 }
 
 const getUserLeads = `-- name: GetUserLeads :many
-SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin FROM leads
+SELECT id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags FROM leads
 WHERE user_id = $1
   AND ($2::bigint IS NULL OR last_flow_id = $2::bigint)
   AND ($3::bigint IS NULL OR last_task_id = $3::bigint)
@@ -1756,8 +1955,9 @@ WHERE user_id = $1
   AND ($6::boolean IS NULL OR (delivered_at IS NOT NULL) = $6::boolean)
   AND ($7::timestamptz IS NULL OR created_at >= $7::timestamptz)
   AND ($8::boolean IS NULL OR (jsonb_array_length(contacts) > 0) = $8::boolean)
+  AND ($9::boolean IS NULL OR (cardinality(flags) > 0) = $9::boolean)
 ORDER BY score DESC, updated_at DESC, id DESC
-LIMIT $10 OFFSET $9
+LIMIT $11 OFFSET $10
 `
 
 type GetUserLeadsParams struct {
@@ -1769,6 +1969,7 @@ type GetUserLeadsParams struct {
 	Delivered  sql.NullBool   `json:"delivered"`
 	Since      sql.NullTime   `json:"since"`
 	HasContact sql.NullBool   `json:"has_contact"`
+	Flagged    sql.NullBool   `json:"flagged"`
 	Off        int64          `json:"off"`
 	Lim        int64          `json:"lim"`
 }
@@ -1783,6 +1984,7 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 		arg.Delivered,
 		arg.Since,
 		arg.HasContact,
+		arg.Flagged,
 		arg.Off,
 		arg.Lim,
 	)
@@ -1815,6 +2017,7 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 			&i.Contacts,
 			&i.Note,
 			&i.Origin,
+			pq.Array(&i.Flags),
 		); err != nil {
 			return nil, err
 		}
@@ -1827,32 +2030,6 @@ func (q *Queries) GetUserLeads(ctx context.Context, arg GetUserLeadsParams) ([]L
 		return nil, err
 	}
 	return items, nil
-}
-
-const getUserResourceByPath = `-- name: GetUserResourceByPath :one
-SELECT id, user_id, hash, name, path, size, is_dir, created_at, updated_at FROM user_resources WHERE user_id = $1 AND path = $2
-`
-
-type GetUserResourceByPathParams struct {
-	UserID int64  `json:"user_id"`
-	Path   string `json:"path"`
-}
-
-func (q *Queries) GetUserResourceByPath(ctx context.Context, arg GetUserResourceByPathParams) (UserResource, error) {
-	row := q.db.QueryRowContext(ctx, getUserResourceByPath, arg.UserID, arg.Path)
-	var i UserResource
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Hash,
-		&i.Name,
-		&i.Path,
-		&i.Size,
-		&i.IsDir,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
 }
 
 const getUserSourceStats = `-- name: GetUserSourceStats :one
@@ -1960,7 +2137,7 @@ INSERT INTO leads (
   $10, $10
 )
 ON CONFLICT (user_id, platform, platform_user_id) DO NOTHING
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags
 `
 
 type InsertManualLeadParams struct {
@@ -2012,6 +2189,7 @@ func (q *Queries) InsertManualLead(ctx context.Context, arg InsertManualLeadPara
 		&i.Contacts,
 		&i.Note,
 		&i.Origin,
+		pq.Array(&i.Flags),
 	)
 	return i, err
 }
@@ -2066,7 +2244,7 @@ const markLeadsDelivered = `-- name: MarkLeadsDelivered :many
 UPDATE leads
 SET delivered_at = CURRENT_TIMESTAMP, delivered_run_id = $1
 WHERE id = ANY($2::bigint[]) AND delivered_at IS NULL
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags
 `
 
 type MarkLeadsDeliveredParams struct {
@@ -2105,6 +2283,7 @@ func (q *Queries) MarkLeadsDelivered(ctx context.Context, arg MarkLeadsDelivered
 			&i.Contacts,
 			&i.Note,
 			&i.Origin,
+			pq.Array(&i.Flags),
 		); err != nil {
 			return nil, err
 		}
@@ -2159,6 +2338,29 @@ func (q *Queries) OpenScheduledGrowthRun(ctx context.Context, arg OpenScheduledG
 		&i.DeadlineAt,
 		&i.ScheduleID,
 		&i.DeadlineClosedAt,
+	)
+	return i, err
+}
+
+const promoteGrowthProfile = `-- name: PromoteGrowthProfile :one
+UPDATE growth_profiles SET is_default = TRUE
+WHERE id = (SELECT p.id FROM growth_profiles p WHERE p.user_id = $1 ORDER BY p.id LIMIT 1)
+  AND NOT EXISTS (SELECT 1 FROM growth_profiles d WHERE d.user_id = $1 AND d.is_default)
+RETURNING user_id, profile, created_at, updated_at, id, title, is_default
+`
+
+// PromoteGrowthProfile makes the oldest profile the default when the customer has none.
+func (q *Queries) PromoteGrowthProfile(ctx context.Context, userID int64) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, promoteGrowthProfile, userID)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Title,
+		&i.IsDefault,
 	)
 	return i, err
 }
@@ -2322,33 +2524,6 @@ func (q *Queries) RefreshSourceYield(ctx context.Context, ids []int64) error {
 	return err
 }
 
-const replaceGrowthProfileDroppingScores = `-- name: ReplaceGrowthProfileDroppingScores :one
-WITH dropped AS (
-  DELETE FROM growth_message_scores WHERE user_id = $1
-)
-INSERT INTO growth_profiles (user_id, profile) VALUES ($1, $2)
-ON CONFLICT (user_id) DO UPDATE SET profile = EXCLUDED.profile
-RETURNING user_id, profile, created_at, updated_at
-`
-
-type ReplaceGrowthProfileDroppingScoresParams struct {
-	UserID  int64           `json:"user_id"`
-	Profile json.RawMessage `json:"profile"`
-}
-
-// One statement, so the profile and the scores it outdates change together.
-func (q *Queries) ReplaceGrowthProfileDroppingScores(ctx context.Context, arg ReplaceGrowthProfileDroppingScoresParams) (GrowthProfile, error) {
-	row := q.db.QueryRowContext(ctx, replaceGrowthProfileDroppingScores, arg.UserID, arg.Profile)
-	var i GrowthProfile
-	err := row.Scan(
-		&i.UserID,
-		&i.Profile,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const resolveGrowthSource = `-- name: ResolveGrowthSource :one
 UPDATE growth_sources
 SET source_key   = $1,
@@ -2434,6 +2609,25 @@ type ScheduleChannelAccountJoinParams struct {
 func (q *Queries) ScheduleChannelAccountJoin(ctx context.Context, arg ScheduleChannelAccountJoinParams) error {
 	_, err := q.db.ExecContext(ctx, scheduleChannelAccountJoin, arg.NextJoinAt, arg.ID)
 	return err
+}
+
+const setDefaultGrowthProfile = `-- name: SetDefaultGrowthProfile :execrows
+UPDATE growth_profiles SET is_default = (id = $1::bigint)
+WHERE user_id = $2::bigint AND (is_default OR id = $1::bigint)
+  AND EXISTS (SELECT 1 FROM growth_profiles p WHERE p.id = $1::bigint AND p.user_id = $2::bigint)
+`
+
+type SetDefaultGrowthProfileParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) SetDefaultGrowthProfile(ctx context.Context, arg SetDefaultGrowthProfileParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setDefaultGrowthProfile, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateAccountSourceJoin = `-- name: UpdateAccountSourceJoin :one
@@ -2589,6 +2783,76 @@ func (q *Queries) UpdateChannelAccountStatus(ctx context.Context, arg UpdateChan
 	return i, err
 }
 
+const updateGrowthProfile = `-- name: UpdateGrowthProfile :one
+UPDATE growth_profiles SET title = $1, profile = $2
+WHERE id = $3 AND user_id = $4
+RETURNING user_id, profile, created_at, updated_at, id, title, is_default
+`
+
+type UpdateGrowthProfileParams struct {
+	Title   string          `json:"title"`
+	Profile json.RawMessage `json:"profile"`
+	ID      int64           `json:"id"`
+	UserID  int64           `json:"user_id"`
+}
+
+func (q *Queries) UpdateGrowthProfile(ctx context.Context, arg UpdateGrowthProfileParams) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, updateGrowthProfile,
+		arg.Title,
+		arg.Profile,
+		arg.ID,
+		arg.UserID,
+	)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Title,
+		&i.IsDefault,
+	)
+	return i, err
+}
+
+const updateGrowthProfileDroppingScores = `-- name: UpdateGrowthProfileDroppingScores :one
+WITH dropped AS (
+  DELETE FROM growth_message_scores WHERE user_id = $4::bigint AND profile_id = $3::bigint
+)
+UPDATE growth_profiles SET title = $1::text, profile = $2::jsonb
+WHERE id = $3::bigint AND user_id = $4::bigint
+RETURNING user_id, profile, created_at, updated_at, id, title, is_default
+`
+
+type UpdateGrowthProfileDroppingScoresParams struct {
+	Title   string          `json:"title"`
+	Profile json.RawMessage `json:"profile"`
+	ID      int64           `json:"id"`
+	UserID  int64           `json:"user_id"`
+}
+
+// One statement, so the profile and the scores it outdates change together.
+func (q *Queries) UpdateGrowthProfileDroppingScores(ctx context.Context, arg UpdateGrowthProfileDroppingScoresParams) (GrowthProfile, error) {
+	row := q.db.QueryRowContext(ctx, updateGrowthProfileDroppingScores,
+		arg.Title,
+		arg.Profile,
+		arg.ID,
+		arg.UserID,
+	)
+	var i GrowthProfile
+	err := row.Scan(
+		&i.UserID,
+		&i.Profile,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Title,
+		&i.IsDefault,
+	)
+	return i, err
+}
+
 const updateGrowthRunDelivery = `-- name: UpdateGrowthRunDelivery :one
 UPDATE growth_runs
 SET delivered_count = $1,
@@ -2665,23 +2929,25 @@ const updateGrowthSchedule = `-- name: UpdateGrowthSchedule :one
 UPDATE growth_schedules
 SET input = $1, days = $2, weekdays = $3, date = $4,
     start_time = $5, end_time = $6, timezone = $7,
-    enabled = $8, next_start_at = $9, last_error = ''
-WHERE id = $10 AND user_id = $11
-RETURNING id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at
+    enabled = $8, next_start_at = $9, profile_id = $10,
+    last_error = ''
+WHERE id = $11 AND user_id = $12
+RETURNING id, user_id, flow_id, input, provider_name, days, weekdays, date, start_time, end_time, timezone, enabled, next_start_at, last_run_id, last_error, created_at, updated_at, profile_id
 `
 
 type UpdateGrowthScheduleParams struct {
-	Input       string       `json:"input"`
-	Days        string       `json:"days"`
-	Weekdays    []int64      `json:"weekdays"`
-	Date        string       `json:"date"`
-	StartTime   string       `json:"start_time"`
-	EndTime     string       `json:"end_time"`
-	Timezone    string       `json:"timezone"`
-	Enabled     bool         `json:"enabled"`
-	NextStartAt sql.NullTime `json:"next_start_at"`
-	ID          int64        `json:"id"`
-	UserID      int64        `json:"user_id"`
+	Input       string        `json:"input"`
+	Days        string        `json:"days"`
+	Weekdays    []int64       `json:"weekdays"`
+	Date        string        `json:"date"`
+	StartTime   string        `json:"start_time"`
+	EndTime     string        `json:"end_time"`
+	Timezone    string        `json:"timezone"`
+	Enabled     bool          `json:"enabled"`
+	NextStartAt sql.NullTime  `json:"next_start_at"`
+	ProfileID   sql.NullInt64 `json:"profile_id"`
+	ID          int64         `json:"id"`
+	UserID      int64         `json:"user_id"`
 }
 
 func (q *Queries) UpdateGrowthSchedule(ctx context.Context, arg UpdateGrowthScheduleParams) (GrowthSchedule, error) {
@@ -2695,6 +2961,7 @@ func (q *Queries) UpdateGrowthSchedule(ctx context.Context, arg UpdateGrowthSche
 		arg.Timezone,
 		arg.Enabled,
 		arg.NextStartAt,
+		arg.ProfileID,
 		arg.ID,
 		arg.UserID,
 	)
@@ -2717,6 +2984,7 @@ func (q *Queries) UpdateGrowthSchedule(ctx context.Context, arg UpdateGrowthSche
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ProfileID,
 	)
 	return i, err
 }
@@ -2925,7 +3193,7 @@ SET note     = COALESCE($1, note),
     tier     = COALESCE($2, tier),
     contacts = COALESCE($3, contacts)
 WHERE id = $4 AND user_id = $5
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags
 `
 
 type UpdateUserLeadParams struct {
@@ -2967,6 +3235,7 @@ func (q *Queries) UpdateUserLead(ctx context.Context, arg UpdateUserLeadParams) 
 		&i.Contacts,
 		&i.Note,
 		&i.Origin,
+		pq.Array(&i.Flags),
 	)
 	return i, err
 }
@@ -3071,22 +3340,53 @@ func (q *Queries) UpsertChannelAccount(ctx context.Context, arg UpsertChannelAcc
 	return i, err
 }
 
-const upsertGrowthProfile = `-- name: UpsertGrowthProfile :one
-INSERT INTO growth_profiles (user_id, profile) VALUES ($1, $2)
-ON CONFLICT (user_id) DO UPDATE SET profile = EXCLUDED.profile
-RETURNING user_id, profile, created_at, updated_at
+const upsertGrowthFlowProfile = `-- name: UpsertGrowthFlowProfile :exec
+INSERT INTO growth_flow_profiles (flow_id, profile_id, title)
+VALUES ($1, $2, $3)
+ON CONFLICT (flow_id) DO UPDATE SET profile_id = EXCLUDED.profile_id, title = EXCLUDED.title
 `
 
-type UpsertGrowthProfileParams struct {
-	UserID  int64           `json:"user_id"`
-	Profile json.RawMessage `json:"profile"`
+type UpsertGrowthFlowProfileParams struct {
+	FlowID    int64         `json:"flow_id"`
+	ProfileID sql.NullInt64 `json:"profile_id"`
+	Title     string        `json:"title"`
 }
 
-func (q *Queries) UpsertGrowthProfile(ctx context.Context, arg UpsertGrowthProfileParams) (GrowthProfile, error) {
-	row := q.db.QueryRowContext(ctx, upsertGrowthProfile, arg.UserID, arg.Profile)
-	var i GrowthProfile
+func (q *Queries) UpsertGrowthFlowProfile(ctx context.Context, arg UpsertGrowthFlowProfileParams) error {
+	_, err := q.db.ExecContext(ctx, upsertGrowthFlowProfile, arg.FlowID, arg.ProfileID, arg.Title)
+	return err
+}
+
+const upsertGrowthProfileDraft = `-- name: UpsertGrowthProfileDraft :one
+INSERT INTO growth_profile_drafts (flow_id, user_id, base_profile_id, title, profile)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (flow_id) DO UPDATE
+SET base_profile_id = EXCLUDED.base_profile_id, title = EXCLUDED.title, profile = EXCLUDED.profile
+RETURNING flow_id, user_id, base_profile_id, title, profile, created_at, updated_at
+`
+
+type UpsertGrowthProfileDraftParams struct {
+	FlowID        int64           `json:"flow_id"`
+	UserID        int64           `json:"user_id"`
+	BaseProfileID sql.NullInt64   `json:"base_profile_id"`
+	Title         string          `json:"title"`
+	Profile       json.RawMessage `json:"profile"`
+}
+
+func (q *Queries) UpsertGrowthProfileDraft(ctx context.Context, arg UpsertGrowthProfileDraftParams) (GrowthProfileDraft, error) {
+	row := q.db.QueryRowContext(ctx, upsertGrowthProfileDraft,
+		arg.FlowID,
+		arg.UserID,
+		arg.BaseProfileID,
+		arg.Title,
+		arg.Profile,
+	)
+	var i GrowthProfileDraft
 	err := row.Scan(
+		&i.FlowID,
 		&i.UserID,
+		&i.BaseProfileID,
+		&i.Title,
 		&i.Profile,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -3288,7 +3588,7 @@ SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
     contacts     = EXCLUDED.contacts,
     last_flow_id = COALESCE(EXCLUDED.last_flow_id, leads.last_flow_id),
     last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id)
-RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin
+RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags
 `
 
 type UpsertLeadParams struct {
@@ -3344,19 +3644,23 @@ func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, e
 		&i.Contacts,
 		&i.Note,
 		&i.Origin,
+		pq.Array(&i.Flags),
 	)
 	return i, err
 }
 
 const upsertMessageScore = `-- name: UpsertMessageScore :exec
-INSERT INTO growth_message_scores (user_id, source_id, message_id, score, signals)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (user_id, source_id, message_id) DO UPDATE
+INSERT INTO growth_message_scores (user_id, profile_id, source_id, message_id, score, signals)
+VALUES (
+  $1, $2, $3, $4, $5, $6
+)
+ON CONFLICT (user_id, profile_id, source_id, message_id) DO UPDATE
 SET score = EXCLUDED.score, signals = EXCLUDED.signals
 `
 
 type UpsertMessageScoreParams struct {
 	UserID    int64  `json:"user_id"`
+	ProfileID int64  `json:"profile_id"`
 	SourceID  int64  `json:"source_id"`
 	MessageID string `json:"message_id"`
 	Score     int32  `json:"score"`
@@ -3366,49 +3670,11 @@ type UpsertMessageScoreParams struct {
 func (q *Queries) UpsertMessageScore(ctx context.Context, arg UpsertMessageScoreParams) error {
 	_, err := q.db.ExecContext(ctx, upsertMessageScore,
 		arg.UserID,
+		arg.ProfileID,
 		arg.SourceID,
 		arg.MessageID,
 		arg.Score,
 		arg.Signals,
 	)
 	return err
-}
-
-const upsertUserResourceFile = `-- name: UpsertUserResourceFile :one
-INSERT INTO user_resources (user_id, hash, name, path, size, is_dir)
-VALUES ($1, $2, $3, $4, $5, false)
-ON CONFLICT (user_id, path) DO UPDATE
-SET hash = EXCLUDED.hash, size = EXCLUDED.size, is_dir = false
-RETURNING id, user_id, hash, name, path, size, is_dir, created_at, updated_at
-`
-
-type UpsertUserResourceFileParams struct {
-	UserID int64  `json:"user_id"`
-	Hash   string `json:"hash"`
-	Name   string `json:"name"`
-	Path   string `json:"path"`
-	Size   int64  `json:"size"`
-}
-
-func (q *Queries) UpsertUserResourceFile(ctx context.Context, arg UpsertUserResourceFileParams) (UserResource, error) {
-	row := q.db.QueryRowContext(ctx, upsertUserResourceFile,
-		arg.UserID,
-		arg.Hash,
-		arg.Name,
-		arg.Path,
-		arg.Size,
-	)
-	var i UserResource
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Hash,
-		&i.Name,
-		&i.Path,
-		&i.Size,
-		&i.IsDir,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
 }

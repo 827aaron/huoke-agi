@@ -251,6 +251,7 @@ func (s *GrowthService) UpdateSource(c *gin.Context) {
 // @Param run_id query int false "only leads delivered by this round"
 // @Param tier query string false "qualified or watchlist"
 // @Param delivered query bool false "true for delivered leads, false for undelivered"
+// @Param flagged query bool false "true for leads with a flag, such as a match of the profile's unwanted list"
 // @Param limit query int false "page size, default 100, at most 500"
 // @Param offset query int false "rows to skip"
 // @Success 200 {object} response.successResp{data=growthLeads} "leads received successful"
@@ -533,6 +534,13 @@ func leadFilter(c *gin.Context) (growth.LeadFilter, error) {
 		}
 		filter.Delivered = &delivered
 	}
+	if raw := c.Query("flagged"); raw != "" {
+		flagged, err := strconv.ParseBool(raw)
+		if err != nil {
+			return filter, errors.New("flagged must be true or false")
+		}
+		filter.Flagged = &flagged
+	}
 	if filter.Limit, err = optionalInt(c, "limit"); err != nil {
 		return filter, err
 	}
@@ -776,6 +784,35 @@ func (s *GrowthService) GetAccountDetail(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, detail)
+}
+
+// DeleteAccount is a function to remove an account and its sign-in
+// @Summary Remove an account with its session or browser profile and its join records; sources and leads are kept
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param accountID path int true "account id"
+// @Success 200 {object} response.successResp "account deleted successful"
+// @Failure 400 {object} response.errorResp "invalid account id"
+// @Failure 403 {object} response.errorResp "deleting accounts not permitted"
+// @Failure 404 {object} response.errorResp "account not found"
+// @Failure 500 {object} response.errorResp "internal error on deleting the account"
+// @Router /growth/accounts/{accountID} [delete]
+func (s *GrowthService) DeleteAccount(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	accountID, err := strconv.ParseInt(c.Param("accountID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	if err := s.svc.DeleteAccount(c, uid, accountID); err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, struct{}{})
 }
 
 // TestAccountProxy is a function to check the route of an account
@@ -1146,22 +1183,21 @@ func (s *GrowthService) EmailLeads(c *gin.Context) {
 	response.Success(c, http.StatusOK, growthTestEmailResult{Sent: true, To: to})
 }
 
-// ListProfiles is a function to return the business profile of the current user
-// @Summary Retrieve the business profile every task of the current user starts from
-// @Description A user has at most one profile, so the list is empty or holds one.
+// ListProfiles is a function to return the business profiles of the current user
+// @Summary Retrieve the business profiles of the current user, the default first
 // @Tags Growth
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} response.successResp{data=[]growth.ProfileView} "profiles received successful"
-// @Failure 403 {object} response.errorResp "getting the profile not permitted"
-// @Failure 500 {object} response.errorResp "internal error on getting the profile"
+// @Failure 403 {object} response.errorResp "getting the profiles not permitted"
+// @Failure 500 {object} response.errorResp "internal error on getting the profiles"
 // @Router /growth/profiles [get]
 func (s *GrowthService) ListProfiles(c *gin.Context) {
 	uid := int64(c.GetUint64("uid"))
 
 	profiles, err := s.svc.ListProfiles(c, uid)
 	if err != nil {
-		logger.FromContext(c).WithError(err).Errorf("error getting business profile")
+		logger.FromContext(c).WithError(err).Errorf("error getting business profiles")
 		response.Error(c, response.ErrInternal, err)
 		return
 	}
@@ -1170,7 +1206,7 @@ func (s *GrowthService) ListProfiles(c *gin.Context) {
 }
 
 // ListProfilePresets is a function to return the starting profiles
-// @Summary Retrieve the starting profiles, one per kind of customer, to copy into the profile form
+// @Summary Retrieve the starting profiles, one per kind of customer, that a new profile is drafted from
 // @Tags Growth
 // @Produce json
 // @Security BearerAuth
@@ -1181,14 +1217,14 @@ func (s *GrowthService) ListProfilePresets(c *gin.Context) {
 	response.Success(c, http.StatusOK, growth.ProfilePresets())
 }
 
-// CreateProfile is a function to store the business profile
-// @Summary Save the business profile; new tasks start with it
-// @Description Saving when a profile exists replaces it. knowledge says whether the lists reached the knowledge store: seeded, or skipped with the reason.
+// CreateProfile is a function to store a new business profile
+// @Summary Save a new business profile; the first one becomes the default
+// @Description knowledge says whether the lists of a default profile reached the knowledge store: seeded, or skipped with the reason.
 // @Tags Growth
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param json body growth.Profile true "business profile"
+// @Param json body growth.ProfileInput true "business profile"
 // @Success 201 {object} response.successResp{data=growth.ProfileView} "profile saved successful"
 // @Failure 400 {object} response.errorResp "invalid profile"
 // @Failure 403 {object} response.errorResp "saving the profile not permitted"
@@ -1197,13 +1233,13 @@ func (s *GrowthService) ListProfilePresets(c *gin.Context) {
 func (s *GrowthService) CreateProfile(c *gin.Context) {
 	uid := int64(c.GetUint64("uid"))
 
-	var req growth.Profile
+	var req growth.ProfileInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		invalidRequest(c, err)
 		return
 	}
 
-	saved, err := s.svc.SaveProfile(c, uid, req)
+	saved, err := s.svc.CreateProfile(c, uid, req)
 	if err != nil {
 		profileError(c, err)
 		return
@@ -1212,14 +1248,14 @@ func (s *GrowthService) CreateProfile(c *gin.Context) {
 	response.Success(c, http.StatusCreated, saved)
 }
 
-// UpdateProfile is a function to change the business profile
-// @Summary Change the business profile; new tasks start with it
+// UpdateProfile is a function to change a business profile
+// @Summary Change a business profile and its title; tasks that use it take the change from their next step
 // @Tags Growth
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param profileID path int true "profile id" minimum(0)
-// @Param json body growth.Profile true "business profile"
+// @Param json body growth.ProfileInput true "business profile"
 // @Success 200 {object} response.successResp{data=growth.ProfileView} "profile saved successful"
 // @Failure 400 {object} response.errorResp "invalid profile"
 // @Failure 403 {object} response.errorResp "saving the profile not permitted"
@@ -1234,7 +1270,7 @@ func (s *GrowthService) UpdateProfile(c *gin.Context) {
 		invalidRequest(c, err)
 		return
 	}
-	var req growth.Profile
+	var req growth.ProfileInput
 	if err := c.ShouldBindJSON(&req); err != nil {
 		invalidRequest(c, err)
 		return
@@ -1249,14 +1285,231 @@ func (s *GrowthService) UpdateProfile(c *gin.Context) {
 	response.Success(c, http.StatusOK, saved)
 }
 
+// DeleteProfile is a function to delete a business profile
+// @Summary Delete a business profile; when it was the default the oldest remaining one becomes the default
+// @Tags Growth
+// @Security BearerAuth
+// @Param profileID path int true "profile id" minimum(0)
+// @Success 204 "profile deleted successful"
+// @Failure 403 {object} response.errorResp "deleting the profile not permitted"
+// @Failure 404 {object} response.errorResp "profile not found"
+// @Failure 500 {object} response.errorResp "internal error on deleting the profile"
+// @Router /growth/profiles/{profileID} [delete]
+func (s *GrowthService) DeleteProfile(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	id, err := strconv.ParseInt(c.Param("profileID"), 10, 64)
+	if err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	if err := s.svc.DeleteProfile(c, uid, id); err != nil {
+		profileError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// SetDefaultProfile is a function to make a business profile the default
+// @Summary Make a business profile the one new tasks start with when none is chosen
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param profileID path int true "profile id" minimum(0)
+// @Success 200 {object} response.successResp{data=growth.ProfileView} "default set successful"
+// @Failure 403 {object} response.errorResp "setting the default not permitted"
+// @Failure 404 {object} response.errorResp "profile not found"
+// @Failure 500 {object} response.errorResp "internal error on setting the default"
+// @Router /growth/profiles/{profileID}/default [post]
+func (s *GrowthService) SetDefaultProfile(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	id, err := strconv.ParseInt(c.Param("profileID"), 10, 64)
+	if err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	v, err := s.svc.SetDefaultProfile(c, uid, id)
+	if err != nil {
+		profileError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, v)
+}
+
+// GetFlowProfile is a function to return the business profile a task uses
+// @Summary Retrieve the business profile a task uses; fallback is true when the default stands in
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param flowID path int true "task id" minimum(0)
+// @Success 200 {object} response.successResp{data=growth.FlowProfileView} "profile received successful"
+// @Failure 403 {object} response.errorResp "getting the profile not permitted"
+// @Failure 404 {object} response.errorResp "task not found"
+// @Failure 500 {object} response.errorResp "internal error on getting the profile"
+// @Router /growth/flows/{flowID}/profile [get]
+func (s *GrowthService) GetFlowProfile(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	flowID, err := strconv.ParseInt(c.Param("flowID"), 10, 64)
+	if err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	v, err := s.svc.FlowProfile(c, uid, flowID)
+	if err != nil {
+		profileError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, v)
+}
+
+type growthFlowProfileRequest struct {
+	ProfileID int64 `json:"profile_id" binding:"required"`
+}
+
+// SetFlowProfile is a function to change the business profile a task uses
+// @Summary Make a task use another business profile from its next judgement and its next step on
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param flowID path int true "task id" minimum(0)
+// @Param json body growthFlowProfileRequest true "profile"
+// @Success 200 {object} response.successResp{data=growth.FlowProfileView} "profile set successful"
+// @Failure 400 {object} response.errorResp "invalid request"
+// @Failure 403 {object} response.errorResp "setting the profile not permitted"
+// @Failure 404 {object} response.errorResp "task or profile not found"
+// @Failure 500 {object} response.errorResp "internal error on setting the profile"
+// @Router /growth/flows/{flowID}/profile [put]
+func (s *GrowthService) SetFlowProfile(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	flowID, err := strconv.ParseInt(c.Param("flowID"), 10, 64)
+	if err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	var req growthFlowProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	v, err := s.svc.SetFlowProfile(c, uid, flowID, req.ProfileID)
+	if err != nil {
+		profileError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, v)
+}
+
+// GetFlowProfileDraft is a function to return the profile a task's assistant drafted
+// @Summary Retrieve the profile draft of a task's assistant, not saved yet
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param flowID path int true "task id" minimum(0)
+// @Success 200 {object} response.successResp{data=growth.ProfileDraftView} "draft received successful"
+// @Failure 403 {object} response.errorResp "getting the draft not permitted"
+// @Failure 404 {object} response.errorResp "the task has no draft"
+// @Failure 500 {object} response.errorResp "internal error on getting the draft"
+// @Router /growth/flows/{flowID}/profile-draft [get]
+func (s *GrowthService) GetFlowProfileDraft(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	flowID, err := strconv.ParseInt(c.Param("flowID"), 10, 64)
+	if err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	v, err := s.svc.ProfileDraft(c, uid, flowID)
+	if err != nil {
+		profileError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, v)
+}
+
+// ApplyFlowProfileDraft is a function to save the profile a task's assistant drafted
+// @Summary Save a task's profile draft as a profile and discard the draft
+// @Description A draft of a saved profile overwrites it unless as_new; use_for_flow makes the task use the saved profile.
+// @Tags Growth
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param flowID path int true "task id" minimum(0)
+// @Param json body growth.ApplyDraftOptions true "how to save"
+// @Success 200 {object} response.successResp{data=growth.ProfileView} "draft saved successful"
+// @Failure 400 {object} response.errorResp "invalid draft"
+// @Failure 403 {object} response.errorResp "saving the draft not permitted"
+// @Failure 404 {object} response.errorResp "the task has no draft"
+// @Failure 500 {object} response.errorResp "internal error on saving the draft"
+// @Router /growth/flows/{flowID}/profile-draft/save [post]
+func (s *GrowthService) ApplyFlowProfileDraft(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	flowID, err := strconv.ParseInt(c.Param("flowID"), 10, 64)
+	if err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	var opt growth.ApplyDraftOptions
+	if err := c.ShouldBindJSON(&opt); err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	v, err := s.svc.ApplyProfileDraft(c, uid, flowID, opt)
+	if err != nil {
+		profileError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, v)
+}
+
+// DiscardFlowProfileDraft is a function to drop the profile a task's assistant drafted
+// @Summary Discard a task's profile draft
+// @Tags Growth
+// @Security BearerAuth
+// @Param flowID path int true "task id" minimum(0)
+// @Success 204 "draft discarded successful"
+// @Failure 403 {object} response.errorResp "discarding the draft not permitted"
+// @Failure 404 {object} response.errorResp "the task has no draft"
+// @Failure 500 {object} response.errorResp "internal error on discarding the draft"
+// @Router /growth/flows/{flowID}/profile-draft [delete]
+func (s *GrowthService) DiscardFlowProfileDraft(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	flowID, err := strconv.ParseInt(c.Param("flowID"), 10, 64)
+	if err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	if err := s.svc.DiscardProfileDraft(c, uid, flowID); err != nil {
+		profileError(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 func profileError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, growth.ErrInvalidProfile):
 		invalidRequest(c, err)
 	case errors.Is(err, growth.ErrNoProfile):
 		response.Error(c, response.ErrGrowthProfileNotFound, err)
+	case errors.Is(err, growth.ErrNoProfileDraft):
+		response.Error(c, response.ErrGrowthProfileDraftNotFound, err)
+	case errors.Is(err, growth.ErrFlowNotFound):
+		response.Error(c, response.ErrGrowthFlowNotFound, err)
 	default:
-		logger.FromContext(c).WithError(err).Errorf("error saving business profile")
+		logger.FromContext(c).WithError(err).Errorf("error handling business profile")
 		response.Error(c, response.ErrInternal, err)
 	}
 }

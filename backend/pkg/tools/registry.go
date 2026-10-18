@@ -3,6 +3,7 @@ package tools
 import (
 	"maps"
 	"pentagi/pkg/database"
+	"pentagi/pkg/growth"
 
 	"github.com/invopop/jsonschema"
 	"github.com/vxcontrol/langchaingo/llms"
@@ -59,6 +60,9 @@ const (
 	GrowthGetProgressToolName   = "growth_get_progress"
 	GrowthDeliverLeadsToolName  = "growth_deliver_leads"
 	GrowthListLeadsToolName     = "growth_list_leads"
+	GrowthGetProfileToolName    = "growth_get_profile"
+	GrowthDraftProfileToolName  = "growth_draft_profile"
+	GrowthSaveProfileToolName   = "growth_save_profile"
 )
 
 type ToolType int
@@ -154,6 +158,9 @@ var toolsTypeMapping = map[string]ToolType{
 	GrowthGetProgressToolName:   EnvironmentToolType,
 	GrowthDeliverLeadsToolName:  EnvironmentToolType,
 	GrowthListLeadsToolName:     EnvironmentToolType,
+	GrowthGetProfileToolName:    EnvironmentToolType,
+	GrowthDraftProfileToolName:  EnvironmentToolType,
+	GrowthSaveProfileToolName:   EnvironmentToolType,
 }
 
 var reflector = &jsonschema.Reflector{
@@ -520,6 +527,25 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Description: "List saved leads with their evidence, read-only, for reporting.",
 		Parameters:  reflector.Reflect(&GrowthListLeadsAction{}),
 	},
+	GrowthGetProfileToolName: {
+		Name: GrowthGetProfileToolName,
+		Description: "Read a business profile (who to find, who is unwanted, how messages are scored): the one this task " +
+			"uses, or a saved one by profile_id. Also lists the user's saved profiles and the exclusions the system always applies.",
+		Parameters: reflector.Reflect(&GrowthGetProfileAction{}),
+	},
+	GrowthDraftProfileToolName: {
+		Name: GrowthDraftProfileToolName,
+		Description: "Show the user a profile draft as a card on the task page, replacing the previous draft; nothing is saved. " +
+			"Call it when the user asks for a new profile or a change to one, with the whole profile. " +
+			"Returns the draft as it will be saved, or why it cannot be.\n" + growth.ProfileGuide,
+		Parameters: reflector.Reflect(&GrowthDraftProfileAction{}),
+	},
+	GrowthSaveProfileToolName: {
+		Name: GrowthSaveProfileToolName,
+		Description: "Save the current draft once the user confirmed it: over the profile it changes, or as a new one. " +
+			"use_for_task makes this task use it from its next step on. Returns the saved profile with its profile_id.",
+		Parameters: reflector.Reflect(&GrowthSaveProfileAction{}),
+	},
 	WaitFlowCompletionToolName: {
 		Name: WaitFlowCompletionToolName,
 		Description: "Block until the currently running automation task completes (or the timeout expires). " +
@@ -561,7 +587,8 @@ func getMessageResultFormat(name string) database.MsglogResultFormat {
 		return database.MsglogResultFormatTerminal
 	case FileToolName, BrowserToolName,
 		GrowthSearchSourcesToolName, GrowthAddSourcesToolName, GrowthJoinSourceToolName, GrowthSyncSourceToolName,
-		GrowthUpsertLeadsToolName, GrowthGetProgressToolName, GrowthDeliverLeadsToolName, GrowthListLeadsToolName:
+		GrowthUpsertLeadsToolName, GrowthGetProgressToolName, GrowthDeliverLeadsToolName, GrowthListLeadsToolName,
+		GrowthGetProfileToolName, GrowthDraftProfileToolName, GrowthSaveProfileToolName:
 		// The growth tools answer in JSON, which the Markdown view runs together.
 		return database.MsglogResultFormatPlain
 	default:

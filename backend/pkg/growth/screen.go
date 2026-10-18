@@ -53,19 +53,24 @@ type screener struct {
 	client *screening.Client
 	// answeredBy is the model version that last answered, logged when it changes.
 	answeredBy string
+	profile    ProfileView
 	now        func() time.Time
 }
 
-// screenerFor builds the owner's Jev client.
-func (s *Service) screenerFor(ctx context.Context, userID int64) (*screener, error) {
-	cfg, err := s.ConfigFor(ctx, userID)
+// screenerFor builds the owner's Jev client, judging by the profile of scope's flow.
+func (s *Service) screenerFor(ctx context.Context, scope Scope) (*screener, error) {
+	cfg, err := s.ConfigFor(ctx, scope.UserID)
 	if err != nil {
 		logrus.WithContext(ctx).WithError(err).Warn("pre-screen runs on the server's settings")
 	}
 	if cfg.TypeSafeAPIKey == "" {
 		return nil, ErrNoJudge
 	}
-	return &screener{client: newJevClient(cfg), now: time.Now}, nil
+	profile, err := s.judgingProfile(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	return &screener{client: newJevClient(cfg), profile: profile, now: time.Now}, nil
 }
 
 // jevBackoff is the first retry delay after a 429 or 529; a variable so tests run fast.
@@ -94,12 +99,8 @@ func (s *Service) screen(
 	if len(msgs) == 0 {
 		return msgs, nil
 	}
-	profile, err := s.judgingProfile(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	scoring := profile.ScoringOrDefault()
-	business := businessSummary(profile)
+	scoring := sc.profile.ScoringOrDefault()
+	business := businessSummary(sc.profile.Profile)
 	kept := make([]MessageView, 0, len(msgs))
 	for start := 0; start < len(msgs); start += screenBatch {
 		batch := msgs[start:min(start+screenBatch, len(msgs))]
@@ -140,7 +141,8 @@ func (s *Service) screen(
 				}
 				m.Tier = scoring.tier(m.Score)
 				if err := s.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
-					UserID: userID, SourceID: sourceID, MessageID: m.MessageID, Score: int32(m.Score), Signals: m.Signals,
+					UserID: userID, ProfileID: sc.profile.ID, SourceID: sourceID, MessageID: m.MessageID,
+					Score: int32(m.Score), Signals: m.Signals,
 				}); err != nil {
 					return nil, fmt.Errorf("failed to store the score of message %s: %w", m.MessageID, err)
 				}
@@ -162,11 +164,7 @@ func (s *Service) judgeEvidence(
 	src database.GrowthSource,
 	in LeadInput,
 ) (int, bool, error) {
-	profile, err := s.judgingProfile(ctx, userID)
-	if err != nil {
-		return 0, false, err
-	}
-	scoring := profile.ScoringOrDefault()
+	scoring := sc.profile.ScoringOrDefault()
 	who := strings.TrimSpace(strings.TrimPrefix(in.Username, "@"))
 	if who != "" {
 		who = "@" + who
@@ -186,7 +184,7 @@ func (s *Service) judgeEvidence(
 		source = src.Link
 	}
 	judged, _, err := sc.client.Judge(ctx, screening.Batch{
-		Platform: src.Platform, Source: source, Business: businessSummary(profile), Messages: msgs,
+		Platform: src.Platform, Source: source, Business: businessSummary(sc.profile.Profile), Messages: msgs,
 		Signals: screening.Signals,
 	})
 	switch {
@@ -214,7 +212,8 @@ func (s *Service) judgeEvidence(
 		best = max(best, score)
 		if id := strings.TrimSpace(ev.MessageID); id != "" && len(j.Signals) > 0 {
 			if err := s.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
-				UserID: userID, SourceID: ev.SourceID, MessageID: id, Score: int32(score), Signals: signals,
+				UserID: userID, ProfileID: sc.profile.ID, SourceID: ev.SourceID, MessageID: id,
+				Score: int32(score), Signals: signals,
 			}); err != nil {
 				return 0, false, fmt.Errorf("failed to store the score of message %s: %w", id, err)
 			}
@@ -236,34 +235,29 @@ const signalYes = 0.5
 // scoreMessage adds the weight of every signal Jev answered yes to, and the active
 // weight for a recent message; the text lists what fired, like "player+3, 7d+2 = 5".
 func scoreMessage(sc Scoring, signals map[string]float64, at, now time.Time) (int, string) {
-	w := sc.Weights
 	var (
 		score int
 		fired []string
 	)
-	add := func(label string, weight int) {
-		if weight > 0 {
-			score += weight
-			fired = append(fired, fmt.Sprintf("%s+%d", label, weight))
+	add := func(label string, points int) {
+		if points > 0 {
+			score += points
+			fired = append(fired, fmt.Sprintf("%s+%d", label, points))
 		}
 	}
-	for _, sig := range []struct {
-		key    string
-		weight int
-	}{
-		{screening.SignalPlayer, w.Player}, {screening.SignalPain, w.Pain},
-		{screening.SignalPaying, w.Paying}, {screening.SignalMatch, w.Match},
-	} {
-		if signals[sig.key] >= signalYes {
-			add(sig.key, sig.weight)
+	for _, d := range sc.Dimensions {
+		if signals[d.Key] >= signalYes {
+			add(d.Key, d.Points)
 		}
 	}
-	switch age := now.Sub(at); {
-	case at.IsZero():
-	case age <= 7*24*time.Hour:
-		add("7d", w.Active)
-	case age <= 30*24*time.Hour:
-		add("30d", w.Active/2)
+	if sc.Recent != nil {
+		switch age := now.Sub(at); {
+		case at.IsZero():
+		case age <= 7*24*time.Hour:
+			add("7d", sc.Recent.Points)
+		case age <= 30*24*time.Hour:
+			add("30d", sc.Recent.Points/2)
+		}
 	}
 	if len(fired) == 0 {
 		return 0, "no signal"
@@ -347,7 +341,8 @@ func businessSummary(p Profile) string {
 	line("Regions", strings.Join(p.Regions, ", "))
 	line("Languages", strings.Join(p.Languages, ", "))
 	line("Words that often mark a likely customer", strings.Join(p.Signals, "; "))
-	line("Usually not a customer", strings.Join(p.Excludes, "; "))
+	line("Always excluded, on explicit evidence only", strings.Join(ComplianceExcludes, "; "))
+	line("Usually not a customer", strings.Join(p.Unwanted, "; "))
 	line("Notes", p.Notes)
 	return strings.TrimSpace(b.String())
 }

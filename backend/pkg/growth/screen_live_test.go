@@ -57,8 +57,8 @@ func TestScreen_SyncSources_ScoresEveryKeptMessageAndLeadsTakeThatScore(t *testi
 	ctx := context.Background()
 	scope := w.seedTask(t)
 	p := gameProfile()
-	p.Scoring = &Scoring{Weights: ScoringWeights{Player: 3, Pain: 3, Paying: 2, Active: 2, Match: 3}, Qualified: 8, Watchlist: 5}
-	_, err := w.svc.SaveProfile(ctx, w.user, p)
+	p.Scoring = &Scoring{Dimensions: defaultDimensions(3, 3, 2, 3), Recent: &RecentDimension{Points: 2}, Qualified: 8, Watchlist: 5}
+	_, err := w.svc.CreateProfile(ctx, w.user, ProfileInput{Profile: p})
 	require.NoError(t, err)
 	w.savePace(t, map[string]string{"read_interval_seconds": "0", "first_sync_days": "90"})
 	w.svc.cfg.TypeSafeAPIURL = signalJev(t).URL

@@ -15,6 +15,7 @@ import (
 	"pentagi/pkg/database"
 	"pentagi/pkg/growth/connectors"
 
+	"github.com/sirupsen/logrus"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -464,6 +465,64 @@ func (s *Service) remoteLogin(
 	}
 	account, cfg, err := s.connectorAccount(ctx, acc)
 	return p, account, cfg, err
+}
+
+// DeleteAccount removes an account with its session and its join records: its sources
+// stay in the pool, now not joined by it, and its leads stay as they are. A task that
+// was using it moves to another account on its next call. A browser_session account's
+// profile is then removed from the browser service, best effort, so an unreachable
+// service leaves an orphaned profile rather than an account that cannot be deleted.
+func (s *Service) DeleteAccount(ctx context.Context, userID, accountID int64) error {
+	a, err := s.userAccount(ctx, userID, accountID)
+	if err != nil {
+		return err
+	}
+	logger := logrus.WithContext(ctx).WithField("account_id", accountID)
+
+	var (
+		forgetter connectors.ProfileForgetter
+		account   connectors.Account
+		cfg       *config.Config
+	)
+	if remote, ok := connectors.LookupRemoteLogin(connectors.Platform(a.Platform)); ok {
+		if f, ok := remote.(connectors.ProfileForgetter); ok {
+			if account, cfg, err = s.connectorAccount(ctx, a); err != nil {
+				logger.WithError(err).Warn("deleting account without removing its browser profile")
+			} else {
+				forgetter = f
+			}
+		}
+	}
+
+	n, err := s.db.DeleteUserChannelAccount(ctx, database.DeleteUserChannelAccountParams{ID: accountID, UserID: userID})
+	if err != nil {
+		return fmt.Errorf("failed to delete account %d: %w", accountID, err)
+	}
+	if n == 0 {
+		return ErrAccountNotFound
+	}
+	s.dropLoginsOf(accountID)
+	s.DropConnector(accountID)
+
+	if forgetter != nil {
+		if err := forgetter.Forget(ctx, cfg, account); err != nil {
+			logger.WithError(err).Warn("account deleted but its browser profile was not removed")
+		}
+	}
+	return nil
+}
+
+func (s *Service) dropLoginsOf(accountID int64) {
+	s.logins.mu.Lock()
+	defer s.logins.mu.Unlock()
+	for id, p := range s.logins.pending {
+		if p.accountID == accountID {
+			delete(s.logins.pending, id)
+			if p.phone != nil {
+				go p.phone.Cancel()
+			}
+		}
+	}
 }
 
 // SetAccountEnabled disables an account, or returns it to work: active when it has

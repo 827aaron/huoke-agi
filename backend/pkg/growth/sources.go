@@ -831,7 +831,7 @@ func (s *Service) syncOne(ctx context.Context, scope Scope, sourceID int64, opt 
 	if src.Platform == string(connectors.PlatformWeb) {
 		return SyncResult{Source: s.viewSource(ctx, src, 0)}, fmt.Errorf("%w: open %s", ErrBrowserSource, src.Link)
 	}
-	sc, err := s.screenerFor(ctx, scope.UserID)
+	sc, err := s.screenerFor(ctx, scope)
 	if err != nil {
 		return SyncResult{Source: s.viewSource(ctx, src, 0)}, err
 	}

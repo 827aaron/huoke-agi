@@ -37,6 +37,8 @@ type Querier interface {
 	CreateContainer(ctx context.Context, arg CreateContainerParams) (Container, error)
 	CreateFlow(ctx context.Context, arg CreateFlowParams) (Flow, error)
 	CreateFlowTemplate(ctx context.Context, arg CreateFlowTemplateParams) (FlowTemplate, error)
+	// A customer's first profile is their default.
+	CreateGrowthProfile(ctx context.Context, arg CreateGrowthProfileParams) (GrowthProfile, error)
 	CreateGrowthSchedule(ctx context.Context, arg CreateGrowthScheduleParams) (GrowthSchedule, error)
 	CreateMsgChain(ctx context.Context, arg CreateMsgChainParams) (Msgchain, error)
 	CreateMsgLog(ctx context.Context, arg CreateMsgLogParams) (Msglog, error)
@@ -64,6 +66,8 @@ type Querier interface {
 	// text result of (cmetadata ->> 'flow_id') which uses JSON ->> extraction.
 	DeleteFlowMemoryDocuments(ctx context.Context, flowID sql.NullString) error
 	DeleteFlowTemplate(ctx context.Context, arg DeleteFlowTemplateParams) error
+	DeleteGrowthProfile(ctx context.Context, arg DeleteGrowthProfileParams) (GrowthProfile, error)
+	DeleteGrowthProfileDraft(ctx context.Context, arg DeleteGrowthProfileDraftParams) (int64, error)
 	// Delete a knowledge document by UUID (admin — no user_id check).
 	DeleteKnowledgeDocument(ctx context.Context, uuid sql.NullString) error
 	DeletePrompt(ctx context.Context, id int64) error
@@ -113,6 +117,7 @@ type Querier interface {
 	GetChannelAccountSession(ctx context.Context, id int64) ([]byte, error)
 	GetContainerTermLogs(ctx context.Context, containerID int64) ([]Termlog, error)
 	GetContainers(ctx context.Context) ([]Container, error)
+	GetDefaultGrowthProfile(ctx context.Context, userID int64) (GrowthProfile, error)
 	GetDeliverableLeads(ctx context.Context, arg GetDeliverableLeadsParams) ([]Lead, error)
 	GetDueGrowthSchedules(ctx context.Context, now time.Time) ([]GrowthSchedule, error)
 	GetFlow(ctx context.Context, id int64) (Flow, error)
@@ -155,7 +160,8 @@ type Querier interface {
 	GetFlowsForPeriod(ctx context.Context, arg GetFlowsForPeriodParams) ([]GetFlowsForPeriodRow, error)
 	// One dense row per calendar day in the caller's timezone, zeros included.
 	GetFlowsStatsByDay(ctx context.Context, arg GetFlowsStatsByDayParams) ([]GetFlowsStatsByDayRow, error)
-	GetGrowthProfile(ctx context.Context, userID int64) (GrowthProfile, error)
+	GetGrowthFlowProfile(ctx context.Context, flowID int64) (GrowthFlowProfile, error)
+	GetGrowthProfileDraft(ctx context.Context, arg GetGrowthProfileDraftParams) (GrowthProfileDraft, error)
 	GetGrowthRun(ctx context.Context, id int64) (GrowthRun, error)
 	GetGrowthRunByTask(ctx context.Context, taskID sql.NullInt64) (GrowthRun, error)
 	GetGrowthSource(ctx context.Context, id int64) (GrowthSource, error)
@@ -268,6 +274,8 @@ type Querier interface {
 	GetUserFlowTermLogs(ctx context.Context, arg GetUserFlowTermLogsParams) ([]Termlog, error)
 	GetUserFlowVectorStoreLogs(ctx context.Context, arg GetUserFlowVectorStoreLogsParams) ([]Vecstorelog, error)
 	GetUserFlows(ctx context.Context, userID int64) ([]Flow, error)
+	GetUserGrowthProfile(ctx context.Context, arg GetUserGrowthProfileParams) (GrowthProfile, error)
+	GetUserGrowthProfiles(ctx context.Context, userID int64) ([]GrowthProfile, error)
 	GetUserGrowthRun(ctx context.Context, arg GetUserGrowthRunParams) (GrowthRun, error)
 	GetUserGrowthRuns(ctx context.Context, arg GetUserGrowthRunsParams) ([]GrowthRun, error)
 	GetUserGrowthSchedule(ctx context.Context, arg GetUserGrowthScheduleParams) (GrowthSchedule, error)
@@ -290,7 +298,6 @@ type Querier interface {
 	GetUserProviders(ctx context.Context, userID int64) ([]Provider, error)
 	GetUserProvidersByType(ctx context.Context, arg GetUserProvidersByTypeParams) ([]Provider, error)
 	GetUserResourceByID(ctx context.Context, id int64) (UserResource, error)
-	GetUserResourceByPath(ctx context.Context, arg GetUserResourceByPathParams) (UserResource, error)
 	GetUserResourcesAll(ctx context.Context, userID int64) ([]UserResource, error)
 	GetUserResourcesByIDs(ctx context.Context, ids []int64) ([]UserResource, error)
 	GetUserResourcesInDir(ctx context.Context, arg GetUserResourcesInDirParams) ([]UserResource, error)
@@ -319,6 +326,8 @@ type Querier interface {
 	MarkChannelAccountUsed(ctx context.Context, id int64) error
 	MarkLeadsDelivered(ctx context.Context, arg MarkLeadsDeliveredParams) ([]Lead, error)
 	OpenScheduledGrowthRun(ctx context.Context, arg OpenScheduledGrowthRunParams) (GrowthRun, error)
+	// PromoteGrowthProfile makes the oldest profile the default when the customer has none.
+	PromoteGrowthProfile(ctx context.Context, userID int64) (GrowthProfile, error)
 	RecordChannelAccountError(ctx context.Context, arg RecordChannelAccountErrorParams) error
 	RecordChannelAccountRateLimit(ctx context.Context, arg RecordChannelAccountRateLimitParams) error
 	RecordChannelAccountSuccess(ctx context.Context, id int64) error
@@ -326,8 +335,6 @@ type Querier interface {
 	RecordGrowthScheduleStart(ctx context.Context, arg RecordGrowthScheduleStartParams) error
 	RecordSourceRead(ctx context.Context, arg RecordSourceReadParams) (GrowthSource, error)
 	RefreshSourceYield(ctx context.Context, ids []int64) error
-	// One statement, so the profile and the scores it outdates change together.
-	ReplaceGrowthProfileDroppingScores(ctx context.Context, arg ReplaceGrowthProfileDroppingScoresParams) (GrowthProfile, error)
 	ResolveGrowthSource(ctx context.Context, arg ResolveGrowthSourceParams) (GrowthSource, error)
 	SaveAssistantLog(ctx context.Context, arg SaveAssistantLogParams) error
 	SaveAssistantLogContent(ctx context.Context, arg SaveAssistantLogContentParams) error
@@ -346,6 +353,7 @@ type Querier interface {
 	// lim          maximum number of rows to return
 	// user_id      owner filter as a decimal text string (e.g. "42")
 	SearchUserKnowledgeDocuments(ctx context.Context, arg SearchUserKnowledgeDocumentsParams) ([]SearchUserKnowledgeDocumentsRow, error)
+	SetDefaultGrowthProfile(ctx context.Context, arg SetDefaultGrowthProfileParams) (int64, error)
 	UpdateAPIToken(ctx context.Context, arg UpdateAPITokenParams) (ApiToken, error)
 	UpdateAccountSourceJoin(ctx context.Context, arg UpdateAccountSourceJoinParams) (AccountSource, error)
 	UpdateAccountSourceSync(ctx context.Context, arg UpdateAccountSourceSyncParams) (AccountSource, error)
@@ -384,6 +392,9 @@ type Querier interface {
 	// statement idempotent: once rewritten, a row no longer matches, so it is safe
 	// to call unconditionally and to retry.
 	UpdateFlowsProviderNameByOldName(ctx context.Context, arg UpdateFlowsProviderNameByOldNameParams) ([]Flow, error)
+	UpdateGrowthProfile(ctx context.Context, arg UpdateGrowthProfileParams) (GrowthProfile, error)
+	// One statement, so the profile and the scores it outdates change together.
+	UpdateGrowthProfileDroppingScores(ctx context.Context, arg UpdateGrowthProfileDroppingScoresParams) (GrowthProfile, error)
 	UpdateGrowthRunDelivery(ctx context.Context, arg UpdateGrowthRunDeliveryParams) (GrowthRun, error)
 	UpdateGrowthRunTarget(ctx context.Context, arg UpdateGrowthRunTargetParams) (GrowthRun, error)
 	UpdateGrowthSchedule(ctx context.Context, arg UpdateGrowthScheduleParams) (GrowthSchedule, error)
@@ -430,13 +441,13 @@ type Querier interface {
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) (User, error)
 	UpsertAccountSource(ctx context.Context, arg UpsertAccountSourceParams) (AccountSource, error)
 	UpsertChannelAccount(ctx context.Context, arg UpsertChannelAccountParams) (ChannelAccount, error)
-	UpsertGrowthProfile(ctx context.Context, arg UpsertGrowthProfileParams) (GrowthProfile, error)
+	UpsertGrowthFlowProfile(ctx context.Context, arg UpsertGrowthFlowProfileParams) error
+	UpsertGrowthProfileDraft(ctx context.Context, arg UpsertGrowthProfileDraftParams) (GrowthProfileDraft, error)
 	UpsertGrowthSetting(ctx context.Context, arg UpsertGrowthSettingParams) (GrowthSetting, error)
 	UpsertGrowthSource(ctx context.Context, arg UpsertGrowthSourceParams) (UpsertGrowthSourceRow, error)
 	UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, error)
 	UpsertMessageScore(ctx context.Context, arg UpsertMessageScoreParams) error
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
-	UpsertUserResourceFile(ctx context.Context, arg UpsertUserResourceFileParams) (UserResource, error)
 }
 
 var _ Querier = (*Queries)(nil)

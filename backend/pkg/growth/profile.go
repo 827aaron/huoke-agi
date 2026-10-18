@@ -2,6 +2,7 @@ package growth
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -19,13 +20,14 @@ import (
 	"pentagi/pkg/docker"
 	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
+	"pentagi/pkg/growth/screening"
 	"pentagi/pkg/resources"
 
 	"github.com/sirupsen/logrus"
 )
 
-// ProfileResourcePath is where the whole profile lives among the customer's resources,
-// and so in every flow container under {{.Cwd}}/resources.
+// ProfileResourcePath is the file of the built-in default profile in a flow container,
+// under {{.Cwd}}/resources; a saved profile's file carries its id.
 const ProfileResourcePath = "business_profile.md"
 
 // profileGuideMarker is the description of the guide documents a profile owns; saving
@@ -48,8 +50,8 @@ var (
 )
 
 // Profile is what a customer sells and to whom. Signals (the words that mark a likely
-// customer), Excludes (who to reject) and Notes are the customer's own free text, one
-// item per line; they are what tunes the generic prompts to one customer.
+// customer), Unwanted (who the customer would rather not get) and Notes are the customer's
+// own free text, one item per line; they are what tunes the generic prompts to one customer.
 type Profile struct {
 	Name          string   `json:"name"`
 	Pitch         string   `json:"pitch"`
@@ -60,31 +62,63 @@ type Profile struct {
 	Languages     []string `json:"languages"`
 	DefaultTarget int      `json:"default_target"`
 	Signals       []string `json:"signals"`
-	Excludes      []string `json:"excludes"`
-	Notes         string   `json:"notes"`
+	// Unwanted lowers a lead's score by UnwantedPenalty and flags it instead of dropping it;
+	// ComplianceExcludes, which do drop, are not part of a profile.
+	Unwanted []string `json:"unwanted"`
+	// UnwantedPenalty is in points; 0 is DefaultUnwantedPenalty.
+	UnwantedPenalty int    `json:"unwanted_penalty"`
+	Notes           string `json:"notes"`
 	// Scoring turns the judgement model's answers into a lead score; nil is DefaultScoring.
 	Scoring *Scoring `json:"scoring,omitempty"`
 	// ContactTypes are the contacts a lead is looked for with: values of ContactTypes or
 	// names the owner chose, up to 30 characters each; empty means the platform handle alone.
 	ContactTypes []string `json:"contact_types"`
+
+	// LegacyExcludes is the field Unwanted replaced; a stored profile or an older page may
+	// still carry it, and normalize moves it over.
+	LegacyExcludes []string `json:"excludes,omitempty" jsonschema:"-"`
 }
 
-// summary is the scoring as the agents read it in the profile block.
-func (sc Scoring) summary() string {
-	w := sc.Weights
-	return fmt.Sprintf("audience +%d, pain or switching +%d, paying +%d, recent +%d (7 days; +%d within 30), "+
-		"fit +%d; qualified from %d, watchlist from %d, below that not saved",
-		w.Player, w.Pain, w.Paying, w.Active, w.Active/2, w.Match, sc.Qualified, sc.Watchlist)
+// ComplianceExcludes are dropped whatever the profile says, and only on explicit evidence
+// in the message: they are the line no customer's targeting may cross.
+var ComplianceExcludes = []string{
+	"a stated age under 18",
+	"an explicit request for help to stop gambling, or a stated self-exclusion",
 }
 
-// Scoring weighs the signals of a message: each signal the judgement model sees adds its
-// weight, and Active adds its weight for a message of the last 7 days and half of it for
+// complianceWords mark an item of an older profile's exclusions that ComplianceExcludes
+// now covers, so moving it to Unwanted would only weaken it.
+var complianceWords = []string{"under 18", "underage", "under-age", "minor", "stop gambling", "self-exclu", "未成年", "戒赌"}
+
+const DefaultUnwantedPenalty = 3
+
+// Scoring weighs a message: each dimension the judgement model answers yes to adds its
+// points, and Recent adds its points for a message of the last 7 days and half of them for
 // one of the last 30. A score of Qualified or more counts toward the target; from
 // Watchlist up a lead is kept for review; below it is dropped.
 type Scoring struct {
-	Weights   ScoringWeights `json:"weights"`
-	Qualified int            `json:"qualified"`
-	Watchlist int            `json:"watchlist"`
+	Dimensions []ScoringDimension `json:"dimensions"`
+	// Recent is judged by the message time, not asked of the model; nil adds nothing.
+	Recent    *RecentDimension `json:"recent,omitempty"`
+	Qualified int              `json:"qualified"`
+	Watchlist int              `json:"watchlist"`
+
+	// LegacyWeights is the fixed five-signal form Dimensions replaced.
+	LegacyWeights *ScoringWeights `json:"weights,omitempty" jsonschema:"-"`
+}
+
+// ScoringDimension is one yes/no question the judgement model is asked of a message.
+// Key is a stable slug the answers and the score breakdown are keyed by; Description is
+// the English text the model reads as what counts as yes.
+type ScoringDimension struct {
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Points      int    `json:"points"`
+}
+
+type RecentDimension struct {
+	Points int `json:"points"`
 }
 
 type ScoringWeights struct {
@@ -95,11 +129,57 @@ type ScoringWeights struct {
 	Match  int `json:"match"`
 }
 
-// DefaultScoring weighs the five signals for an offer with no weighting of its own.
-var DefaultScoring = Scoring{
-	Weights:   ScoringWeights{Player: 3, Pain: 3, Paying: 2, Active: 2, Match: 3},
-	Qualified: QualifiedMinScore,
-	Watchlist: WatchlistMinScore,
+// maxDimensionPoints bounds one dimension so a typo cannot make a single answer qualify
+// every message.
+const maxDimensionPoints = 20
+
+// defaultDimensions are the four questions the judgement model has always been asked,
+// keyed as its answers are.
+func defaultDimensions(player, pain, paying, match int) []ScoringDimension {
+	return []ScoringDimension{
+		{Key: screening.SignalPlayer, Name: "Audience", Points: player,
+			Description: "The sender uses or follows this kind of product or service themselves."},
+		{Key: screening.SignalPain, Name: "Pain or switching", Points: pain,
+			Description: "The sender is unhappy with, bored of or leaving what they use now, or asks for an alternative."},
+		{Key: screening.SignalPaying, Name: "Paying", Points: paying,
+			Description: "The sender mentions paying for this kind of product: purchases, deposits, top-ups, subscriptions."},
+		{Key: screening.SignalMatch, Name: "Fit", Points: match,
+			Description: "What the sender wants or uses fits the offer: its category, platform, region and style."},
+	}
+}
+
+// DefaultScoring weighs an offer with no weighting of its own.
+func DefaultScoring() Scoring {
+	return Scoring{
+		Dimensions: defaultDimensions(3, 3, 2, 3),
+		Recent:     &RecentDimension{Points: 2},
+		Qualified:  QualifiedMinScore,
+		Watchlist:  WatchlistMinScore,
+	}
+}
+
+// summary is the scoring as the agents read it in the profile block.
+func (sc Scoring) summary() string {
+	parts := make([]string, 0, len(sc.Dimensions)+1)
+	for _, d := range sc.Dimensions {
+		parts = append(parts, fmt.Sprintf("%s +%d", strings.ToLower(d.Name), d.Points))
+	}
+	if sc.Recent != nil && sc.Recent.Points > 0 {
+		parts = append(parts, fmt.Sprintf("recent +%d (7 days; +%d within 30)", sc.Recent.Points, sc.Recent.Points/2))
+	}
+	return fmt.Sprintf("%s; qualified from %d, watchlist from %d, below that not saved",
+		strings.Join(parts, ", "), sc.Qualified, sc.Watchlist)
+}
+
+func (sc Scoring) maxScore() int {
+	total := 0
+	for _, d := range sc.Dimensions {
+		total += d.Points
+	}
+	if sc.Recent != nil {
+		total += sc.Recent.Points
+	}
+	return total
 }
 
 // The contact types a lead can carry. A platform handle is the lead's own account, which
@@ -140,18 +220,34 @@ func contactType(t string) string {
 // ScoringOrDefault is the profile's scoring, or DefaultScoring when it sets none.
 func (p Profile) ScoringOrDefault() Scoring {
 	if p.Scoring == nil {
-		return DefaultScoring
+		return DefaultScoring()
 	}
 	return *p.Scoring
 }
 
-// ProfileView is a stored profile. A customer has one profile, so ID is the owner's id.
-// Knowledge is "seeded", "skipped: <reason>" or empty, and only set by a save.
+func (p Profile) UnwantedPenaltyOrDefault() int {
+	if p.UnwantedPenalty <= 0 {
+		return DefaultUnwantedPenalty
+	}
+	return p.UnwantedPenalty
+}
+
+// ProfileView is a stored profile. ID 0 is DefaultProfile standing in for a customer who
+// saved none. Knowledge is "seeded", "skipped: <reason>" or empty, and only set by a save.
 type ProfileView struct {
-	ID int64 `json:"id"`
+	ID      int64  `json:"id"`
+	Title   string `json:"title"`
+	Default bool   `json:"default"`
 	Profile
 	UpdatedAt *time.Time `json:"updated_at"`
 	Knowledge string     `json:"knowledge,omitempty"`
+}
+
+// ProfileInput is a profile with the name the owner knows it by; an empty title is the
+// business name.
+type ProfileInput struct {
+	Title string `json:"title"`
+	Profile
 }
 
 // ProfileKnowledge is the slice of the knowledge store a profile writes its long lists to.
@@ -167,25 +263,40 @@ func (s *Service) SetKnowledgeStore(k ProfileKnowledge) {
 	s.knowledge = k
 }
 
-func (p *Profile) normalize() {
-	trim := func(items []string) []string {
-		out := make([]string, 0, len(items))
-		for _, item := range items {
-			if item = strings.TrimSpace(item); item != "" {
-				out = append(out, item)
-			}
+func trimItems(items []string) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
 		}
-		return out
 	}
+	return out
+}
+
+func (p *Profile) normalize() {
 	p.Name = strings.TrimSpace(p.Name)
 	p.Pitch = strings.TrimSpace(p.Pitch)
 	p.Genre = strings.TrimSpace(p.Genre)
 	p.Notes = strings.TrimSpace(p.Notes)
-	p.Games, p.Competitors = trim(p.Games), trim(p.Competitors)
-	p.Regions, p.Languages = trim(p.Regions), trim(p.Languages)
-	p.Signals, p.Excludes = trim(p.Signals), trim(p.Excludes)
+	p.Games, p.Competitors = trimItems(p.Games), trimItems(p.Competitors)
+	p.Regions, p.Languages = trimItems(p.Regions), trimItems(p.Languages)
+	p.Signals, p.Unwanted = trimItems(p.Signals), trimItems(p.Unwanted)
+	if len(p.Unwanted) == 0 {
+		for _, item := range trimItems(p.LegacyExcludes) {
+			lower := strings.ToLower(item)
+			if !slices.ContainsFunc(complianceWords, func(w string) bool { return strings.Contains(lower, w) }) {
+				p.Unwanted = append(p.Unwanted, item)
+			}
+		}
+	}
+	p.LegacyExcludes = nil
+	if p.Scoring != nil {
+		sc := *p.Scoring
+		sc.normalize()
+		p.Scoring = &sc
+	}
 	types := make([]string, 0, len(p.ContactTypes))
-	for _, t := range trim(p.ContactTypes) {
+	for _, t := range trimItems(p.ContactTypes) {
 		expanded := []string{contactType(t)}
 		if expanded[0] == contactMessenger {
 			expanded = messengerApps
@@ -202,12 +313,48 @@ func (p *Profile) normalize() {
 	p.ContactTypes = types
 }
 
+var dimensionKeyChars = regexp.MustCompile(`[^a-z0-9]+`)
+
+// normalize converts the legacy weights and gives every dimension a unique key: its own,
+// else a slug of its name, else dN for a name with no Latin letters.
+func (sc *Scoring) normalize() {
+	if w := sc.LegacyWeights; w != nil && len(sc.Dimensions) == 0 {
+		sc.Dimensions = defaultDimensions(w.Player, w.Pain, w.Paying, w.Match)
+		if sc.Recent == nil && w.Active > 0 {
+			sc.Recent = &RecentDimension{Points: w.Active}
+		}
+	}
+	sc.LegacyWeights = nil
+	dims := make([]ScoringDimension, 0, len(sc.Dimensions))
+	seen := map[string]bool{}
+	for _, d := range sc.Dimensions {
+		d.Name, d.Description = strings.TrimSpace(d.Name), strings.TrimSpace(d.Description)
+		if d.Name == "" && d.Description == "" {
+			continue
+		}
+		key := strings.Trim(dimensionKeyChars.ReplaceAllString(strings.ToLower(cmp.Or(d.Key, d.Name)), "_"), "_")
+		if key == "" || key == signalActive || seen[key] {
+			for n := len(dims) + 1; ; n++ {
+				if key = fmt.Sprintf("d%d", n); !seen[key] {
+					break
+				}
+			}
+		}
+		seen[key] = true
+		d.Key = key
+		dims = append(dims, d)
+	}
+	sc.Dimensions = dims
+}
+
 func (p Profile) validate() error {
 	switch {
 	case p.Name == "" && p.Pitch == "" && len(p.Games) == 0:
 		return fmt.Errorf("%w: name, pitch or a product is required", ErrInvalidProfile)
 	case p.DefaultTarget < 0:
 		return fmt.Errorf("%w: default_target cannot be negative", ErrInvalidProfile)
+	case p.UnwantedPenalty < 0:
+		return fmt.Errorf("%w: unwanted_penalty cannot be negative", ErrInvalidProfile)
 	}
 	for _, t := range p.ContactTypes {
 		if utf8.RuneCountInString(t) > maxContactTypeRunes {
@@ -215,24 +362,49 @@ func (p Profile) validate() error {
 		}
 	}
 	if sc := p.Scoring; sc != nil {
-		w := sc.Weights
-		for _, v := range []int{w.Player, w.Pain, w.Paying, w.Active, w.Match} {
-			if v < 0 || v > 10 {
-				return fmt.Errorf("%w: a scoring weight is between 0 and 10", ErrInvalidProfile)
+		if len(sc.Dimensions) == 0 {
+			return fmt.Errorf("%w: scoring needs at least one dimension", ErrInvalidProfile)
+		}
+		for _, d := range sc.Dimensions {
+			if d.Name == "" {
+				return fmt.Errorf("%w: every scoring dimension needs a name", ErrInvalidProfile)
 			}
+			if d.Points < 0 || d.Points > maxDimensionPoints {
+				return fmt.Errorf("%w: dimension %q: points are between 0 and %d", ErrInvalidProfile, d.Name, maxDimensionPoints)
+			}
+		}
+		if sc.Recent != nil && (sc.Recent.Points < 0 || sc.Recent.Points > maxDimensionPoints) {
+			return fmt.Errorf("%w: recent points are between 0 and %d", ErrInvalidProfile, maxDimensionPoints)
 		}
 		if sc.Watchlist < 1 || sc.Qualified <= sc.Watchlist {
 			return fmt.Errorf("%w: scoring needs 1 <= watchlist < qualified", ErrInvalidProfile)
 		}
-		if w.Player+w.Pain+w.Paying+w.Active+w.Match < sc.Qualified {
-			return fmt.Errorf("%w: the weights add up to less than qualified, so no lead could qualify", ErrInvalidProfile)
+		if sc.maxScore() < sc.Qualified {
+			return fmt.Errorf("%w: the points add up to less than qualified, so no lead could qualify", ErrInvalidProfile)
 		}
 	}
 	return nil
 }
 
-func (s *Service) GetProfile(ctx context.Context, userID int64) (ProfileView, error) {
-	row, err := s.db.GetGrowthProfile(ctx, userID)
+func profileView(row database.GrowthProfile) (ProfileView, error) {
+	v := ProfileView{
+		ID: row.ID, Title: row.Title, Default: row.IsDefault,
+		UpdatedAt: nullTime(row.UpdatedAt.Time, row.UpdatedAt.Valid),
+	}
+	if err := json.Unmarshal(row.Profile, &v.Profile); err != nil {
+		return ProfileView{}, fmt.Errorf("%w: %w", errCorruptProfile, err)
+	}
+	v.normalize()
+	return v, nil
+}
+
+// builtInProfileView is DefaultProfile for a customer with no saved profile.
+func builtInProfileView() ProfileView {
+	return ProfileView{Default: true, Profile: DefaultProfile()}
+}
+
+func (s *Service) GetProfile(ctx context.Context, userID, id int64) (ProfileView, error) {
+	row, err := s.db.GetUserGrowthProfile(ctx, database.GetUserGrowthProfileParams{ID: id, UserID: userID})
 	if errors.Is(err, sql.ErrNoRows) {
 		return ProfileView{}, ErrNoProfile
 	}
@@ -242,102 +414,273 @@ func (s *Service) GetProfile(ctx context.Context, userID int64) (ProfileView, er
 	return profileView(row)
 }
 
-func profileView(row database.GrowthProfile) (ProfileView, error) {
-	v := ProfileView{ID: row.UserID, UpdatedAt: nullTime(row.UpdatedAt.Time, row.UpdatedAt.Valid)}
-	if err := json.Unmarshal(row.Profile, &v.Profile); err != nil {
-		return ProfileView{}, fmt.Errorf("%w: %w", errCorruptProfile, err)
+// DefaultProfileOf is the owner's default profile, or ErrNoProfile when they saved none.
+func (s *Service) DefaultProfileOf(ctx context.Context, userID int64) (ProfileView, error) {
+	row, err := s.db.GetDefaultGrowthProfile(ctx, userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ProfileView{}, ErrNoProfile
 	}
-	v.normalize()
-	return v, nil
+	if err != nil {
+		return ProfileView{}, fmt.Errorf("failed to load the business profile: %w", err)
+	}
+	return profileView(row)
 }
 
-// ListProfiles returns the owner's profile, or none.
+// ListProfiles returns the owner's profiles, the default first.
 func (s *Service) ListProfiles(ctx context.Context, userID int64) ([]ProfileView, error) {
-	v, err := s.GetProfile(ctx, userID)
-	switch {
-	case errors.Is(err, ErrNoProfile):
-		return []ProfileView{}, nil
-	case err != nil:
+	rows, err := s.db.GetUserGrowthProfiles(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load the business profiles: %w", err)
+	}
+	out := make([]ProfileView, 0, len(rows))
+	for _, row := range rows {
+		v, err := profileView(row)
+		if err != nil {
+			logrus.WithContext(ctx).WithError(err).WithField("profile_id", row.ID).Warn("business profile left out of the list")
+			continue
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+func (in *ProfileInput) prepare() ([]byte, error) {
+	in.normalize()
+	if err := in.validate(); err != nil {
 		return nil, err
 	}
-	return []ProfileView{v}, nil
+	in.Title = strings.TrimSpace(in.Title)
+	if in.Title == "" {
+		in.Title = cmp.Or(in.Name, strings.Join(in.Games, ", "))
+	}
+	return json.Marshal(in.Profile)
 }
 
-// SaveProfile stores the profile, rewrites its resource file and replaces its guide
-// documents. The knowledge step needs an embedder; without one it is skipped and said so.
-// A change to what the judgement model reads or to the weights drops the owner's stored
-// message scores: they were judged for another audience, and a message saved as evidence
-// later is judged again. Leads already saved keep their scores.
-func (s *Service) SaveProfile(ctx context.Context, userID int64, p Profile) (ProfileView, error) {
-	p.normalize()
-	if err := p.validate(); err != nil {
-		return ProfileView{}, err
-	}
-	raw, err := json.Marshal(p)
+// CreateProfile stores a new profile; a customer's first profile is their default.
+func (s *Service) CreateProfile(ctx context.Context, userID int64, in ProfileInput) (ProfileView, error) {
+	raw, err := in.prepare()
 	if err != nil {
 		return ProfileView{}, err
 	}
-	prev, err := s.judgingProfile(ctx, userID)
+	row, err := s.db.CreateGrowthProfile(ctx, database.CreateGrowthProfileParams{UserID: userID, Title: in.Title, Profile: raw})
 	if err != nil {
+		return ProfileView{}, fmt.Errorf("failed to store the business profile: %w", err)
+	}
+	return s.savedProfile(ctx, userID, row)
+}
+
+// UpdateProfile saves over one of the owner's profiles. A change to what the judgement
+// model reads or to the scoring drops the message scores judged by that profile: they were
+// judged for another audience, and a message saved as evidence later is judged again.
+// Leads already saved keep their scores.
+func (s *Service) UpdateProfile(ctx context.Context, userID, id int64, in ProfileInput) (ProfileView, error) {
+	raw, err := in.prepare()
+	if err != nil {
+		return ProfileView{}, err
+	}
+	prev, err := s.GetProfile(ctx, userID, id)
+	if errors.Is(err, errCorruptProfile) {
+		prev = builtInProfileView()
+	} else if err != nil {
 		return ProfileView{}, err
 	}
 	var row database.GrowthProfile
-	if businessSummary(prev) != businessSummary(p) || prev.ScoringOrDefault() != p.ScoringOrDefault() {
-		row, err = s.db.ReplaceGrowthProfileDroppingScores(ctx, database.ReplaceGrowthProfileDroppingScoresParams{UserID: userID, Profile: raw})
+	if businessSummary(prev.Profile) != businessSummary(in.Profile) || !sameScoring(prev.Profile, in.Profile) {
+		row, err = s.db.UpdateGrowthProfileDroppingScores(ctx, database.UpdateGrowthProfileDroppingScoresParams{
+			ID: id, UserID: userID, Title: in.Title, Profile: raw,
+		})
 		if err == nil {
-			logrus.WithContext(ctx).WithField("user_id", userID).
-				Info("business profile changed what leads are judged by; stored message scores dropped")
+			logrus.WithContext(ctx).WithFields(logrus.Fields{"user_id": userID, "profile_id": id}).
+				Info("business profile changed what leads are judged by; its stored message scores dropped")
 		}
 	} else {
-		row, err = s.db.UpsertGrowthProfile(ctx, database.UpsertGrowthProfileParams{UserID: userID, Profile: raw})
+		row, err = s.db.UpdateGrowthProfile(ctx, database.UpdateGrowthProfileParams{ID: id, UserID: userID, Title: in.Title, Profile: raw})
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		return ProfileView{}, ErrNoProfile
 	}
 	if err != nil {
 		return ProfileView{}, fmt.Errorf("failed to store the business profile: %w", err)
 	}
-	if err := s.writeProfileResource(ctx, userID, p); err != nil {
-		return ProfileView{}, err
-	}
+	return s.savedProfile(ctx, userID, row)
+}
+
+func sameScoring(a, b Profile) bool {
+	x, _ := json.Marshal(a.ScoringOrDefault())
+	y, _ := json.Marshal(b.ScoringOrDefault())
+	return bytes.Equal(x, y) && a.UnwantedPenaltyOrDefault() == b.UnwantedPenaltyOrDefault()
+}
+
+// savedProfile reseeds the knowledge store when the default profile changed: the store
+// holds the default profile's lists only.
+func (s *Service) savedProfile(ctx context.Context, userID int64, row database.GrowthProfile) (ProfileView, error) {
 	v, err := profileView(row)
 	if err != nil {
 		return ProfileView{}, err
 	}
-	v.Knowledge = s.seedProfileKnowledge(ctx, userID, p)
+	if v.Default {
+		v.Knowledge = s.seedProfileKnowledge(ctx, userID, &v.Profile)
+	}
 	return v, nil
 }
 
-// UpdateProfile saves over the profile with the given id, which must be the owner's.
-func (s *Service) UpdateProfile(ctx context.Context, userID, id int64, p Profile) (ProfileView, error) {
-	if id != userID {
+// SetDefaultProfile makes the profile new tasks start with when none is chosen.
+func (s *Service) SetDefaultProfile(ctx context.Context, userID, id int64) (ProfileView, error) {
+	n, err := s.db.SetDefaultGrowthProfile(ctx, database.SetDefaultGrowthProfileParams{ID: id, UserID: userID})
+	if err != nil {
+		return ProfileView{}, fmt.Errorf("failed to set the default business profile: %w", err)
+	}
+	if n == 0 {
 		return ProfileView{}, ErrNoProfile
 	}
-	if _, err := s.GetProfile(ctx, userID); err != nil {
+	v, err := s.GetProfile(ctx, userID, id)
+	if err != nil {
 		return ProfileView{}, err
 	}
-	return s.SaveProfile(ctx, userID, p)
+	v.Knowledge = s.seedProfileKnowledge(ctx, userID, &v.Profile)
+	return v, nil
 }
 
-func (s *Service) writeProfileResource(ctx context.Context, userID int64, p Profile) error {
-	if s.cfg.DataDir == "" {
+// DeleteProfile removes one of the owner's profiles with the message scores judged by it.
+// When it was the default, the oldest remaining profile becomes the default; flows that
+// used it fall back to the default.
+func (s *Service) DeleteProfile(ctx context.Context, userID, id int64) error {
+	row, err := s.db.DeleteGrowthProfile(ctx, database.DeleteGrowthProfileParams{ID: id, UserID: userID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNoProfile
+	}
+	if err != nil {
+		return fmt.Errorf("failed to delete the business profile: %w", err)
+	}
+	if !row.IsDefault {
 		return nil
 	}
-	tmpDir := filepath.Join(resources.ResourcesDir(s.cfg.DataDir), ".tmp")
-	tmp, hash, size, err := resources.SaveToTemp(bytes.NewReader([]byte(p.Markdown())), tmpDir)
-	if err != nil {
-		return err
+	promoted, err := s.db.PromoteGrowthProfile(ctx, userID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		s.seedProfileKnowledge(ctx, userID, nil)
+		return nil
+	case err != nil:
+		return fmt.Errorf("failed to choose the next default business profile: %w", err)
 	}
-	if err := resources.CommitBlob(s.cfg.DataDir, hash, tmp); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	if _, err := s.db.UpsertUserResourceFile(ctx, database.UpsertUserResourceFileParams{
-		UserID: userID, Hash: hash, Name: ProfileResourcePath, Path: ProfileResourcePath, Size: size,
-	}); err != nil {
-		return fmt.Errorf("failed to store %s: %w", ProfileResourcePath, err)
+	if v, err := profileView(promoted); err == nil {
+		s.seedProfileKnowledge(ctx, userID, &v.Profile)
 	}
 	return nil
 }
 
-func (s *Service) seedProfileKnowledge(ctx context.Context, userID int64, p Profile) string {
+type selectedProfileKey struct{}
+
+// WithSelectedProfile carries the profile a client chose for the flow it is starting
+// through the flow controller, whose signature has no place for it.
+func WithSelectedProfile(ctx context.Context, id int64) context.Context {
+	return context.WithValue(ctx, selectedProfileKey{}, id)
+}
+
+// SelectedProfile is the profile WithSelectedProfile put in ctx.
+func SelectedProfile(ctx context.Context) (int64, bool) {
+	id, ok := ctx.Value(selectedProfileKey{}).(int64)
+	return id, ok
+}
+
+// ResolveProfile is the profile a new flow starts with: the selected one, which must be
+// the owner's, else the owner's default, else DefaultProfile with ID 0.
+func (s *Service) ResolveProfile(ctx context.Context, userID int64, selected *int64) (ProfileView, error) {
+	if selected != nil {
+		return s.GetProfile(ctx, userID, *selected)
+	}
+	v, err := s.DefaultProfileOf(ctx, userID)
+	if errors.Is(err, ErrNoProfile) || errors.Is(err, errCorruptProfile) {
+		return builtInProfileView(), nil
+	}
+	return v, err
+}
+
+// BindFlowProfile records the profile a flow started with, so its follow-up tasks and the
+// judgement of its leads keep using it when the default changes.
+func (s *Service) BindFlowProfile(ctx context.Context, flowID int64, v ProfileView) error {
+	params := database.UpsertGrowthFlowProfileParams{FlowID: flowID, Title: v.Title}
+	if v.ID != 0 {
+		params.ProfileID = sql.NullInt64{Int64: v.ID, Valid: true}
+	}
+	if err := s.db.UpsertGrowthFlowProfile(ctx, params); err != nil {
+		return fmt.Errorf("failed to record the business profile of flow %d: %w", flowID, err)
+	}
+	return nil
+}
+
+// ProfileForFlow is the profile a flow's tasks and lead judgement use: the one it was
+// started with while it exists, else the owner's default, else DefaultProfile with ID 0.
+// flowID 0 is a call outside any flow.
+func (s *Service) ProfileForFlow(ctx context.Context, userID, flowID int64) (ProfileView, error) {
+	if flowID != 0 {
+		fp, err := s.db.GetGrowthFlowProfile(ctx, flowID)
+		switch {
+		case err == nil && fp.ProfileID.Valid:
+			v, err := s.GetProfile(ctx, userID, fp.ProfileID.Int64)
+			if !errors.Is(err, ErrNoProfile) && !errors.Is(err, errCorruptProfile) {
+				return v, err
+			}
+		case err != nil && !errors.Is(err, sql.ErrNoRows):
+			return ProfileView{}, fmt.Errorf("failed to load the business profile of flow %d: %w", flowID, err)
+		}
+	}
+	return s.ResolveProfile(ctx, userID, nil)
+}
+
+// FlowProfileView names the profile a flow uses. Fallback is true when the flow recorded
+// none, or the one it recorded is deleted, so the default stands in.
+type FlowProfileView struct {
+	FlowID    int64  `json:"flow_id"`
+	ProfileID *int64 `json:"profile_id"`
+	Title     string `json:"title"`
+	Fallback  bool   `json:"fallback"`
+}
+
+func (s *Service) FlowProfile(ctx context.Context, userID, flowID int64) (FlowProfileView, error) {
+	if _, err := s.db.GetUserFlow(ctx, database.GetUserFlowParams{ID: flowID, UserID: userID}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return FlowProfileView{}, fmt.Errorf("%w: %d", ErrFlowNotFound, flowID)
+		}
+		return FlowProfileView{}, fmt.Errorf("failed to load task %d: %w", flowID, err)
+	}
+	v, err := s.ProfileForFlow(ctx, userID, flowID)
+	if err != nil {
+		return FlowProfileView{}, err
+	}
+	out := FlowProfileView{FlowID: flowID, Title: v.Title}
+	if v.ID != 0 {
+		out.ProfileID = &v.ID
+	}
+	fp, err := s.db.GetGrowthFlowProfile(ctx, flowID)
+	out.Fallback = err != nil || !fp.ProfileID.Valid || fp.ProfileID.Int64 != v.ID
+	return out, nil
+}
+
+// profileResource writes the profile file into the resource store and returns it as a
+// resource at ProfileResourcePath, so a flow's copy is the file of the flow's own profile
+// whichever profile it is. The resource has no row among the customer's resources.
+func (s *Service) profileResource(userID int64, v ProfileView) (database.UserResource, bool, error) {
+	if s.cfg.DataDir == "" {
+		return database.UserResource{}, false, nil
+	}
+	tmpDir := filepath.Join(resources.ResourcesDir(s.cfg.DataDir), ".tmp")
+	tmp, hash, size, err := resources.SaveToTemp(bytes.NewReader([]byte(v.Markdown())), tmpDir)
+	if err != nil {
+		return database.UserResource{}, false, err
+	}
+	if err := resources.CommitBlob(s.cfg.DataDir, hash, tmp); err != nil {
+		_ = os.Remove(tmp)
+		return database.UserResource{}, false, err
+	}
+	return database.UserResource{
+		UserID: userID, Hash: hash, Name: v.resourcePath(), Path: v.resourcePath(), Size: size,
+	}, true, nil
+}
+
+// seedProfileKnowledge replaces the profile lists in the knowledge store with p's; nil
+// only removes them. The store holds the default profile's lists.
+func (s *Service) seedProfileKnowledge(ctx context.Context, userID int64, p *Profile) string {
 	s.mu.Lock()
 	k := s.knowledge
 	s.mu.Unlock()
@@ -357,6 +700,9 @@ func (s *Service) seedProfileKnowledge(ctx context.Context, userID int64, p Prof
 			}
 		}
 	}
+	if p == nil {
+		return ""
+	}
 
 	subject := strings.Join(p.Games, ", ")
 	if subject == "" {
@@ -366,13 +712,13 @@ func (s *Service) seedProfileKnowledge(ctx context.Context, userID int64, p Prof
 	for _, c := range p.Competitors {
 		rejected = append(rejected, "Competitor: "+c)
 	}
-	rejected = append(rejected, p.Excludes...)
+	rejected = append(rejected, p.Unwanted...)
 	lists := []struct {
 		question string
 		items    []string
 	}{
 		{"Signal words that mark a likely customer of " + subject, p.Signals},
-		{"People, groups, competitors and phrases to reject for " + subject, rejected},
+		{"People, groups, competitors and phrases that make a lead less wanted for " + subject, rejected},
 	}
 	seeded := 0
 	for _, l := range lists {
@@ -401,12 +747,23 @@ func (s *Service) seedProfileKnowledge(ctx context.Context, userID int64, p Prof
 // Compact is the block every task's input starts with. It stays short because each
 // agent call carries it, summarised, in the execution context; long lists and text are
 // cut here and read in full from the file or with search_guide.
-func (p Profile) Compact() string {
-	return p.compact(true)
+func (v ProfileView) Compact() string {
+	return v.compact(v.resourcePath(), v.Default)
 }
 
-// compact without the file is the whole profile, since nothing else holds what it cuts.
-func (p Profile) compact(withFile bool) string {
+// resourcePath is the file name of the profile among a flow's resources; each saved
+// profile has its own, so a flow that changes profile gets the new file beside the old.
+func (v ProfileView) resourcePath() string {
+	if v.ID == 0 {
+		return ProfileResourcePath
+	}
+	return fmt.Sprintf("business_profile_%d.md", v.ID)
+}
+
+// compact with no file path is the whole profile, since nothing else holds what it cuts.
+// guide says the knowledge store holds this profile's lists.
+func (p Profile) compact(path string, guide bool) string {
+	withFile := path != ""
 	var b strings.Builder
 	cut := false
 	line := func(label, value string) {
@@ -449,16 +806,20 @@ func (p Profile) compact(withFile bool) string {
 	}
 	list("Signal words", p.Signals, "; ")
 	list("Competitors (reject)", p.Competitors, ", ")
-	list("Exclude", p.Excludes, "; ")
+	list("Unwanted (score lower and flag, do not drop)", p.Unwanted, "; ")
+	line("Always excluded, on explicit evidence only", strings.Join(ComplianceExcludes, "; "))
 	text("Notes", p.Notes)
 	if !slices.Equal(p.ContactTypes, []string{ContactPlatformHandle}) {
 		line("Contacts to find", strings.Join(p.ContactTypes, ", "))
 	}
 	line("Scoring", p.ScoringOrDefault().summary())
 	if withFile {
-		fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, ProfileResourcePath)
-		if cut {
+		fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, path)
+		switch {
+		case cut && guide:
 			b.WriteString(" (the lines above are cut; read the file, or search_guide \"business profile\")")
+		case cut:
+			b.WriteString(" (the lines above are cut; read the file)")
 		}
 		b.WriteString("\n")
 	}
@@ -499,7 +860,20 @@ func (p Profile) Markdown() string {
 	}
 	section("Signal words", p.Signals)
 	section("Competitors (reject their staff and promoters)", p.Competitors)
-	section("Exclude", p.Excludes)
+	section("Unwanted (score lower and flag, do not drop)", p.Unwanted)
+	section("Always excluded, on explicit evidence only", ComplianceExcludes)
+	sc := p.ScoringOrDefault()
+	fmt.Fprintf(&b, "\n## Scoring\n\n")
+	for _, d := range sc.Dimensions {
+		fmt.Fprintf(&b, "- **%s** (+%d): %s\n", d.Name, d.Points, d.Description)
+	}
+	if sc.Recent != nil && sc.Recent.Points > 0 {
+		fmt.Fprintf(&b, "- **Recent** (+%d within 7 days, +%d within 30)\n", sc.Recent.Points, sc.Recent.Points/2)
+	}
+	if len(p.Unwanted) > 0 {
+		fmt.Fprintf(&b, "- **Unwanted** (-%d)\n", p.UnwantedPenaltyOrDefault())
+	}
+	fmt.Fprintf(&b, "\nQualified from %d, watchlist from %d.\n", sc.Qualified, sc.Watchlist)
 	if p.Notes != "" {
 		fmt.Fprintf(&b, "\n## Notes\n\n%s\n", p.Notes)
 	}
@@ -513,51 +887,65 @@ func head(items []string, n int) []string {
 	return items
 }
 
-// WithProfile puts the owner's compact profile at the start of input, replacing a block
-// already there, and adds the profile file to resources. Without a saved profile the
-// block is DefaultProfile's and there is no file to add.
-func (s *Service) WithProfile(
+// ProfileInput puts v's compact block at the start of input, replacing a block already
+// there, and adds v's file to resources.
+func (s *Service) ProfileInput(
 	ctx context.Context,
 	userID int64,
+	v ProfileView,
 	input string,
 	res []database.UserResource,
 ) (string, []database.UserResource) {
-	v, err := s.GetProfile(ctx, userID)
-	switch {
-	case errors.Is(err, ErrNoProfile):
-		return DefaultProfile().compact(false) + "\n\n" + strings.TrimSpace(profileBlock.ReplaceAllString(input, "")), res
-	case err != nil:
-		logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).Warn("task started without the business profile")
-		return input, res
-	}
-	input = v.Compact() + "\n\n" + strings.TrimSpace(profileBlock.ReplaceAllString(input, ""))
-	return input, s.WithProfileResource(ctx, userID, res)
-}
-
-// judgingProfile is the profile leads are judged by: the owner's, or DefaultProfile when
-// they have none or it is unreadable. A failure to load is returned, so a passing
-// database error neither judges by the wrong profile nor drops scores.
-func (s *Service) judgingProfile(ctx context.Context, userID int64) (Profile, error) {
-	v, err := s.GetProfile(ctx, userID)
-	switch {
-	case errors.Is(err, ErrNoProfile), errors.Is(err, errCorruptProfile):
-		return DefaultProfile(), nil
-	case err != nil:
-		return Profile{}, err
-	}
-	return v.Profile, nil
-}
-
-// WithProfileResource adds the profile file to res unless it is there already.
-func (s *Service) WithProfileResource(ctx context.Context, userID int64, res []database.UserResource) []database.UserResource {
-	file, err := s.db.GetUserResourceByPath(ctx, database.GetUserResourceByPathParams{UserID: userID, Path: ProfileResourcePath})
+	block := v.Compact()
+	file, ok, err := s.profileResource(userID, v)
 	if err != nil {
+		logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).Warn("task started without the business profile file")
+	}
+	if !ok {
+		block = v.compact("", false)
+	}
+	input = block + "\n\n" + strings.TrimSpace(profileBlock.ReplaceAllString(input, ""))
+	if ok {
+		res = withProfileFile(res, file)
+	}
+	return input, res
+}
+
+// ProfileResources adds v's file to res.
+func (s *Service) ProfileResources(ctx context.Context, userID int64, v ProfileView, res []database.UserResource) []database.UserResource {
+	file, ok, err := s.profileResource(userID, v)
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).WithField("user_id", userID).Warn("assistant started without the business profile file")
+	}
+	if !ok {
 		return res
 	}
+	return withProfileFile(res, file)
+}
+
+// withProfileFile puts file in place of any resource at its path, which would otherwise
+// win the copy into the flow.
+func withProfileFile(res []database.UserResource, file database.UserResource) []database.UserResource {
+	out := make([]database.UserResource, 0, len(res)+1)
 	for _, r := range res {
-		if r.ID == file.ID {
-			return res
+		if r.Path != file.Path {
+			out = append(out, r)
 		}
 	}
-	return append(res, file)
+	return append(out, file)
+}
+
+// FlowOfAssistant is the flow an assistant runs in.
+func (s *Service) FlowOfAssistant(ctx context.Context, assistantID int64) (int64, error) {
+	a, err := s.db.GetAssistant(ctx, assistantID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to load assistant %d: %w", assistantID, err)
+	}
+	return a.FlowID, nil
+}
+
+// judgingProfile is the profile the leads of scope are judged by. A failure to load is
+// returned, so a passing database error neither judges by the wrong profile nor drops scores.
+func (s *Service) judgingProfile(ctx context.Context, scope Scope) (ProfileView, error) {
+	return s.ProfileForFlow(ctx, scope.UserID, scope.FlowID)
 }

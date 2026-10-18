@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,7 +51,9 @@ vi.mock('@/features/growth/use-growth-data', () => ({
     useGrowthSettings: () => settingsState,
 }));
 
-vi.mock('@/features/growth/growth-api', () => ({ growthApi: { getAccountDetail: vi.fn() } }));
+vi.mock('@/features/growth/growth-api', () => ({
+    growthApi: { deleteAccount: vi.fn(async () => {}), getAccountDetail: vi.fn() },
+}));
 
 const renderAccounts = () =>
     render(
@@ -87,6 +89,35 @@ describe('SettingsAccounts', () => {
         expect(within(sheet).getByRole('link', { name: 'https://t.me/thaislots' })).toBeInTheDocument();
         expect(within(sheet).getByText('1200')).toBeInTheDocument();
         expect(growthApi.getAccountDetail).toHaveBeenCalledWith(7);
+    });
+
+    it('deletes an account once the owner confirms and drops its row', async () => {
+        renderAccounts();
+
+        fireEvent.click(screen.getByRole('button', { name: '删除 Bangkok' }));
+        const dialog = await screen.findByRole('dialog');
+
+        expect(dialog).toHaveTextContent(
+            '删除账号 Bangkok（…1234） 后，系统会断开它的登录、清掉保存的登录信息，并把它从列表中移除。它加入过的群仍留在来源池里（改为未加入），已找到的潜客不受影响。以后要用需重新登录添加。此操作无法撤销。',
+        );
+        expect(growthApi.deleteAccount).not.toHaveBeenCalled();
+
+        fireEvent.click(within(dialog).getByRole('button', { name: '删除' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(screen.queryByText('Bangkok')).not.toBeInTheDocument();
+        expect(growthApi.deleteAccount).toHaveBeenCalledWith(7);
+    });
+
+    it('keeps the account when the owner cancels the delete', async () => {
+        renderAccounts();
+
+        fireEvent.click(screen.getByRole('button', { name: '删除 Bangkok' }));
+        fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '取消' }));
+
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(growthApi.deleteAccount).not.toHaveBeenCalled();
+        expect(screen.getByRole('button', { name: '删除 Bangkok' })).toBeInTheDocument();
     });
 
     it('says when the chat count could not be read and the account joined nothing', async () => {
