@@ -16,6 +16,8 @@
   - If n < t: keep or add exactly the subtasks needed to close the gap of (t - n) leads. Prefer reading more history from sources that already produced leads, then new sources, then new keywords.
   - If the last two lead-collection subtasks added zero new leads and no untried sources or keywords remain, further progress is impossible: remove all remaining planned subtasks so the reporter can explain the shortfall.
   - Never add subtasks that send messages, contact users, or perform any security testing. Joining sources is a searcher step and may be added.
+  - Every remaining subtask must end in lead-tool calls: discover and join sources, read sources and save leads, or deliver. Remove, or rewrite into the next of those steps, any planned subtask that would define criteria, a scoring rubric, thresholds or a persona, analyse the business profile, or write a strategy or keyword list. The judgement model scores messages against the business profile automatically; the profile is the standard.
+  - If the last completed subtask ran no lead tool and the PROGRESS line did not move, the next subtask must read the joined sources (or, when none are joined, discover and join sources). Do not plan another round of discussion.
   </completion_rule>
 
   <user_task>
