@@ -1067,7 +1067,8 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 	// a delivery) answers with ErrNoTask; reads and source and lead writes work.
 	fte.addGrowthTools(ce, nil,
 		GrowthSearchSourcesToolName, GrowthAddSourcesToolName, GrowthJoinSourceToolName, GrowthSyncSourceToolName,
-		GrowthUpsertLeadsToolName, GrowthGetProgressToolName, GrowthDeliverLeadsToolName, GrowthListLeadsToolName)
+		GrowthUpsertLeadsToolName, GrowthGetProgressToolName, GrowthDeliverLeadsToolName, GrowthListLeadsToolName,
+		GrowthGetProfileToolName, GrowthDraftProfileToolName, GrowthSaveProfileToolName)
 
 	return ce, nil
 }

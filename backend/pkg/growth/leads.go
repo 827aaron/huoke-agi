@@ -122,7 +122,12 @@ type LeadView struct {
 	// are empty for a lead no judgement scored, such as one added by hand.
 	Signals        []string    `json:"signals"`
 	ScoreBreakdown []ScorePart `json:"score_breakdown"`
+	// Flags mark what the score does not show; LeadFlagUnwanted is a match of the
+	// profile's unwanted list.
+	Flags []string `json:"flags"`
 }
+
+const LeadFlagUnwanted = "unwanted"
 
 // LeadUpdate changes what is set; Contacts replaces the whole list. The score and the
 // delivery follow from the work and are not edited.
@@ -156,8 +161,10 @@ type LeadFilter struct {
 	Since time.Time
 	// HasContact keeps leads with (true) or without (false) a contact beside the platform account.
 	HasContact *bool
-	Limit      int
-	Offset     int
+	// Flagged keeps leads with (true) or without (false) a flag.
+	Flagged *bool
+	Limit   int
+	Offset  int
 }
 
 // UpsertLeads stores candidates with their evidence. A person is one lead per customer
@@ -166,24 +173,23 @@ type LeadFilter struct {
 func (s *Service) UpsertLeads(ctx context.Context, scope Scope, inputs []LeadInput) ([]LeadResult, error) {
 	sources := map[int64]database.GrowthSource{}
 	results := make([]LeadResult, 0, len(inputs))
-	profile, err := s.judgingProfile(ctx, scope.UserID)
+	profile, err := s.judgingProfile(ctx, scope)
 	if err != nil {
 		return nil, err
 	}
-	scoring := profile.ScoringOrDefault()
 
 	var sc *screener
 	judge := func(src database.GrowthSource, in LeadInput) (int, bool, error) {
 		if sc == nil {
 			var err error
-			if sc, err = s.screenerFor(ctx, scope.UserID); err != nil {
+			if sc, err = s.screenerFor(ctx, scope); err != nil {
 				return 0, false, err
 			}
 		}
 		return s.judgeEvidence(ctx, scope.UserID, sc, src, in)
 	}
 	for i, in := range inputs {
-		res, err := s.upsertLead(ctx, scope, in, sources, scoring, judge)
+		res, err := s.upsertLead(ctx, scope, in, sources, profile, judge)
 		res.Index = i
 		if err != nil {
 			return results, err
@@ -208,7 +214,7 @@ func (s *Service) upsertLead(
 	scope Scope,
 	in LeadInput,
 	sources map[int64]database.GrowthSource,
-	scoring Scoring,
+	profile ProfileView,
 	judge func(database.GrowthSource, LeadInput) (int, bool, error),
 ) (LeadResult, error) {
 	res := LeadResult{PlatformUserID: in.PlatformUserID, Score: in.Score}
@@ -250,7 +256,7 @@ func (s *Service) upsertLead(
 	}
 	res.PlatformUserID = userID
 
-	score, judged, err := s.judgedScore(ctx, scope.UserID, in.Evidence)
+	score, judged, err := s.judgedScore(ctx, scope.UserID, profile.ID, in.Evidence)
 	if err != nil {
 		return res, err
 	}
@@ -264,6 +270,7 @@ func (s *Service) upsertLead(
 	} else if in.Score != 0 && in.Score != score {
 		res.Reason = fmt.Sprintf("score %d is the judgement model's for this evidence, not %d", score, in.Score)
 	}
+	scoring := profile.ScoringOrDefault()
 	res.Score = score
 	tier := scoring.tier(score)
 	if tier == "" {
@@ -340,7 +347,7 @@ func (s *Service) upsertLead(
 
 // judgedScore is the highest score the judgement model gave a message of the evidence,
 // and false when it scored none of them.
-func (s *Service) judgedScore(ctx context.Context, userID int64, evidence []EvidenceInput) (int, bool, error) {
+func (s *Service) judgedScore(ctx context.Context, userID, profileID int64, evidence []EvidenceInput) (int, bool, error) {
 	bySource := map[int64][]string{}
 	for _, ev := range evidence {
 		if id := strings.TrimSpace(ev.MessageID); id != "" {
@@ -349,7 +356,9 @@ func (s *Service) judgedScore(ctx context.Context, userID int64, evidence []Evid
 	}
 	best, judged := 0, false
 	for sourceID, ids := range bySource {
-		rows, err := s.db.GetMessageScores(ctx, database.GetMessageScoresParams{UserID: userID, SourceID: sourceID, MessageIds: ids})
+		rows, err := s.db.GetMessageScores(ctx, database.GetMessageScoresParams{
+			UserID: userID, ProfileID: profileID, SourceID: sourceID, MessageIds: ids,
+		})
 		if err != nil {
 			return 0, false, fmt.Errorf("failed to load message scores: %w", err)
 		}
@@ -507,6 +516,9 @@ func (s *Service) ListLeads(ctx context.Context, userID int64, f LeadFilter) ([]
 	if f.HasContact != nil {
 		params.HasContact = sql.NullBool{Bool: *f.HasContact, Valid: true}
 	}
+	if f.Flagged != nil {
+		params.Flagged = sql.NullBool{Bool: *f.Flagged, Valid: true}
+	}
 
 	leads, err := s.db.GetUserLeads(ctx, params)
 	if err != nil {
@@ -586,6 +598,10 @@ func (s *Service) leadViews(ctx context.Context, leads []database.Lead) ([]LeadV
 			Origin:         l.Origin,
 			Signals:        []string{},
 			ScoreBreakdown: breakdown[l.ID],
+			Flags:          l.Flags,
+		}
+		if v.Flags == nil {
+			v.Flags = []string{}
 		}
 		if v.ScoreBreakdown == nil {
 			v.ScoreBreakdown = []ScorePart{}
@@ -658,7 +674,11 @@ func (s *Service) CreateLead(ctx context.Context, userID int64, in ManualLead) (
 	if err != nil {
 		return LeadView{}, err
 	}
-	profile, err := s.judgingProfile(ctx, userID)
+	scope := Scope{UserID: userID}
+	if in.FlowID != nil {
+		scope.FlowID = *in.FlowID
+	}
+	profile, err := s.judgingProfile(ctx, scope)
 	if err != nil {
 		return LeadView{}, err
 	}

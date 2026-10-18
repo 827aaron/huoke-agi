@@ -924,6 +924,14 @@ type fakeGrowthBackend struct {
 	lastSync         growth.SyncOptions
 	lastSyncIDs      []int64
 	lastSince        time.Time
+
+	profile     growth.ProfileView
+	profiles    []growth.ProfileView
+	lastProfile int64
+	lastDraft   growth.Profile
+	lastTitle   string
+	lastBase    *int64
+	lastApply   growth.ApplyDraftOptions
 }
 
 func (f *fakeGrowthBackend) SearchSources(_ context.Context, scope growth.Scope, _ connectors.Platform, _ string, _ int) ([]growth.SourceView, error) {
@@ -1003,6 +1011,32 @@ func (f *fakeGrowthBackend) Deliver(_ context.Context, scope growth.Scope, opt g
 func (f *fakeGrowthBackend) ListLeads(_ context.Context, _ int64, filter growth.LeadFilter) ([]growth.LeadView, error) {
 	f.lastFilter = filter
 	return []growth.LeadView{}, f.err
+}
+
+func (f *fakeGrowthBackend) ProfileForFlow(_ context.Context, userID, flowID int64) (growth.ProfileView, error) {
+	f.lastScope = growth.Scope{UserID: userID, FlowID: flowID}
+	return f.profile, f.err
+}
+
+func (f *fakeGrowthBackend) GetProfile(_ context.Context, _, id int64) (growth.ProfileView, error) {
+	f.lastProfile = id
+	return f.profile, f.err
+}
+
+func (f *fakeGrowthBackend) ListProfiles(context.Context, int64) ([]growth.ProfileView, error) {
+	return f.profiles, f.err
+}
+
+func (f *fakeGrowthBackend) SaveProfileDraft(
+	_ context.Context, scope growth.Scope, title string, baseID *int64, p growth.Profile,
+) (growth.ProfileDraftView, error) {
+	f.lastScope, f.lastTitle, f.lastBase, f.lastDraft = scope, title, baseID, p
+	return growth.ProfileDraftView{FlowID: scope.FlowID, BaseProfileID: baseID, Title: title, Profile: p}, f.err
+}
+
+func (f *fakeGrowthBackend) ApplyProfileDraft(_ context.Context, userID, flowID int64, opt growth.ApplyDraftOptions) (growth.ProfileView, error) {
+	f.lastScope, f.lastApply = growth.Scope{UserID: userID, FlowID: flowID}, opt
+	return f.profile, f.err
 }
 
 // flowLanguageDB answers GetFlow with a flow in lang, for the lines the executor writes

@@ -47,6 +47,9 @@ type ScheduleInput struct {
 	EndTime   string `json:"end_time" example:"06:00"`
 	Timezone  string `json:"timezone" example:"Asia/Bangkok"`
 	Enabled   *bool  `json:"enabled,omitempty"`
+	// ProfileID is the business profile each start uses; on create nil takes the flow's,
+	// on update nil keeps the saved one, and 0 means the default at each start.
+	ProfileID *int64 `json:"profile_id,omitempty"`
 }
 
 type ScheduleRun struct {
@@ -73,6 +76,7 @@ type ScheduleView struct {
 	NextStartAt *time.Time   `json:"next_start_at,omitempty"`
 	LastRun     *ScheduleRun `json:"last_run,omitempty"`
 	LastError   string       `json:"last_error,omitempty"`
+	ProfileID   *int64       `json:"profile_id,omitempty"`
 }
 
 // ScheduledStart is one start the scheduler must open a task for.
@@ -80,9 +84,11 @@ type ScheduledStart struct {
 	ScheduleID   int64
 	UserID       int64
 	ProviderName string
-	Input        string
-	Start        time.Time
-	Deadline     time.Time
+	// ProfileID is nil to start with the owner's default profile.
+	ProfileID *int64
+	Input     string
+	Start     time.Time
+	Deadline  time.Time
 }
 
 // ClosedRound is a round closed at its end time; the scheduler stops its flow.
@@ -237,6 +243,9 @@ func (s *Service) scheduleView(ctx context.Context, row database.GrowthSchedule)
 	if row.FlowID.Valid {
 		v.FlowID = &row.FlowID.Int64
 	}
+	if row.ProfileID.Valid {
+		v.ProfileID = &row.ProfileID.Int64
+	}
 	if row.NextStartAt.Valid {
 		t := row.NextStartAt.Time.UTC()
 		v.NextStartAt = &t
@@ -296,6 +305,15 @@ func (s *Service) CreateSchedule(ctx context.Context, userID int64, in ScheduleI
 			return ScheduleView{}, fmt.Errorf("%w: task %d has no input to repeat, so input is needed", ErrInvalidSchedule, flow.ID)
 		}
 	}
+	profileID, err := s.scheduleProfile(ctx, userID, in.ProfileID, sql.NullInt64{})
+	if err != nil {
+		return ScheduleView{}, err
+	}
+	if in.ProfileID == nil {
+		if fp, err := s.db.GetGrowthFlowProfile(ctx, flow.ID); err == nil {
+			profileID = fp.ProfileID
+		}
+	}
 	enabled := in.Enabled == nil || *in.Enabled
 	next, ok := sc.next(time.Now())
 	if sc.days == ScheduleOnce && !ok {
@@ -315,6 +333,7 @@ func (s *Service) CreateSchedule(ctx context.Context, userID int64, in ScheduleI
 		Timezone:     in.Timezone,
 		Enabled:      enabled,
 		NextStartAt:  startAt(next, ok && enabled),
+		ProfileID:    profileID,
 	})
 	if err != nil {
 		return ScheduleView{}, fmt.Errorf("failed to save the schedule: %w", err)
@@ -335,6 +354,10 @@ func (s *Service) UpdateSchedule(ctx context.Context, userID, id int64, in Sched
 	}
 	if in.Input == "" {
 		in.Input = old.Input
+	}
+	profileID, err := s.scheduleProfile(ctx, userID, in.ProfileID, old.ProfileID)
+	if err != nil {
+		return ScheduleView{}, err
 	}
 	enabled := old.Enabled
 	if in.Enabled != nil {
@@ -357,6 +380,7 @@ func (s *Service) UpdateSchedule(ctx context.Context, userID, id int64, in Sched
 		Timezone:    in.Timezone,
 		Enabled:     enabled,
 		NextStartAt: startAt(next, ok && enabled),
+		ProfileID:   profileID,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return ScheduleView{}, fmt.Errorf("%w: %d", ErrScheduleNotFound, id)
@@ -364,6 +388,24 @@ func (s *Service) UpdateSchedule(ctx context.Context, userID, id int64, in Sched
 		return ScheduleView{}, fmt.Errorf("failed to save schedule %d: %w", id, err)
 	}
 	return s.scheduleView(ctx, row), nil
+}
+
+// scheduleProfile is the profile column for a requested id: kept for nil, cleared for 0,
+// else the id once it is known to be the owner's.
+func (s *Service) scheduleProfile(ctx context.Context, userID int64, requested *int64, kept sql.NullInt64) (sql.NullInt64, error) {
+	switch {
+	case requested == nil:
+		return kept, nil
+	case *requested == 0:
+		return sql.NullInt64{}, nil
+	}
+	if _, err := s.GetProfile(ctx, userID, *requested); err != nil {
+		if errors.Is(err, ErrNoProfile) {
+			return sql.NullInt64{}, fmt.Errorf("%w: business profile %d is not one of yours", ErrInvalidSchedule, *requested)
+		}
+		return sql.NullInt64{}, err
+	}
+	return sql.NullInt64{Int64: *requested, Valid: true}, nil
 }
 
 func (s *Service) DeleteSchedule(ctx context.Context, userID, id int64) error {
@@ -426,6 +468,7 @@ func (s *Service) DueStarts(ctx context.Context, now time.Time) ([]ScheduledStar
 			ScheduleID:   row.ID,
 			UserID:       row.UserID,
 			ProviderName: row.ProviderName,
+			ProfileID:    nullInt64Ptr(row.ProfileID),
 			Input:        scheduledInput(row.Input, start, deadline.In(sc.loc)),
 			Start:        start,
 			Deadline:     deadline,
@@ -518,4 +561,11 @@ func (s *Service) DeadlineHandled(ctx context.Context, runID int64) error {
 		return fmt.Errorf("failed to mark round %d closed at its end time: %w", runID, err)
 	}
 	return nil
+}
+
+func nullInt64Ptr(n sql.NullInt64) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	return &n.Int64
 }

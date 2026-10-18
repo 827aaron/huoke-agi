@@ -376,7 +376,7 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	scope := w.seedTask(t)
 	p := gameProfile()
 	p.Signals = []string{"looking for a new game"}
-	_, err := w.svc.SaveProfile(ctx, w.user, p)
+	_, err := w.svc.CreateProfile(ctx, w.user, ProfileInput{Profile: p})
 	require.NoError(t, err)
 	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
 	jevBackoff = time.Millisecond
