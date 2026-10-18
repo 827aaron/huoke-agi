@@ -80,6 +80,9 @@ All subtasks are performed in:
    - Generate diverse alternative solutions when initial attempts fail
    - Incorporate exploratory subtasks to test different approaches when appropriate
    - Balance trying new keywords and sources with reusing the ones that already produced leads
+   - Lead qualification and scoring are done automatically by the system's pre-screen (the judgement model) against the business profile, so never keep or add a subtask to define qualification criteria, scoring rules or thresholds; here experimentation and evaluation are about which sources and keywords produce leads
+   - When the task input and the business profile disagree on the audience or the exclusions, the task input wins: refine for it and never keep or add a subtask to discuss the conflict; the orchestrator tells the user, in one sentence, that the business profile does not match this task, the judgement model still scores messages against the profile and may filter these people out, so the user should adjust the profile
+   - When the last completed subtask ran no lead tool and the PROGRESS line did not move, the next planned subtask must read the joined sources, or discover and join sources when none are joined
 
 ## SUMMARIZATION AWARENESS PROTOCOL
 
@@ -159,14 +162,12 @@ The refinement context is provided in XML format:
 
 5. **Progressive Convergence Planning**
    - Ensure each subtask brings the solution measurably closer to completion
-   - Every remaining subtask follows the standard lead generation plan:
-     1. **Discover and join sources** (searcher): links the user pasted first, then audience-language keyword search and similar-channel recommendations; expand the keywords inside this subtask, as its first step, never as a subtask of its own
-     2. **Read sources and save leads** (lead researcher): `growth_sync_source` on the joined sources, `growth_upsert_leads` for every scored sender, until the target is reached or the sources run dry; report the PROGRESS line
-     3. **More sources** — only when step 2 ended below the target: steps 1 and 2 again on new sources or new keywords
-     4. **Deliver** (orchestrator): `growth_deliver_leads`, with `allow_partial=true` only when every source is exhausted
-   - Remove or rewrite into the next step of that plan every planned subtask that would define criteria, a scoring rubric, thresholds or a persona, analyse or reconcile the business profile, or produce a strategy or keyword list as its result. The judgement model scores messages against the business profile automatically; the profile is the standard
-   - When the task input, the business profile and the defaults disagree, the task input decides this run, the profile decides what the input leaves open, and the defaults apply only where both are silent; never keep or add a subtask to discuss the conflict
-   - Convergence check: when the last completed subtask added no source, joined or read none, and saved no lead (the PROGRESS line did not move and no lead tool ran), the next planned subtask MUST be the next executable step — reading the joined sources if any exist, otherwise discovering and joining sources
+   - Maintain a clear progression where each completed subtask increases probability of overall success
+   - Structure the plan to follow the optimal distribution:
+     * ~10% for environment setup and fact gathering (which may be consolidated if straightforward)
+     * ~30% for diverse experimentation with different approaches
+     * ~30% for evaluation and selection of the most promising path
+     * ~30% for focused execution along the chosen solution path
 
 ## STRATEGIC SEARCH USAGE
 
@@ -192,11 +193,12 @@ Each refined subtask MUST:
 - NEVER include commands that require Docker host access, UDP port scanning, or software installation via Docker images
 - NEVER include tools that require interactive terminal sessions that cannot be automated
 
-## RESULTS-DRIVEN REFINEMENT
+## RESEARCH-DRIVEN REFINEMENT
 
-- After each subtask, read what the lead tools reported (sources found, joined and read, the PROGRESS line) and adjust the next steps to it
-- Prefer reading more history from sources that already produced leads, then new sources, then new keywords
-- Never add a research, analysis or evaluation subtask; information a step needs is gathered inside that step
+- After each exploratory or information-gathering subtask, analyze results to adjust subsequent plan
+- Include targeted research steps when trying new approaches or techniques
+- Use research findings to inform the selection of the most promising solution path
+- Prioritize concrete experimentation over excessive theoretical research
 
 ## OUTPUT FORMAT: DELTA OPERATIONS
 
