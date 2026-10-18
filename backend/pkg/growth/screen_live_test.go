@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -19,9 +20,12 @@ import (
 )
 
 // signalJev answers every question by keywords of the message: the exclusion question
-// yes on "lol", player on "play", pain on "bored", paying on "top up", match on "RPG".
-func signalJev(t *testing.T) *httptest.Server {
+// yes on "lol", player on "play", pain on "bored", paying on "top up", match on "RPG",
+// unwanted on "seller", and an owner's dimension "agent_team" on "my team". It records
+// the question ids of the last request.
+func signalJev(t *testing.T, asked *[]string) *httptest.Server {
 	t.Helper()
+	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		var body struct {
 			State struct {
@@ -32,9 +36,13 @@ func signalJev(t *testing.T) *httptest.Server {
 			Questions map[string]json.RawMessage `json:"questions"`
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		keyword := map[string]string{"player": "play", "pain": "bored", "paying": "top up", "match": "RPG"}
+		keyword := map[string]string{
+			"player": "play", "pain": "bored", "paying": "top up", "match": "RPG", "unwanted": "seller", "agent_team": "my team",
+		}
 		answers := map[string]any{}
+		ids := make([]string, 0, len(body.Questions))
 		for qid := range body.Questions {
+			ids = append(ids, qid)
 			key, signal, _ := strings.Cut(qid, "_")
 			text := body.State.Messages[key].Text
 			yes := strings.Contains(text, "lol")
@@ -46,6 +54,12 @@ func signalJev(t *testing.T) *httptest.Server {
 				p = 0.9
 			}
 			answers[qid] = map[string]any{"type": "noul", "noul": p}
+		}
+		if asked != nil {
+			sort.Strings(ids)
+			mu.Lock()
+			*asked = ids
+			mu.Unlock()
 		}
 		_ = json.NewEncoder(rw).Encode(map[string]any{"answers": answers})
 	}))
@@ -62,7 +76,8 @@ func TestScreen_SyncSources_ScoresEveryKeptMessageAndLeadsTakeThatScore(t *testi
 	_, err := w.svc.CreateProfile(ctx, w.user, ProfileInput{Profile: p})
 	require.NoError(t, err)
 	w.savePace(t, map[string]string{"read_interval_seconds": "0", "first_sync_days": "90"})
-	w.svc.cfg.TypeSafeAPIURL = signalJev(t).URL
+	var asked []string
+	w.svc.cfg.TypeSafeAPIURL = signalJev(t, &asked).URL
 
 	at := func(m connectors.Message, age time.Duration) connectors.Message {
 		m.Time = time.Now().UTC().Add(-age).Truncate(time.Second)
@@ -83,6 +98,12 @@ func TestScreen_SyncSources_ScoresEveryKeptMessageAndLeadsTakeThatScore(t *testi
 		got[m.MessageID] = m
 	}
 	require.Len(t, got, 2, "the exclusion question drops 3, the watchlist line drops 4")
+	assert.Equal(t, []string{
+		"m0", "m0_match", "m0_pain", "m0_paying", "m0_player", "m0_unwanted",
+		"m1", "m1_match", "m1_pain", "m1_paying", "m1_player", "m1_unwanted",
+		"m2", "m2_match", "m2_pain", "m2_paying", "m2_player", "m2_unwanted",
+		"m3", "m3_match", "m3_pain", "m3_paying", "m3_player", "m3_unwanted",
+	}, asked, "the default dimensions ask the four built-in questions; the profile's unwanted list adds one")
 	assert.Equal(t, 13, got["1"].Score)
 	assert.Equal(t, TierQualified, got["1"].Tier)
 	assert.Equal(t, "player+3, pain+3, paying+2, match+3, 7d+2 = 13", got["1"].Signals)
@@ -157,4 +178,88 @@ func TestScreen_SyncSources_JudgesAgainstTheFlowsInstruction(t *testing.T) {
 		"find 50",
 		"find 10 Malaysian agents\nLatest instruction: keep going",
 	}, tasks, "each flow is judged against its own instruction, and a follow-up keeps the first one")
+}
+
+func TestScreen_SyncSources_AsksTheProfilesOwnDimensionsAndFlagsTheUnwanted(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	p := gameProfile()
+	p.Unwanted = []string{"account sellers"}
+	p.UnwantedPenalty = 4
+	p.Scoring = &Scoring{
+		Dimensions: []ScoringDimension{
+			{Key: "player", Name: "Audience", Description: "The sender uses or follows this kind of product or service themselves.", Points: 3},
+			{Name: "Agent team", Description: "The sender says they lead a team of agents.", Points: 5},
+		},
+		Qualified: 7, Watchlist: 1,
+	}
+	_, err := w.svc.CreateProfile(ctx, w.user, ProfileInput{Profile: p})
+	require.NoError(t, err)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0", "first_sync_days": "90"})
+	var asked []string
+	w.svc.cfg.TypeSafeAPIURL = signalJev(t, &asked).URL
+
+	src := w.mustAddTelegramGroup(t, scope, tgGroup("381", "agents_my", "Agents MY"),
+		tgMessage(1, "41", "I play daily and my team has 20 agents"),
+		tgMessage(2, "42", "my team sells accounts, I am a seller"),
+		tgMessage(3, "43", "I play now and then, bored of it, I top up a lot"),
+		tgMessage(4, "44", "seller here, cheap accounts"),
+		tgMessage(5, "42", "I play too and my team is growing"),
+	)
+	results, err := w.svc.SyncSources(ctx, scope, []int64{src}, SyncOptions{})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	got := map[string]MessageView{}
+	for _, m := range results[0].Messages {
+		got[m.MessageID] = m
+	}
+	assert.Equal(t, []string{
+		"m0", "m0_agent_team", "m0_player", "m0_unwanted",
+		"m1", "m1_agent_team", "m1_player", "m1_unwanted",
+		"m2", "m2_agent_team", "m2_player", "m2_unwanted",
+		"m3", "m3_agent_team", "m3_player", "m3_unwanted",
+		"m4", "m4_agent_team", "m4_player", "m4_unwanted",
+	}, asked, "only the profile's dimensions are asked, under their keys")
+	require.Len(t, got, 4, "the penalty alone drops 4 below the watchlist line")
+	assert.Equal(t, 8, got["1"].Score)
+	assert.Equal(t, "player+3, agent_team+5 = 8", got["1"].Signals)
+	assert.Equal(t, TierQualified, got["1"].Tier)
+	assert.Equal(t, 1, got["2"].Score, "an unwanted hit costs the profile's penalty and is kept")
+	assert.Equal(t, "agent_team+5, unwanted-4 = 1", got["2"].Signals)
+	assert.Equal(t, TierWatchlist, got["2"].Tier)
+	assert.Equal(t, 3, got["3"].Score, "pain and paying are not this profile's dimensions")
+	assert.Equal(t, "player+3 = 3", got["3"].Signals)
+	assert.Equal(t, 8, got["5"].Score)
+
+	seller := qualified("42", src, "2")
+	seller.Evidence = append(seller.Evidence, qualified("42", src, "5").Evidence...)
+	saved, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{qualified("41", src, "1"), seller})
+	require.NoError(t, err)
+	require.Len(t, saved, 2)
+	assert.Equal(t, LeadStatusNew, saved[0].Status)
+	assert.Equal(t, LeadStatusNew, saved[1].Status, "an unwanted hit never drops a lead")
+
+	leads, err := w.svc.ListLeads(ctx, w.user, LeadFilter{})
+	require.NoError(t, err)
+	byUser := map[string]LeadView{}
+	for _, l := range leads {
+		byUser[l.PlatformUserID] = l
+	}
+	assert.Equal(t, []string{}, byUser["41"].Flags)
+	assert.Equal(t, []string{"player", "agent_team"}, byUser["41"].Signals)
+	assert.Equal(t, []string{LeadFlagUnwanted}, byUser["42"].Flags, "flagged by any judged message, scored by the best")
+	assert.Equal(t, 8, byUser["42"].Score)
+	assert.Equal(t, []string{"player", "agent_team"}, byUser["42"].Signals)
+	flagged := true
+	only, err := w.svc.ListLeads(ctx, w.user, LeadFilter{Flagged: &flagged})
+	require.NoError(t, err)
+	require.Len(t, only, 1)
+	assert.Equal(t, "42", only[0].PlatformUserID)
+
+	_, err = w.svc.UpsertLeads(ctx, scope, []LeadInput{qualified("42", src, "5")})
+	require.NoError(t, err)
+	again, err := w.svc.ListLeads(ctx, w.user, LeadFilter{Flagged: &flagged})
+	require.NoError(t, err)
+	require.Len(t, again, 1, "a later clean message keeps the flag")
 }

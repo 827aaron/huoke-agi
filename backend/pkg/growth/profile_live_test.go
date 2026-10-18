@@ -408,6 +408,12 @@ func TestProfile_UpdateProfile_DropsTheMessageScoresOfThatProfileWhenTheAudience
 	require.NoError(t, err)
 	assert.Equal(t, 0, scored(game.ID), "so does a new unwanted penalty")
 
+	score(game.ID)
+	casino.Unwanted = append(casino.Unwanted, "people in Singapore")
+	_, err = w.svc.UpdateProfile(ctx, w.user, game.ID, ProfileInput{Profile: casino})
+	require.NoError(t, err)
+	assert.Equal(t, 0, scored(game.ID), "and a new unwanted entry, which the judgement model is asked about")
+
 	require.NoError(t, w.svc.DeleteProfile(ctx, w.user, other.ID))
 	assert.Equal(t, 0, scored(other.ID), "a deleted profile takes its scores along")
 }

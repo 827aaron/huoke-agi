@@ -50,7 +50,7 @@ func TestLeads_UpsertLeads_TierFollowsTheScore(t *testing.T) {
 	ctx := context.Background()
 	scope := w.seedTask(t)
 	src := w.mustAddTelegramGroup(t, scope, tgGroup("901", "card_games", "Cards"))
-	w.svc.cfg.TypeSafeAPIURL = signalJev(t).URL
+	w.svc.cfg.TypeSafeAPIURL = signalJev(t, nil).URL
 	says := func(messageID, excerpt string, score int) LeadInput {
 		in := qualified("7", src, messageID)
 		in.Score, in.Evidence[0].Excerpt = score, excerpt
@@ -82,7 +82,7 @@ func TestLeads_UpsertLeads_JudgesTheExcerptsOfAWebLeadOnce(t *testing.T) {
 	w.judgeAsAGamePublisher(t)
 	ctx := context.Background()
 	scope := w.seedTask(t)
-	jev := signalJev(t)
+	jev := signalJev(t, nil)
 	var calls atomic.Int32
 	counted := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
