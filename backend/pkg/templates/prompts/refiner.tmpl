@@ -80,6 +80,9 @@ All subtasks are performed in:
    - Generate diverse alternative solutions when initial attempts fail
    - Incorporate exploratory subtasks to test different approaches when appropriate
    - Balance trying new keywords and sources with reusing the ones that already produced leads
+   - Lead qualification and scoring are done automatically by the system's pre-screen (the judgement model) against the business profile, so never keep or add a subtask to define qualification criteria, scoring rules or thresholds; here experimentation and evaluation are about which sources and keywords produce leads
+   - When the task input and the business profile disagree on the audience or the exclusions, the task input wins: refine for it and never keep or add a subtask to discuss the conflict; the orchestrator tells the user, in one sentence, that the business profile does not match this task, the judgement model still scores messages against the profile and may filter these people out, so the user should adjust the profile
+   - When the last completed subtask ran no lead tool and the PROGRESS line did not move, the next planned subtask must read the joined sources, or discover and join sources when none are joined
 
 ## SUMMARIZATION AWARENESS PROTOCOL
 
