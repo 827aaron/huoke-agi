@@ -16,13 +16,13 @@ const openNewProfile = async (page: Page) => {
     await expect(page.getByRole('combobox', { name: '从模板开始（可选）' })).toHaveText('持牌线上娱乐城找玩家');
 };
 
-test.describe('growth business profile', { tag: '@settings' }, () => {
+test.describe('growth user profiles', { tag: '@settings' }, () => {
     test.use({ cassette: growthCassette() });
 
     test('starts from the casino template and flags what it leaves to the owner', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/business-profile');
 
-        await expect(page.getByText('还没有业务档案')).toBeVisible();
+        await expect(page.getByText('还没有用户画像')).toBeVisible();
         await expect(page.getByRole('combobox', { name: '从模板开始（可选）' })).toHaveText('持牌线上娱乐城找玩家');
         await expect(page.getByLabel('产品类型')).toHaveValue('Licensed online gaming platform');
 
@@ -31,7 +31,7 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
         await expect(page.getByText('请填写业务名称')).toBeVisible();
         await expect(page.getByText('请填写目标地区')).toBeVisible();
         await expect(page.getByText('请至少选择一种目标语言')).toBeVisible();
-        await expect(page.getByText('业务档案已保存')).toHaveCount(0);
+        await expect(page.getByText('用户画像已保存')).toHaveCount(0);
 
         expectCleanPage(pageErrorLog);
     });
@@ -68,7 +68,7 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
         await page.getByLabel('默认每轮目标数').fill('30');
         await page.getByRole('button', { name: '保存' }).click();
 
-        await expect(page.getByText('业务档案已保存，下一轮起生效。')).toBeVisible();
+        await expect(page.getByText('用户画像已保存，下一轮起生效。')).toBeVisible();
         await expect(page.getByText('请填写业务名称')).toHaveCount(0);
         await expect(page.getByLabel('业务名称')).toHaveValue('星穹纪元');
         await expect(page.getByLabel('默认每轮目标数')).toHaveValue('30');
@@ -85,6 +85,33 @@ test.describe('growth business profile', { tag: '@settings' }, () => {
 
         await expect(page.getByLabel('业务名称')).toHaveValue('Star Era');
         await expect(page.getByLabel('产品类型')).toHaveValue('Mobile and PC games');
+
+        expectCleanPage(pageErrorLog);
+    });
+
+    test('keeps several profiles and copies, defaults and deletes them', async ({ page, pageErrorLog }) => {
+        await openNewProfile(page);
+
+        await page.getByLabel('画像名称').fill('泰国玩家');
+        await page.getByLabel('业务名称').fill('Lucky Star');
+        await page.getByLabel('目标地区').fill('泰国');
+        await page.getByRole('button', { name: '泰语' }).click();
+        await page.getByRole('button', { name: '保存' }).click();
+        await expect(page.getByText('用户画像已保存，下一轮起生效。')).toBeVisible();
+        await expect(page.getByRole('button', { name: /泰国玩家.*默认/ })).toBeVisible();
+
+        await page.getByRole('button', { name: '复制' }).click();
+        await expect(page.getByRole('button', { name: '泰国玩家（副本）' })).toBeVisible();
+        await expect(page.getByLabel('画像名称')).toHaveValue('泰国玩家（副本）');
+
+        await page.getByRole('button', { name: '设为默认' }).click();
+        await expect(page.getByRole('button', { name: /泰国玩家（副本）.*默认/ })).toBeVisible();
+
+        await page.getByRole('button', { name: '删除' }).click();
+        await page.getByRole('dialog').getByRole('button', { name: '删除' }).click();
+        await expect(page.getByText('已删除画像')).toBeVisible();
+        await expect(page.getByRole('button', { name: /泰国玩家.*默认/ })).toBeVisible();
+        await expect(page.getByRole('button', { name: /副本/ })).toHaveCount(0);
 
         expectCleanPage(pageErrorLog);
     });

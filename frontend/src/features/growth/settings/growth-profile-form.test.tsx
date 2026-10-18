@@ -15,7 +15,6 @@ vi.mock('../growth-api', () => ({
                     competitors: null,
                     contact_types: ['platform_handle'],
                     default_target: 50,
-                    excludes: null,
                     games: null,
                     genre: 'Mobile and PC games',
                     languages: null,
@@ -24,6 +23,8 @@ vi.mock('../growth-api', () => ({
                     pitch: 'A game looking for players.',
                     regions: null,
                     signals: null,
+                    unwanted: null,
+                    unwanted_penalty: null,
                 },
             },
             {
@@ -33,7 +34,6 @@ vi.mock('../growth-api', () => ({
                     competitors: null,
                     contact_types: ['platform_handle'],
                     default_target: 50,
-                    excludes: ['bots and spam'],
                     games: ['online slots', 'live casino'],
                     genre: 'Licensed online casino and sportsbook',
                     languages: null,
@@ -42,11 +42,17 @@ vi.mock('../growth-api', () => ({
                     pitch: 'A licensed online casino looking for adult players.',
                     regions: null,
                     scoring: {
+                        dimensions: [
+                            { description: 'Plays online casino games.', key: 'player', name: 'Audience', points: 3 },
+                            { description: 'Runs a betting agency.', key: 'agent', name: '代理', points: 6 },
+                        ],
                         qualified: 8,
+                        recent: { points: 2 },
                         watchlist: 4,
-                        weights: { active: 2, match: 3, pain: 3, paying: 3, player: 3 },
                     },
                     signals: ['free spins'],
+                    unwanted: ['bots and spam'],
+                    unwanted_penalty: null,
                 },
             },
         ]),
@@ -56,8 +62,8 @@ vi.mock('../growth-api', () => ({
 
 const profile: GrowthProfile = {
     competitors: [],
+    default: true,
     default_target: 50,
-    excludes: [],
     games: ['Star Era'],
     genre: 'MOBA',
     id: 3,
@@ -67,6 +73,9 @@ const profile: GrowthProfile = {
     pitch: 'New server opens',
     regions: ['Thailand'],
     signals: [],
+    title: 'Star Era players',
+    unwanted: [],
+    unwanted_penalty: 0,
     updated_at: '2026-10-16T00:00:00Z',
 };
 
@@ -96,10 +105,42 @@ describe('GrowthProfileForm', () => {
                 expect.objectContaining({
                     contact_types: ['platform_handle', 'phone'],
                     scoring: {
+                        dimensions: [
+                            {
+                                description: 'The sender uses or follows this kind of product or service themselves.',
+                                key: 'player',
+                                name: '目标人群身份',
+                                points: 3,
+                            },
+                            {
+                                description:
+                                    'The sender is unhappy with, bored of or leaving what they use now, or asks for an alternative.',
+                                key: 'pain',
+                                name: '痛点或需求',
+                                points: 3,
+                            },
+                            {
+                                description:
+                                    'The sender mentions paying for this kind of product: purchases, deposits, top-ups, subscriptions.',
+                                key: 'paying',
+                                name: '成交意向',
+                                points: 2,
+                            },
+                            {
+                                description:
+                                    'What the sender wants or uses fits the offer: its category, platform, region and style.',
+                                key: 'match',
+                                name: '匹配度（地区、语言、产品）',
+                                points: 3,
+                            },
+                        ],
                         qualified: 7,
+                        recent: { points: 2 },
                         watchlist: 4,
-                        weights: { active: 2, match: 3, pain: 3, paying: 2, player: 3 },
                     },
+                    title: 'Star Era players',
+                    unwanted: [],
+                    unwanted_penalty: 3,
                 }),
             ),
         );
@@ -170,15 +211,63 @@ describe('GrowthProfileForm', () => {
         expect(screen.queryByRole('button', { name: 'x'.repeat(31) })).not.toBeInTheDocument();
     });
 
-    it('refuses a qualified line the weights cannot reach', async () => {
+    it('refuses a qualified line the points cannot reach', async () => {
         renderForm();
 
-        fireEvent.click(screen.getByText('高级：打分规则'));
         fireEvent.change(screen.getByLabelText('合格线'), { target: { value: '14' } });
         fireEvent.click(screen.getByRole('button', { name: '保存' }));
 
-        expect(await screen.findByText('各项权重加起来低于合格线，没有潜客能合格')).toBeInTheDocument();
+        expect(await screen.findByText('各项分数加起来低于合格线，没有潜客能合格')).toBeInTheDocument();
         expect(growthApi.updateProfile).not.toHaveBeenCalled();
+    });
+
+    it('saves a dimension the owner added and drops one they removed', async () => {
+        renderForm();
+
+        fireEvent.click(screen.getAllByRole('button', { name: '删除这一项' })[1] as HTMLElement);
+        fireEvent.click(screen.getByRole('button', { name: '添加一项' }));
+        const names = screen.getAllByLabelText('名称');
+        const points = screen.getAllByLabelText('分数');
+        const descriptions = screen.getAllByLabelText('Jev 判断标准（英文更准）');
+
+        fireEvent.change(names[3] as HTMLElement, { target: { value: ' 代理经验 ' } });
+        fireEvent.change(points[3] as HTMLElement, { target: { value: '5' } });
+        fireEvent.change(descriptions[3] as HTMLElement, { target: { value: 'Has run a betting agency.' } });
+        fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+        await waitFor(() => expect(growthApi.updateProfile).toHaveBeenCalled());
+        const [, input] = vi.mocked(growthApi.updateProfile).mock.calls[0] ?? [];
+
+        expect(input?.scoring?.dimensions.map(({ key, name, points: value }) => [key, name, value])).toEqual([
+            ['player', '目标人群身份', 3],
+            ['paying', '成交意向', 2],
+            ['match', '匹配度（地区、语言、产品）', 3],
+            ['', '代理经验', 5],
+        ]);
+        expect(input?.scoring?.dimensions[3]?.description).toBe('Has run a betting agency.');
+    });
+
+    it('refuses a dimension without a name and a scoring without any dimension', async () => {
+        renderForm();
+
+        fireEvent.click(screen.getByRole('button', { name: '添加一项' }));
+        fireEvent.click(screen.getByRole('button', { name: '保存' }));
+        expect(await screen.findByText('请填写名称')).toBeInTheDocument();
+
+        for (const button of screen.getAllByRole('button', { name: '删除这一项' })) {
+            fireEvent.click(button);
+        }
+
+        fireEvent.click(screen.getByRole('button', { name: '保存' }));
+        expect(await screen.findByText('至少要有一项')).toBeInTheDocument();
+        expect(growthApi.updateProfile).not.toHaveBeenCalled();
+    });
+
+    it('shows the lines the system always excludes, outside what the owner edits', () => {
+        renderForm();
+
+        expect(screen.getByText('· 自称未满 18 岁的人')).toBeInTheDocument();
+        expect(screen.getByText('· 明确求助戒赌，或说自己已自我禁赌的人')).toBeInTheDocument();
     });
 
     it('fills the form from a template and keeps the name, regions and languages it leaves empty', async () => {
@@ -196,7 +285,6 @@ describe('GrowthProfileForm', () => {
                 competitors: [],
                 contact_types: ['platform_handle'],
                 default_target: 50,
-                excludes: ['bots and spam'],
                 games: ['online slots', 'live casino'],
                 genre: 'Licensed online casino and sportsbook',
                 languages: ['th'],
@@ -205,11 +293,18 @@ describe('GrowthProfileForm', () => {
                 pitch: 'A licensed online casino looking for adult players.',
                 regions: ['Thailand'],
                 scoring: {
+                    dimensions: [
+                        { description: 'Plays online casino games.', key: 'player', name: '目标人群身份', points: 3 },
+                        { description: 'Runs a betting agency.', key: 'agent', name: '代理', points: 6 },
+                    ],
                     qualified: 8,
+                    recent: { points: 2 },
                     watchlist: 4,
-                    weights: { active: 2, match: 3, pain: 3, paying: 3, player: 3 },
                 },
                 signals: ['free spins'],
+                title: 'Star Era players',
+                unwanted: ['bots and spam'],
+                unwanted_penalty: 3,
             }),
         );
     });
@@ -220,7 +315,6 @@ describe('GrowthProfileForm', () => {
             'competitors',
             'contact_types',
             'default_target',
-            'excludes',
             'games',
             'genre',
             'languages',
@@ -230,6 +324,8 @@ describe('GrowthProfileForm', () => {
             'regions',
             'scoring',
             'signals',
+            'unwanted',
+            'unwanted_penalty',
         ];
 
         expect(Object.keys(PRESET_FORM_FIELDS).sort()).toEqual(serverFields);

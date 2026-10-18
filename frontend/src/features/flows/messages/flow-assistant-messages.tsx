@@ -17,6 +17,7 @@ import { Form, FormControl, FormField } from '@/components/ui/form';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Spinner } from '@/components/ui/spinner';
+import { GrowthProfileDraftCard } from '@/features/growth/profiles/growth-profile-draft-card';
 import { StatusType } from '@/graphql/types';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { copy, statusLabel } from '@/lib/copy';
@@ -608,6 +609,7 @@ function FlowAssistantMessages({ className }: FlowAssistantMessagesProps) {
             )}
 
             <div className="bg-background sticky bottom-0 p-px">
+                <GrowthProfileDraftCard />
                 <FlowForm
                     defaultValues={{
                         providerName: selectedAssistant?.provider?.name ?? selectedProvider?.name ?? '',

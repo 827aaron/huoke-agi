@@ -48,9 +48,10 @@ import {
     type LeadSort,
     sortLeads,
 } from './leads-filter';
+import { useSignalLabel } from './use-signal-label';
 
 const ALL = 'all';
-const FLAGS: LeadFlag[] = ['pain', 'paying', 'recent'];
+const FLAGS: LeadFlag[] = ['pain', 'paying', 'recent', 'unwanted'];
 const MIN_SCORES = [5, 7, 9];
 
 const dayTitle = (group: LeadDayGroup): string => {
@@ -448,6 +449,8 @@ function FlowLeads() {
 }
 
 function LeadsTable({ leads, onOpenLead, onOpenSource }: LeadsTableProps) {
+    const signalLabel = useSignalLabel();
+
     return (
         <div className="rounded-md border">
             <Table aria-label={copy.flowTabs.leads}>
@@ -480,12 +483,15 @@ function LeadsTable({ leads, onOpenLead, onOpenSource }: LeadsTableProps) {
                             </TableCell>
                             <TableCell>
                                 <div className="flex w-56 flex-wrap gap-1">
+                                    {lead.flags?.includes('unwanted') && (
+                                        <Badge variant="destructive">{copy.leads.flag.unwanted}</Badge>
+                                    )}
                                     {lead.signals.map((signal) => (
                                         <Badge
                                             key={signal}
                                             variant="outline"
                                         >
-                                            {copy.leads.signal[signal] ?? signal}
+                                            {signalLabel(signal)}
                                         </Badge>
                                     ))}
                                 </div>

@@ -15,7 +15,14 @@ export const useGrowthAccounts = (intervalMs: null | number = null) =>
 
 export const useGrowthSettings = () => useGrowthPoll('settings', () => growthApi.listSettings(), null);
 
-export const useGrowthProfiles = () => useGrowthPoll('profiles', () => growthApi.listProfiles(), null);
+export const useGrowthProfiles = (intervalMs: null | number = null) =>
+    useGrowthPoll('profiles', () => growthApi.listProfiles(), intervalMs);
+
+export const useGrowthFlowProfile = (flowId: null | string) =>
+    useGrowthPoll(flowId ? `flow-profile:${flowId}` : null, () => growthApi.getFlowProfile(flowId ?? ''));
+
+export const useGrowthProfileDraft = (flowId: null | string) =>
+    useGrowthPoll(flowId ? `profile-draft:${flowId}` : null, () => growthApi.getProfileDraft(flowId ?? ''));
 
 export function useGrowthCurrentRun(flowId: null | string) {
     const state = useGrowthPoll(flowId ? `runs:${flowId}` : null, () => growthApi.listRuns(flowId ?? ''));

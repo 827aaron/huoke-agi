@@ -1102,8 +1102,8 @@ mutation deleteFlowTemplate($templateId: ID!) {
 
 # ==================== Flows ====================
 
-mutation createFlow($modelProvider: String!, $input: String!, $resourceIds: [ID!]) {
-    createFlow(modelProvider: $modelProvider, input: $input, resourceIds: $resourceIds) {
+mutation createFlow($modelProvider: String!, $input: String!, $resourceIds: [ID!], $profileId: ID) {
+    createFlow(modelProvider: $modelProvider, input: $input, resourceIds: $resourceIds, profileId: $profileId) {
         ...flowFragment
     }
 }
@@ -1128,8 +1128,8 @@ mutation renameFlow($flowId: ID!, $title: String!) {
     renameFlow(flowId: $flowId, title: $title)
 }
 
-mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!, $resourceIds: [ID!]) {
-    createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents, resourceIds: $resourceIds) {
+mutation createAssistant($flowId: ID!, $modelProvider: String!, $input: String!, $useAgents: Boolean!, $resourceIds: [ID!], $profileId: ID) {
+    createAssistant(flowId: $flowId, modelProvider: $modelProvider, input: $input, useAgents: $useAgents, resourceIds: $resourceIds, profileId: $profileId) {
         flow {
             ...flowFragment
         }

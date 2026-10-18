@@ -102,6 +102,8 @@ export interface GrowthLead {
     first_flow_title: string;
     first_round: number;
     first_task_id: number;
+    // `unwanted` when the lead matched an unwanted line of the profile it was judged with; absent means none.
+    flags?: string[];
     id: number;
     last_active_at: null | string;
     // The owner's own words about the lead; empty when none.
@@ -158,7 +160,8 @@ export interface GrowthLeadProfile {
     related_groups?: number;
 }
 
-export type GrowthLeadSignal = 'active' | 'match' | 'pain' | 'paying' | 'player';
+// A scoring dimension key of the profile, or `active` for the recency points.
+export type GrowthLeadSignal = string;
 
 export type GrowthLeadTier = 'qualified' | 'watch';
 
@@ -203,12 +206,21 @@ export interface GrowthFingerprint {
     timezone?: string;
 }
 
+// The profile a task judges with; fallback is set when the one it started with was deleted.
+export interface GrowthFlowProfile {
+    fallback: boolean;
+    flow_id: number;
+    profile_id: null | number;
+    title: string;
+}
+
 export interface GrowthProfile {
     competitors: string[];
     // Empty means the platform account alone. Anything not a GrowthContactType is a name the owner added.
     contact_types?: string[];
+    // The one a task uses when none is chosen.
+    default: boolean;
     default_target: number;
-    excludes: string[];
     games: string[];
     genre: string;
     id: number;
@@ -221,10 +233,32 @@ export interface GrowthProfile {
     // Absent means the server's default weighting.
     scoring?: GrowthScoring | null;
     signals: string[];
+    // The name the owner knows the profile by; the server falls back to the business name.
+    title: string;
+    // A hit lowers the score by unwanted_penalty (0 is the server's default) and flags the lead.
+    unwanted: string[];
+    unwanted_penalty: number;
     updated_at: string;
 }
 
-export type GrowthProfileInput = Omit<GrowthProfile, 'id' | 'updated_at'>;
+// What the task's assistant drafted and the owner has not saved; base_profile_id is the profile it changes.
+export interface GrowthProfileDraft {
+    base_profile_id: null | number;
+    flow_id: number;
+    profile: GrowthProfileInput;
+    title: string;
+    updated_at: string;
+}
+
+// An empty title keeps the draft's.
+export interface GrowthProfileDraftSave {
+    as_new?: boolean;
+    make_default?: boolean;
+    title?: string;
+    use_for_flow?: boolean;
+}
+
+export type GrowthProfileInput = Omit<GrowthProfile, 'default' | 'id' | 'updated_at'>;
 
 // A starting profile in English, the language the agents read; the page names it by its id. A list
 // the preset leaves to the owner, such as the regions, comes back null.
@@ -304,6 +338,8 @@ export interface GrowthSchedule {
     last_run?: GrowthScheduleLastRun | null;
     // UTC; absent while paused or once a one-off date has passed.
     next_start_at?: null | string;
+    // Absent starts with the default profile.
+    profile_id?: null | number;
     start_time: string;
     timezone: string;
     // 0 is Sunday.
@@ -320,6 +356,8 @@ export interface GrowthScheduleInput {
     end_time: string;
     flow_id: number;
     input?: string;
+    // On create, absent takes the task's profile; on update, absent keeps it and 0 clears it.
+    profile_id?: number;
     start_time: string;
     timezone: string;
     weekdays?: number[];
@@ -338,15 +376,22 @@ export interface GrowthSchedulesResponse {
     total: number;
 }
 
-// Each signal the judgement model sees in a message adds its weight; `active` adds it for a message of the last 7
-// days and half of it for one of the last 30.
+// Each dimension the judgement model answers yes for a message adds its points; `recent` adds its points for a
+// message of the last 7 days and half of them for one of the last 30.
 export interface GrowthScoring {
+    dimensions: GrowthScoringDimension[];
     qualified: number;
+    recent?: null | { points: number };
     watchlist: number;
-    weights: Record<GrowthScoringSignal, number>;
 }
 
-export type GrowthScoringSignal = 'active' | 'match' | 'pain' | 'paying' | 'player';
+// An empty key is made from the name by the server. The description is what the judgement model reads.
+export interface GrowthScoringDimension {
+    description: string;
+    key: string;
+    name: string;
+    points: number;
+}
 
 // One card of the "Keys & connections" page. Secret fields come back masked ("••••abcd"); `source` says
 // whether the value was saved here, preset by the server, or is missing.
