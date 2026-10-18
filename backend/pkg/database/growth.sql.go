@@ -3572,12 +3572,12 @@ func (q *Queries) UpsertGrowthSource(ctx context.Context, arg UpsertGrowthSource
 const upsertLead = `-- name: UpsertLead :one
 INSERT INTO leads (
   user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason,
-  contacts, first_flow_id, first_task_id, last_flow_id, last_task_id
+  contacts, first_flow_id, first_task_id, last_flow_id, last_task_id, flags
 ) VALUES (
   $1, $2, $3, $4,
   $5, $6,
   $7, $8, $9, $10,
-  $11, $12, $11, $12
+  $11, $12, $11, $12, $13::text[]
 )
 ON CONFLICT (user_id, platform, platform_user_id) DO UPDATE
 SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
@@ -3587,7 +3587,8 @@ SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
     match_reason = CASE WHEN EXCLUDED.score > leads.score THEN EXCLUDED.match_reason ELSE leads.match_reason END,
     contacts     = EXCLUDED.contacts,
     last_flow_id = COALESCE(EXCLUDED.last_flow_id, leads.last_flow_id),
-    last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id)
+    last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id),
+    flags        = ARRAY(SELECT DISTINCT f FROM unnest(leads.flags || EXCLUDED.flags) AS f ORDER BY f)
 RETURNING id, user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason, first_flow_id, first_task_id, last_flow_id, last_task_id, delivered_at, delivered_run_id, created_at, updated_at, contacts, note, origin, flags
 `
 
@@ -3604,6 +3605,7 @@ type UpsertLeadParams struct {
 	Contacts       json.RawMessage `json:"contacts"`
 	FlowID         sql.NullInt64   `json:"flow_id"`
 	TaskID         sql.NullInt64   `json:"task_id"`
+	Flags          []string        `json:"flags"`
 }
 
 func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, error) {
@@ -3620,6 +3622,7 @@ func (q *Queries) UpsertLead(ctx context.Context, arg UpsertLeadParams) (Lead, e
 		arg.Contacts,
 		arg.FlowID,
 		arg.TaskID,
+		pq.Array(arg.Flags),
 	)
 	var i Lead
 	err := row.Scan(

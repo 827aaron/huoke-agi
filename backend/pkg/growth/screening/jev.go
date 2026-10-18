@@ -51,29 +51,38 @@ type Message struct {
 
 // Batch is a set of messages from one source judged against one business. Task is the
 // customer's instruction for this search: it names whom to find and wins over Business
-// where the two disagree; empty leaves Business to decide. Signals are asked of every
-// message beside the exclusion question.
+// and Unwanted where they disagree; empty leaves Business to decide. Excluded are the
+// people dropped whatever Task says; Unwanted those the business would rather not get,
+// asked about only when the list is not empty. Signals are asked of every message beside
+// those questions.
 type Batch struct {
 	Platform string    `json:"platform"`
 	Source   string    `json:"source"`
 	Task     string    `json:"task"`
 	Business string    `json:"business"`
+	Excluded []string  `json:"excluded"`
+	Unwanted []string  `json:"unwanted"`
 	Messages []Message `json:"messages"`
 	Signals  []Signal  `json:"-"`
 }
 
 // Signal is one yes/no question about a message; Question has one %s, the message's key.
+// Name and Description are what a profile shows for a built-in signal.
 type Signal struct {
-	Key      string
-	Question string
-	Criteria map[string]string
+	Key         string
+	Name        string
+	Description string
+	Question    string
+	Criteria    map[string]string
 }
 
-// Judgement is the probability that a message shows its sender is excluded, and that
-// it shows each signal asked, by key. A question missing from the answer is missing
-// from Signals; Excluded is -1 when its own question went unanswered.
+// Judgement is the probability that a message shows its sender is excluded, that it
+// shows them unwanted, and that it shows each signal asked, by key. A question missing
+// from the answer is missing from Signals; Excluded and Unwanted are -1 when their own
+// question went unanswered or was not asked.
 type Judgement struct {
 	Excluded float64
+	Unwanted float64
 	Signals  map[string]float64
 }
 
@@ -88,7 +97,8 @@ const (
 
 var Signals = []Signal{
 	{
-		Key: SignalPlayer,
+		Key: SignalPlayer, Name: "Audience",
+		Description: "The sender uses or follows this kind of product or service themselves.",
 		Question: "Is the sender of `messages.%s` one of the people this search is for: the people `task` asks for " +
 			"or, when `task` is empty, the audience the business in `business` serves, who use or follow its kind of " +
 			"product or service themselves (talk about using it, ask for tips, share their results)?",
@@ -98,7 +108,8 @@ var Signals = []Signal{
 		},
 	},
 	{
-		Key: SignalPain,
+		Key: SignalPain, Name: "Pain or switching",
+		Description: "The sender is unhappy with, bored of or leaving what they use now, or asks for an alternative.",
 		Question: "Is the sender of `messages.%s` unhappy with what they use now, bored with it, leaving it, " +
 			"or asking for an alternative like the offer in `business`? Wanting to stop using this kind of product " +
 			"altogether is not this signal.",
@@ -108,7 +119,8 @@ var Signals = []Signal{
 		},
 	},
 	{
-		Key: SignalPaying,
+		Key: SignalPaying, Name: "Paying",
+		Description: "The sender mentions paying for this kind of product: purchases, deposits, top-ups, subscriptions.",
 		Question: "Does the sender of `messages.%s` mention paying for this kind of product or service: purchases, " +
 			"deposits, top-ups, subscriptions, plans or memberships?",
 		Criteria: map[string]string{
@@ -117,7 +129,8 @@ var Signals = []Signal{
 		},
 	},
 	{
-		Key: SignalMatch,
+		Key: SignalMatch, Name: "Fit",
+		Description: "What the sender wants or uses fits the offer: its category, platform, region and style.",
 		Question: "Does what the sender of `messages.%s` wants or uses fit the offer in `business`: " +
 			"its category, platform, region and style?",
 		Criteria: map[string]string{
@@ -125,6 +138,36 @@ var Signals = []Signal{
 			"false": "Unrelated or opposite to the offer",
 		},
 	},
+}
+
+// SignalFor is the question for one scoring dimension of a profile: the built-in question
+// of its key while the profile keeps that signal's own description, else one built from
+// the name and description the owner wrote. The owner's text is quoted into the question,
+// so a % in it must not read as a verb.
+func SignalFor(key, name, description string) Signal {
+	for _, sig := range Signals {
+		if sig.Key == key && (description == "" || description == sig.Description) {
+			return sig
+		}
+	}
+	q := "Does `messages.%s` show that its sender fits " + strconv.Quote(escapeVerbs(name))
+	if description != "" {
+		q += ", meaning: " + strings.TrimSuffix(escapeVerbs(description), ".")
+	}
+	return Signal{
+		Key: key, Name: name, Description: description,
+		Question: q + "? Judge this for the search `task` describes and the business in `business`.",
+		Criteria: dimensionCriteria,
+	}
+}
+
+var dimensionCriteria = map[string]string{
+	"true":  "The message shows it, in the sender's own words or as a plain fact",
+	"false": "The message does not show it",
+}
+
+func escapeVerbs(s string) string {
+	return strings.ReplaceAll(s, "%", "%%")
 }
 
 // Client calls the System One HTTP API. The zero HTTP client and retry delay take
@@ -142,13 +185,18 @@ type Client struct {
 
 // question is asked of each message in turn; %s is its key under `messages`. A yes
 // drops the message whatever its signals score, so it asks for explicit evidence only.
-const question = "Does `messages.%s` (posted on `platform`, in `source`) itself show that its sender is someone the " +
-	"business in `business` cannot serve: spam, advertising, a bot, a seller or booster, a competitor, someone " +
-	"`business` says is usually not a customer, a person outside its regions, one who says they use only a " +
-	"language outside its languages, or one with no use for its offer? When `task` is not empty it names whom " +
-	"this search is for and wins over `business`: an exclusion that contradicts `task` does not apply, and a " +
-	"region or language `task` names replaces those of `business`. One about minors or about people asking for " +
-	"help to stop applies whatever `task` says."
+const question = "Does `messages.%s` (posted on `platform`, in `source`) itself show that its sender is one of the " +
+	"people listed in `excluded`, or that it is spam, advertising or a bot? These apply whatever `task` and " +
+	"`business` say."
+
+// unwantedQuestion lowers a score instead of dropping the message, and gives way to the
+// task the way an exclusion once did.
+const unwantedQuestion = "Does `messages.%s` itself show that its sender is one of the people listed in `unwanted`, " +
+	"whom the business in `business` would rather not get? When `task` is not empty it names whom this search is " +
+	"for and wins over `unwanted`: an entry that contradicts `task` does not apply."
+
+// unwantedKey suffixes the unwanted question's id; a dimension key never equals it.
+const unwantedKey = "unwanted"
 
 var criteria = map[string]string{
 	"true": "The message states it explicitly, in the sender's own words or as a plain fact",
@@ -185,11 +233,14 @@ func (c *Client) Judge(ctx context.Context, b Batch) (map[string]Judgement, stri
 				}
 				j, seen := out[q.id]
 				if !seen {
-					j = Judgement{Excluded: -1, Signals: map[string]float64{}}
+					j = Judgement{Excluded: -1, Unwanted: -1, Signals: map[string]float64{}}
 				}
-				if q.signal == "" {
+				switch {
+				case q.unwanted:
+					j.Unwanted = *a.Noul
+				case q.signal == "":
 					j.Excluded = *a.Noul
-				} else {
+				default:
 					j.Signals[q.signal] = *a.Noul
 				}
 				out[q.id] = j
@@ -267,8 +318,9 @@ func retryAfter(v string) time.Duration {
 }
 
 type questionOf struct {
-	id     string
-	signal string
+	id       string
+	signal   string
+	unwanted bool
 }
 
 // request asks independent questions per message over one shared state, so the
@@ -287,6 +339,15 @@ func request(model string, b Batch) (map[string]any, map[string]questionOf) {
 			"instructions": fmt.Sprintf(question, key),
 			"criteria":     criteria,
 		}
+		if len(b.Unwanted) > 0 {
+			qid := key + "_" + unwantedKey
+			ids[qid] = questionOf{id: m.ID, unwanted: true}
+			questions[qid] = map[string]any{
+				"type":         "noul",
+				"instructions": fmt.Sprintf(unwantedQuestion, key),
+				"criteria":     criteria,
+			}
+		}
 		for _, sig := range b.Signals {
 			qid := key + "_" + sig.Key
 			ids[qid] = questionOf{id: m.ID, signal: sig.Key}
@@ -304,10 +365,20 @@ func request(model string, b Batch) (map[string]any, map[string]questionOf) {
 			"source":   b.Source,
 			"task":     b.Task,
 			"business": b.Business,
+			"excluded": emptyAsList(b.Excluded),
+			"unwanted": emptyAsList(b.Unwanted),
 			"messages": messages,
 		},
 		"questions": questions,
 	}, ids
+}
+
+// emptyAsList keeps a nil list a JSON list, not null, so the model reads an empty one.
+func emptyAsList(items []string) []string {
+	if items == nil {
+		return []string{}
+	}
+	return items
 }
 
 func snippet(data []byte) string {

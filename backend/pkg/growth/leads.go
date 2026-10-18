@@ -179,11 +179,11 @@ func (s *Service) UpsertLeads(ctx context.Context, scope Scope, inputs []LeadInp
 	}
 
 	var sc *screener
-	judge := func(src database.GrowthSource, in LeadInput) (int, bool, error) {
+	judge := func(src database.GrowthSource, in LeadInput) (int, bool, bool, error) {
 		if sc == nil {
 			var err error
 			if sc, err = s.screenerFor(ctx, scope); err != nil {
-				return 0, false, err
+				return 0, false, false, err
 			}
 		}
 		return s.judgeEvidence(ctx, scope.UserID, sc, src, in)
@@ -215,7 +215,7 @@ func (s *Service) upsertLead(
 	in LeadInput,
 	sources map[int64]database.GrowthSource,
 	profile ProfileView,
-	judge func(database.GrowthSource, LeadInput) (int, bool, error),
+	judge func(database.GrowthSource, LeadInput) (int, bool, bool, error),
 ) (LeadResult, error) {
 	res := LeadResult{PlatformUserID: in.PlatformUserID, Score: in.Score}
 	reject := func(reason string) (LeadResult, error) {
@@ -256,12 +256,12 @@ func (s *Service) upsertLead(
 	}
 	res.PlatformUserID = userID
 
-	score, judged, err := s.judgedScore(ctx, scope.UserID, profile.ID, in.Evidence)
+	score, unwanted, judged, err := s.judgedScore(ctx, scope.UserID, profile.ID, in.Evidence)
 	if err != nil {
 		return res, err
 	}
 	if !judged {
-		if score, judged, err = judge(firstSource, in); err != nil {
+		if score, unwanted, judged, err = judge(firstSource, in); err != nil {
 			return res, err
 		}
 	}
@@ -313,6 +313,7 @@ func (s *Service) upsertLead(
 		Contacts:       contactsJSON,
 		FlowID:         scope.flowID(),
 		TaskID:         scope.taskID(),
+		Flags:          leadFlags(unwanted),
 	})
 	if err != nil {
 		return res, fmt.Errorf("failed to store lead %s: %w", userID, err)
@@ -346,27 +347,38 @@ func (s *Service) upsertLead(
 }
 
 // judgedScore is the highest score the judgement model gave a message of the evidence,
-// and false when it scored none of them.
-func (s *Service) judgedScore(ctx context.Context, userID, profileID int64, evidence []EvidenceInput) (int, bool, error) {
+// whether it found the sender unwanted in any of them, and false when it scored none.
+func (s *Service) judgedScore(ctx context.Context, userID, profileID int64, evidence []EvidenceInput) (int, bool, bool, error) {
 	bySource := map[int64][]string{}
 	for _, ev := range evidence {
 		if id := strings.TrimSpace(ev.MessageID); id != "" {
 			bySource[ev.SourceID] = append(bySource[ev.SourceID], id)
 		}
 	}
-	best, judged := 0, false
+	best, unwanted, judged := 0, false, false
 	for sourceID, ids := range bySource {
 		rows, err := s.db.GetMessageScores(ctx, database.GetMessageScoresParams{
 			UserID: userID, ProfileID: profileID, SourceID: sourceID, MessageIds: ids,
 		})
 		if err != nil {
-			return 0, false, fmt.Errorf("failed to load message scores: %w", err)
+			return 0, false, false, fmt.Errorf("failed to load message scores: %w", err)
 		}
 		for _, r := range rows {
 			best, judged = max(best, int(r.Score)), true
+			unwanted = unwanted || slices.ContainsFunc(scoreParts(r.Signals), isUnwantedPart)
 		}
 	}
-	return best, judged, nil
+	return best, unwanted, judged, nil
+}
+
+func isUnwantedPart(p ScorePart) bool { return p.Signal == LeadFlagUnwanted }
+
+// leadFlags are the flags a judgement sets on a lead; stored ones are kept.
+func leadFlags(unwanted bool) []string {
+	if unwanted {
+		return []string{LeadFlagUnwanted}
+	}
+	return []string{}
 }
 
 // cleanContacts keeps the contacts of a known type with a value, once each, and says
@@ -607,7 +619,9 @@ func (s *Service) leadViews(ctx context.Context, leads []database.Lead) ([]LeadV
 			v.ScoreBreakdown = []ScorePart{}
 		}
 		for _, part := range v.ScoreBreakdown {
-			v.Signals = append(v.Signals, part.Signal)
+			if part.Points > 0 {
+				v.Signals = append(v.Signals, part.Signal)
+			}
 		}
 		if v.Evidence == nil {
 			v.Evidence = []EvidenceView{}

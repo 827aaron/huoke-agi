@@ -135,14 +135,10 @@ func (s *Service) screen(
 		return msgs, nil
 	}
 	scoring := sc.profile.ScoringOrDefault()
-	business := businessSummary(sc.profile.Profile)
 	kept := make([]MessageView, 0, len(msgs))
 	for start := 0; start < len(msgs); start += screenBatch {
 		batch := msgs[start:min(start+screenBatch, len(msgs))]
-		judged, model, err := sc.client.Judge(ctx, screening.Batch{
-			Platform: platform, Source: source, Task: sc.task, Business: business, Messages: screenMessages(batch),
-			Signals: screening.Signals,
-		})
+		judged, model, err := sc.client.Judge(ctx, sc.batch(platform, source, screenMessages(batch)))
 		switch {
 		case errors.Is(err, screening.ErrUnauthorized):
 			return nil, fmt.Errorf("%w (%v)", ErrNoJudge, err)
@@ -169,8 +165,8 @@ func (s *Service) screen(
 			if j.Excluded >= signalYes {
 				continue
 			}
-			if len(j.Signals) > 0 {
-				m.Score, m.Signals = scoreMessage(scoring, j.Signals, m.Time, sc.now())
+			if len(j.Signals) > 0 || j.Unwanted >= signalYes {
+				m.Score, m.Signals = scoreMessage(scoring, sc.profile.UnwantedPenaltyOrDefault(), j, m.Time, sc.now())
 				if m.Score < scoring.Watchlist {
 					continue
 				}
@@ -188,17 +184,35 @@ func (s *Service) screen(
 	return kept, nil
 }
 
+// batch is the Jev request for msgs: the profile's dimensions as questions, its unwanted
+// list, and the compliance exclusions.
+func (sc *screener) batch(platform, source string, msgs []screening.Message) screening.Batch {
+	return screening.Batch{
+		Platform: platform, Source: source, Task: sc.task, Business: businessSummary(sc.profile.Profile),
+		Excluded: ComplianceExcludes, Unwanted: sc.profile.Unwanted, Messages: msgs,
+		Signals: signalsFor(sc.profile.ScoringOrDefault()),
+	}
+}
+
+func signalsFor(sc Scoring) []screening.Signal {
+	out := make([]screening.Signal, 0, len(sc.Dimensions))
+	for _, d := range sc.Dimensions {
+		out = append(out, screening.SignalFor(d.Key, d.Name, d.Description))
+	}
+	return out
+}
+
 // judgeEvidence screens the excerpts of a lead whose messages no read scored, as on web
-// pages the researcher reads itself: the best excerpt's score, or false when Jev failed
-// and the agent's score has to stand. A score is stored per message id, so a repeat of
-// the lead is not judged again.
+// pages the researcher reads itself: the best excerpt's score, whether any excerpt showed
+// the sender unwanted, and false when Jev failed and the agent's score has to stand. A
+// score is stored per message id, so a repeat of the lead is not judged again.
 func (s *Service) judgeEvidence(
 	ctx context.Context,
 	userID int64,
 	sc *screener,
 	src database.GrowthSource,
 	in LeadInput,
-) (int, bool, error) {
+) (int, bool, bool, error) {
 	scoring := sc.profile.ScoringOrDefault()
 	who := strings.TrimSpace(strings.TrimPrefix(in.Username, "@"))
 	if who != "" {
@@ -218,22 +232,19 @@ func (s *Service) judgeEvidence(
 	if source == "" {
 		source = src.Link
 	}
-	judged, _, err := sc.client.Judge(ctx, screening.Batch{
-		Platform: src.Platform, Source: source, Task: sc.task, Business: businessSummary(sc.profile.Profile), Messages: msgs,
-		Signals: screening.Signals,
-	})
+	judged, _, err := sc.client.Judge(ctx, sc.batch(src.Platform, source, msgs))
 	switch {
 	case errors.Is(err, screening.ErrUnauthorized):
-		return 0, false, fmt.Errorf("%w (%v)", ErrNoJudge, err)
+		return 0, false, false, fmt.Errorf("%w (%v)", ErrNoJudge, err)
 	case ctx.Err() != nil:
-		return 0, false, ctx.Err()
+		return 0, false, false, ctx.Err()
 	case err != nil:
 		logrus.WithContext(ctx).WithError(err).WithField("source_id", src.ID).
 			Warn("judging a lead's evidence failed; the agent's score stands")
-		return 0, false, nil
+		return 0, false, false, nil
 	}
 
-	best, scored := 0, false
+	best, unwanted, scored := 0, false, false
 	for i, ev := range in.Evidence {
 		j, ok := judged[strconv.Itoa(i)]
 		if !ok {
@@ -243,18 +254,19 @@ func (s *Service) judgeEvidence(
 		if j.Excluded >= signalYes {
 			continue
 		}
-		score, signals := scoreMessage(scoring, j.Signals, evidenceTime(ev), sc.now())
+		score, signals := scoreMessage(scoring, sc.profile.UnwantedPenaltyOrDefault(), j, evidenceTime(ev), sc.now())
 		best = max(best, score)
-		if id := strings.TrimSpace(ev.MessageID); id != "" && len(j.Signals) > 0 {
+		unwanted = unwanted || j.Unwanted >= signalYes
+		if id := strings.TrimSpace(ev.MessageID); id != "" && (len(j.Signals) > 0 || j.Unwanted >= signalYes) {
 			if err := s.db.UpsertMessageScore(ctx, database.UpsertMessageScoreParams{
 				UserID: userID, ProfileID: sc.profile.ID, SourceID: ev.SourceID, MessageID: id,
 				Score: int32(score), Signals: signals,
 			}); err != nil {
-				return 0, false, fmt.Errorf("failed to store the score of message %s: %w", id, err)
+				return 0, false, false, fmt.Errorf("failed to store the score of message %s: %w", id, err)
 			}
 		}
 	}
-	return best, scored, nil
+	return best, unwanted, scored, nil
 }
 
 func evidenceTime(ev EvidenceInput) time.Time {
@@ -267,21 +279,22 @@ func evidenceTime(ev EvidenceInput) time.Time {
 // signalYes is the probability from which any of Jev's answers counts as yes.
 const signalYes = 0.5
 
-// scoreMessage adds the weight of every signal Jev answered yes to, and the active
-// weight for a recent message; the text lists what fired, like "player+3, 7d+2 = 5".
-func scoreMessage(sc Scoring, signals map[string]float64, at, now time.Time) (int, string) {
+// scoreMessage adds the points of every dimension Jev answered yes to and the recent
+// points for a fresh message, and takes penalty off when Jev found the sender unwanted,
+// never below zero; the text lists what fired, like "player+3, 7d+2, unwanted-3 = 2".
+func scoreMessage(sc Scoring, penalty int, j screening.Judgement, at, now time.Time) (int, string) {
 	var (
 		score int
 		fired []string
 	)
 	add := func(label string, points int) {
-		if points > 0 {
+		if points != 0 {
 			score += points
-			fired = append(fired, fmt.Sprintf("%s+%d", label, points))
+			fired = append(fired, fmt.Sprintf("%s%+d", label, points))
 		}
 	}
 	for _, d := range sc.Dimensions {
-		if signals[d.Key] >= signalYes {
+		if j.Signals[d.Key] >= signalYes {
 			add(d.Key, d.Points)
 		}
 	}
@@ -294,10 +307,13 @@ func scoreMessage(sc Scoring, signals map[string]float64, at, now time.Time) (in
 			add("30d", sc.Recent.Points/2)
 		}
 	}
+	if j.Unwanted >= signalYes {
+		add(LeadFlagUnwanted, -penalty)
+	}
 	if len(fired) == 0 {
 		return 0, "no signal"
 	}
-	return score, fmt.Sprintf("%s = %d", strings.Join(fired, ", "), score)
+	return max(score, 0), fmt.Sprintf("%s = %d", strings.Join(fired, ", "), max(score, 0))
 }
 
 // signalActive names the recency weight in a score breakdown.
@@ -310,14 +326,18 @@ type ScorePart struct {
 }
 
 // scoreParts reads back the text scoreMessage stores, reporting either recency label as
-// the active signal.
+// the active signal; the unwanted penalty is a part with negative points.
 func scoreParts(text string) []ScorePart {
 	text, _, _ = strings.Cut(text, " = ")
 	parts := []ScorePart{}
 	for _, field := range strings.Split(text, ", ") {
-		label, n, ok := strings.Cut(field, "+")
+		i := strings.LastIndexAny(field, "+-")
+		if i < 0 {
+			continue
+		}
+		label, n := field[:i], field[i:]
 		points, err := strconv.Atoi(n)
-		if !ok || err != nil {
+		if err != nil {
 			continue
 		}
 		if label == "7d" || label == "30d" {
@@ -359,8 +379,8 @@ func screenMessages(batch []MessageView) []screening.Message {
 	return out
 }
 
-// businessSummary is the profile as Jev reads it; signal words and exclusions are
-// hints to its judgment, not a filter.
+// businessSummary is the profile as Jev reads it; signal words are hints to its
+// judgment, not a filter. The exclusions and the unwanted list travel as their own state.
 func businessSummary(p Profile) string {
 	var b strings.Builder
 	line := func(label, value string) {
@@ -376,8 +396,6 @@ func businessSummary(p Profile) string {
 	line("Regions", strings.Join(p.Regions, ", "))
 	line("Languages", strings.Join(p.Languages, ", "))
 	line("Words that often mark a likely customer", strings.Join(p.Signals, "; "))
-	line("Always excluded, on explicit evidence only", strings.Join(ComplianceExcludes, "; "))
-	line("Usually not a customer", strings.Join(p.Unwanted, "; "))
 	line("Notes", p.Notes)
 	return strings.TrimSpace(b.String())
 }

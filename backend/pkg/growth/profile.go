@@ -136,16 +136,14 @@ const maxDimensionPoints = 20
 // defaultDimensions are the four questions the judgement model has always been asked,
 // keyed as its answers are.
 func defaultDimensions(player, pain, paying, match int) []ScoringDimension {
-	return []ScoringDimension{
-		{Key: screening.SignalPlayer, Name: "Audience", Points: player,
-			Description: "The sender uses or follows this kind of product or service themselves."},
-		{Key: screening.SignalPain, Name: "Pain or switching", Points: pain,
-			Description: "The sender is unhappy with, bored of or leaving what they use now, or asks for an alternative."},
-		{Key: screening.SignalPaying, Name: "Paying", Points: paying,
-			Description: "The sender mentions paying for this kind of product: purchases, deposits, top-ups, subscriptions."},
-		{Key: screening.SignalMatch, Name: "Fit", Points: match,
-			Description: "What the sender wants or uses fits the offer: its category, platform, region and style."},
+	points := map[string]int{
+		screening.SignalPlayer: player, screening.SignalPain: pain, screening.SignalPaying: paying, screening.SignalMatch: match,
 	}
+	dims := make([]ScoringDimension, 0, len(screening.Signals))
+	for _, sig := range screening.Signals {
+		dims = append(dims, ScoringDimension{Key: sig.Key, Name: sig.Name, Description: sig.Description, Points: points[sig.Key]})
+	}
+	return dims
 }
 
 // DefaultScoring weighs an offer with no weighting of its own.
@@ -333,7 +331,7 @@ func (sc *Scoring) normalize() {
 			continue
 		}
 		key := strings.Trim(dimensionKeyChars.ReplaceAllString(strings.ToLower(cmp.Or(d.Key, d.Name)), "_"), "_")
-		if key == "" || key == signalActive || seen[key] {
+		if key == "" || key == signalActive || key == LeadFlagUnwanted || seen[key] {
 			for n := len(dims) + 1; ; n++ {
 				if key = fmt.Sprintf("d%d", n); !seen[key] {
 					break
@@ -508,7 +506,8 @@ func (s *Service) UpdateProfile(ctx context.Context, userID, id int64, in Profil
 func sameScoring(a, b Profile) bool {
 	x, _ := json.Marshal(a.ScoringOrDefault())
 	y, _ := json.Marshal(b.ScoringOrDefault())
-	return bytes.Equal(x, y) && a.UnwantedPenaltyOrDefault() == b.UnwantedPenaltyOrDefault()
+	return bytes.Equal(x, y) && a.UnwantedPenaltyOrDefault() == b.UnwantedPenaltyOrDefault() &&
+		slices.Equal(a.Unwanted, b.Unwanted)
 }
 
 // savedProfile reseeds the knowledge store when the default profile changed: the store

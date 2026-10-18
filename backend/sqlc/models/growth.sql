@@ -285,12 +285,12 @@ WHERE user_id = sqlc.arg(user_id) AND platform = sqlc.arg(platform) AND platform
 -- name: UpsertLead :one
 INSERT INTO leads (
   user_id, platform, platform_user_id, identity_kind, username, display_name, score, tier, match_reason,
-  contacts, first_flow_id, first_task_id, last_flow_id, last_task_id
+  contacts, first_flow_id, first_task_id, last_flow_id, last_task_id, flags
 ) VALUES (
   sqlc.arg(user_id), sqlc.arg(platform), sqlc.arg(platform_user_id), sqlc.arg(identity_kind),
   sqlc.arg(username), sqlc.arg(display_name),
   sqlc.arg(score), sqlc.arg(tier), sqlc.arg(match_reason), sqlc.arg(contacts),
-  sqlc.narg(flow_id), sqlc.narg(task_id), sqlc.narg(flow_id), sqlc.narg(task_id)
+  sqlc.narg(flow_id), sqlc.narg(task_id), sqlc.narg(flow_id), sqlc.narg(task_id), sqlc.arg(flags)::text[]
 )
 ON CONFLICT (user_id, platform, platform_user_id) DO UPDATE
 SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
@@ -300,7 +300,8 @@ SET username     = COALESCE(NULLIF(EXCLUDED.username, ''), leads.username),
     match_reason = CASE WHEN EXCLUDED.score > leads.score THEN EXCLUDED.match_reason ELSE leads.match_reason END,
     contacts     = EXCLUDED.contacts,
     last_flow_id = COALESCE(EXCLUDED.last_flow_id, leads.last_flow_id),
-    last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id)
+    last_task_id = COALESCE(EXCLUDED.last_task_id, leads.last_task_id),
+    flags        = ARRAY(SELECT DISTINCT f FROM unnest(leads.flags || EXCLUDED.flags) AS f ORDER BY f)
 RETURNING *;
 
 -- name: InsertLeadEvidence :execrows
