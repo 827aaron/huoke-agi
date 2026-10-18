@@ -49,11 +49,14 @@ type Message struct {
 	Text   string `json:"text"`
 }
 
-// Batch is a set of messages from one source judged against one business. Signals are
-// asked of every message beside the exclusion question.
+// Batch is a set of messages from one source judged against one business. Task is the
+// customer's instruction for this search: it names whom to find and wins over Business
+// where the two disagree; empty leaves Business to decide. Signals are asked of every
+// message beside the exclusion question.
 type Batch struct {
 	Platform string    `json:"platform"`
 	Source   string    `json:"source"`
+	Task     string    `json:"task"`
 	Business string    `json:"business"`
 	Messages []Message `json:"messages"`
 	Signals  []Signal  `json:"-"`
@@ -86,10 +89,11 @@ const (
 var Signals = []Signal{
 	{
 		Key: SignalPlayer,
-		Question: "Is the sender of `messages.%s` part of the audience the business in `business` serves: do they use " +
-			"or follow its kind of product or service themselves (talk about using it, ask for tips, share their results)?",
+		Question: "Is the sender of `messages.%s` one of the people this search is for: the people `task` asks for " +
+			"or, when `task` is empty, the audience the business in `business` serves, who use or follow its kind of " +
+			"product or service themselves (talk about using it, ask for tips, share their results)?",
 		Criteria: map[string]string{
-			"true":  "The sender shows they use or follow this kind of product or service themselves",
+			"true":  "The sender shows they are the kind of person `task` asks for, or with no `task`, a user or follower of this kind of product or service",
 			"false": "No sign the sender belongs to this audience",
 		},
 	},
@@ -141,7 +145,10 @@ type Client struct {
 const question = "Does `messages.%s` (posted on `platform`, in `source`) itself show that its sender is someone the " +
 	"business in `business` cannot serve: spam, advertising, a bot, a seller or booster, a competitor, someone " +
 	"`business` says is usually not a customer, a person outside its regions, one who says they use only a " +
-	"language outside its languages, or one with no use for its offer?"
+	"language outside its languages, or one with no use for its offer? When `task` is not empty it names whom " +
+	"this search is for and wins over `business`: an exclusion that contradicts `task` does not apply, and a " +
+	"region or language `task` names replaces those of `business`. One about minors or about people asking for " +
+	"help to stop applies whatever `task` says."
 
 var criteria = map[string]string{
 	"true": "The message states it explicitly, in the sender's own words or as a plain fact",
@@ -295,6 +302,7 @@ func request(model string, b Batch) (map[string]any, map[string]questionOf) {
 		"state": map[string]any{
 			"platform": b.Platform,
 			"source":   b.Source,
+			"task":     b.Task,
 			"business": b.Business,
 			"messages": messages,
 		},
