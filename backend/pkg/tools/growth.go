@@ -27,6 +27,11 @@ type GrowthBackend interface {
 	SetTarget(ctx context.Context, scope growth.Scope, target int) (growth.Progress, error)
 	Deliver(ctx context.Context, scope growth.Scope, opt growth.DeliverOptions) (growth.Delivery, error)
 	ListLeads(ctx context.Context, userID int64, filter growth.LeadFilter) ([]growth.LeadView, error)
+	ProfileForFlow(ctx context.Context, userID, flowID int64) (growth.ProfileView, error)
+	GetProfile(ctx context.Context, userID, id int64) (growth.ProfileView, error)
+	ListProfiles(ctx context.Context, userID int64) ([]growth.ProfileView, error)
+	SaveProfileDraft(ctx context.Context, scope growth.Scope, title string, baseID *int64, p growth.Profile) (growth.ProfileDraftView, error)
+	ApplyProfileDraft(ctx context.Context, userID, flowID int64, opt growth.ApplyDraftOptions) (growth.ProfileView, error)
 }
 
 // growthTools are the lead-generation tools, bound per role in tools.go: the searcher
@@ -61,6 +66,12 @@ func (g *growthTools) Handle(ctx context.Context, name string, args json.RawMess
 		return g.deliverLeads(ctx, args)
 	case GrowthListLeadsToolName:
 		return g.listLeads(ctx, args)
+	case GrowthGetProfileToolName:
+		return g.getProfile(ctx, args)
+	case GrowthDraftProfileToolName:
+		return g.draftProfile(ctx, args)
+	case GrowthSaveProfileToolName:
+		return g.saveProfile(ctx, args)
 	default:
 		return "", fmt.Errorf("unknown growth tool: %s", name)
 	}
@@ -390,6 +401,106 @@ func parseSince(raw string) (time.Time, error) {
 
 // respond appends the round's progress line when the call belongs to a task, so every
 // growth result carries the number the planners and the reporter judge the round by.
+func (g *growthTools) getProfile(ctx context.Context, args json.RawMessage) (string, error) {
+	var action GrowthGetProfileAction
+	if err := json.Unmarshal(args, &action); err != nil {
+		return "", fmt.Errorf("failed to parse %s args: %w", GrowthGetProfileToolName, err)
+	}
+
+	var (
+		v   growth.ProfileView
+		err error
+	)
+	if id := action.ProfileID.Int64(); id > 0 {
+		v, err = g.backend.GetProfile(ctx, g.scope.UserID, id)
+	} else {
+		v, err = g.backend.ProfileForFlow(ctx, g.scope.UserID, g.scope.FlowID)
+	}
+	if err != nil {
+		return g.failure(ctx, err)
+	}
+	saved, err := g.backend.ListProfiles(ctx, g.scope.UserID)
+	if err != nil {
+		return g.failure(ctx, err)
+	}
+	type savedProfile struct {
+		ID      int64  `json:"profile_id"`
+		Title   string `json:"title"`
+		Default bool   `json:"default"`
+	}
+	list := make([]savedProfile, 0, len(saved))
+	for _, p := range saved {
+		list = append(list, savedProfile{ID: p.ID, Title: p.Title, Default: p.Default})
+	}
+	return g.respond(ctx, map[string]any{
+		"profile_id":      v.ID,
+		"title":           v.Title,
+		"profile":         v.Profile,
+		"saved_profiles":  list,
+		"always_excluded": growth.ComplianceExcludes,
+		"built_in":        v.ID == 0,
+	})
+}
+
+// draftProfileArgs reads the draft whether the model sends the profile as an object or as
+// a JSON string holding one.
+func draftProfileArgs(args json.RawMessage) (GrowthDraftProfileAction, error) {
+	var action GrowthDraftProfileAction
+	err := json.Unmarshal(args, &action)
+	if err == nil {
+		return action, nil
+	}
+	var loose struct {
+		GrowthDraftProfileAction
+		Profile string `json:"profile"`
+	}
+	if json.Unmarshal(args, &loose) != nil {
+		return action, err
+	}
+	action = loose.GrowthDraftProfileAction
+	if perr := json.Unmarshal([]byte(loose.Profile), &action.Profile); perr != nil {
+		return action, fmt.Errorf("profile is not a JSON object: %w", perr)
+	}
+	return action, nil
+}
+
+func (g *growthTools) draftProfile(ctx context.Context, args json.RawMessage) (string, error) {
+	action, err := draftProfileArgs(args)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse %s args: %w", GrowthDraftProfileToolName, err)
+	}
+
+	var base *int64
+	if id := action.ProfileID.Int64(); id > 0 {
+		base = &id
+	}
+	d, err := g.backend.SaveProfileDraft(ctx, g.scope, action.Title, base, action.Profile)
+	if err != nil {
+		return g.failure(ctx, err)
+	}
+	return g.respond(ctx, map[string]any{
+		"draft": d,
+		"next":  "The user sees this draft as a card. Ask them to confirm or say what to change; save it with " + GrowthSaveProfileToolName + " only after they confirm.",
+	})
+}
+
+func (g *growthTools) saveProfile(ctx context.Context, args json.RawMessage) (string, error) {
+	var action GrowthSaveProfileAction
+	if err := json.Unmarshal(args, &action); err != nil {
+		return "", fmt.Errorf("failed to parse %s args: %w", GrowthSaveProfileToolName, err)
+	}
+
+	v, err := g.backend.ApplyProfileDraft(ctx, g.scope.UserID, g.scope.FlowID, growth.ApplyDraftOptions{
+		AsNew: action.AsNew.Bool(), UseForFlow: action.UseForTask.Bool(), MakeDefault: action.MakeDefault.Bool(),
+	})
+	if err != nil {
+		return g.failure(ctx, err)
+	}
+	return g.respond(ctx, map[string]any{
+		"profile_id": v.ID, "title": v.Title, "default": v.Default, "used_by_this_task": action.UseForTask.Bool(),
+	})
+}
+
 func (g *growthTools) respond(ctx context.Context, payload any) (string, error) {
 	if g.scope.TaskID == nil {
 		return marshalWithProgress(payload, nil)
@@ -439,6 +550,12 @@ func growthFailureText(err error) string {
 		return fmt.Sprintf("%v. Join sources with %s first, or pass source_ids.", err, GrowthJoinSourceToolName)
 	case errors.Is(err, growth.ErrNoTask):
 		return fmt.Sprintf("%v.", err)
+	case errors.Is(err, growth.ErrInvalidProfile):
+		return fmt.Sprintf("%v. Fix that field and call %s again with the whole profile.", err, GrowthDraftProfileToolName)
+	case errors.Is(err, growth.ErrNoProfileDraft):
+		return fmt.Sprintf("%v. Show the user a draft with %s first.", err, GrowthDraftProfileToolName)
+	case errors.Is(err, growth.ErrNoProfile):
+		return fmt.Sprintf("%v. Use a profile_id listed by %s.", err, GrowthGetProfileToolName)
 	default:
 		return fmt.Sprintf("the growth tool failed: %v", err)
 	}

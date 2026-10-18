@@ -301,3 +301,48 @@ func TestSchedules_CloseOverdueRounds_MailsASummaryWhenNothingQualified(t *testi
 	require.NoError(t, err)
 	assert.Len(t, sink.Messages(), 1, "the summary is mailed once")
 }
+
+func TestSchedules_CreateSchedule_StartsWithTheTasksOrTheChosenProfile(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	a := w.mustCreateProfile(t, "a", gameProfile())
+	b := w.mustCreateProfile(t, "b", Profile{Name: "B"})
+	flowID := w.seedFlowWithInput(t, "find 50 players")
+	daily := ScheduleInput{FlowID: flowID, Days: ScheduleDaily, StartTime: "02:00", EndTime: "06:00", Timezone: "Asia/Bangkok"}
+
+	unbound := w.mustCreateSchedule(t, daily)
+	assert.Nil(t, unbound.ProfileID, "a task with no profile record starts with the default")
+
+	_, err := w.svc.SetFlowProfile(ctx, w.user, flowID, b.ID)
+	require.NoError(t, err)
+	inherited := w.mustCreateSchedule(t, daily)
+	assert.Equal(t, &b.ID, inherited.ProfileID, "the task's profile")
+
+	chosen := daily
+	chosen.ProfileID = &a.ID
+	v := w.mustCreateSchedule(t, chosen)
+	assert.Equal(t, &a.ID, v.ProfileID)
+
+	kept, err := w.svc.UpdateSchedule(ctx, w.user, v.ID, daily)
+	require.NoError(t, err)
+	assert.Equal(t, &a.ID, kept.ProfileID, "an update without profile_id keeps it")
+	none := int64(0)
+	daily.ProfileID = &none
+	cleared, err := w.svc.UpdateSchedule(ctx, w.user, v.ID, daily)
+	require.NoError(t, err)
+	assert.Nil(t, cleared.ProfileID, "0 clears it")
+
+	other := seedUser(t, w.db, "other@example.test")
+	daily.ProfileID = &a.ID
+	_, err = w.svc.UpdateSchedule(ctx, other, v.ID, daily)
+	assert.ErrorIs(t, err, ErrScheduleNotFound)
+
+	due, err := w.svc.DueStarts(ctx, inherited.NextStartAt.Add(time.Minute))
+	require.NoError(t, err)
+	byID := map[int64]ScheduledStart{}
+	for _, st := range due {
+		byID[st.ScheduleID] = st
+	}
+	assert.Nil(t, byID[unbound.ID].ProfileID)
+	assert.Equal(t, &b.ID, byID[inherited.ID].ProfileID)
+}

@@ -1074,7 +1074,7 @@ type Query {
 
 type Mutation {
   # Flow management
-  createFlow(modelProvider: String!, input: String!, resourceIds: [ID!]): Flow!
+  createFlow(modelProvider: String!, input: String!, resourceIds: [ID!], profileId: ID): Flow!
   putUserInput(flowId: ID!, input: String!, modelProvider: String, resourceIds: [ID!]): ResultType!
   stopFlow(flowId: ID!): ResultType!
   finishFlow(flowId: ID!): ResultType!
@@ -1082,7 +1082,7 @@ type Mutation {
   renameFlow(flowId: ID!, title: String!): ResultType!
 
   # Assistant management
-  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!, resourceIds: [ID!]): FlowAssistant!
+  createAssistant(flowId: ID!, modelProvider: String!, input: String!, useAgents: Boolean!, resourceIds: [ID!], profileId: ID): FlowAssistant!
   callAssistant(flowId: ID!, assistantId: ID!, input: String!, useAgents: Boolean!, resourceIds: [ID!]): ResultType!
   stopAssistant(flowId: ID!, assistantId: ID!): Assistant!
   deleteAssistant(flowId: ID!, assistantId: ID!): ResultType!

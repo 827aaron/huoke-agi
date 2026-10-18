@@ -31,18 +31,17 @@ func ProfilePresets() []ProfilePreset {
 					"deposit experience", "withdrawal speed", "bonus terms", "cashback", "VIP program", "odds",
 					"platform reliability", "looking for a new platform", "platform recommendation",
 				},
-				Excludes: []string{
-					"a stated age under 18",
-					"an explicit request for help to stop gambling, or a stated self-exclusion",
+				Unwanted: []string{
 					"a stated location outside the licensed regions",
 					"affiliates and agents promoting other platforms", "bots and spam",
 				},
 				Notes: "The licensed regions are the ones under Regions. Exclusions apply only on explicit evidence in " +
 					"the message; never infer them from style, age cues or platform.",
 				Scoring: &Scoring{
-					Weights:   ScoringWeights{Player: 3, Pain: 3, Paying: 3, Active: 2, Match: 3},
-					Qualified: 8,
-					Watchlist: WatchlistMinScore,
+					Dimensions: defaultDimensions(3, 3, 3, 3),
+					Recent:     &RecentDimension{Points: 2},
+					Qualified:  8,
+					Watchlist:  WatchlistMinScore,
 				},
 				ContactTypes: []string{ContactPlatformHandle, ContactWhatsApp, ContactLine, ContactTelegram},
 			},
@@ -57,7 +56,7 @@ func ProfilePresets() []ProfilePreset {
 					"looking for a new game", "any game like", "bored of", "quitting", "top up", "skins",
 					"battle pass", "guide", "build", "rank",
 				},
-				Excludes: []string{
+				Unwanted: []string{
 					"accounts selling or boosting services", "bots and spam", "developers advertising their own game",
 				},
 				ContactTypes: []string{ContactPlatformHandle},
