@@ -373,8 +373,8 @@ type ComplexityRoot struct {
 		AnonymizeText           func(childComplexity int, text string) int
 		CallAssistant           func(childComplexity int, flowID int64, assistantID int64, input string, useAgents bool, resourceIds []int64) int
 		CreateAPIToken          func(childComplexity int, input model.CreateAPITokenInput) int
-		CreateAssistant         func(childComplexity int, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) int
-		CreateFlow              func(childComplexity int, modelProvider string, input string, resourceIds []int64) int
+		CreateAssistant         func(childComplexity int, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64, profileID *int64) int
+		CreateFlow              func(childComplexity int, modelProvider string, input string, resourceIds []int64, profileID *int64) int
 		CreateFlowTemplate      func(childComplexity int, input model.CreateFlowTemplateInput) int
 		CreateKnowledgeDocument func(childComplexity int, input model.CreateKnowledgeDocumentInput) int
 		CreatePrompt            func(childComplexity int, typeArg model.PromptType, template string) int
@@ -778,13 +778,13 @@ type ComplexityRoot struct {
 }
 
 type MutationResolver interface {
-	CreateFlow(ctx context.Context, modelProvider string, input string, resourceIds []int64) (*model.Flow, error)
+	CreateFlow(ctx context.Context, modelProvider string, input string, resourceIds []int64, profileID *int64) (*model.Flow, error)
 	PutUserInput(ctx context.Context, flowID int64, input string, modelProvider *string, resourceIds []int64) (model.ResultType, error)
 	StopFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	FinishFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	DeleteFlow(ctx context.Context, flowID int64) (model.ResultType, error)
 	RenameFlow(ctx context.Context, flowID int64, title string) (model.ResultType, error)
-	CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) (*model.FlowAssistant, error)
+	CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64, profileID *int64) (*model.FlowAssistant, error)
 	CallAssistant(ctx context.Context, flowID int64, assistantID int64, input string, useAgents bool, resourceIds []int64) (model.ResultType, error)
 	StopAssistant(ctx context.Context, flowID int64, assistantID int64) (*model.Assistant, error)
 	DeleteAssistant(ctx context.Context, flowID int64, assistantID int64) (model.ResultType, error)
@@ -2487,7 +2487,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateAssistant(childComplexity, args["flowId"].(int64), args["modelProvider"].(string), args["input"].(string), args["useAgents"].(bool), args["resourceIds"].([]int64)), true
+		return e.complexity.Mutation.CreateAssistant(childComplexity, args["flowId"].(int64), args["modelProvider"].(string), args["input"].(string), args["useAgents"].(bool), args["resourceIds"].([]int64), args["profileId"].(*int64)), true
 
 	case "Mutation.createFlow":
 		if e.complexity.Mutation.CreateFlow == nil {
@@ -2499,7 +2499,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateFlow(childComplexity, args["modelProvider"].(string), args["input"].(string), args["resourceIds"].([]int64)), true
+		return e.complexity.Mutation.CreateFlow(childComplexity, args["modelProvider"].(string), args["input"].(string), args["resourceIds"].([]int64), args["profileId"].(*int64)), true
 
 	case "Mutation.createFlowTemplate":
 		if e.complexity.Mutation.CreateFlowTemplate == nil {
@@ -5424,6 +5424,11 @@ func (ec *executionContext) field_Mutation_createAssistant_args(ctx context.Cont
 		return nil, err
 	}
 	args["resourceIds"] = arg4
+	arg5, err := ec.field_Mutation_createAssistant_argsProfileID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["profileId"] = arg5
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_createAssistant_argsFlowID(
@@ -5536,6 +5541,28 @@ func (ec *executionContext) field_Mutation_createAssistant_argsResourceIds(
 	return zeroVal, nil
 }
 
+func (ec *executionContext) field_Mutation_createAssistant_argsProfileID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["profileId"]
+	if !ok {
+		var zeroVal *int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("profileId"))
+	if tmp, ok := rawArgs["profileId"]; ok {
+		return ec.unmarshalOID2ᚖint64(ctx, tmp)
+	}
+
+	var zeroVal *int64
+	return zeroVal, nil
+}
+
 func (ec *executionContext) field_Mutation_createFlowTemplate_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -5586,6 +5613,11 @@ func (ec *executionContext) field_Mutation_createFlow_args(ctx context.Context, 
 		return nil, err
 	}
 	args["resourceIds"] = arg2
+	arg3, err := ec.field_Mutation_createFlow_argsProfileID(ctx, rawArgs)
+	if err != nil {
+		return nil, err
+	}
+	args["profileId"] = arg3
 	return args, nil
 }
 func (ec *executionContext) field_Mutation_createFlow_argsModelProvider(
@@ -5651,6 +5683,28 @@ func (ec *executionContext) field_Mutation_createFlow_argsResourceIds(
 	}
 
 	var zeroVal []int64
+	return zeroVal, nil
+}
+
+func (ec *executionContext) field_Mutation_createFlow_argsProfileID(
+	ctx context.Context,
+	rawArgs map[string]interface{},
+) (*int64, error) {
+	// We won't call the directive if the argument is null.
+	// Set call_argument_directives_with_null to true to call directives
+	// even if the argument is null.
+	_, ok := rawArgs["profileId"]
+	if !ok {
+		var zeroVal *int64
+		return zeroVal, nil
+	}
+
+	ctx = graphql.WithPathContext(ctx, graphql.NewPathWithField("profileId"))
+	if tmp, ok := rawArgs["profileId"]; ok {
+		return ec.unmarshalOID2ᚖint64(ctx, tmp)
+	}
+
+	var zeroVal *int64
 	return zeroVal, nil
 }
 
@@ -19270,7 +19324,7 @@ func (ec *executionContext) _Mutation_createFlow(ctx context.Context, field grap
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreateFlow(rctx, fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["resourceIds"].([]int64))
+		return ec.resolvers.Mutation().CreateFlow(rctx, fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["resourceIds"].([]int64), fc.Args["profileId"].(*int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -19618,7 +19672,7 @@ func (ec *executionContext) _Mutation_createAssistant(ctx context.Context, field
 	}()
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreateAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["useAgents"].(bool), fc.Args["resourceIds"].([]int64))
+		return ec.resolvers.Mutation().CreateAssistant(rctx, fc.Args["flowId"].(int64), fc.Args["modelProvider"].(string), fc.Args["input"].(string), fc.Args["useAgents"].(bool), fc.Args["resourceIds"].([]int64), fc.Args["profileId"].(*int64))
 	})
 	if err != nil {
 		ec.Error(ctx, err)

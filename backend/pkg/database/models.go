@@ -1007,6 +1007,13 @@ type FlowTemplate struct {
 	UpdatedAt sql.NullTime `json:"updated_at"`
 }
 
+type GrowthFlowProfile struct {
+	FlowID    int64         `json:"flow_id"`
+	ProfileID sql.NullInt64 `json:"profile_id"`
+	Title     string        `json:"title"`
+	CreatedAt sql.NullTime  `json:"created_at"`
+}
+
 type GrowthMessageScore struct {
 	ID        int64        `json:"id"`
 	UserID    int64        `json:"user_id"`
@@ -1015,6 +1022,7 @@ type GrowthMessageScore struct {
 	Score     int32        `json:"score"`
 	Signals   string       `json:"signals"`
 	CreatedAt sql.NullTime `json:"created_at"`
+	ProfileID int64        `json:"profile_id"`
 }
 
 type GrowthProfile struct {
@@ -1022,6 +1030,19 @@ type GrowthProfile struct {
 	Profile   json.RawMessage `json:"profile"`
 	CreatedAt sql.NullTime    `json:"created_at"`
 	UpdatedAt sql.NullTime    `json:"updated_at"`
+	ID        int64           `json:"id"`
+	Title     string          `json:"title"`
+	IsDefault bool            `json:"is_default"`
+}
+
+type GrowthProfileDraft struct {
+	FlowID        int64           `json:"flow_id"`
+	UserID        int64           `json:"user_id"`
+	BaseProfileID sql.NullInt64   `json:"base_profile_id"`
+	Title         string          `json:"title"`
+	Profile       json.RawMessage `json:"profile"`
+	CreatedAt     sql.NullTime    `json:"created_at"`
+	UpdatedAt     sql.NullTime    `json:"updated_at"`
 }
 
 type GrowthRun struct {
@@ -1061,6 +1082,7 @@ type GrowthSchedule struct {
 	LastError    string        `json:"last_error"`
 	CreatedAt    sql.NullTime  `json:"created_at"`
 	UpdatedAt    sql.NullTime  `json:"updated_at"`
+	ProfileID    sql.NullInt64 `json:"profile_id"`
 }
 
 type GrowthSetting struct {
@@ -1142,6 +1164,7 @@ type Lead struct {
 	Contacts       json.RawMessage `json:"contacts"`
 	Note           string          `json:"note"`
 	Origin         string          `json:"origin"`
+	Flags          []string        `json:"flags"`
 }
 
 type LeadEvidence struct {

@@ -97,7 +97,7 @@ func newWorld(t *testing.T) *world {
 	return w
 }
 
-// gameProfile is a customer with the default weights: 3/3/2/2/3, qualified from 7.
+// gameProfile is a customer with the default scoring: 3/3/2/3 and recent 2, qualified from 7.
 func gameProfile() Profile {
 	return Profile{
 		Name:          "Starfall Studio",
@@ -109,7 +109,7 @@ func gameProfile() Profile {
 		Languages:     []string{"英语", "泰语"},
 		DefaultTarget: 50,
 		Signals:       []string{"s1", "s2", "s3", "s4", "s5", "s6"},
-		Excludes:      []string{"account sellers"},
+		Unwanted:      []string{"account sellers"},
 		Notes:         "Players who quit Rival Saga after the last patch are the best fit.",
 	}
 }
@@ -118,7 +118,7 @@ func gameProfile() Profile {
 // default preset's.
 func (w *world) judgeAsAGamePublisher(t *testing.T) {
 	t.Helper()
-	if _, err := w.svc.SaveProfile(context.Background(), w.user, gameProfile()); err != nil {
+	if _, err := w.svc.CreateProfile(context.Background(), w.user, ProfileInput{Profile: gameProfile()}); err != nil {
 		t.Fatalf("save the game profile: %v", err)
 	}
 }

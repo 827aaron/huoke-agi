@@ -89,9 +89,11 @@ type createdFlow struct {
 type schedulingController struct {
 	controller.FlowController
 	created []createdFlow
-	running map[int64]controller.FlowWorker
-	stopped []int64
-	calls   *[]string
+	// profiles holds the profile chosen for each created flow, 0 for none.
+	profiles []int64
+	running  map[int64]controller.FlowWorker
+	stopped  []int64
+	calls    *[]string
 	// stopFails is how many StopFlow calls fail before one succeeds.
 	stopFails int
 }
@@ -105,6 +107,8 @@ func (s *schedulingController) CreateFlow(
 	}
 	*s.calls = append(*s.calls, "create")
 	s.created = append(s.created, createdFlow{userID, input, prvname, prvtype})
+	profile, _ := growth.SelectedProfile(ctx)
+	s.profiles = append(s.profiles, profile)
 	return 41, nil
 }
 
@@ -150,7 +154,7 @@ func TestScheduler_Tick_StartsDueTasksAndRecordsWhyOneDidNot(t *testing.T) {
 		starts: []growth.ScheduledStart{
 			{ScheduleID: 1, UserID: 7, ProviderName: "openai-main", Input: "<scheduled_round>\n</scheduled_round>\n\nfind 50"},
 			{ScheduleID: 2, UserID: 7, ProviderName: "gone", Input: "find 10"},
-			{ScheduleID: 3, UserID: 7, ProviderName: "deepseek", Input: "find 20"},
+			{ScheduleID: 3, UserID: 7, ProviderName: "deepseek", Input: "find 20", ProfileID: ptr(int64(5))},
 		},
 		calls: &calls, started: map[int64]int64{}, failed: map[int64]string{},
 	}
@@ -162,6 +166,7 @@ func TestScheduler_Tick_StartsDueTasksAndRecordsWhyOneDidNot(t *testing.T) {
 		{7, "<scheduled_round>\n</scheduled_round>\n\nfind 50", "openai-main", provider.ProviderOpenAI},
 		{7, "find 20", "custom", provider.ProviderCustom},
 	}, fc.created, "a schedule whose provider is gone runs on the one it resolves to")
+	assert.Equal(t, []int64{0, 5}, fc.profiles, "a schedule with a profile starts its task with it")
 	assert.Equal(t, map[int64]int64{1: 41, 3: 41}, svc.started)
 	assert.Equal(t, map[int64]string{2: `provider "gone" of the task is unavailable: provider not found`}, svc.failed)
 }

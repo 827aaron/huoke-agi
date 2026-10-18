@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -182,4 +183,69 @@ func TestGrowth_Handle_UpsertPassesTheContactsAndAnOmittedScore(t *testing.T) {
 	require.Len(t, backend.upserted, 1)
 	assert.Equal(t, 0, backend.upserted[0].Score)
 	assert.Equal(t, []growth.Contact{{Type: "email", Value: "ann@example.test"}}, backend.upserted[0].Contacts)
+}
+
+func TestGrowth_Handle_ReadsTheTasksProfileOrAChosenOne(t *testing.T) {
+	backend := &fakeGrowthBackend{
+		profile:  growth.ProfileView{ID: 3, Title: "agents", Profile: growth.Profile{Name: "Acme"}},
+		profiles: []growth.ProfileView{{ID: 3, Title: "agents", Default: true}, {ID: 4, Title: "players"}},
+	}
+	tools := newGrowthTools(backend, 1, 42, nil)
+
+	out, err := tools.Handle(t.Context(), GrowthGetProfileToolName, json.RawMessage(`{"message":"m"}`))
+	require.NoError(t, err)
+	assert.Equal(t, growth.Scope{UserID: 1, FlowID: 42}, backend.lastScope)
+	assert.Contains(t, out, `"profile_id":3`)
+	assert.Contains(t, out, `"saved_profiles":[{"profile_id":3,"title":"agents","default":true},{"profile_id":4,"title":"players","default":false}]`)
+	assert.Contains(t, out, `"a stated age under 18"`)
+
+	_, err = tools.Handle(t.Context(), GrowthGetProfileToolName, json.RawMessage(`{"profile_id":"4","message":"m"}`))
+	require.NoError(t, err)
+	assert.Equal(t, int64(4), backend.lastProfile)
+}
+
+func TestGrowth_Handle_DraftsTheWholeProfileSentAsAnObjectOrAString(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+	}{
+		{"object", `{"title":"MY agents","profile_id":"3","profile":{"name":"Acme","regions":["MY"]},"message":"m"}`},
+		{"string", `{"title":"MY agents","profile_id":3,"profile":"{\"name\":\"Acme\",\"regions\":[\"MY\"]}","message":"m"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			backend := &fakeGrowthBackend{}
+			out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthDraftProfileToolName, json.RawMessage(tt.args))
+			require.NoError(t, err)
+
+			assert.Equal(t, growth.Scope{UserID: 1, FlowID: 42}, backend.lastScope)
+			assert.Equal(t, "MY agents", backend.lastTitle)
+			require.NotNil(t, backend.lastBase)
+			assert.Equal(t, int64(3), *backend.lastBase)
+			assert.Equal(t, "Acme", backend.lastDraft.Name)
+			assert.Equal(t, []string{"MY"}, backend.lastDraft.Regions)
+			assert.Contains(t, out, GrowthSaveProfileToolName)
+		})
+	}
+}
+
+func TestGrowth_Handle_TellsTheModelHowToFixAnInvalidDraft(t *testing.T) {
+	backend := &fakeGrowthBackend{err: fmt.Errorf("%w: scoring needs 1 <= watchlist < qualified", growth.ErrInvalidProfile)}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthDraftProfileToolName,
+		json.RawMessage(`{"title":"t","profile":{"name":"Acme"},"message":"m"}`))
+
+	require.NoError(t, err)
+	assert.Contains(t, out, "watchlist < qualified")
+	assert.Contains(t, out, "call growth_draft_profile again")
+}
+
+func TestGrowth_Handle_SavesTheDraftWithTheChosenOptions(t *testing.T) {
+	backend := &fakeGrowthBackend{profile: growth.ProfileView{ID: 9, Title: "MY agents"}}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSaveProfileToolName,
+		json.RawMessage(`{"use_for_task":"true","as_new":true,"message":"m"}`))
+
+	require.NoError(t, err)
+	assert.Equal(t, growth.Scope{UserID: 1, FlowID: 42}, backend.lastScope)
+	assert.Equal(t, growth.ApplyDraftOptions{AsNew: true, UseForFlow: true}, backend.lastApply)
+	assert.Contains(t, out, `"profile_id":9`)
 }

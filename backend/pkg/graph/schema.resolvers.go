@@ -16,6 +16,7 @@ import (
 	"pentagi/pkg/database/knowledge"
 	"pentagi/pkg/flowfiles"
 	"pentagi/pkg/graph/model"
+	"pentagi/pkg/growth"
 	"pentagi/pkg/providers"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/providers/provider"
@@ -33,7 +34,7 @@ import (
 )
 
 // CreateFlow is the resolver for the createFlow field.
-func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string, input string, resourceIds []int64) (*model.Flow, error) {
+func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string, input string, resourceIds []int64, profileID *int64) (*model.Flow, error) {
 	uid, _, err := validatePermission(ctx, "flows.create")
 	if err != nil {
 		return nil, err
@@ -68,6 +69,9 @@ func (r *mutationResolver) CreateFlow(ctx context.Context, modelProvider string,
 	}
 	prvtype := prv.Type()
 
+	if profileID != nil {
+		ctx = growth.WithSelectedProfile(ctx, *profileID)
+	}
 	flowID, err := r.Controller.CreateFlow(ctx, uid, input, prvname, prvtype, nil, dbResources)
 	if err != nil {
 		return nil, err
@@ -287,7 +291,7 @@ func (r *mutationResolver) RenameFlow(ctx context.Context, flowID int64, title s
 }
 
 // CreateAssistant is the resolver for the createAssistant field.
-func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64) (*model.FlowAssistant, error) {
+func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, modelProvider string, input string, useAgents bool, resourceIds []int64, profileID *int64) (*model.FlowAssistant, error) {
 	var (
 		err error
 		uid int64
@@ -338,6 +342,9 @@ func (r *mutationResolver) CreateAssistant(ctx context.Context, flowID int64, mo
 	}
 	prvtype := prv.Type()
 
+	if profileID != nil {
+		ctx = growth.WithSelectedProfile(ctx, *profileID)
+	}
 	assistantID, err := r.Controller.CreateAssistant(
 		ctx, uid, flowID, input, useAgents, prvname, prvtype, nil, dbResources,
 	)

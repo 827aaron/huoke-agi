@@ -5356,6 +5356,341 @@
                 }
             }
         },
+        "/growth/flows/{flowID}/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Retrieve the business profile a task uses; fallback is true when the default stands in",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "task id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "profile received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.FlowProfileView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "getting the profile not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "task not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting the profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Make a task use another business profile from its next judgement and its next step on",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "task id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "profile",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.growthFlowProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "profile set successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.FlowProfileView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "setting the profile not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "task or profile not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on setting the profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/flows/{flowID}/profile-draft": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Retrieve the profile draft of a task's assistant, not saved yet",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "task id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "draft received successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.ProfileDraftView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "getting the draft not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "the task has no draft",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on getting the draft",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Discard a task's profile draft",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "task id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "draft discarded successful"
+                    },
+                    "403": {
+                        "description": "discarding the draft not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "the task has no draft",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on discarding the draft",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/flows/{flowID}/profile-draft/save": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "A draft of a saved profile overwrites it unless as_new; use_for_flow makes the task use the saved profile.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Save a task's profile draft as a profile and discard the draft",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "task id",
+                        "name": "flowID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "how to save",
+                        "name": "json",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/growth.ApplyDraftOptions"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "draft saved successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.ProfileView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "invalid draft",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "saving the draft not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "the task has no draft",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on saving the draft",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/growth/leads/": {
             "get": {
                 "security": [
@@ -5399,6 +5734,12 @@
                         "type": "boolean",
                         "description": "true for delivered leads, false for undelivered",
                         "name": "delivered",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "true for leads with a flag, such as a match of the profile's unwanted list",
+                        "name": "flagged",
                         "in": "query"
                     },
                     {
@@ -5882,14 +6223,13 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "A user has at most one profile, so the list is empty or holds one.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Growth"
                 ],
-                "summary": "Retrieve the business profile every task of the current user starts from",
+                "summary": "Retrieve the business profiles of the current user, the default first",
                 "responses": {
                     "200": {
                         "description": "profiles received successful",
@@ -5913,13 +6253,13 @@
                         }
                     },
                     "403": {
-                        "description": "getting the profile not permitted",
+                        "description": "getting the profiles not permitted",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "internal error on getting the profile",
+                        "description": "internal error on getting the profiles",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -5932,7 +6272,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Saving when a profile exists replaces it. knowledge says whether the lists reached the knowledge store: seeded, or skipped with the reason.",
+                "description": "knowledge says whether the lists of a default profile reached the knowledge store: seeded, or skipped with the reason.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5942,7 +6282,7 @@
                 "tags": [
                     "Growth"
                 ],
-                "summary": "Save the business profile; new tasks start with it",
+                "summary": "Save a new business profile; the first one becomes the default",
                 "parameters": [
                     {
                         "description": "business profile",
@@ -5950,7 +6290,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/growth.Profile"
+                            "$ref": "#/definitions/growth.ProfileInput"
                         }
                     }
                 ],
@@ -6007,7 +6347,7 @@
                 "tags": [
                     "Growth"
                 ],
-                "summary": "Retrieve the starting profiles, one per kind of customer, to copy into the profile form",
+                "summary": "Retrieve the starting profiles, one per kind of customer, that a new profile is drafted from",
                 "responses": {
                     "200": {
                         "description": "presets received successful",
@@ -6055,7 +6395,7 @@
                 "tags": [
                     "Growth"
                 ],
-                "summary": "Change the business profile; new tasks start with it",
+                "summary": "Change a business profile and its title; tasks that use it take the change from their next step",
                 "parameters": [
                     {
                         "minimum": 0,
@@ -6071,7 +6411,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/growth.Profile"
+                            "$ref": "#/definitions/growth.ProfileInput"
                         }
                     }
                 ],
@@ -6114,6 +6454,114 @@
                     },
                     "500": {
                         "description": "internal error on saving the profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Delete a business profile; when it was the default the oldest remaining one becomes the default",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "profile id",
+                        "name": "profileID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "profile deleted successful"
+                    },
+                    "403": {
+                        "description": "deleting the profile not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "profile not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on deleting the profile",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/growth/profiles/{profileID}/default": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Growth"
+                ],
+                "summary": "Make a business profile the one new tasks start with when none is chosen",
+                "parameters": [
+                    {
+                        "minimum": 0,
+                        "type": "integer",
+                        "description": "profile id",
+                        "name": "profileID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "default set successful",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/growth.ProfileView"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "403": {
+                        "description": "setting the default not permitted",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "profile not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error on setting the default",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -10791,6 +11239,23 @@
                 }
             }
         },
+        "growth.ApplyDraftOptions": {
+            "type": "object",
+            "properties": {
+                "as_new": {
+                    "type": "boolean"
+                },
+                "make_default": {
+                    "type": "boolean"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "use_for_flow": {
+                    "type": "boolean"
+                }
+            }
+        },
         "growth.Contact": {
             "type": "object",
             "properties": {
@@ -10825,6 +11290,23 @@
                 },
                 "source_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "growth.FlowProfileView": {
+            "type": "object",
+            "properties": {
+                "fallback": {
+                    "type": "boolean"
+                },
+                "flow_id": {
+                    "type": "integer"
+                },
+                "profile_id": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
                 }
             }
         },
@@ -10890,6 +11372,13 @@
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/growth.EvidenceView"
+                    }
+                },
+                "flags": {
+                    "description": "Flags mark what the score does not show; LeadFlagUnwanted is a match of the\nprofile's unwanted list.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
                     }
                 },
                 "flow_id": {
@@ -11037,6 +11526,7 @@
                     "type": "integer"
                 },
                 "excludes": {
+                    "description": "LegacyExcludes is the field Unwanted replaced; a stored profile or an older page may\nstill carry it, and normalize moves it over.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -11081,6 +11571,119 @@
                     "items": {
                         "type": "string"
                     }
+                },
+                "unwanted": {
+                    "description": "Unwanted lowers a lead's score by UnwantedPenalty and flags it instead of dropping it;\nComplianceExcludes, which do drop, are not part of a profile.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "unwanted_penalty": {
+                    "description": "UnwantedPenalty is in points; 0 is DefaultUnwantedPenalty.",
+                    "type": "integer"
+                }
+            }
+        },
+        "growth.ProfileDraftView": {
+            "type": "object",
+            "properties": {
+                "base_profile_id": {
+                    "type": "integer"
+                },
+                "flow_id": {
+                    "type": "integer"
+                },
+                "profile": {
+                    "$ref": "#/definitions/growth.Profile"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "growth.ProfileInput": {
+            "type": "object",
+            "properties": {
+                "competitors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "contact_types": {
+                    "description": "ContactTypes are the contacts a lead is looked for with: values of ContactTypes or\nnames the owner chose, up to 30 characters each; empty means the platform handle alone.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "default_target": {
+                    "type": "integer"
+                },
+                "excludes": {
+                    "description": "LegacyExcludes is the field Unwanted replaced; a stored profile or an older page may\nstill carry it, and normalize moves it over.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "games": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "genre": {
+                    "type": "string"
+                },
+                "languages": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "pitch": {
+                    "type": "string"
+                },
+                "regions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "scoring": {
+                    "description": "Scoring turns the judgement model's answers into a lead score; nil is DefaultScoring.",
+                    "$ref": "#/definitions/growth.Scoring"
+                },
+                "signals": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "type": "string"
+                },
+                "unwanted": {
+                    "description": "Unwanted lowers a lead's score by UnwantedPenalty and flags it instead of dropping it;\nComplianceExcludes, which do drop, are not part of a profile.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "unwanted_penalty": {
+                    "description": "UnwantedPenalty is in points; 0 is DefaultUnwantedPenalty.",
+                    "type": "integer"
                 }
             }
         },
@@ -11115,10 +11718,14 @@
                         "type": "string"
                     }
                 },
+                "default": {
+                    "type": "boolean"
+                },
                 "default_target": {
                     "type": "integer"
                 },
                 "excludes": {
+                    "description": "LegacyExcludes is the field Unwanted replaced; a stored profile or an older page may\nstill carry it, and normalize moves it over.",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -11170,6 +11777,20 @@
                         "type": "string"
                     }
                 },
+                "title": {
+                    "type": "string"
+                },
+                "unwanted": {
+                    "description": "Unwanted lowers a lead's score by UnwantedPenalty and flags it instead of dropping it;\nComplianceExcludes, which do drop, are not part of a profile.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "unwanted_penalty": {
+                    "description": "UnwantedPenalty is in points; 0 is DefaultUnwantedPenalty.",
+                    "type": "integer"
+                },
                 "updated_at": {
                     "type": "string"
                 }
@@ -11192,6 +11813,14 @@
                 },
                 "source": {
                     "type": "string"
+                }
+            }
+        },
+        "growth.RecentDimension": {
+            "type": "object",
+            "properties": {
+                "points": {
+                    "type": "integer"
                 }
             }
         },
@@ -11239,6 +11868,10 @@
                 },
                 "input": {
                     "type": "string"
+                },
+                "profile_id": {
+                    "description": "ProfileID is the business profile each start uses; on create nil takes the flow's,\non update nil keeps the saved one, and 0 means the default at each start.",
+                    "type": "integer"
                 },
                 "start_time": {
                     "type": "string",
@@ -11309,6 +11942,9 @@
                 "next_start_at": {
                     "type": "string"
                 },
+                "profile_id": {
+                    "type": "integer"
+                },
                 "start_time": {
                     "type": "string"
                 },
@@ -11337,14 +11973,42 @@
         "growth.Scoring": {
             "type": "object",
             "properties": {
+                "dimensions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/growth.ScoringDimension"
+                    }
+                },
                 "qualified": {
                     "type": "integer"
+                },
+                "recent": {
+                    "description": "Recent is judged by the message time, not asked of the model; nil adds nothing.",
+                    "$ref": "#/definitions/growth.RecentDimension"
                 },
                 "watchlist": {
                     "type": "integer"
                 },
                 "weights": {
+                    "description": "LegacyWeights is the fixed five-signal form Dimensions replaced.",
                     "$ref": "#/definitions/growth.ScoringWeights"
+                }
+            }
+        },
+        "growth.ScoringDimension": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "integer"
                 }
             }
         },
@@ -14122,6 +14786,17 @@
                 },
                 "status": {
                     "type": "string"
+                }
+            }
+        },
+        "services.growthFlowProfileRequest": {
+            "type": "object",
+            "required": [
+                "profile_id"
+            ],
+            "properties": {
+                "profile_id": {
+                    "type": "integer"
                 }
             }
         },

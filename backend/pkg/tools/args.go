@@ -8,6 +8,7 @@ import (
 
 	"pentagi/pkg/database/knowledge/limits"
 	"pentagi/pkg/graph/model"
+	"pentagi/pkg/growth"
 )
 
 // FileOp is a type alias (not a distinct type) for String: it shares the
@@ -1018,6 +1019,25 @@ type GrowthDeliverLeadsAction struct {
 	AllowPartial Bool   `json:"allow_partial,omitempty" jsonschema:"type=boolean" jsonschema_description:"Deliver fewer than the target. Set it only when every source is exhausted or blocked; otherwise a short round delivers nothing and says how many more are needed."`
 	HasContact   Bool   `json:"has_contact,omitempty" jsonschema:"type=boolean" jsonschema_description:"Deliver only leads with a contact beside their platform account; set it only when the user asked for that"`
 	Message      string `json:"message" jsonschema:"required,title=Deliver leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on closing the round. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthGetProfileAction struct {
+	ProfileID Int64  `json:"profile_id,omitempty" jsonschema:"type=integer" jsonschema_description:"A saved profile to read; omit for the profile this task uses"`
+	Message   string `json:"message" jsonschema:"required,title=Get profile message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you read the profile. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthDraftProfileAction struct {
+	Title     string         `json:"title" jsonschema:"required" jsonschema_description:"Short name of the profile in the user's language, e.g. the audience and the region"`
+	ProfileID Int64          `json:"profile_id,omitempty" jsonschema:"type=integer" jsonschema_description:"The saved profile this draft changes, from growth_get_profile; omit to draft a new profile"`
+	Profile   growth.Profile `json:"profile" jsonschema:"required" jsonschema_description:"The whole profile, not only the changed fields"`
+	Message   string         `json:"message" jsonschema:"required,title=Draft profile message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on what the draft says or changes. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthSaveProfileAction struct {
+	AsNew       Bool   `json:"as_new,omitempty" jsonschema:"type=boolean" jsonschema_description:"Save as a new profile even when the draft changes a saved one"`
+	UseForTask  Bool   `json:"use_for_task,omitempty" jsonschema:"type=boolean" jsonschema_description:"Make this task find and judge leads by the saved profile from now on"`
+	MakeDefault Bool   `json:"make_default,omitempty" jsonschema:"type=boolean" jsonschema_description:"Make it the profile new tasks start with; only when the user asked for that"`
+	Message     string `json:"message" jsonschema:"required,title=Save profile message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on saving the profile. Written in the engagement language declared by your system prompt."`
 }
 
 type GrowthListLeadsAction struct {
