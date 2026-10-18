@@ -43,6 +43,21 @@ test.describe('growth account connections', { tag: '@settings' }, () => {
         expectCleanPage(pageErrorLog);
     });
 
+    test('deletes an account only after the owner confirms', async ({ page, pageErrorLog }) => {
+        await page.goto('/settings/accounts');
+        await accountRow(page, '1207').getByRole('button', { name: /^删除/ }).click();
+
+        const dialog = page.getByRole('alertdialog').or(page.getByRole('dialog'));
+
+        await expect(dialog.getByText(/断开它的登录/)).toBeVisible();
+        await dialog.getByRole('button', { exact: true, name: '删除' }).click();
+
+        await expect(accountRow(page, '1207')).toHaveCount(0);
+        await expect(accountRow(page, '8842')).toHaveCount(1);
+
+        expectCleanPage(pageErrorLog);
+    });
+
     test('disables and re-enables an account immediately, without a confirmation', async ({ page, pageErrorLog }) => {
         await page.goto('/settings/accounts');
 
