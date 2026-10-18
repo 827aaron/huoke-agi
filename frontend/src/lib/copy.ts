@@ -361,6 +361,7 @@ const zh = {
         globalInvalidLink: '去更新',
         guide: {
             anthropic: '登录 Anthropic Console（console.anthropic.com），进入 API Keys 页面创建密钥。',
+            brave: '登录 Brave Search API（api-dashboard.search.brave.com），选 Search 套餐，在 API Keys 页面创建密钥。每月送 5 美元额度（估算约 1000 次搜索，以官网为准），注册时需要绑定信用卡。',
             custom: '向你的接口提供方索取密钥和服务地址，接口需兼容 OpenAI 的格式。',
             deepseek: '登录 DeepSeek 开放平台（platform.deepseek.com），进入 API keys 页面。',
             email: '在邮箱的设置里开启 SMTP 服务（QQ、163 等邮箱会给你一个“授权码”，用它代替登录密码），再把服务器地址、端口和账号填到这里。',
@@ -426,6 +427,7 @@ const zh = {
         } as Record<string, string>,
         providerLabel: {
             anthropic: 'Anthropic (Claude)',
+            brave: 'Brave Search',
             custom: '自定义（OpenAI 兼容接口）',
             deepseek: 'DeepSeek',
             firecrawl: 'Firecrawl',
@@ -2463,6 +2465,7 @@ const en: Copy = {
         globalInvalidLink: 'Update',
         guide: {
             anthropic: 'Sign in to the Anthropic Console (console.anthropic.com) and create a key under API Keys.',
+            brave: 'Sign in to the Brave Search API dashboard (api-dashboard.search.brave.com), subscribe to the Search plan and create a key under API Keys. It includes $5 of free credit every month (about 1,000 searches, an estimate; check the official site); a credit card is required at sign-up.',
             custom: 'Ask your provider for a key and server URL; the API must be OpenAI-compatible.',
             deepseek: 'Sign in to the DeepSeek platform (platform.deepseek.com) and open API keys.',
             email: 'Turn on SMTP in your mailbox settings (Gmail and others give you an app password to use instead of the sign-in password), then enter the server, port and account here.',
@@ -2531,6 +2534,7 @@ const en: Copy = {
         },
         providerLabel: {
             anthropic: 'Anthropic (Claude)',
+            brave: 'Brave Search',
             custom: 'Custom (OpenAI-compatible)',
             deepseek: 'DeepSeek',
             firecrawl: 'Firecrawl',

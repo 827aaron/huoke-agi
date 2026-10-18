@@ -82,6 +82,7 @@ func TestConfig_GetSecretPatterns_FindsEachSecretVerbatim(t *testing.T) {
 		OAuthGithubClientSecret: "1234567890abcdefghijklmnopqrstuvwxyz123456",
 		TraversaalAPIKey:        "traversaal-123",
 		TavilyAPIKey:            "tvly-1234567890abcdefghijklmnopqrstuvwxyz",
+		BraveAPIKey:             "brave-123",
 		FirecrawlAPIKey:         "fc-123",
 		PerplexityAPIKey:        "perplexity-123",
 		TypeSafeAPIKey:          "ts-1234567890abcdef",

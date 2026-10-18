@@ -18,6 +18,7 @@ const (
 	SearchEngineTypePerplexity SearchEngineType = "perplexity"
 	SearchEngineTypeBrowser    SearchEngineType = "browser"
 	SearchEngineTypeSploitus   SearchEngineType = "sploitus"
+	SearchEngineTypeBrave      SearchEngineType = "brave"
 )
 
 func (s SearchEngineType) String() string {
@@ -34,7 +35,8 @@ func (s SearchEngineType) Valid() error {
 		SearchEngineTypeTraversaal,
 		SearchEngineTypePerplexity,
 		SearchEngineTypeBrowser,
-		SearchEngineTypeSploitus:
+		SearchEngineTypeSploitus,
+		SearchEngineTypeBrave:
 		return nil
 	default:
 		return fmt.Errorf("invalid SearchEngineType: %s", s)

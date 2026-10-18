@@ -651,3 +651,36 @@ func TestWebSearch_NewBrowserPageFetcher_ReadsPagesOnlyThroughAConfiguredScraper
 		})
 	}
 }
+
+func TestWebSearch_BuildSearchEngines_RegistersBraveUnderItsKey(t *testing.T) {
+	tests := []struct {
+		name          string
+		key           string
+		wantAvailable bool
+		wantRotation  bool
+	}{
+		{name: "no key leaves brave unavailable", key: "", wantAvailable: false},
+		{name: "one key", key: "brave-a", wantAvailable: true},
+		{name: "a key list rotates", key: "brave-a,brave-b", wantAvailable: true, wantRotation: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			engines := buildSearchEngines(&config.Config{BraveAPIKey: tt.key}, nil, nil)
+
+			brave, ok := engines[database.SearchengineType("brave")]
+			if !ok || brave == nil {
+				t.Fatal("brave is not registered")
+			}
+			if brave.Engine() != database.SearchengineType("brave") {
+				t.Errorf("Engine() = %q, want brave", brave.Engine())
+			}
+			if brave.IsAvailable() != tt.wantAvailable {
+				t.Errorf("IsAvailable() = %v, want %v", brave.IsAvailable(), tt.wantAvailable)
+			}
+			if _, rotates := brave.(*keyRotation); rotates != tt.wantRotation {
+				t.Errorf("rotates keys = %v, want %v", rotates, tt.wantRotation)
+			}
+		})
+	}
+}

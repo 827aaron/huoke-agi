@@ -490,7 +490,7 @@ const providersOf: Record<GrowthSettingKind, string[]> = {
     proxy: [],
     screening: ['typesafe', 'openrouter', 'custom'],
     telegram: [],
-    web_search: ['tavily', 'google', 'perplexity', 'firecrawl', 'traversaal'],
+    web_search: ['tavily', 'brave', 'google', 'perplexity', 'firecrawl', 'traversaal'],
     youtube: [],
 };
 

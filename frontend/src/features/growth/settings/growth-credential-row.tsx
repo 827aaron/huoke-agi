@@ -50,7 +50,7 @@ export const EMBEDDING_PROVIDERS = [
     'voyageai',
 ] as const;
 
-export const SEARCH_PROVIDERS = ['tavily', 'google', 'perplexity', 'firecrawl', 'traversaal'] as const;
+export const SEARCH_PROVIDERS = ['tavily', 'brave', 'google', 'perplexity', 'firecrawl', 'traversaal'] as const;
 
 export const REQUIRED_KINDS: GrowthSettingKind[] = ['llm', 'screening'];
 

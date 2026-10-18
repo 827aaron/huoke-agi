@@ -261,6 +261,24 @@ describe('GrowthCredentialCard', () => {
         expect(screen.queryByText(/这家服务商的模型按智能体角色自动分配/)).not.toBeInTheDocument();
     });
 
+    it('offers Brave Search with one key list and no search engine ID', async () => {
+        renderCard(setting({ fields: { api_keys: '', cx: '' }, kind: 'web_search', provider: 'brave' }));
+
+        expect(screen.getByRole('combobox')).toHaveTextContent('Brave Search');
+        expect(screen.getByText(/api-dashboard\.search\.brave\.com/)).toBeInTheDocument();
+        expect(screen.queryByLabelText(/搜索引擎 ID/)).not.toBeInTheDocument();
+
+        fireEvent.change(screen.getByLabelText('API 密钥'), { target: { value: 'BSA-key-1' } });
+        fireEvent.click(screen.getByRole('button', { name: /保存/ }));
+
+        await waitFor(() =>
+            expect(growthApi.saveSetting).toHaveBeenCalledWith('web_search', {
+                fields: { api_keys: 'BSA-key-1' },
+                provider: 'brave',
+            }),
+        );
+    });
+
     it('explains each pace field under the advanced toggle', () => {
         renderCard(setting({ fields: { api_hash: '', api_id: '' }, kind: 'telegram' }));
 

@@ -232,6 +232,9 @@ type Config struct {
 	// === Search Engine: Traversaal AI ===
 	TraversaalAPIKey string `env:"TRAVERSAAL_API_KEY"`
 
+	// === Search Engine: Brave Search ===
+	BraveAPIKey string `env:"BRAVE_API_KEY"`
+
 	// === Search Engine: Tavily AI ===
 	TavilyAPIKey string `env:"TAVILY_API_KEY"`
 
@@ -653,6 +656,7 @@ func (c *Config) GetSecretPatterns() []patterns.Pattern {
 		{c.GoogleAPIKey, "Google API Key"},
 		{c.TraversaalAPIKey, "Traversaal Key"},
 		{c.TavilyAPIKey, "Tavily Key"},
+		{c.BraveAPIKey, "Brave Key"},
 		{c.FirecrawlAPIKey, "Firecrawl Key"},
 		{c.PerplexityAPIKey, "Perplexity Key"},
 		{c.YouTubeAPIKey, "YouTube API Key"},
