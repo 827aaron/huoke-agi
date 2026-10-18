@@ -24,7 +24,7 @@ func TestJev_Judge_AsksOneNoulPerMessage(t *testing.T) {
 
 	c := &Client{URL: srv.URL + "/", Key: "ts-key"}
 	out, model, err := c.Judge(t.Context(), Batch{
-		Platform: "telegram", Source: "Fans", Business: "Offer: an MMORPG",
+		Platform: "telegram", Source: "Fans", Task: "find 10 guild leaders", Business: "Offer: an MMORPG",
 		Messages: []Message{{ID: "45", Sender: "@ann", Text: "looking for a new MMO"}, {ID: "44", Sender: "@bob", Text: "lol"}},
 	})
 	require.NoError(t, err)
@@ -39,12 +39,14 @@ func TestJev_Judge_AsksOneNoulPerMessage(t *testing.T) {
 	assert.Equal(t, "telegram", state["platform"])
 	assert.Equal(t, "Fans", state["source"])
 	assert.Equal(t, "Offer: an MMORPG", state["business"])
+	assert.Equal(t, "find 10 guild leaders", state["task"])
 	assert.Equal(t, map[string]any{"id": "44", "sender": "@bob", "text": "lol"}, state["messages"].(map[string]any)["m1"])
 	questions := got["questions"].(map[string]any)
 	require.Len(t, questions, 2)
 	q := questions["m1"].(map[string]any)
 	assert.Equal(t, "noul", q["type"])
 	assert.Contains(t, q["instructions"], "`messages.m1`")
+	assert.Contains(t, q["instructions"], "`task` is not empty it names whom this search is for and wins over `business`")
 	assert.Contains(t, q["criteria"], "true")
 }
 

@@ -55,6 +55,8 @@ type screener struct {
 	answeredBy string
 	profile    ProfileView
 	now        func() time.Time
+	// task is what the customer asked of the scope's flow; it defines whom to look for.
+	task string
 }
 
 // screenerFor builds the owner's Jev client, judging by the profile of scope's flow.
@@ -70,7 +72,40 @@ func (s *Service) screenerFor(ctx context.Context, scope Scope) (*screener, erro
 	if err != nil {
 		return nil, err
 	}
-	return &screener{client: newJevClient(cfg), profile: profile, now: time.Now}, nil
+	return &screener{client: newJevClient(cfg), profile: profile, task: s.taskGoal(ctx, scope), now: time.Now}, nil
+}
+
+// taskGoalRunes bounds each instruction: a preset template runs to a page, and its
+// opening lines carry the target.
+const taskGoalRunes = 500
+
+// taskGoal is the flow's first instruction and, when it differs, its latest one, so a
+// follow-up such as "keep going" keeps the original target. Empty without a flow, and
+// when the tasks cannot be read: the profile alone then decides.
+func (s *Service) taskGoal(ctx context.Context, scope Scope) string {
+	if scope.FlowID == 0 {
+		return ""
+	}
+	tasks, err := s.db.GetFlowTasks(ctx, scope.FlowID)
+	if err != nil {
+		logrus.WithContext(ctx).WithError(err).WithField("flow_id", scope.FlowID).
+			Warn("pre-screen without the task's instruction")
+		return ""
+	}
+	var first, latest string
+	for _, t := range tasks {
+		if in := strings.Join(strings.Fields(t.Input), " "); in != "" {
+			if first == "" {
+				first = in
+			}
+			latest = in
+		}
+	}
+	goal := truncateRunes(first, taskGoalRunes)
+	if latest != first {
+		goal += "\nLatest instruction: " + truncateRunes(latest, taskGoalRunes)
+	}
+	return goal
 }
 
 // jevBackoff is the first retry delay after a 429 or 529; a variable so tests run fast.
@@ -105,7 +140,7 @@ func (s *Service) screen(
 	for start := 0; start < len(msgs); start += screenBatch {
 		batch := msgs[start:min(start+screenBatch, len(msgs))]
 		judged, model, err := sc.client.Judge(ctx, screening.Batch{
-			Platform: platform, Source: source, Business: business, Messages: screenMessages(batch),
+			Platform: platform, Source: source, Task: sc.task, Business: business, Messages: screenMessages(batch),
 			Signals: screening.Signals,
 		})
 		switch {
@@ -184,7 +219,7 @@ func (s *Service) judgeEvidence(
 		source = src.Link
 	}
 	judged, _, err := sc.client.Judge(ctx, screening.Batch{
-		Platform: src.Platform, Source: source, Business: businessSummary(sc.profile.Profile), Messages: msgs,
+		Platform: src.Platform, Source: source, Task: sc.task, Business: businessSummary(sc.profile.Profile), Messages: msgs,
 		Signals: screening.Signals,
 	})
 	switch {

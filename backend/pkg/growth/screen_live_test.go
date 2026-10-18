@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -103,4 +104,57 @@ func TestScreen_SyncSources_ScoresEveryKeptMessageAndLeadsTakeThatScore(t *testi
 	assert.Contains(t, saved[0].Reason, "score 13 is the judgement model's for this evidence, not 2")
 	assert.Equal(t, 7, saved[1].Score)
 	assert.Equal(t, TierWatchlist, saved[1].Tier)
+}
+
+func TestScreen_SyncSources_JudgesAgainstTheFlowsInstruction(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	w.savePace(t, map[string]string{"read_interval_seconds": "0", "first_sync_days": "90"})
+	var (
+		mu    sync.Mutex
+		tasks []string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		var body struct {
+			State struct {
+				Task string `json:"task"`
+			} `json:"state"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		mu.Lock()
+		tasks = append(tasks, body.State.Task)
+		mu.Unlock()
+		_ = json.NewEncoder(rw).Encode(map[string]any{"answers": map[string]any{}})
+	}))
+	t.Cleanup(srv.Close)
+	w.svc.cfg.TypeSafeAPIURL = srv.URL
+
+	scope := w.seedTask(t)
+	_, err := w.db.Exec(`UPDATE tasks SET input = $1 WHERE id = $2`, "  find 10 Malaysian\n agents  ", *scope.TaskID)
+	require.NoError(t, err)
+	first := w.mustAddTelegramGroup(t, scope, tgGroup("950", "agents_my", "Agents MY"), tgMessage(1, "51", "who is hiring agents"))
+	_, err = w.svc.SyncSources(ctx, scope, []int64{first}, SyncOptions{})
+	require.NoError(t, err)
+
+	next := w.seedTaskIn(t, scope.FlowID)
+	_, err = w.db.Exec(`UPDATE tasks SET input = 'keep going' WHERE id = $1`, *next.TaskID)
+	require.NoError(t, err)
+	second := w.mustAddTelegramGroup(t, next, tgGroup("951", "agents_kl", "Agents KL"), tgMessage(1, "52", "I run a team"))
+	_, err = w.svc.SyncSources(ctx, next, []int64{second}, SyncOptions{})
+	require.NoError(t, err)
+
+	other := w.seedTask(t)
+	third := w.mustAddTelegramGroup(t, other, tgGroup("952", "players_my", "Players MY"), tgMessage(1, "53", "I play slots"))
+	_, err = w.svc.SyncSources(ctx, other, []int64{third}, SyncOptions{})
+	require.NoError(t, err)
+
+	_, err = w.svc.UpsertLeads(ctx, next, []LeadInput{qualified("52", second, "1")})
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{
+		"find 10 Malaysian agents",
+		"find 10 Malaysian agents\nLatest instruction: keep going",
+		"find 50",
+		"find 10 Malaysian agents\nLatest instruction: keep going",
+	}, tasks, "each flow is judged against its own instruction, and a follow-up keeps the first one")
 }
