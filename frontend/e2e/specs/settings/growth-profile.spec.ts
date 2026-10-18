@@ -107,8 +107,8 @@ test.describe('growth user profiles', { tag: '@settings' }, () => {
         await page.getByRole('button', { name: '设为默认' }).click();
         await expect(page.getByRole('button', { name: /泰国玩家（副本）.*默认/ })).toBeVisible();
 
-        await page.getByRole('button', { name: '删除' }).click();
-        await page.getByRole('dialog').getByRole('button', { name: '删除' }).click();
+        await page.getByRole('button', { exact: true, name: '删除' }).click();
+        await page.getByRole('dialog').getByRole('button', { exact: true, name: '删除' }).click();
         await expect(page.getByText('已删除画像')).toBeVisible();
         await expect(page.getByRole('button', { name: /泰国玩家.*默认/ })).toBeVisible();
         await expect(page.getByRole('button', { name: /副本/ })).toHaveCount(0);
