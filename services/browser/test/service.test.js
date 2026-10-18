@@ -223,6 +223,35 @@ describe('auth and routing', () => {
   });
 });
 
+describe('account removal', () => {
+  test('delete closes the browser and forgets the profile, fingerprint and login ticket', async () => {
+    const opened = await call('POST', '/sessions/gone1/navigate', { platform: 'web', url: fixtureUrl + '/group', wait_ms: 50 });
+    assert.equal(opened.status, 200, JSON.stringify(opened.data));
+    const before = await call('GET', '/sessions/gone1');
+    assert.ok(before.data.fingerprint, 'the account has a fingerprint to lose');
+    const { ticket } = manager.issueTicket('gone1');
+
+    const r = await call('DELETE', '/sessions/gone1');
+
+    assert.equal(r.status, 204);
+    await assert.rejects(fs.stat(path.join(profilesDir, 'gone1')), { code: 'ENOENT' });
+    assert.equal((await call('GET', '/sessions/gone1')).status, 404);
+    assert.equal(manager.ticketAllows(ticket, 'gone1'), false);
+    const again = await call('GET', '/sessions/gone1?platform=web');
+    assert.equal(again.data.fingerprint, null, 'a new account of that name starts without the old fingerprint');
+  });
+
+  test('deleting an account the service never held succeeds', async () => {
+    assert.equal((await call('DELETE', '/sessions/never-seen')).status, 204);
+  });
+
+  test('delete needs the service token', async () => {
+    const { ticket } = manager.issueTicket('gone2');
+    const res = await fetch(`${serviceUrl}/sessions/gone2?ticket=${ticket}`, { method: 'DELETE' });
+    assert.equal(res.status, 401);
+  });
+});
+
 describe('facebook account lifecycle', () => {
   test('a new account refuses work until an operator logs in', async () => {
     const r = await call('POST', '/sessions/fb1/navigate', { platform: 'facebook', fingerprint: FIXED_FP, url: fixtureUrl + '/feed' });

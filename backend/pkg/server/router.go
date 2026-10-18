@@ -470,6 +470,7 @@ func setGrowthGroup(parent *gin.RouterGroup, svc *services.GrowthService) {
 		gg.GET("/accounts/", auth.PrivilegesRequired("growth.view"), svc.ListAccounts)
 		gg.POST("/accounts/", auth.PrivilegesRequired("growth.edit"), svc.CreateAccount)
 		gg.PUT("/accounts/:accountID", auth.PrivilegesRequired("growth.edit"), svc.UpdateAccount)
+		gg.DELETE("/accounts/:accountID", auth.PrivilegesRequired("growth.edit"), svc.DeleteAccount)
 		gg.GET("/accounts/:accountID/detail", auth.PrivilegesRequired("growth.view"), svc.GetAccountDetail)
 		gg.POST("/accounts/:accountID/test-proxy", auth.PrivilegesRequired("growth.edit"), svc.TestAccountProxy)
 		gg.POST("/accounts/:accountID/enable", auth.PrivilegesRequired("growth.edit"), svc.EnableAccount)

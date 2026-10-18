@@ -660,6 +660,17 @@ export class SessionManager {
     return out;
   }
 
+  // Closes the account's browser and deletes its profile directory, meta.json and with
+  // it the fingerprint and position; an account it never held is already gone.
+  async remove(accountId) {
+    validateAccountId(accountId);
+    const session = this.sessions.get(accountId);
+    this.sessions.delete(accountId);
+    this.revokeTickets(accountId);
+    if (session) await session.run(() => session.closeContext());
+    await fs.rm(path.join(this.cfg.profilesDir, accountId), { recursive: true, force: true });
+  }
+
   async closeAll() {
     await Promise.all([...this.sessions.values()].map((s) => s.closeContext()));
     this.sessions.clear();

@@ -778,6 +778,35 @@ func (s *GrowthService) GetAccountDetail(c *gin.Context) {
 	response.Success(c, http.StatusOK, detail)
 }
 
+// DeleteAccount is a function to remove an account and its sign-in
+// @Summary Remove an account with its session or browser profile and its join records; sources and leads are kept
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param accountID path int true "account id"
+// @Success 200 {object} response.successResp "account deleted successful"
+// @Failure 400 {object} response.errorResp "invalid account id"
+// @Failure 403 {object} response.errorResp "deleting accounts not permitted"
+// @Failure 404 {object} response.errorResp "account not found"
+// @Failure 500 {object} response.errorResp "internal error on deleting the account"
+// @Router /growth/accounts/{accountID} [delete]
+func (s *GrowthService) DeleteAccount(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+
+	accountID, err := strconv.ParseInt(c.Param("accountID"), 10, 64)
+	if err != nil {
+		response.Error(c, response.ErrGrowthInvalidRequest, err)
+		return
+	}
+
+	if err := s.svc.DeleteAccount(c, uid, accountID); err != nil {
+		accountError(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusOK, struct{}{})
+}
+
 // TestAccountProxy is a function to check the route of an account
 // @Summary Reach the internet the way the account's traffic goes and report the latency or the error
 // @Description source is account, global or direct; ok false carries the error.
