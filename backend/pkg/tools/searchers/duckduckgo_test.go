@@ -1,14 +1,18 @@
 package searchers
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
@@ -94,35 +98,203 @@ func TestDuckduckgo_Handle_PostsTheFormAndReturnsAtMostMaxResults(t *testing.T) 
 	})
 }
 
-func TestDuckduckgo_Handle_GivesUpFatallyAfterThreeRejectedAttempts(t *testing.T) {
+// searchersDuckduckgoLitePage renders n results the way lite.duckduckgo.com lays them out.
+func searchersDuckduckgoLitePage(n int) string {
+	var b strings.Builder
+	b.WriteString("<table border=\"0\">\n")
+	for i := 1; i <= n; i++ {
+		fmt.Fprintf(&b, `<tr>
+	<td valign="top">%d.&nbsp;</td>
+	<td><a rel="nofollow" href="https://example.com/%d" class='result-link'>Result <b>%d</b></a></td>
+</tr>
+<tr>
+	<td>&nbsp;&nbsp;&nbsp;</td>
+	<td class='result-snippet'>Description %d</td>
+</tr>
+<tr>
+	<td>&nbsp;&nbsp;&nbsp;</td>
+	<td><span class='link-text'>example.com/%d</span></td>
+</tr>
+`, i, i, i, i, i)
+	}
+	b.WriteString("</table>\n")
+	return b.String()
+}
+
+// searchersDuckduckgoUpstream answers each front end from its own script, one reply per attempt,
+// repeating the last, and records the paths in the order they were asked.
+type searchersDuckduckgoUpstream struct {
+	mu      sync.Mutex
+	replies map[string][]searchersDuckduckgoReply
+	paths   []string
+}
+
+type searchersDuckduckgoReply struct {
+	status int
+	body   string
+}
+
+func (u *searchersDuckduckgoUpstream) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.paths = append(u.paths, r.URL.Path)
+	script := u.replies[r.URL.Path]
+	if len(script) == 0 {
+		http.Error(w, "no reply scripted for "+r.URL.Path, http.StatusTeapot)
+		return
+	}
+	reply := script[0]
+	if len(script) > 1 {
+		u.replies[r.URL.Path] = script[1:]
+	}
+	w.WriteHeader(reply.status)
+	_, _ = io.WriteString(w, reply.body)
+}
+
+const searchersDuckduckgoBotCheck = `<form id="challenge-form" action="//duckduckgo.com/anomaly.js"><div class="anomaly-modal__title">Unfortunately, bots use DuckDuckGo too.</div></form>`
+
+func TestDuckduckgo_Handle_AlternatesFrontEndsUntilOneAnswers(t *testing.T) {
+	throttled := searchersDuckduckgoReply{http.StatusAccepted, searchersDuckduckgoBotCheck}
 	for _, tt := range []struct {
-		name   string
-		status int
+		name      string
+		replies   map[string][]searchersDuckduckgoReply
+		paths     []string
+		waits     []bool
+		wantErr   string
+		throttled bool
+		results   int
 	}{
-		{"a server error is fatal once retried", http.StatusInternalServerError},
-		{"a client error is fatal once retried", http.StatusNotFound},
+		{
+			name: "a throttled html front end falls over to lite",
+			replies: map[string][]searchersDuckduckgoReply{
+				"/html/": {throttled},
+				"/lite/": {{http.StatusOK, searchersDuckduckgoLitePage(3)}},
+			},
+			paths:   []string{"/html/", "/lite/"},
+			waits:   []bool{true},
+			results: 3,
+		},
+		{
+			name: "a bot check served with 200 counts as throttled",
+			replies: map[string][]searchersDuckduckgoReply{
+				"/html/": {{http.StatusOK, searchersDuckduckgoBotCheck}, {http.StatusOK, searchersDuckduckgoPage(2)}},
+				"/lite/": {{http.StatusTooManyRequests, ""}},
+			},
+			paths:   []string{"/html/", "/lite/", "/html/"},
+			waits:   []bool{true, true},
+			results: 2,
+		},
+		{
+			name: "throttled everywhere names the cause and the way out",
+			replies: map[string][]searchersDuckduckgoReply{
+				"/html/": {throttled},
+				"/lite/": {{http.StatusForbidden, ""}},
+			},
+			paths:     []string{"/html/", "/lite/", "/html/", "/lite/"},
+			waits:     []bool{true, true, true},
+			wantErr:   "HTTP 403 on 4 attempts",
+			throttled: true,
+		},
+		{
+			name: "a server error is fatal once both front ends refused twice",
+			replies: map[string][]searchersDuckduckgoReply{
+				"/html/": {{http.StatusInternalServerError, ""}},
+				"/lite/": {{http.StatusInternalServerError, ""}},
+			},
+			paths:   []string{"/html/", "/lite/", "/html/", "/lite/"},
+			waits:   []bool{false, false, false},
+			wantErr: "unexpected status code: 500",
+		},
+		{
+			name: "a client error is fatal once both front ends refused twice",
+			replies: map[string][]searchersDuckduckgoReply{
+				"/html/": {{http.StatusNotFound, ""}},
+				"/lite/": {{http.StatusNotFound, ""}},
+			},
+			paths:   []string{"/html/", "/lite/", "/html/", "/lite/"},
+			waits:   []bool{false, false, false},
+			wantErr: "unexpected status code: 404",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			up := &searchersUpstream{status: tt.status}
-			p := newTestProxy(t, "html.duckduckgo.com", up)
+			up := &searchersDuckduckgoUpstream{replies: tt.replies}
+			p := newTestProxy(t, "duckduckgo.com", up)
 			ddg := NewDuckDuckGo(&config.Config{
 				DuckDuckGoEnabled: true,
 				ProxyURL:          p.URL(),
 				ExternalSSLCAPath: p.CACertPath(),
-			})
+			}).(*duckduckgo)
+			var waits []bool
+			ddg.backoff = func(n int, throttled bool) time.Duration {
+				if n != len(waits)+1 {
+					t.Errorf("backoff asked for attempt %d after %d waits", n, len(waits))
+				}
+				waits = append(waits, throttled)
+				return 0
+			}
 
 			got, err := ddg.Handle(t.Context(), Request{Query: "test", MaxResults: 5})
 
+			if !reflect.DeepEqual(up.paths, tt.paths) {
+				t.Errorf("front ends asked = %v, want %v", up.paths, tt.paths)
+			}
+			if !reflect.DeepEqual(waits, tt.waits) {
+				t.Errorf("waits (throttled?) = %v, want %v", waits, tt.waits)
+			}
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Handle() unexpected error: %v", err)
+				}
+				if n := strings.Count(got, "## URL\n"); n != tt.results {
+					t.Errorf("Handle() returned %d results, want %d:\n%s", n, tt.results, got)
+				}
+				return
+			}
 			if got != "" || !IsFatal(err) {
 				t.Fatalf("Handle() = %q, %v; want no result and a FatalError", got, err)
 			}
-			if want := fmt.Sprintf("unexpected status code: %d", tt.status); !strings.Contains(err.Error(), want) {
-				t.Errorf("Handle() error = %v, want it to contain %q", err, want)
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Handle() error = %v, want it to contain %q", err, tt.wantErr)
 			}
-			if up.hits != 3 {
-				t.Errorf("upstream saw %d attempts, want 3", up.hits)
+			if errors.Is(err, errDuckduckgoThrottled) != tt.throttled {
+				t.Errorf("errors.Is(err, errDuckduckgoThrottled) = %v, want %v", !tt.throttled, tt.throttled)
+			}
+			if tt.throttled && !strings.Contains(err.Error(), "PROXY_URL") {
+				t.Errorf("Handle() error = %v, want it to point at PROXY_URL", err)
 			}
 		})
+	}
+}
+
+func TestDuckduckgo_Backoff_GrowsOnlyWhenThrottled(t *testing.T) {
+	for _, tt := range []struct {
+		n         int
+		throttled bool
+		min, max  time.Duration
+	}{
+		{1, false, time.Second, time.Second},
+		{3, false, time.Second, time.Second},
+		{1, true, 2 * time.Second, 3 * time.Second},
+		{2, true, 4 * time.Second, 5 * time.Second},
+		{3, true, 8 * time.Second, 9 * time.Second},
+	} {
+		if got := duckduckgoBackoff(tt.n, tt.throttled); got < tt.min || got > tt.max {
+			t.Errorf("duckduckgoBackoff(%d, %v) = %v, want within [%v, %v]", tt.n, tt.throttled, got, tt.min, tt.max)
+		}
+	}
+}
+
+func TestDuckduckgo_ParseLite_PairsEachLinkWithItsSnippet(t *testing.T) {
+	ddg := &duckduckgo{}
+	want := []searchResult{
+		{Title: "Result 1", URL: "https://example.com/1", Description: "Description 1"},
+		{Title: "Result 2", URL: "https://example.com/2", Description: "Description 2"},
+	}
+	if got := ddg.parseLite([]byte(searchersDuckduckgoLitePage(2))); !reflect.DeepEqual(got, want) {
+		t.Errorf("parseLite() = %+v, want %+v", got, want)
+	}
+	if got := ddg.parseLite([]byte(searchersDuckduckgoPage(2))); len(got) != 0 {
+		t.Errorf("parseLite() of an html front-end page = %+v, want none", got)
 	}
 }
 

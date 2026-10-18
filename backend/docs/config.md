@@ -1710,6 +1710,8 @@ These settings control the integration with various search engines used for web 
 | DuckDuckGoSafeSearch | `DUCKDUCKGO_SAFESEARCH` | *(none)*      | Safe search filter (`off`, `moderate`, `strict`)                           |
 | DuckDuckGoTimeRange  | `DUCKDUCKGO_TIME_RANGE` | *(none)*      | Time range for search results (`d`: day, `w`: week, `m`: month, `y`: year) |
 
+DuckDuckGo needs no key, but it throttles IPs it finds suspicious: it answers `202` (sometimes `403`, `429`, or a `200` bot-check page) instead of results. The engine then backs off (2s, 4s, 8s) and alternates between the `html.duckduckgo.com` and `lite.duckduckgo.com` front ends, four attempts in all. If every attempt is throttled the error says so; search goes out through `PROXY_URL`, so a proxy there or a second search engine is the remedy.
+
 ### Sploitus Search
 
 | Option          | Environment Variable | Default Value | Description                                                 |

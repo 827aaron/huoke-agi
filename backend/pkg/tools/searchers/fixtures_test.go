@@ -38,8 +38,8 @@ type testProxy struct {
 	certCache    sync.Map // host -> *tls.Certificate
 }
 
-// newTestProxy starts a proxy that sends targetDomain to mockHandler and answers any other host
-// with 502, so a test never reaches the network. It shuts down when the test ends.
+// newTestProxy starts a proxy that sends targetDomain and its subdomains to mockHandler and answers
+// any other host with 502, so a test never reaches the network. It shuts down when the test ends.
 func newTestProxy(t *testing.T, targetDomain string, mockHandler http.Handler) *testProxy {
 	t.Helper()
 
@@ -105,7 +105,8 @@ func (p *testProxy) intercepts(host string) bool {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
-	return strings.HasPrefix(strings.ToLower(host), p.targetDomain)
+	host = strings.ToLower(host)
+	return strings.HasPrefix(host, p.targetDomain) || strings.HasSuffix(host, "."+p.targetDomain)
 }
 
 func (p *testProxy) handler(mockURL *url.URL) http.Handler {

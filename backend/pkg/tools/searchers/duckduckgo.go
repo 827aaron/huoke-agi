@@ -2,11 +2,14 @@ package searchers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,12 +24,24 @@ import (
 )
 
 const (
-	duckduckgoMaxResults = 10
-	duckduckgoMaxRetries = 3
-	duckduckgoSearchURL  = "https://html.duckduckgo.com/html/"
-	duckduckgoTimeout    = 30 * time.Second
-	duckduckgoUserAgent  = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	duckduckgoMaxResults  = 10
+	duckduckgoMaxAttempts = 4
+	duckduckgoTimeout     = 30 * time.Second
+	duckduckgoUserAgent   = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
 )
+
+// duckduckgoEndpoints are tried in turn: when DuckDuckGo throttles an IP on one front end the
+// other one often still answers. Both take the same form fields.
+var duckduckgoEndpoints = []struct{ origin, path string }{
+	{"https://html.duckduckgo.com", "/html/"},
+	{"https://lite.duckduckgo.com", "/lite/"},
+}
+
+// errDuckduckgoThrottled is DuckDuckGo refusing this IP: it answers 202 (or 403/429) with a
+// bot-check page instead of results, and a different query will not help.
+var errDuckduckgoThrottled = errors.New("DuckDuckGo is rate-limiting this server's IP and answered " +
+	"with a bot check instead of results; route search through another IP with PROXY_URL, or add " +
+	"another search engine (Google, Tavily, Perplexity, Firecrawl, Traversaal) as a fallback")
 
 // Region constants for DuckDuckGo search
 const (
@@ -69,10 +84,32 @@ type searchResponse struct {
 
 type duckduckgo struct {
 	cfg *config.Config
+	// backoff is how long to wait before attempt n (n >= 1).
+	backoff func(n int, throttled bool) time.Duration
 }
 
 func NewDuckDuckGo(cfg *config.Config) Searcher {
-	return &duckduckgo{cfg: cfg}
+	return &duckduckgo{cfg: cfg, backoff: duckduckgoBackoff}
+}
+
+// duckduckgoBackoff waits a second after an ordinary failure, and 2s, 4s, 8s plus jitter
+// after a throttled one, since an immediate retry from the same IP is throttled again.
+func duckduckgoBackoff(n int, throttled bool) time.Duration {
+	if !throttled {
+		return time.Second
+	}
+	return time.Second<<n + rand.N(time.Second)
+}
+
+func duckduckgoThrottled(status int, body []byte) bool {
+	switch status {
+	case http.StatusAccepted, http.StatusForbidden, http.StatusTooManyRequests:
+		return true
+	case http.StatusOK:
+		return strings.Contains(string(body), "anomaly-modal")
+	default:
+		return false
+	}
 }
 
 func (d *duckduckgo) Engine() database.SearchengineType {
@@ -142,49 +179,52 @@ func (d *duckduckgo) search(ctx context.Context, query string, maxResults int) (
 
 	client.Timeout = duckduckgoTimeout
 
-	// Execute request with retry logic
-	var response *searchResponse
-	for attempt := 0; attempt < duckduckgoMaxRetries; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, "POST", duckduckgoSearchURL, strings.NewReader(formData))
+	var (
+		response *searchResponse
+		lastErr  error
+	)
+	for attempt := 0; attempt < duckduckgoMaxAttempts && response == nil; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(d.backoff(attempt, errors.Is(lastErr, errDuckduckgoThrottled))):
+			}
+		}
+
+		endpoint := duckduckgoEndpoints[attempt%len(duckduckgoEndpoints)]
+		req, err := http.NewRequestWithContext(ctx, "POST", endpoint.origin+endpoint.path, strings.NewReader(formData))
 		if err != nil {
 			return "", fmt.Errorf("failed to create search request: %w", err)
 		}
 
-		// Add necessary headers for POST request
 		req.Header.Set("User-Agent", duckduckgoUserAgent)
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 		req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+		req.Header.Set("Origin", endpoint.origin)
+		req.Header.Set("Referer", endpoint.origin+"/")
 
 		resp, err := client.Do(req)
 		if err != nil {
-			if attempt == duckduckgoMaxRetries-1 {
-				return "", fmt.Errorf("failed to execute search after %d attempts: %w", duckduckgoMaxRetries, err)
-			}
-			select {
-			case <-ctx.Done():
+			if ctx.Err() != nil {
 				return "", ctx.Err()
-			case <-time.After(time.Second):
 			}
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			if attempt == duckduckgoMaxRetries-1 {
-				return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-			}
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-time.After(time.Second):
-			}
+			lastErr = fmt.Errorf("failed to execute search after %d attempts: %w", attempt+1, err)
 			continue
 		}
 
 		body, err := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		if err != nil {
+		switch {
+		case duckduckgoThrottled(resp.StatusCode, body):
+			lastErr = fmt.Errorf("%w (HTTP %d on %d attempts across the html and lite endpoints)",
+				errDuckduckgoThrottled, resp.StatusCode, attempt+1)
+			continue
+		case resp.StatusCode != http.StatusOK:
+			lastErr = fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+			continue
+		case err != nil:
 			return "", fmt.Errorf("failed to read response body: %w", err)
 		}
 
@@ -192,11 +232,12 @@ func (d *duckduckgo) search(ctx context.Context, query string, maxResults int) (
 		if err != nil {
 			return "", fmt.Errorf("failed to parse search response: %w", err)
 		}
-
-		break
+	}
+	if response == nil {
+		return "", lastErr
 	}
 
-	if response == nil || len(response.Results) == 0 {
+	if len(response.Results) == 0 {
 		return "No results found", nil
 	}
 
@@ -242,6 +283,10 @@ func (d *duckduckgo) parseHTMLResponse(body []byte) (*searchResponse, error) {
 		}, nil
 	}
 
+	if results := d.parseLite(body); len(results) > 0 {
+		return &searchResponse{Results: results}, nil
+	}
+
 	// Fallback to regex-based parsing
 	results, err = d.parseHTMLRegex(body)
 	if err != nil {
@@ -265,6 +310,39 @@ func (d *duckduckgo) parseHTMLStructured(body []byte) ([]searchResult, error) {
 	d.findResultNodes(doc, &results)
 
 	return results, nil
+}
+
+// parseLite reads lite.duckduckgo.com, where a result is an a.result-link row followed by a
+// td.result-snippet row of the same table.
+func (d *duckduckgo) parseLite(body []byte) []searchResult {
+	doc, err := html.Parse(strings.NewReader(string(body)))
+	if err != nil {
+		return nil
+	}
+
+	var results []searchResult
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode {
+			switch {
+			case n.Data == "a" && d.hasClass(n, "result-link"):
+				results = append(results, searchResult{
+					Title: d.cleanText(d.getTextContent(n)),
+					URL:   d.getAttr(n, "href"),
+				})
+				return
+			case n.Data == "td" && d.hasClass(n, "result-snippet") && len(results) > 0:
+				results[len(results)-1].Description = d.cleanText(d.getTextContent(n))
+				return
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+
+	return slices.DeleteFunc(results, func(r searchResult) bool { return r.Title == "" || r.URL == "" })
 }
 
 // findResultNodes recursively finds and extracts search result nodes
