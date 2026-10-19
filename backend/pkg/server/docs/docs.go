@@ -5957,7 +5957,7 @@ const docTemplate = `{
                 "tags": [
                     "Growth"
                 ],
-                "summary": "Download leads as CSV, one row per lead with its first evidence",
+                "summary": "Download leads as CSV, one row per lead with its newest evidence",
                 "parameters": [
                     {
                         "type": "integer",

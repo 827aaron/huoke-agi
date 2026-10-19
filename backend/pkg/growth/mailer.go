@@ -359,17 +359,41 @@ func (s *Service) mailLeads(
 	if err != nil {
 		return nil, err
 	}
-	lang := s.Language(ctx, scope.UserID, scope.FlowID)
-	subject, body := deliverySummary(s.flowTitle(ctx, scope), leads, target, deadline, lang)
-	name := fmt.Sprintf("leads-flow-%d.csv", scope.FlowID)
-	if runID != 0 {
-		name = fmt.Sprintf("leads-round-%d.csv", runID)
-	}
+	sheet := s.LeadsCSVContext(ctx, scope.UserID, scope.FlowID)
+	subject, body := deliverySummary(s.flowTitle(ctx, scope), leads, target, deadline, sheet.Lang)
 	return to, sendMail(ctx, cfg, to, subject, body, attachment{
-		name:        name,
+		name:        LeadsCSVFileName(s.businessName(ctx, scope), s.sheetScope(ctx, scope, runID, sheet), sheet, time.Now()),
 		contentType: "text/csv; charset=utf-8",
-		data:        LeadsCSV(leads, lang),
+		data:        LeadsCSV(leads, sheet),
 	})
+}
+
+func (s *Service) businessName(ctx context.Context, scope Scope) string {
+	profile, err := s.ProfileForFlow(ctx, scope.UserID, scope.FlowID)
+	if err != nil {
+		return ""
+	}
+	return profile.Name
+}
+
+// sheetScope names what the attached sheet holds the way the web app names its download:
+// the round's number for one round, else the flow's delivered leads.
+func (s *Service) sheetScope(ctx context.Context, scope Scope, runID int64, sheet LeadsCSVContext) string {
+	if runID == 0 {
+		return sheet.DeliveredScope()
+	}
+	var flowID *int64
+	if scope.FlowID != 0 {
+		flowID = &scope.FlowID
+	}
+	runs, err := s.ListRuns(ctx, scope.UserID, flowID)
+	if err != nil {
+		return sheet.DeliveredScope()
+	}
+	if round, ok := RoundNumbers(runs)[runID]; ok {
+		return sheet.RoundScope(round)
+	}
+	return sheet.DeliveredScope()
 }
 
 // EmailLeads mails the leads of one round on demand, as the email of a finished round:

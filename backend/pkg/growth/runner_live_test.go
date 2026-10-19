@@ -145,11 +145,11 @@ func TestRunner_Deliver_MailsTheListWithTheCSVAttached(t *testing.T) {
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "leads@example.test", msgs[0].From)
 	assert.Equal(t, []string{"boss@example.test", "ops@example.test"}, msgs[0].To)
-	assert.Contains(t, msgs[0].Data, `filename=leads-round-`)
+	assert.Contains(t, msgs[0].Data, `filename=Prospects_Unnamed_business_round-1_`)
 
 	csv := decodeAttachment(t, msgs[0].Data)
-	assert.Contains(t, csv, "lead_id,platform,platform_user_id")
-	assert.Contains(t, csv, "telegram,1,u1")
+	assert.Contains(t, csv, "Name,Username,Platform,Contact,Score,Signals,Profile,Source,Quote,Link,Posted at")
+	assert.Contains(t, csv, "u1,@u1,Telegram,https://t.me/u1,9 · Qualified,")
 	assert.Contains(t, csv, "any game like this one?")
 
 	runs, err := w.svc.ListRuns(ctx, w.user, nil)
