@@ -26,18 +26,19 @@ import (
 )
 
 const (
-	RepeatingToolCallThreshold   = 3
-	maxQASectionsAfterRestore    = 3
-	keepQASectionsAfterRestore   = 1
-	lastSecBytesAfterRestore     = 16 * 1024 // 16 KB
-	maxBPBytesAfterRestore       = 8 * 1024  // 8 KB
-	maxQABytesAfterRestore       = 20 * 1024 // 20 KB
-	msgLogResultSummarySizeLimit = 70 * 1024 // 70 KB
-	msgLogResultEntrySizeLimit   = 1024      // 1 KB
-	extractLastMessagesCount     = 30
-	extractToolCallsCount        = 10
-	toolCallsHistorySeparator    = "---------------TOOL_CALLS_HISTORY---------------"
-	ChainContinuationMessage     = "Continue from where we left off"
+	RepeatingToolCallThreshold    = 3
+	maxQASectionsAfterRestore     = 3
+	keepQASectionsAfterRestore    = 1
+	lastSecBytesAfterRestore      = 16 * 1024 // 16 KB
+	maxBPBytesAfterRestore        = 8 * 1024  // 8 KB
+	executionContextVerbatimLimit = 8 * 1024  // 8 KB
+	maxQABytesAfterRestore        = 20 * 1024 // 20 KB
+	msgLogResultSummarySizeLimit  = 70 * 1024 // 70 KB
+	msgLogResultEntrySizeLimit    = 1024      // 1 KB
+	extractLastMessagesCount      = 30
+	extractToolCallsCount         = 10
+	toolCallsHistorySeparator     = "---------------TOOL_CALLS_HISTORY---------------"
+	ChainContinuationMessage      = "Continue from where we left off"
 )
 
 type dummyMessage struct {
@@ -757,7 +758,7 @@ func (fp *flowProvider) prepareExecutionContext(ctx context.Context, taskID, sub
 		}
 	}
 
-	executionContextRaw, err := fp.prompter.RenderTemplate(templates.PromptTypeFullExecutionContext, map[string]any{
+	executionContext, err := fp.prompter.RenderTemplate(templates.PromptTypeFullExecutionContext, map[string]any{
 		"Task":              tasksInfo.Task,
 		"Tasks":             tasksInfo.Tasks,
 		"CompletedSubtasks": subtasksInfo.Completed,
@@ -768,10 +769,13 @@ func (fp *flowProvider) prepareExecutionContext(ctx context.Context, taskID, sub
 		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to render execution context", err)
 	}
 
-	summarizeHandler := fp.GetSummarizeResultHandler(&taskID, &subtaskID)
-	executionContext, err := summarizeHandler(ctx, executionContextRaw)
-	if err != nil {
-		return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to summarize execution context", err)
+	// A short plan already fits the prompt; summarizing it spends a model call to restate it.
+	if len(executionContext) >= executionContextVerbatimLimit {
+		summarizeHandler := fp.GetSummarizeResultHandler(&taskID, &subtaskID)
+		executionContext, err = summarizeHandler(ctx, executionContext)
+		if err != nil {
+			return "", wrapErrorEndEvaluatorSpan(ctx, evaluator, "failed to summarize execution context", err)
+		}
 	}
 
 	evaluator.End(

@@ -353,9 +353,9 @@ Flow states and what each allows:
 - After patching, the response lists the new subtask IDs — use those IDs for any subsequent references
 - Obtain the `task_id` via `{{.GetFlowStatusToolName}}` with `detail=tasks`
 
-**`{{.WaitFlowCompletionToolName}}`** — block until the currently running automation task finishes or the timeout expires.
+**`{{.WaitFlowCompletionToolName}}`** — block until the currently running automation task finishes, or for one hour.
 - Use when you need to wait for the automation to complete before inspecting results or taking further action
-- `timeout` — seconds to wait; 0 or negative → 60 s default; values above 3600 are capped at 1 hour
+- `timeout` — accepted and ignored; the wait returns when the task finishes, and gives up after 1 hour
 - Returns immediately (without blocking) if no tasks exist or if no task is running
 - Always call `{{.GetFlowStatusToolName}}` with `detail='summary'` after this tool returns to see the final state
 </flow_management_tools>
@@ -367,7 +367,7 @@ Flow states and what each allows:
 
 **User asks you to wait until the automation finishes:**
 1. `{{.GetFlowStatusToolName}}` with `detail=summary` to confirm the flow is running
-2. `{{.WaitFlowCompletionToolName}}` with an appropriate `timeout` (default 60 s; up to 3600 s)
+2. `{{.WaitFlowCompletionToolName}}` and leave it until the task finishes (it gives up after 1 hour)
 3. After it returns, call `{{.GetFlowStatusToolName}}` with `detail=summary` to report the final state to the user
 
 **User asks what was found or accomplished:**

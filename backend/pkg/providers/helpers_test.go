@@ -1,11 +1,17 @@
 package providers
 
 import (
+	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
+	"pentagi/pkg/database"
+	"pentagi/pkg/providers/provider"
+	"pentagi/pkg/providers/tester/mock"
 	"pentagi/pkg/templates"
 	"pentagi/pkg/tools"
 
@@ -593,6 +599,124 @@ func TestHelpers_ToolCallIDTemplateOrDefault_NeverYieldsAnEmptyTemplate(t *testi
 
 			assert.Equal(t, tt.want, got)
 			assert.NotEmpty(t, templates.GenerateFromPattern(got, tools.AdviceToolName), "the template must yield an ID")
+		})
+	}
+}
+
+type helpersSummaryQuerier struct {
+	usageCapturingQuerier
+
+	tasks    []database.Task
+	subtasks []database.Subtask
+	chain    database.Msgchain
+}
+
+func (q helpersSummaryQuerier) GetFlowTasks(context.Context, int64) ([]database.Task, error) {
+	return q.tasks, nil
+}
+
+func (q helpersSummaryQuerier) GetFlowSubtasks(context.Context, int64) ([]database.Subtask, error) {
+	return q.subtasks, nil
+}
+
+func (q helpersSummaryQuerier) GetTask(context.Context, int64) (database.Task, error) {
+	return q.tasks[0], nil
+}
+
+func (q helpersSummaryQuerier) GetFlowTaskTypeLastMsgChain(
+	_ context.Context, arg database.GetFlowTaskTypeLastMsgChainParams,
+) (database.Msgchain, error) {
+	if arg.Type != database.MsgchainTypePrimaryAgent || len(q.chain.Chain) == 0 {
+		return database.Msgchain{}, errors.New("no chain")
+	}
+	return q.chain, nil
+}
+
+func (q helpersSummaryQuerier) GetTaskMsgLogs(context.Context, sql.NullInt64) ([]database.Msglog, error) {
+	return nil, nil
+}
+
+type helpersRefinerExecutor struct {
+	tools.FlowToolsExecutor
+}
+
+func (helpersRefinerExecutor) GetRefinerExecutor(tools.RefinerExecutorConfig) (tools.ContextToolsExecutor, error) {
+	return nil, errors.New("stop before the refiner model")
+}
+
+func helpersSummaryFixture(result string) (helpersSummaryQuerier, *performerWindowProvider, *flowProvider) {
+	chain, err := json.Marshal([]llms.MessageContent{
+		llms.TextParts(llms.ChatMessageTypeHuman, "find leads"),
+		llms.TextParts(llms.ChatMessageTypeAI, "reading the group"),
+	})
+	if err != nil {
+		panic(err)
+	}
+	db := helpersSummaryQuerier{
+		tasks: []database.Task{{
+			ID: 7, Status: database.TaskStatusRunning, Title: "leads", Input: "find leads in the group",
+		}},
+		subtasks: []database.Subtask{{
+			ID: 8, TaskID: 7, Status: database.SubtaskStatusFinished, Title: "read", Result: result,
+		}},
+		chain: database.Msgchain{Chain: chain},
+	}
+	prv := &performerWindowProvider{Provider: mock.NewProvider(provider.ProviderCustom, "custom", "gateway-model")}
+	prv.SetDefaultResponse("short summary")
+	fp := newFlowProvider()
+	fp.flowID = 1
+	fp.db = &db
+	fp.Provider = prv
+	fp.prompter = templates.NewDefaultPrompter()
+	fp.executor = helpersRefinerExecutor{}
+	return db, prv, fp
+}
+
+func TestHelpers_PrepareExecutionContext_LeavesAShortPlanUnsummarized(t *testing.T) {
+	tests := []struct {
+		name    string
+		result  string
+		wantLLM bool
+	}{
+		{name: "a plan under 8KB is kept verbatim", result: "read 12 messages"},
+		{name: "a plan past 8KB is summarized", result: strings.Repeat("message ", 2000), wantLLM: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, prv, fp := helpersSummaryFixture(tt.result)
+
+			got, err := fp.prepareExecutionContext(context.Background(), 7, 9)
+			require.NoError(t, err)
+			if tt.wantLLM {
+				assert.Positive(t, prv.summaries.Load())
+				assert.Equal(t, "short summary", got)
+				return
+			}
+			assert.Zero(t, prv.summaries.Load())
+			assert.Contains(t, got, "find leads in the group")
+			assert.Contains(t, got, tt.result)
+		})
+	}
+}
+
+func TestHelpers_RefineSubtasks_SummarizesOnlyAPromptPastSixtyKilobytes(t *testing.T) {
+	tests := []struct {
+		name      string
+		result    string
+		wantCalls int64
+	}{
+		{name: "a short plan skips both summaries", result: "read 12 messages"},
+		{name: "a plan past 60KB takes the chain summaries", result: strings.Repeat("x", 70*1024), wantCalls: 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, prv, fp := helpersSummaryFixture(tt.result)
+
+			_, err := fp.RefineSubtasks(context.Background(), 7)
+			require.ErrorContains(t, err, "stop before the refiner model")
+			assert.Equal(t, tt.wantCalls, prv.summaries.Load())
 		})
 	}
 }

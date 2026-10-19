@@ -352,96 +352,125 @@ func determineTypeToSummarizedSections(sections []*cast.ChainSection) cast.BodyP
 	return summarizedType
 }
 
-// summarizeOversizedBodyPairs handles individual body pairs that exceed the maximum size
-// by summarizing them in place, before the main pair selection logic runs
+// summarizeOversizedBodyPairs cuts a single body pair that exceeds the maximum size down to its
+// head and tail. A model summary of one tool answer costs a full call and, on a multi-megabyte
+// answer, sees only the two ends anyway. The last pair is left whole: its reasoning signature
+// has to reach the provider unchanged.
 func summarizeOversizedBodyPairs(
-	ctx context.Context,
+	_ context.Context,
 	section *cast.ChainSection,
-	handler tools.SummarizeHandler,
+	_ tools.SummarizeHandler,
 	maxBodyPairBytes int,
-	tcIDTemplate string,
+	_ string,
 ) error {
 	if len(section.Body) == 0 {
 		return nil
 	}
 
-	// Concurrent processing of body pairs summarization
-	mx := sync.Mutex{}
-	wg := sync.WaitGroup{}
-
-	// Map of body pairs that have been summarized
-	bodyPairsSummarized := make(map[int]*cast.BodyPair)
-
-	// Process each body pair except the last one
-	// The last body pair should never be summarized to preserve reasoning signatures
-	// which are critical for providers like Gemini (thought_signature requirement)
+	changed := false
 	for i, pair := range section.Body {
-		// Always skip the last body pair to preserve reasoning signatures
 		if i == len(section.Body)-1 {
 			continue
 		}
-
-		// Skip pairs that are already summarized content or under the size limit
 		if pair.Size() <= maxBodyPairBytes || containsSummarizedContent(pair) {
 			continue
 		}
 
-		// Convert to messages
-		pairMessages := pair.Messages()
-		if len(pairMessages) == 0 {
-			continue
-		}
-
-		var humanMessages []llms.MessageContent
-		if section.Header.HumanMessage != nil {
-			humanMessages = append(humanMessages, *section.Header.HumanMessage)
-		}
-
-		wg.Add(1)
-		go func(pair *cast.BodyPair, i int) {
-			defer wg.Done()
-
-			summaryText, err := GenerateSummary(ctx, handler, humanMessages, pairMessages)
-			if err != nil {
-				return // It's should collected next step in summarizeLastSection function
-			}
-
-			mx.Lock()
-			defer mx.Unlock()
-
-			// Create a new Summarization or Completion body pair with the summary
-			// If the pair is a Completion, we need to create a new Completion pair
-			// If the pair is a RequestResponse, we need to create a new Summarization pair
-			if pair.Type == cast.RequestResponse {
-				// Check if the original pair contained reasoning signatures
-				// This is critical for providers like Gemini that require thought_signature
-				// If the original pair had reasoning, we add a fake signature to satisfy API requirements
-				addFakeSignature := cast.ContainsToolCallReasoning(pairMessages)
-
-				// Extract reasoning message for providers like Kimi that require reasoning_content before ToolCall
-				// This preserves the original reasoning structure in the current turn
-				reasoningMsg := cast.ExtractReasoningMessage(pairMessages)
-
-				bodyPairsSummarized[i] = cast.NewBodyPairFromSummarization(summaryText, tcIDTemplate, addFakeSignature, reasoningMsg)
-			} else {
-				bodyPairsSummarized[i] = cast.NewBodyPairFromCompletion(SummarizedContentPrefix + summaryText)
-			}
-		}(pair, i)
+		section.Body[i] = truncateBodyPair(pair, maxBodyPairBytes)
+		changed = true
 	}
 
-	wg.Wait()
-
-	// If any pairs were summarized, create a new section with the updated body
-	// This ensures proper size calculation
-	if len(bodyPairsSummarized) > 0 {
-		for i, pair := range bodyPairsSummarized {
-			section.Body[i] = pair
-		}
+	if changed {
 		newSection := cast.NewChainSection(section.Header, section.Body)
 		*section = *newSection
 	}
 
 	return nil
+}
+
+// truncateBodyPair keeps the pair's tool calls and reasoning, and shortens its longest text
+// until the pair fits in limit. The result is never larger than limit, so a later pass leaves it.
+func truncateBodyPair(pair *cast.BodyPair, limit int) *cast.BodyPair {
+	ai := cloneMessageContent(pair.AIMessage)
+	tools := make([]*llms.MessageContent, len(pair.ToolMessages))
+	for i, msg := range pair.ToolMessages {
+		tools[i] = cloneMessageContent(msg)
+	}
+
+	fitted := cast.NewBodyPair(ai, tools)
+	for fitted.Size() > limit {
+		if !shrinkLongestText(fitted, limit) {
+			break
+		}
+		fitted = cast.NewBodyPair(fitted.AIMessage, fitted.ToolMessages)
+	}
+
+	return fitted
+}
+
+func cloneMessageContent(msg *llms.MessageContent) *llms.MessageContent {
+	if msg == nil {
+		return nil
+	}
+
+	return &llms.MessageContent{Role: msg.Role, Parts: slices.Clone(msg.Parts)}
+}
+
+// shrinkLongestText replaces the longest text or tool answer with its head and tail, short
+// enough that the pair loses at least its excess over limit. The marker TruncateMiddle adds is
+// counted, so the pair cannot come back larger.
+func shrinkLongestText(pair *cast.BodyPair, limit int) bool {
+	type slot struct {
+		text string
+		set  func(string)
+	}
+
+	var best *slot
+	consider := func(text string, set func(string)) {
+		if best == nil || len(text) > len(best.text) {
+			best = &slot{text: text, set: set}
+		}
+	}
+
+	if pair.AIMessage != nil {
+		for i, part := range pair.AIMessage.Parts {
+			text, ok := part.(llms.TextContent)
+			if !ok || text.Text == "" {
+				continue
+			}
+			consider(text.Text, func(updated string) {
+				text.Text = updated
+				pair.AIMessage.Parts[i] = text
+			})
+		}
+	}
+	for _, msg := range pair.ToolMessages {
+		if msg == nil {
+			continue
+		}
+		for i, part := range msg.Parts {
+			response, ok := part.(llms.ToolCallResponse)
+			if !ok || response.Content == "" {
+				continue
+			}
+			consider(response.Content, func(updated string) {
+				response.Content = updated
+				msg.Parts[i] = response
+			})
+		}
+	}
+	if best == nil {
+		return false
+	}
+
+	const markerBytes = 96
+	keep := len(best.text) - (pair.Size() - limit) - markerBytes
+	if keep < 0 {
+		keep = 0
+	}
+	best.set(TruncateMiddle(best.text, keep))
+
+	return true
 }
 
 // containsSummarizedContent checks if a body pair contains summarized content

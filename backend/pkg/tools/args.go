@@ -380,7 +380,7 @@ type SubmitFlowInputAction struct {
 
 // WaitFlowCompletionAction defines arguments for the wait_flow_completion tool.
 type WaitFlowCompletionAction struct {
-	Timeout Int64  `json:"timeout" jsonschema:"required,type=integer" jsonschema_description:"How long to wait for the running automation task to finish, in seconds. Use 0 or a negative value to apply the default timeout of 60 seconds. Values above 3600 are capped at 3600 seconds (1 hour)."`
+	Timeout Int64  `json:"timeout" jsonschema:"required,type=integer" jsonschema_description:"Accepted and ignored. The wait blocks until the running automation task finishes, or for one hour if it does not. Pass 0."`
 	Message string `json:"message" jsonschema:"required,title=Wait message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary explaining why you are waiting for the automation to finish. Written in the engagement language declared by your system prompt."`
 }
 
