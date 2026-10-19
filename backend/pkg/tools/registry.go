@@ -497,9 +497,10 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"backwards one page per call until the source's back-read is done; 'newer' then reads what was posted since, " +
 			"page by page until caught up, which is how a source is monitored. The read position is kept between calls. " +
 			"Only the messages the judgement model (Jev) picks as worth a closer look are returned unless all_messages is true; " +
-			"each has its sender id, username, time, link, its opening lines as text, and its score, tier and signals weighted by the business profile. " +
+			"each has its sender id, username, time, link, its opening 400 characters as text, and its score, tier and signals weighted by the business profile. " +
 			"A result holds as many messages as fit its size limit: when more wait, 'pending' says how many and the read position " +
 			"stays before them, so the next call with the same direction continues there and nothing is skipped. " +
+			"action=message returns one message's full text for an evidence excerpt and does not move the read position. " +
 			"action=user returns a sender's public profile. Web sources are read with the browser tool instead.",
 		Parameters: reflector.Reflect(&GrowthSyncSourceAction{}),
 	},

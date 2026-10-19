@@ -179,7 +179,7 @@ func TestGrowth_Handle_SyncPassesTheResultBudgetAndReportsWhatIsPending(t *testi
 
 func TestGrowth_Handle_SyncReturnsAFittingReadUnchanged(t *testing.T) {
 	msgs := []growth.MessageView{
-		{MessageID: "7", SenderID: "1", Text: strings.Repeat("a", 1500), Score: 8, Tier: "qualified"},
+		{MessageID: "7", SenderID: "1", Text: "short", Score: 8, Tier: "qualified"},
 		{MessageID: "6", SenderID: "2", Text: "b"},
 	}
 	backend := &fakeGrowthBackend{synced: map[int64]growth.SyncResult{5: {
@@ -200,7 +200,53 @@ func TestGrowth_Handle_SyncReturnsAFittingReadUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	want, err := json.Marshal(msgs)
 	require.NoError(t, err)
-	assert.JSONEq(t, string(want), string(raw), "the messages reach the model as the read returned them")
+	assert.JSONEq(t, string(want), string(raw), "a message inside the text limit reaches the model as the read returned it")
+	assert.NotContains(t, out, `"platform"`)
+	assert.NotContains(t, out, `"messages_read"`)
+}
+
+func TestGrowth_Handle_SyncCutsTheTextAndDropsTheFieldsAPageDoesNotNeed(t *testing.T) {
+	long := strings.Repeat("买", 900)
+	backend := &fakeGrowthBackend{synced: map[int64]growth.SyncResult{5: {
+		Source: growth.SourceView{ID: 5, Title: "MOBA talk", Platform: "telegram", MessagesRead: 40},
+		Messages: []growth.MessageView{{
+			MessageID: "7", SenderID: "1", SenderIsBot: true, ReplyTo: "3", Text: long, Score: 8,
+		}},
+		Read: 1,
+	}}}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(`{"source_id":5}`))
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &payload))
+	source := payload["source"].(map[string]any)
+	assert.Equal(t, map[string]any{"source_id": float64(5), "title": "MOBA talk"}, source)
+	msg := payload["messages"].([]any)[0].(map[string]any)
+	assert.Equal(t, 401, len([]rune(msg["text"].(string))))
+	assert.NotContains(t, msg, "sender_is_bot")
+	assert.NotContains(t, msg, "reply_to")
+	raw, err := json.Marshal(msg)
+	require.NoError(t, err)
+	assert.Less(t, len(raw), 2000, "400 characters, not the 900 that were read")
+}
+
+func TestGrowth_Handle_MessageReturnsTheFullTextAndLeavesTheReadAlone(t *testing.T) {
+	full := strings.Repeat("买", 900)
+	backend := &fakeGrowthBackend{message: growth.MessageView{
+		MessageID: "7", SenderID: "1", Text: full, Link: "https://t.me/c/1/7", ReplyTo: "3",
+	}}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSyncSourceToolName,
+		json.RawMessage(`{"action":"message","source_id":5,"message_id":"7"}`))
+	require.NoError(t, err)
+	assert.Contains(t, out, full)
+	assert.Contains(t, out, `"reply_to":"3"`)
+	assert.Empty(t, backend.lastSyncIDs, "a single message is not a page read")
+
+	out, err = newGrowthTools(&fakeGrowthBackend{err: growth.ErrMessageNotFound}, 1, 42, nil).Handle(t.Context(),
+		GrowthSyncSourceToolName, json.RawMessage(`{"action":"message","source_id":5,"message_id":"9"}`))
+	require.NoError(t, err)
+	assert.Contains(t, out, "message not found")
+	assert.Contains(t, out, "message_id from a growth_sync_source history page")
 }
 
 func TestGrowth_Handle_ListLeadsStopsAtTheResultLimitAndNamesTheNextOffset(t *testing.T) {

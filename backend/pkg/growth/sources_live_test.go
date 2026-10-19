@@ -620,7 +620,7 @@ func TestSources_SyncSources_BoundedReadStopsAtItsBudgetAndTheNextCallContinues(
 	assert.Equal(t, 50, res.Read+second[0].Read+rest[0].Read, "every message is read exactly once")
 	assert.Equal(t, fmt.Sprint(second[0].NextFrom), rest[0].Messages[0].MessageID)
 	assert.True(t, rest[0].Source.HistoryExhausted)
-	assert.Len(t, []rune(rest[0].Messages[0].Text), 600, "an unbounded read keeps the full text")
+	assert.Len(t, []rune(rest[0].Messages[0].Text), 401, "a page read keeps the opening 400 characters")
 	assert.EqualValues(t, 3, calls.Load())
 }
 
@@ -681,6 +681,40 @@ func TestSources_SyncSource_BoundedForwardReadStopsBeforeThePendingMessages(t *t
 	next := results[0]
 	require.NotEmpty(t, next.Messages)
 	assert.Equal(t, res.NextFrom, next.Messages[len(next.Messages)-1].MessageID, "the next read continues with the first pending message")
+}
+
+func TestSources_ReadMessage_ReturnsTheFullTextWithoutMovingTheCursor(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
+	acceptingJev(t, w)
+	text := strings.Repeat("buy ", 300)
+	id := w.mustAddTelegramGroup(t, scope, tgGroup("394", "verbatim", "Verbatim"),
+		tgMessage(1, "11", "one"), tgMessage(2, "12", "two"), tgMessage(3, "13", "three"), tgMessage(4, "14", text))
+
+	page, err := w.svc.SyncSource(ctx, scope, id, DirectionOlder, 2)
+	require.NoError(t, err)
+	require.Len(t, page.Messages, 2)
+	assert.Equal(t, "4", page.Messages[0].MessageID)
+	assert.Len(t, []rune(page.Messages[0].Text), 401, "the page carries the opening lines")
+	assert.False(t, page.Source.HistoryExhausted)
+	read := page.Source.MessagesRead
+
+	full, err := w.svc.ReadMessage(ctx, scope, id, "4")
+	require.NoError(t, err)
+	assert.Equal(t, text, full.Text)
+	assert.Equal(t, "https://t.me/c/1/4", full.Link)
+
+	_, err = w.svc.ReadMessage(ctx, scope, id, "9")
+	assert.ErrorIs(t, err, ErrMessageNotFound)
+
+	again, err := w.svc.SyncSource(ctx, scope, id, DirectionOlder, 2)
+	require.NoError(t, err)
+	require.Len(t, again.Messages, 2)
+	assert.Equal(t, "2", again.Messages[0].MessageID, "the next page continues where the first stopped")
+	assert.Equal(t, "1", again.Messages[1].MessageID)
+	assert.Equal(t, read+2, again.Source.MessagesRead, "fetching one message is not a page read")
 }
 
 func TestSources_SyncSources_WaitsBetweenTwoSourcesOfOneAccount(t *testing.T) {
