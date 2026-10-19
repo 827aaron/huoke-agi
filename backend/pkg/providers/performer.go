@@ -147,6 +147,19 @@ func (fp *flowProvider) performAgentChain(
 				}
 			}
 
+			fitted, truncated, fitErr := fitChainToWindow(fp, optAgentType, chain, executor.Tools())
+			if truncated {
+				chain = fitted
+				if err := fp.updateMsgChain(ctx, optAgentType, chainID, chain, rollLastUpdateTime()); err != nil {
+					obs.LogErrorOrCancel(logger, err, "failed to update msg chain")
+					return err
+				}
+			}
+			if fitErr != nil {
+				logger.WithError(fitErr).Error("agent chain is too large to send")
+				return fmt.Errorf("%w: %w", ErrAgentModelCall, fitErr)
+			}
+
 			result, err = fp.callWithRetries(ctx, optAgentType, chainID, taskID, subtaskID, chain, executor, executionContext)
 			if err != nil {
 				obs.LogErrorOrCancel(logger, err, "failed to call agent chain")
@@ -568,7 +581,12 @@ func (fp *flowProvider) callWithRetries(
 			err = fmt.Errorf("%w: %w", ErrAgentModelCall, err)
 		}
 		if isDeterministicError(err) {
-			return nil, fmt.Errorf("failed to call agent chain: %w", errors.Join(append(errs, err)...))
+			err = fmt.Errorf("failed to call agent chain: %w", errors.Join(append(errs, err)...))
+			if isInsufficientBalance(err) {
+				logger.WithError(err).Error("provider balance is insufficient, the subtask waits for a top-up")
+				err = fmt.Errorf("%w: %w", ErrProviderBalance, err)
+			}
+			return nil, err
 		}
 		if err == nil {
 			err = fillResult(resp)

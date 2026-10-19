@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"pentagi/pkg/cast"
 	"pentagi/pkg/tools"
@@ -794,6 +795,26 @@ func GenerateSummary(
 	}
 
 	return summary, nil
+}
+
+// TruncateMiddle keeps the head and the tail of s, cut on rune boundaries, so the result is at
+// most limit bytes plus a one-line marker naming the byte ranges it kept. A string within limit
+// is returned unchanged.
+func TruncateMiddle(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+
+	head := max(limit/2, 0)
+	for head > 0 && !utf8.RuneStart(s[head]) {
+		head--
+	}
+	tail := len(s) - max(limit-head, 0)
+	for tail < len(s) && !utf8.RuneStart(s[tail]) {
+		tail++
+	}
+
+	return fmt.Sprintf("%s\n... [truncated bytes %d:%d of %d] ...\n%s", s[:head], head, tail, len(s), s[tail:])
 }
 
 // messagesToPrompt converts a slice of messages to a text representation

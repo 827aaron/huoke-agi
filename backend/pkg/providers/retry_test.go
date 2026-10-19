@@ -55,6 +55,20 @@ func TestRetry_IsDeterministicError_TellsARepeatableFailureFromATransientOne(t *
 		{"connection dropped", errors.New("connection refused"), false},
 		{"a digit run that spells a status", errors.New("API returned unexpected status code: 503: maximum 4000 tokens"), false},
 		{"output stopped at the limit", &llms.ErrStructuredOutputValidation{}, false},
+		{"gateway balance as a bare status", errors.New("HTTP 402 Payment Required"), true},
+		{"gateway balance in a json body", errors.New(`{"error":{"code":"402","message":"insufficient balance"}}`), true},
+		{"gateway balance in words only", errors.New("Arrearage: credit balance is too low"), true},
+		{"gateway balance in chinese", errors.New("供应商返回：余额不足"), true},
+		{"gateway rejected the key in words", errors.New("Incorrect API key provided"), true},
+		{"gateway payload too large", errors.New(`{"status":413,"error":"request entity too large"}`), true},
+		{"gateway context length without a status", errors.New("This model's maximum context length is 128000 tokens"), true},
+		{"gateway too many tokens", errors.New("error: too many tokens in the request"), true},
+		{"gateway request too large", errors.New("request too large for the upstream"), true},
+		{"a token limit the library classified", llms.NewError(llms.ErrCodeTokenLimit, "custom", "context length exceeded"), true},
+		{"an authentication failure the library classified", llms.NewError(llms.ErrCodeAuthentication, "custom", "invalid api key"), true},
+		{"a rate limit that mentions tokens stays retryable", errors.New("API returned unexpected status code: 429: too many tokens per minute"), false},
+		{"a timeout that mentions the context stays retryable", errors.New("API returned unexpected status code: 408: context length check timed out"), false},
+		{"a scan count is not a status", errors.New("scanned 200 hosts and found nothing"), false},
 	}
 
 	for _, tt := range tests {

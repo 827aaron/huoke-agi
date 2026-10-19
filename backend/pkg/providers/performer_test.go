@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -567,6 +568,8 @@ func TestPerformer_AnEmptyGeneratorPlanMustBeExplicit(t *testing.T) {
 
 func (p *performerFailingProvider) Type() provider.ProviderType { return provider.ProviderOpenAI }
 
+func (p *performerFailingProvider) Model(pconfig.ProviderOptionsType) string { return "" }
+
 func (p *performerFailingProvider) CallWithTools(
 	_ context.Context,
 	_ pconfig.ProviderOptionsType,
@@ -876,12 +879,18 @@ type performerWindowProvider struct {
 	summaries       atomic.Int64
 	summariesAtCall int64
 	sentBytes       int
+	calls           int
+	lastChain       []llms.MessageContent
+	summaryErr      error
 }
 
 func (p *performerWindowProvider) CallEx(
 	ctx context.Context, opt pconfig.ProviderOptionsType, chain []llms.MessageContent, streamCb streaming.Callback,
 ) (*llms.ContentResponse, error) {
 	p.summaries.Add(1)
+	if p.summaryErr != nil {
+		return nil, p.summaryErr
+	}
 
 	return p.Provider.CallEx(ctx, opt, chain, streamCb)
 }
@@ -889,8 +898,10 @@ func (p *performerWindowProvider) CallEx(
 func (p *performerWindowProvider) CallWithTools(
 	_ context.Context, _ pconfig.ProviderOptionsType, chain []llms.MessageContent, _ []llms.Tool, _ streaming.Callback,
 ) (*llms.ContentResponse, error) {
+	p.calls++
 	p.summariesAtCall = p.summaries.Load()
 	p.sentBytes += windowCompactionBytes(chain)
+	p.lastChain = chain
 
 	return nil, performerLocalRefusal
 }
@@ -930,16 +941,18 @@ func TestPerformer_PerformAgentChain_CompactsAChainItsToolSchemasPushOutOfTheWin
 
 	tests := []struct {
 		name          string
+		window        int
 		description   int
 		wantCompacted bool
 	}{
-		{name: "a chain that fits beside its tool schemas is sent as it is", description: 100},
-		{name: "a chain that fits only without its tool schemas is summarised first", description: 20000, wantCompacted: true},
+		{name: "a chain that fits beside its tool schemas is sent as it is", window: 8000, description: 100},
+		// The preserved last turn plus these schemas still fits at 11000 once the older turns are summarised.
+		{name: "a chain that fits only without its tool schemas is summarised first", window: 11000, description: 20000, wantCompacted: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			window := 8000
+			window := tt.window
 			prv := &performerWindowProvider{Provider: mock.NewProvider(provider.ProviderOpenAI, "openai", "small-model")}
 			prv.SetModels(pconfig.ModelsConfig{{Name: "small-model", ContextWindow: &window}})
 			prv.SetDefaultResponse("short summary")
@@ -969,6 +982,121 @@ func TestPerformer_PerformAgentChain_CompactsAChainItsToolSchemasPushOutOfTheWin
 			assert.Positive(t, prv.summariesAtCall, "the summariser runs before the agent is called")
 			assert.Less(t, prv.sentBytes, chainBytes)
 			assert.Equal(t, 1, db.chainWrites, "the compacted chain replaces the stored one")
+		})
+	}
+}
+
+// performerOversizedToolChain is one turn whose tool answer is body bytes, the shape a sync page takes.
+func performerOversizedToolChain(body int) []llms.MessageContent {
+	return []llms.MessageContent{
+		llms.TextParts(llms.ChatMessageTypeSystem, "you are a tester"),
+		llms.TextParts(llms.ChatMessageTypeHuman, "read the group"),
+		{Role: llms.ChatMessageTypeAI, Parts: []llms.ContentPart{llms.ToolCall{
+			ID: "call_1", Type: "function",
+			FunctionCall: &llms.FunctionCall{Name: "growth_sync_source", Arguments: `{"source_id":1}`},
+		}}},
+		{Role: llms.ChatMessageTypeTool, Parts: []llms.ContentPart{llms.ToolCallResponse{
+			ToolCallID: "call_1", Name: "growth_sync_source", Content: strings.Repeat("m", body),
+		}}},
+	}
+}
+
+func TestPerformer_PerformAgentChain_ShrinksAnOversizedChainBeforeSendingIt(t *testing.T) {
+	prv := &performerWindowProvider{Provider: mock.NewProvider(provider.ProviderCustom, "custom", "gateway-model")}
+	prv.SetDefaultResponse("short summary")
+
+	fp := newFlowProvider()
+	fp.db = &performerChainQuerier{}
+	fp.Provider = prv
+	fp.prompter = templates.NewDefaultPrompter()
+	fp.tcIDTemplate = "toolu_{r:24:b}"
+
+	chain := performerOversizedToolChain(600_000)
+	original := windowCompactionBytes(chain)
+
+	err := fp.performAgentChain(
+		context.Background(), pconfig.OptionsTypePentester, 42, nil, nil, chain, oneToolExecutor{},
+		csum.NewSummarizer(csum.SummarizerConfig{}),
+	)
+
+	require.ErrorIs(t, err, performerLocalRefusal)
+	assert.Equal(t, 1, prv.calls, "the model is asked once, with the chain already shrunk")
+	assert.Less(t, prv.sentBytes, original/2)
+	found := false
+	for _, msg := range prv.lastChain {
+		for _, part := range msg.Parts {
+			if response, ok := part.(llms.ToolCallResponse); ok && strings.Contains(response.Content, "[truncated bytes") {
+				found = true
+			}
+		}
+	}
+	assert.True(t, found, "a tool answer past the budget keeps its head and tail")
+}
+
+func TestPerformer_PerformAgentChain_FailsAnUncompressibleChainWithoutRetrying(t *testing.T) {
+	prv := &performerWindowProvider{
+		Provider:   mock.NewProvider(provider.ProviderCustom, "custom", "gateway-model"),
+		summaryErr: performerLocalRefusal,
+	}
+
+	fp := newFlowProvider()
+	fp.db = &performerChainQuerier{}
+	fp.Provider = prv
+	fp.prompter = templates.NewDefaultPrompter()
+
+	start := time.Now()
+	err := fp.performAgentChain(
+		context.Background(), pconfig.OptionsTypePentester, 42, nil, nil,
+		windowCompactionChain(80, 4000), oneToolExecutor{}, csum.NewSummarizer(csum.SummarizerConfig{}),
+	)
+
+	require.ErrorIs(t, err, ErrContextOverflow)
+	assert.ErrorIs(t, err, ErrAgentModelCall)
+	assert.Zero(t, prv.calls, "a chain that cannot be shrunk is never sent")
+	assert.Less(t, time.Since(start), delayBetweenRetries)
+}
+
+func TestPerformer_CallWithRetries_DoesNotRetryASpentBalanceOrAnOversizedRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		err     error
+		balance bool
+	}{
+		{name: "a gateway that reports no balance", err: errors.New("HTTP 402 Payment Required"), balance: true},
+		{name: "a gateway that reports the context is too long", err: errors.New("maximum context length exceeded")},
+		{name: "a gateway that rejects the payload", err: errors.New("status code: 413 request too large")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hook := logtest.NewGlobal()
+			prv := &performerFailingProvider{err: tt.err}
+			fp := newFlowProvider()
+			fp.Provider = prv
+
+			start := time.Now()
+			_, err := fp.callWithRetries(
+				context.Background(), pconfig.OptionsTypePentester, 42, nil, nil,
+				[]llms.MessageContent{llms.TextParts(llms.ChatMessageTypeHuman, "read the group")},
+				oneToolExecutor{}, "read the group",
+			)
+
+			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.err)
+			assert.Equal(t, 1, prv.calls, "the model must not be asked again")
+			assert.Less(t, time.Since(start), delayBetweenRetries)
+			if tt.balance {
+				assert.ErrorIs(t, err, ErrProviderBalance)
+				var logged bool
+				for _, entry := range hook.AllEntries() {
+					if strings.Contains(entry.Message, "provider balance is insufficient") {
+						logged = true
+					}
+				}
+				assert.True(t, logged, "the log must say the balance is spent")
+			} else {
+				assert.NotErrorIs(t, err, ErrProviderBalance)
+			}
 		})
 	}
 }
