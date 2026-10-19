@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
 
 # GraphQL schema for code generation
 COPY ./backend/pkg/graph/schema.graphqls ../backend/pkg/graph/
+COPY ./backend/pkg/growth/leadscsv.json ../backend/pkg/growth/
 
 # Application source code
 COPY frontend/ .
