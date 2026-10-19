@@ -293,7 +293,7 @@ func syncPayload(res growth.SyncResult, direction string) map[string]any {
 
 	switch {
 	case res.Read == 0 && res.CaughtUp != nil:
-		payload["note"] = "no new messages since the last read; come back later"
+		payload["note"] = "no new messages; read another source and come back to this one later"
 	case res.Read == 0:
 		payload["note"] = "the back-read of this source is done; read it with direction=newer from now on"
 	case len(res.Messages) == 0:

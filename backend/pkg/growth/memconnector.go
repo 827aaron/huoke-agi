@@ -24,6 +24,8 @@ type MemoryConnector struct {
 	// Err, when set, is returned by every call; tests use it for rate limits and lost sessions.
 	Err    error
 	Joined map[string]int
+	// Reads counts ReadHistory calls, which is the platform read a quiet source must not make.
+	Reads int
 }
 
 func NewMemoryConnector(platform connectors.Platform) *MemoryConnector {
@@ -143,6 +145,7 @@ func (m *MemoryConnector) ReadHistory(
 ) (connectors.HistoryPage, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.Reads++
 	if err := m.check(ctx); err != nil {
 		return connectors.HistoryPage{}, err
 	}

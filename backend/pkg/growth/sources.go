@@ -894,6 +894,9 @@ func (s *Service) syncOne(ctx context.Context, scope Scope, sourceID int64, opt 
 		result   SyncResult
 		judgeErr error
 	)
+	if skipped, ok, err := s.skippedRead(ctx, scope, src, opt); err != nil || ok {
+		return skipped, err
+	}
 	err = s.withAccount(ctx, scope.UserID, connectors.Platform(src.Platform), src.ID, nil,
 		func(conn connectors.Connector, acc database.ChannelAccount) error {
 			var err error
@@ -1045,8 +1048,81 @@ func (s *Service) syncWith(
 	}
 	if opt.Direction == DirectionNewer {
 		res.CaughtUp = &caughtUp
+		if caughtUp && take.pending == 0 {
+			s.markQuiet(scope.UserID, src.ID)
+		} else {
+			s.clearQuiet(scope.UserID, src.ID)
+		}
 	}
 	return res, nil
+}
+
+// caughtUpCooldown is how long a source that just caught up is answered from memory.
+// A read still waiting on messages, or a back-read, is never held for it.
+var caughtUpCooldown = 15 * time.Second
+
+type readQuiet struct {
+	userID   int64
+	sourceID int64
+}
+
+func (s *Service) markQuiet(userID, sourceID int64) {
+	s.readMu.Lock()
+	defer s.readMu.Unlock()
+	if s.quietUntil == nil {
+		s.quietUntil = map[readQuiet]time.Time{}
+	}
+	s.quietUntil[readQuiet{userID, sourceID}] = time.Now().Add(caughtUpCooldown)
+}
+
+func (s *Service) clearQuiet(userID, sourceID int64) {
+	s.readMu.Lock()
+	defer s.readMu.Unlock()
+	delete(s.quietUntil, readQuiet{userID, sourceID})
+}
+
+func (s *Service) quietRemaining(userID, sourceID int64) (time.Time, bool) {
+	s.readMu.Lock()
+	defer s.readMu.Unlock()
+	until, ok := s.quietUntil[readQuiet{userID, sourceID}]
+	return until, ok && time.Now().Before(until)
+}
+
+// skippedRead answers a source whose back-read is done, or whose forward read just
+// caught up, without opening the platform.
+func (s *Service) skippedRead(ctx context.Context, scope Scope, src database.GrowthSource, opt SyncOptions) (SyncResult, bool, error) {
+	states, err := s.db.GetUserAccountSources(ctx, scope.UserID)
+	if err != nil {
+		return SyncResult{}, false, fmt.Errorf("failed to read the cursor of source %d: %w", src.ID, err)
+	}
+	var accountID int64
+	linked := false
+	exhausted := true
+	for _, st := range states {
+		if st.SourceID != src.ID {
+			continue
+		}
+		linked = true
+		accountID = st.AccountID
+		exhausted = exhausted && st.HistoryExhausted
+	}
+	switch opt.Direction {
+	case "", DirectionOlder:
+		if !linked || !exhausted {
+			return SyncResult{}, false, nil
+		}
+		return SyncResult{Source: s.viewSource(ctx, src, accountID), Messages: []MessageView{}}, true, nil
+	case DirectionNewer:
+		if _, ok := s.quietRemaining(scope.UserID, src.ID); !ok {
+			return SyncResult{}, false, nil
+		}
+		caught := true
+		return SyncResult{
+			Source: s.viewSource(ctx, src, accountID), Messages: []MessageView{}, CaughtUp: &caught,
+		}, true, nil
+	default:
+		return SyncResult{}, false, nil
+	}
 }
 
 // syncTake walks the pages of one read in cursor order, the message nearest the cursor
