@@ -37,9 +37,10 @@ const TasksNumberLimit = 15
 
 const (
 	msgGeneratorSizeLimit = 150 * 1024 // 150 KB
-	msgRefinerSizeLimit   = 100 * 1024 // 100 KB
-	msgReporterSizeLimit  = 100 * 1024 // 100 KB
-	msgSummarizerLimit    = 32 * 1024  // 32 KB
+	// dualSummaryTemplateFloor is where the refiner and the reporter start paying for a second
+	// summary of a prompt that already carries the subtask results.
+	dualSummaryTemplateFloor = 60 * 1024 // 60 KB
+	msgSummarizerLimit       = 32 * 1024 // 32 KB
 )
 
 const textTruncateMessage = "\n\n[...truncated]"
@@ -495,7 +496,7 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 	}
 
 	// TODO: here need to store it in the database and use it as a cache for next runs
-	if len(refinerTmpl) < msgRefinerSizeLimit {
+	if len(refinerTmpl) > dualSummaryTemplateFloor {
 		summarizerHandler := fp.GetSummarizeResultHandler(&taskID, nil)
 		executionState, err := fp.getTaskPrimaryAgentChainSummary(ctx, taskID, summarizerHandler)
 		if err != nil {
@@ -508,7 +509,7 @@ func (fp *flowProvider) RefineSubtasks(ctx context.Context, taskID int64) ([]too
 			return nil, wrapErrorEndEvaluatorSpan(ctx, refinerEvaluator, "failed to get task subtasks refiner template (2)", err)
 		}
 
-		if len(refinerTmpl) < msgRefinerSizeLimit {
+		if len(refinerTmpl) > dualSummaryTemplateFloor {
 			msgLogsSummary, err := fp.getTaskMsgLogsSummary(ctx, taskID, summarizerHandler)
 			if err != nil {
 				return nil, wrapErrorEndEvaluatorSpan(ctx, refinerEvaluator, "failed to get task msg logs summary", err)
@@ -588,7 +589,7 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 		return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to get task reporter template (1)", err)
 	}
 
-	if len(reporterTmpl) < msgReporterSizeLimit {
+	if len(reporterTmpl) > dualSummaryTemplateFloor {
 		summarizerHandler := fp.GetSummarizeResultHandler(&taskID, nil)
 		executionState, err := fp.getTaskPrimaryAgentChainSummary(ctx, taskID, summarizerHandler)
 		if err != nil {
@@ -601,7 +602,7 @@ func (fp *flowProvider) GetTaskResult(ctx context.Context, taskID int64) (*tools
 			return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to get task reporter template (2)", err)
 		}
 
-		if len(reporterTmpl) < msgReporterSizeLimit {
+		if len(reporterTmpl) > dualSummaryTemplateFloor {
 			msgLogsSummary, err := fp.getTaskMsgLogsSummary(ctx, taskID, summarizerHandler)
 			if err != nil {
 				return nil, wrapErrorEndEvaluatorSpan(ctx, reporterEvaluator, "failed to get task msg logs summary", err)

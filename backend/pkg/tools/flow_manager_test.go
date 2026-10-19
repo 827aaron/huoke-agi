@@ -1031,15 +1031,15 @@ func TestFlowManager_WaitFlowCompletionTool_ReportsHowTheWaitEnded(t *testing.T)
 			wantSubstr: "has completed",
 		},
 		{
-			name:       "default timeout applied when zero, still running reports the elapsed wait",
+			name:       "a zero timeout still waits out the hour",
 			args:       `{"timeout":0,"message":"x"}`,
 			tasks:      flowManagerTasks(database.TaskStatusRunning),
 			handler:    neverFinishes,
-			wantSubstr: "after waiting 1m0s",
-			wantWait:   time.Minute,
+			wantSubstr: "after waiting 1h0m0s",
+			wantWait:   time.Hour,
 		},
 		{
-			name:       "timeout above the cap is clamped to one hour",
+			name:       "a timeout above the old cap still waits out the hour",
 			args:       `{"timeout":99999,"message":"x"}`,
 			tasks:      flowManagerTasks(database.TaskStatusRunning),
 			handler:    neverFinishes,
@@ -1047,12 +1047,29 @@ func TestFlowManager_WaitFlowCompletionTool_ReportsHowTheWaitEnded(t *testing.T)
 			wantWait:   time.Hour,
 		},
 		{
-			name:       "a timeout within the cap is the wait",
+			name:       "a short timeout does not end the wait early",
 			args:       `{"timeout":10,"message":"x"}`,
 			tasks:      flowManagerTasks(database.TaskStatusRunning),
 			handler:    neverFinishes,
-			wantSubstr: "after waiting 10s",
-			wantWait:   10 * time.Second,
+			wantSubstr: "after waiting 1h0m0s",
+			wantWait:   time.Hour,
+		},
+		{
+			name:  "the task finishing inside the hour returns at that moment",
+			args:  `{"timeout":10,"message":"x"}`,
+			tasks: flowManagerTasks(database.TaskStatusRunning),
+			handler: func(ctx context.Context) error {
+				timer := time.NewTimer(2 * time.Minute)
+				defer timer.Stop()
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-timer.C:
+					return nil
+				}
+			},
+			wantSubstr: "has completed",
+			wantWait:   2 * time.Minute,
 		},
 		{
 			name:          "wait cancelled surfaces an interruption error",

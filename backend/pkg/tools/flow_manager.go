@@ -45,23 +45,22 @@ func NewFlowStatusTool(flowID int64, db database.Querier, summarizer SummarizeHa
 }
 
 const (
-	msgLogLimitNormal      = 10
-	msgLogLimitVerbose     = 50
-	flowOperationTimeout   = 15 * time.Second
-	taskReadyPollInterval  = 5 * time.Second
-	taskReadyPollTimeout   = 2 * time.Minute
-	waitFlowDefaultTimeout = 1 * time.Minute
-	waitFlowMaxTimeout     = 1 * time.Hour
-	msgLogsLimit           = 16 * 1024  // 16 KB
-	summaryLimit           = 32 * 1024  // 32 KB
-	taskListLimit          = 32 * 1024  // 32 KB
-	subtasksListLimit      = 48 * 1024  // 48 KB
-	plannedListLimit       = 32 * 1024  // 32 KB
-	runningInfoLimit       = 48 * 1024  // 48 KB
-	inputLimit             = 8 * 1024   // 8 KB
-	descriptionLimit       = 4 * 1024   // 4 KB
-	resultLimit            = 8 * 1024   // 8 KB
-	summarizationLimit     = 128 * 1024 // 128 KB hard limit
+	msgLogLimitNormal     = 10
+	msgLogLimitVerbose    = 50
+	flowOperationTimeout  = 15 * time.Second
+	taskReadyPollInterval = 5 * time.Second
+	taskReadyPollTimeout  = 2 * time.Minute
+	waitFlowMaxTimeout    = 1 * time.Hour
+	msgLogsLimit          = 16 * 1024  // 16 KB
+	summaryLimit          = 32 * 1024  // 32 KB
+	taskListLimit         = 32 * 1024  // 32 KB
+	subtasksListLimit     = 48 * 1024  // 48 KB
+	plannedListLimit      = 32 * 1024  // 32 KB
+	runningInfoLimit      = 48 * 1024  // 48 KB
+	inputLimit            = 8 * 1024   // 8 KB
+	descriptionLimit      = 4 * 1024   // 4 KB
+	resultLimit           = 8 * 1024   // 8 KB
+	summarizationLimit    = 128 * 1024 // 128 KB hard limit
 )
 
 func (t *flowStatusTool) Handle(ctx context.Context, name string, args json.RawMessage) (string, error) {
@@ -545,13 +544,10 @@ func (t *waitFlowCompletionTool) Handle(ctx context.Context, name string, args j
 		return "", fmt.Errorf("failed to parse %s args: %w", WaitFlowCompletionToolName, err)
 	}
 
-	timeout := time.Duration(action.Timeout.Int64()) * time.Second
-	switch {
-	case timeout <= 0:
-		timeout = waitFlowDefaultTimeout
-	case timeout > waitFlowMaxTimeout:
-		timeout = waitFlowMaxTimeout
-	}
+	// The model asks for a few minutes and the task runs for hours, so every short wait ends
+	// early and the assistant spends another turn asking again. The wait itself returns the
+	// moment the task finishes; the cap is only how long a task that never finishes may block.
+	timeout := waitFlowMaxTimeout
 
 	tasks, err := t.db.GetFlowTasks(ctx, t.flowID)
 	if err != nil {

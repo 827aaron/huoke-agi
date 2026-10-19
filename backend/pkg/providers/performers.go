@@ -4,11 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"pentagi/pkg/cast"
+	"pentagi/pkg/csum"
 	"pentagi/pkg/database"
+	"pentagi/pkg/docker"
 	obs "pentagi/pkg/observability"
 	"pentagi/pkg/providers/pconfig"
 	"pentagi/pkg/templates"
@@ -450,6 +455,7 @@ func (fp *flowProvider) performCoder(
 		return "", fmt.Errorf("failed to get task coder result: %w", err)
 	}
 
+	codeResult.Result = fp.capSpecialistResult("coder", msgChainID, codeResult.Result)
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
 		_, _ = fp.putAgentLog(
 			ctx,
@@ -535,6 +541,7 @@ func (fp *flowProvider) performInstaller(
 		return "", fmt.Errorf("failed to get task installer result: %w", err)
 	}
 
+	maintenanceResult.Result = fp.capSpecialistResult("installer", msgChainID, maintenanceResult.Result)
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
 		_, _ = fp.putAgentLog(
 			ctx,
@@ -591,6 +598,7 @@ func (fp *flowProvider) performMemorist(
 		return "", fmt.Errorf("failed to get task memorist result: %w", err)
 	}
 
+	memoristResult.Result = fp.capSpecialistResult("memorist", msgChainID, memoristResult.Result)
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
 		_, _ = fp.putAgentLog(
 			ctx,
@@ -688,6 +696,7 @@ func (fp *flowProvider) performPentester(
 		return "", fmt.Errorf("failed to get task pentester result: %w", err)
 	}
 
+	hackResult.Result = fp.capSpecialistResult("pentester", msgChainID, hackResult.Result)
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
 		_, _ = fp.putAgentLog(
 			ctx,
@@ -750,6 +759,7 @@ func (fp *flowProvider) performSearcher(
 		return "", fmt.Errorf("failed to get task searcher result: %w", err)
 	}
 
+	searchResult.Result = fp.capSpecialistResult("searcher", msgChainID, searchResult.Result)
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
 		_, _ = fp.putAgentLog(
 			ctx,
@@ -806,6 +816,7 @@ func (fp *flowProvider) performEnricher(
 		return "", fmt.Errorf("failed to get task enricher result: %w", err)
 	}
 
+	enricherResult.Result = fp.capSpecialistResult("enricher", msgChainID, enricherResult.Result)
 	if agentCtx, ok := tools.GetAgentContext(ctx); ok {
 		_, _ = fp.putAgentLog(
 			ctx,
@@ -1040,4 +1051,32 @@ func (fp *flowProvider) performSimpleChain(
 	}
 
 	return strings.Join(parts, "\n\n"), nil
+}
+
+const specialistResultLimit = 8 * 1024
+
+// capSpecialistResult keeps a specialist's answer in the caller's chain to one page. The full
+// text is written into the flow work directory, which the sandbox mounts at /work.
+func (fp *flowProvider) capSpecialistResult(agent string, chainID int64, result string) string {
+	if len(result) <= specialistResultLimit {
+		return result
+	}
+
+	kept := csum.TruncateMiddle(result, specialistResultLimit)
+	if fp.cfg == nil || fp.cfg.DataDir == "" || fp.flowID == 0 {
+		return kept
+	}
+
+	name := fmt.Sprintf("%s-%d.md", agent, chainID)
+	full := filepath.Join(docker.FlowWorkDir(fp.cfg.DataDir, fp.flowID), "leads", name)
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		logrus.WithError(err).Warn("failed to store the full specialist result")
+		return kept
+	}
+	if err := os.WriteFile(full, []byte(result), 0o600); err != nil {
+		logrus.WithError(err).Warn("failed to store the full specialist result")
+		return kept
+	}
+
+	return kept + "\n\nThe full result is in " + path.Join(docker.WorkFolderPathInContainer, "leads", name)
 }

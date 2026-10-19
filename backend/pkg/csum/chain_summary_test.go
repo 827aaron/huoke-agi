@@ -347,6 +347,27 @@ func chainSummaryInputSize(n int) chainSummaryCheck {
 }
 
 // chainSummaryBodyAt checks the body of section i, counted from the end when negative, against the same section before.
+func chainSummaryTruncated(section, pair, limit int) chainSummaryCheck {
+	return func(t *testing.T, got, before *cast.ChainAST) {
+		t.Helper()
+		require.Greater(t, len(got.Sections[section].Body), pair)
+		g := got.Sections[section].Body[pair]
+		assert.LessOrEqual(t, g.Size(), limit)
+		assert.Contains(t, chainSummaryJSON(t, g), "[truncated bytes")
+		assert.NotEqual(t, chainSummaryJSON(t, before.Sections[section].Body[pair]), chainSummaryJSON(t, g))
+	}
+}
+
+func chainSummaryPairKept(section, pair int) chainSummaryCheck {
+	return func(t *testing.T, got, before *cast.ChainAST) {
+		t.Helper()
+		assert.Equal(t,
+			chainSummaryJSON(t, before.Sections[section].Body[pair]),
+			chainSummaryJSON(t, got.Sections[section].Body[pair]),
+			"pair %d of section %d", pair, section)
+	}
+}
+
 func chainSummaryBodyAt(
 	i int, want []int, kind cast.BodyPairType, signed bool, lead ...llms.ContentPart,
 ) chainSummaryCheck {
@@ -672,7 +693,7 @@ func TestChainSummary_SummarizeChain_AppliesTheConfiguredStrategies(t *testing.T
 			stable: true,
 		},
 		{
-			name:    "only the pair over the pair budget is summarized",
+			name:    "only the pair over the pair budget is cut, without a model call",
 			cfg:     SummarizerConfig{PreserveLast: true, LastSecBytes: 30 * 1024, MaxBPBytes: 1000},
 			initial: []*cast.ChainSection{chainSummaryFirst(chainSummaryQA("Question requiring various size responses"))},
 			steps: []chainSummaryStep{{
@@ -688,11 +709,8 @@ func TestChainSummary_SummarizeChain_AppliesTheConfiguredStrategies(t *testing.T
 						last.AddBodyPair(cast.NewBodyPairFromCompletion(fmt.Sprintf("Additional message %d", i)))
 					}
 				},
-				calls:   1,
-				sent:    []string{"CCC"},
-				notSent: []string{"BBB", "Another normal response"},
-				checks: []chainSummaryCheck{chainSummaryBodyAt(0,
-					[]int{0, 1, 2, chainSummaryNew, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}, cast.Completion, false)},
+				notSent: []string{"CCC", "BBB", "Another normal response"},
+				checks:  []chainSummaryCheck{chainSummaryTruncated(0, 3, 1000), chainSummaryPairKept(0, 2)},
 			}},
 			stable: true,
 		},
@@ -702,10 +720,10 @@ func TestChainSummary_SummarizeChain_AppliesTheConfiguredStrategies(t *testing.T
 			initial: []*cast.ChainSection{chainSummaryQA("Question",
 				strings.Repeat("A", 20*1024)+"First", strings.Repeat("B", 20*1024)+"Second", strings.Repeat("C", 20*1024)+"Last")},
 			steps: []chainSummaryStep{{
-				calls:   2,
-				sent:    []string{"AFirst", "BSecond"},
-				notSent: []string{"CLast"},
-				checks:  []chainSummaryCheck{chainSummaryBodyAt(0, []int{chainSummaryNew, chainSummaryNew, 2}, cast.Completion, false)},
+				notSent: []string{"AFirst", "BSecond", "CLast"},
+				checks: []chainSummaryCheck{
+					chainSummaryTruncated(0, 0, 16*1024), chainSummaryTruncated(0, 1, 16*1024), chainSummaryPairKept(0, 2),
+				},
 			}},
 			stable: true,
 		},
@@ -725,10 +743,8 @@ func TestChainSummary_SummarizeChain_AppliesTheConfiguredStrategies(t *testing.T
 				},
 				{
 					grow:    chainSummaryAddPairs(cast.NewBodyPairFromCompletion("A newer response")),
-					calls:   1,
-					sent:    []string{"Question with potentially large responses", "Oversized response: XXX"},
-					notSent: []string{"Initial normal response", "Another normal", "A newer response"},
-					checks:  []chainSummaryCheck{chainSummaryBodyAt(0, []int{0, 1, chainSummaryNew, 3}, cast.Completion, false)},
+					notSent: []string{"Oversized response", "Initial normal response", "A newer response"},
+					checks:  []chainSummaryCheck{chainSummaryTruncated(0, 2, 16*1024), chainSummaryPairKept(0, 3)},
 				},
 			},
 			stable: true,
@@ -876,14 +892,14 @@ func TestChainSummary_SummarizeChain_AppliesTheConfiguredStrategies(t *testing.T
 			stable:  true,
 		},
 		{
-			name:    "an unset pair budget summarizes an older pair one byte over 16 KB",
+			name:    "an unset pair budget cuts an older pair one byte over 16 KB",
 			cfg:     SummarizerConfig{PreserveLast: true, LastSecBytes: 1 << 20},
 			initial: []*cast.ChainSection{chainSummaryQA("Question", chainSummaryPad("Answer 0: ", 16385), "Answer 1")},
 			steps: []chainSummaryStep{{
-				calls:   1,
-				sent:    []string{"Answer 0: "},
-				notSent: []string{"Answer 1"},
-				checks:  []chainSummaryCheck{chainSummaryBodyAt(0, []int{chainSummaryNew, 1}, cast.Completion, false)},
+				notSent: []string{"Answer 0: ", "Answer 1"},
+				checks: []chainSummaryCheck{
+					chainSummaryTruncated(0, 0, 16*1024), chainSummaryPairKept(0, 1),
+				},
 			}},
 			stable: true,
 		},
@@ -1158,13 +1174,6 @@ func TestChainSummary_SummarizeChain_ReturnsTheInputChainWhenSummarizingFails(t 
 			wantErr:  "failed to summarize last section 0: last section summary generation failed",
 		},
 		{
-			name:     "an oversized pair whose summary fails is reported by the rotation after it",
-			cfg:      SummarizerConfig{PreserveLast: true, LastSecBytes: 1000, MaxBPBytes: 500},
-			sections: []*cast.ChainSection{chainSummaryQA("Question", strings.Repeat("A", 2000), strings.Repeat("B", 100))},
-			calls:    2,
-			wantErr:  "failed to summarize last section 0: last section summary generation failed",
-		},
-		{
 			name: "the QA sections fail",
 			cfg:  SummarizerConfig{UseQA: true, MaxQASections: 1},
 			sections: []*cast.ChainSection{
@@ -1361,6 +1370,8 @@ func TestChainSummary_SummarizeLastSection_RotatesOldPairsIntoASummary(t *testin
 		sent      []string
 		notSent   []string
 		sentOrder []string // substrings that must appear in this order in what reached the summarizer
+		hasCut    bool
+		cut       int // body index cut to a head and a tail, instead of being summarized
 	}{
 		{name: "an index outside the chain is ignored", maxBytes: 1000, reserve: 25},
 		{
@@ -1427,16 +1438,14 @@ func TestChainSummary_SummarizeLastSection_RotatesOldPairsIntoASummary(t *testin
 			reserve:  25,
 		},
 		{
-			name: "an oversized pair is summarized in place before rotation is weighed",
+			name: "an oversized pair is cut in place before rotation is weighed",
 			sections: []*cast.ChainSection{chainSummaryQA("Question with large response",
 				"Normal size answer", strings.Repeat("X", 20*1024), "Another normal size answer")},
 			maxBytes: 20 * 1024, // over the budget only while the oversized pair is whole
 			reserve:  25,
-			body:     []int{0, chainSummaryNew, 2},
-			kind:     cast.Completion,
-			calls:    1,
-			sent:     []string{"Question with large response", "XXX"},
-			notSent:  []string{"Normal size answer", "Another normal"},
+			notSent:  []string{"Question with large response", "XXX", "Normal size answer"},
+			hasCut:   true,
+			cut:      1,
 		},
 		{
 			name:     "no reserve keeps every newest pair that fits",
@@ -1497,6 +1506,14 @@ func TestChainSummary_SummarizeLastSection_RotatesOldPairsIntoASummary(t *testin
 						"the summarizer sees the older pair before the newer one")
 				}
 			}
+			if tt.hasCut {
+				pair := ast.Sections[last].Body[tt.cut]
+				assert.LessOrEqual(t, pair.Size(), 16*1024)
+				assert.Contains(t, chainSummaryJSON(t, pair), "[truncated bytes")
+				assert.NotEqual(t, original[tt.cut], chainSummaryJSON(t, pair))
+				chainSummaryVerifyAST(t, ast)
+				return
+			}
 			if tt.body == nil {
 				assert.Equal(t, before, chainSummaryJSON(t, ast), "the chain should be untouched")
 				return
@@ -1507,62 +1524,62 @@ func TestChainSummary_SummarizeLastSection_RotatesOldPairsIntoASummary(t *testin
 	}
 }
 
-func TestChainSummary_SummarizeOversizedBodyPairs_CarriesTheReasoningOfASummarizedToolCall(t *testing.T) {
+func TestChainSummary_SummarizeOversizedBodyPairs_CutsTheBodyWithoutCallingTheModel(t *testing.T) {
 	oversized := strings.Repeat("X", 20*1024)
 	thought := chainSummaryThought("Let me analyze the wp-abilities plugin...",
 		"The wp-abilities plugin seems to be the main target here. Need to find vulnerabilities.")
 	signed := chainSummarySignature("original_gemini_signature_12345")
 
 	tests := []struct {
-		name   string
-		body   []*cast.BodyPair
-		signed bool
-		lead   []llms.ContentPart
+		name string
+		body []*cast.BodyPair
 	}{
 		{
-			name: "a signed tool call is summarized with a fake signature",
+			name: "a signed tool call keeps its signature",
 			body: []*cast.BodyPair{
 				chainSummaryToolPair("call_test123", "get_data", oversized, signed),
 				cast.NewBodyPairFromCompletion("This is a normal response"),
 			},
-			signed: true,
 		},
 		{
-			name: "an unsigned tool call is summarized without a signature",
+			name: "an unsigned tool call keeps its call",
 			body: []*cast.BodyPair{
 				chainSummaryToolPair("call_test456", "get_info", oversized, nil),
 				cast.NewBodyPairFromCompletion("This is a normal response"),
 			},
 		},
 		{
-			name: "reasoning text is carried before the summary call",
+			name: "reasoning text stays in front of the tool call",
 			body: []*cast.BodyPair{
 				chainSummaryToolPair("call_kimi_test", "search", oversized, nil, thought),
 				cast.NewBodyPairFromCompletion("This is the final response"),
 			},
-			lead: []llms.ContentPart{thought},
 		},
 		{
-			name: "reasoning text and a signed call keep both",
+			name: "reasoning text and a signed call both stay",
 			body: []*cast.BodyPair{
 				chainSummaryToolPair("call_kimi_full", "exploit", oversized, signed, thought),
 				cast.NewBodyPairFromCompletion("Final response"),
 			},
-			signed: true,
-			lead:   []llms.ContentPart{thought},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			section := chainSummarySection("Test question", tt.body...)
-			original := chainSummaryPairsJSON(t, section.Body)
+			before := chainSummaryJSON(t, section.Body[0])
 			rec := &chainSummaryRecorder{}
 
 			err := summarizeOversizedBodyPairs(t.Context(), section, rec.handle, 16*1024, cast.ToolCallIDTemplate)
 			require.NoError(t, err)
-			assert.Len(t, rec.sent(), 1, "summarizer calls")
-			chainSummaryCheckBody(t, section.Body, original, []int{chainSummaryNew, 1}, cast.Summarization, tt.signed, tt.lead...)
+			assert.Empty(t, rec.sent(), "an oversized body is cut, not summarized")
+			assert.LessOrEqual(t, section.Body[0].Size(), 16*1024)
+			assert.Equal(t, tt.body[0].Type, section.Body[0].Type)
+			got := chainSummaryJSON(t, section.Body[0])
+			assert.NotEqual(t, before, got)
+			assert.Contains(t, got, "[truncated bytes")
+			assert.Contains(t, got, "XXXX")
+			assert.Equal(t, chainSummaryJSON(t, tt.body[1]), chainSummaryJSON(t, section.Body[1]), "the last pair is left whole")
 			chainSummaryVerifyAST(t, &cast.ChainAST{Sections: []*cast.ChainSection{section}})
 		})
 	}

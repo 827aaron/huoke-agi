@@ -73,6 +73,11 @@ const (
 	containerStopGrace = 2
 )
 
+// FlowWorkDir is the host directory mounted at WorkFolderPathInContainer for one flow.
+func FlowWorkDir(dataDir string, flowID int64) string {
+	return filepath.Join(dataDir, fmt.Sprintf(containerLocalCwdTemplate, flowID))
+}
+
 type dockerClient struct {
 	db                   database.Querier
 	logger               *logrus.Logger
