@@ -9,7 +9,7 @@ import GrowthProgressBar from './growth-progress-bar';
 const flow = vi.hoisted(() => ({ run: null as GrowthRun | null }));
 
 vi.mock('../growth-flow-provider', () => ({
-    useGrowthFlow: () => ({ accounts: [], leads: [], profile: null, run: flow.run, sources: [] }),
+    useGrowthFlow: () => ({ accounts: [], leads: [], profile: null, profiles: [], run: flow.run, sources: [] }),
 }));
 vi.mock('@/providers/flow-provider', () => ({
     useFlow: () => ({ flowData: null, submitAutomationMessage: vi.fn() }),

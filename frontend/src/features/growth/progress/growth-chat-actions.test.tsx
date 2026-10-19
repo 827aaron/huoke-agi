@@ -28,7 +28,7 @@ const run: GrowthRun = {
 };
 
 vi.mock('../growth-flow-provider', () => ({
-    useGrowthFlow: () => ({ leads: [], profile: null, run, sources: [] }),
+    useGrowthFlow: () => ({ leads: [], profile: null, profiles: [], run, sources: [] }),
 }));
 vi.mock('@/providers/flow-provider', () => ({
     useFlow: () => ({ flowData: null, flowStatus: 'finished', submitAutomationMessage: vi.fn() }),
