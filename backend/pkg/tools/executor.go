@@ -377,6 +377,8 @@ func (ce *customExecutor) Execute(
 		result = database.SanitizeUTF8(result)
 		allowSummarize := slices.Contains(allowedSummarizingToolsResult, name)
 		switch {
+		case slices.Contains(structuredResultTools, name) && len(result) > DefaultResultSizeLimit:
+			result = truncateStructuredResult(result)
 		case ce.summarizer != nil && allowSummarize && len(result) > DefaultResultSizeLimit:
 			summary, err := ce.summarizeResult(ctx, name, args, result)
 			if err == nil {
@@ -458,6 +460,83 @@ func (ce *customExecutor) summarizeResult(ctx context.Context, name string, args
 	}
 
 	return ce.summarizer(ctx, summarizePrompt)
+}
+
+// truncateStructuredResult keeps the longest prefix of the largest object array that fits
+// the result limit, and says how many items were left out. A progress line after the JSON
+// is kept. Anything that is not that shape falls back to the head-and-tail cut.
+func truncateStructuredResult(result string) string {
+	body, progress, hasProgress := strings.Cut(result, "\nPROGRESS:")
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		return truncateResult(result)
+	}
+	original := map[string]int{}
+	for {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return truncateResult(result)
+		}
+		if len(raw) <= DefaultResultSizeLimit {
+			if hasProgress {
+				return string(raw) + "\nPROGRESS:" + progress
+			}
+			return string(raw)
+		}
+		holder, key, items := largestObjectArray(payload)
+		if holder == nil || len(items) <= 1 {
+			if hasProgress {
+				return string(raw) + "\nPROGRESS:" + progress
+			}
+			return string(raw)
+		}
+		if _, seen := original[key]; !seen {
+			original[key] = len(items)
+		}
+		keep := len(items) * DefaultResultSizeLimit / len(raw)
+		if keep < 1 || keep >= len(items) {
+			keep = len(items) - 1
+		}
+		holder[key] = items[:keep]
+		holder["note"] = fmt.Sprintf("truncated to the first %d of %d %s", keep, original[key], key)
+	}
+}
+
+// largestObjectArray is the longest array of objects in payload or one level down, which
+// is the message, lead or source list a growth result is built around.
+func largestObjectArray(payload map[string]any) (map[string]any, string, []any) {
+	var (
+		best     int
+		holder   map[string]any
+		key      string
+		items    []any
+		consider func(map[string]any)
+	)
+	consider = func(obj map[string]any) {
+		for k, v := range obj {
+			arr, ok := v.([]any)
+			if !ok || len(arr) <= best {
+				continue
+			}
+			if _, ok := arr[0].(map[string]any); !ok {
+				continue
+			}
+			best, holder, key, items = len(arr), obj, k, arr
+		}
+	}
+	consider(payload)
+	for _, v := range payload {
+		arr, ok := v.([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range arr {
+			if obj, ok := item.(map[string]any); ok {
+				consider(obj)
+			}
+		}
+	}
+	return holder, key, items
 }
 
 func truncateResult(result string) string {

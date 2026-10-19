@@ -176,6 +176,14 @@ var allowedSummarizingToolsResult = []string{
 	BrowserToolName,
 }
 
+// structuredResultTools answer in JSON the model has to read field by field, so a result
+// over the size limit keeps its first items instead of being summarised.
+var structuredResultTools = []string{
+	GrowthSyncSourceToolName,
+	GrowthListLeadsToolName,
+	GrowthSearchSourcesToolName,
+}
+
 // Results later subtasks recall from memory; losing the search agent's findings degrades them silently.
 var allowedStoringInMemoryTools = []string{
 	TerminalToolName,

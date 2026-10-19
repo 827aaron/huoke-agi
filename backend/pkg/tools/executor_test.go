@@ -1394,3 +1394,79 @@ func TestExecutor_Execute_RecordsTheAgentOnItsMessage(t *testing.T) {
 		t.Fatalf("an executor serving no agent recorded %v", anonymous.agents)
 	}
 }
+
+func TestExecutor_Execute_TruncatesAGrowthResultByKeepingItsFirstItems(t *testing.T) {
+	messages := make([]map[string]any, 80)
+	for i := range messages {
+		messages[i] = map[string]any{
+			"message_id": fmt.Sprint(i + 1),
+			"sender_id":  "11",
+			"text":       strings.Repeat("buy ", 120),
+			"link":       "https://t.me/c/1/" + fmt.Sprint(i+1),
+		}
+	}
+	body, err := json.Marshal(map[string]any{
+		"source": map[string]any{"source_id": 5, "title": "MOBA"}, "messages": messages, "count": len(messages),
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	page := string(body) + "\nPROGRESS: new_leads_this_task=1 target=50"
+	if len(page) <= DefaultResultSizeLimit {
+		t.Fatalf("the fixture is %d bytes, under the %d limit", len(page), DefaultResultSizeLimit)
+	}
+
+	summarized := false
+	ce := &customExecutor{
+		mlp: &executorMsgLog{}, tclp: &executorToolCallLog{}, replacer: identityReplacer{},
+		handlers: map[string]ExecutorHandler{
+			GrowthSyncSourceToolName: func(context.Context, string, json.RawMessage) (string, error) { return page, nil },
+		},
+		summarizer: func(context.Context, string) (string, error) {
+			summarized = true
+			return "summary", nil
+		},
+	}
+	result, err := ce.Execute(t.Context(), 1, "call-1", GrowthSyncSourceToolName, GrowthSyncSourceToolName, "",
+		mustJSON(map[string]any{"source_id": 5, "message": "read"}))
+	if err != nil {
+		t.Fatalf("the read finished, yet Execute reported a failure: %v", err)
+	}
+	if summarized {
+		t.Fatal("a growth result is cut by items, not summarised")
+	}
+	jsonPart, progress, ok := strings.Cut(result, "\nPROGRESS:")
+	if !ok || progress != " new_leads_this_task=1 target=50" {
+		t.Fatalf("the progress line was not kept: %q", result[max(0, len(result)-80):])
+	}
+	if len(jsonPart) > DefaultResultSizeLimit {
+		t.Fatalf("the JSON is %d bytes, over the %d limit", len(jsonPart), DefaultResultSizeLimit)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(jsonPart), &payload); err != nil {
+		t.Fatalf("the truncated result is not JSON: %v", err)
+	}
+	msgs, _ := payload["messages"].([]any)
+	if len(msgs) == 0 || len(msgs) >= len(messages) {
+		t.Fatalf("kept %d of %d messages", len(msgs), len(messages))
+	}
+	first, _ := msgs[0].(map[string]any)
+	if first["message_id"] != "1" || first["sender_id"] != "11" || first["text"] == "" || first["link"] == "" {
+		t.Fatalf("the first message lost a field: %#v", first)
+	}
+	note, _ := payload["note"].(string)
+	if !strings.Contains(note, "truncated to the first") || !strings.Contains(note, "of 80 messages") {
+		t.Fatalf("note = %q", note)
+	}
+
+	small := `{"messages":[{"message_id":"1","text":"hi"}]}`
+	ce.handlers[GrowthSyncSourceToolName] = func(context.Context, string, json.RawMessage) (string, error) { return small, nil }
+	result, err = ce.Execute(t.Context(), 1, "call-2", GrowthSyncSourceToolName, GrowthSyncSourceToolName, "",
+		mustJSON(map[string]any{"source_id": 5, "message": "read"}))
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if result != small || summarized {
+		t.Fatalf("a result under the limit was changed to %d bytes, summarised=%v", len(result), summarized)
+	}
+}
