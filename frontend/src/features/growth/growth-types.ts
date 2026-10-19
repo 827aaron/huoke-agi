@@ -106,6 +106,8 @@ export interface GrowthLead {
     flags?: string[];
     id: number;
     last_active_at: null | string;
+    // The agent's one-line reason the lead fits, in the customer's language; absent on a lead added by hand.
+    match_reason?: string;
     // The owner's own words about the lead; empty when none.
     note: string;
     origin: GrowthLeadOrigin;

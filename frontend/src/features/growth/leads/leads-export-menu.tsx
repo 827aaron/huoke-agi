@@ -18,6 +18,7 @@ import type { GrowthLead } from '../growth-types';
 
 import { useGrowthFlow } from '../growth-flow-provider';
 import { buildLeadsCsv, leadsCsvFileName } from './leads-csv';
+import { useSignalLabel } from './use-signal-label';
 
 interface LeadsExportMenuProps {
     filteredLeads?: GrowthLead[];
@@ -27,29 +28,45 @@ interface LeadsExportMenuProps {
 
 function LeadsExportMenu({ filteredLeads, size = 'sm', variant = 'default' }: LeadsExportMenuProps) {
     const { leads, profile, run, sources } = useGrowthFlow();
+    const signalLabel = useSignalLabel();
 
     const options = useMemo(() => {
         const roundDelivered = run ? leads.filter((lead) => lead.delivered_task_id === run.task_id) : [];
 
         return [
-            { id: 'round', label: copy.export.currentRoundDelivered, leads: roundDelivered },
-            { id: 'delivered', label: copy.export.allDelivered, leads: leads.filter((lead) => lead.delivered_at) },
-            { id: 'filtered', label: copy.export.filtered, leads: filteredLeads ?? leads },
+            {
+                id: 'round',
+                label: copy.export.currentRoundDelivered,
+                leads: roundDelivered,
+                scope: run ? copy.export.roundScope(run.round) : copy.export.currentRoundDelivered,
+            },
+            {
+                id: 'delivered',
+                label: copy.export.allDelivered,
+                leads: leads.filter((lead) => lead.delivered_at),
+                scope: copy.export.allDelivered,
+            },
+            { id: 'filtered', label: copy.export.filtered, leads: filteredLeads ?? leads, scope: copy.export.filtered },
             {
                 id: 'qualified',
                 label: copy.export.allQualified,
                 leads: leads.filter((lead) => lead.tier === 'qualified'),
+                scope: copy.export.allQualified,
             },
         ];
     }, [filteredLeads, leads, run]);
 
     const defaultId = options[0]?.leads.length ? 'round' : 'filtered';
 
-    const handleExport = (items: GrowthLead[]) => {
+    const handleExport = (items: GrowthLead[], scope: string) => {
         try {
-            const links = new Map(sources.map((source) => [source.id, source.link]));
+            const sourceLinks = new Map(sources.map((source) => [source.id, source.link]));
 
-            downloadTextFile(buildLeadsCsv(items, links), leadsCsvFileName(profile?.name), 'text/csv;charset=utf-8');
+            downloadTextFile(
+                buildLeadsCsv(items, { signalLabel, sourceLinks }),
+                leadsCsvFileName(profile?.name, scope),
+                'text/csv;charset=utf-8',
+            );
         } catch (error) {
             Log.error('Failed to export leads:', error);
             toast.error(copy.export.failed);
@@ -73,7 +90,7 @@ function LeadsExportMenu({ filteredLeads, size = 'sm', variant = 'default' }: Le
                         className={cn(option.id === defaultId && 'font-medium')}
                         disabled={!option.leads.length}
                         key={option.id}
-                        onClick={() => handleExport(option.leads)}
+                        onClick={() => handleExport(option.leads, option.scope)}
                         title={option.leads.length ? undefined : copy.export.nothing}
                     >
                         {option.label}

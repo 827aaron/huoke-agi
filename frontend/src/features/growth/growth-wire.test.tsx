@@ -281,6 +281,7 @@ describe('growth wire', () => {
             flags: [],
             id: 21,
             last_active_at: '2026-10-17T08:00:00Z',
+            match_reason: 'wants a site that pays out',
             note: '',
             origin: 'ai',
             platform: 'telegram',
