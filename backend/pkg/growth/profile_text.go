@@ -460,10 +460,7 @@ func parseNeed(p *Profile) {
 		case "Signal words":
 			p.Signals = splitSemi(value)
 		case "Contacts to find":
-			p.ContactTypes = nil
-			for _, t := range splitComma(value) {
-				p.ContactTypes = append(p.ContactTypes, t)
-			}
+			p.ContactTypes = splitComma(value)
 		case "Notes":
 			inNotes = true
 			if value != "" {
