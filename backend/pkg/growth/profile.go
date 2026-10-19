@@ -34,12 +34,8 @@ const ProfileResourcePath = "business_profile.md"
 // the profile replaces exactly those documents and no others.
 const profileGuideMarker = "growth business profile"
 
-// compactItems and compactRunes keep each list and free text of the compact block
-// short; what is cut stays in the file and the knowledge store.
-const (
-	compactItems = 5
-	compactRunes = 240
-)
+// compactRunes bounds the prompt block carried on every agent call; the file holds the rest.
+const compactRunes = 240
 
 var (
 	ErrInvalidProfile = errors.New("invalid business profile")
@@ -49,30 +45,39 @@ var (
 	profileBlock = regexp.MustCompile(`(?s)<business_profile>.*?</business_profile>\s*`)
 )
 
-// Profile is what a customer sells and to whom. Signals (the words that mark a likely
-// customer), Unwanted (who the customer would rather not get) and Notes are the customer's
-// own free text, one item per line; they are what tunes the generic prompts to one customer.
+// Profile is the three prompts the agents and Jev read, plus any prompts the owner added.
+// Need says who to look for, Exclude who scores lower, ScoringText how Jev's answers become
+// a score. The structured fields are the older shape: a saved profile or a Go value may still
+// set them, and normalize copies them into the three prompts when those are empty, then reads
+// the prompts back so the judgement code can keep using them.
 type Profile struct {
-	Name          string   `json:"name"`
-	Pitch         string   `json:"pitch"`
-	Games         []string `json:"games"`
-	Genre         string   `json:"genre"`
-	Competitors   []string `json:"competitors"`
-	Regions       []string `json:"regions"`
-	Languages     []string `json:"languages"`
-	DefaultTarget int      `json:"default_target"`
-	Signals       []string `json:"signals"`
-	// Unwanted lowers a lead's score by UnwantedPenalty and flags it instead of dropping it;
-	// ComplianceExcludes, which do drop, are not part of a profile.
-	Unwanted []string `json:"unwanted"`
-	// UnwantedPenalty is in points; 0 is DefaultUnwantedPenalty.
-	UnwantedPenalty int    `json:"unwanted_penalty"`
-	Notes           string `json:"notes"`
-	// Scoring turns the judgement model's answers into a lead score; nil is DefaultScoring.
-	Scoring *Scoring `json:"scoring,omitempty"`
-	// ContactTypes are the contacts a lead is looked for with: values of ContactTypes or
-	// names the owner chose, up to 30 characters each; empty means the platform handle alone.
-	ContactTypes []string `json:"contact_types"`
+	Name        string           `json:"name"`
+	Need        string           `json:"need,omitempty"`
+	Exclude     string           `json:"exclude,omitempty"`
+	ScoringText scoringText      `json:"scoring,omitempty"`
+	Sections    []ProfileSection `json:"sections,omitempty"`
+	// Legacy is the profile document from before the three prompts, kept so the migration
+	// can be reversed. A profile created after the migration leaves it empty.
+	Legacy json.RawMessage `json:"legacy,omitempty" jsonschema:"-"`
+	// Editor is "assistant" or "user", whoever saved last. Revision is the document from
+	// before the last assistant edit.
+	Editor   string           `json:"editor,omitempty" jsonschema:"-"`
+	Revision *ProfileRevision `json:"revision,omitempty" jsonschema:"-"`
+
+	Pitch           string   `json:"pitch,omitempty" jsonschema:"-"`
+	Games           []string `json:"games,omitempty" jsonschema:"-"`
+	Genre           string   `json:"genre,omitempty" jsonschema:"-"`
+	Competitors     []string `json:"competitors,omitempty" jsonschema:"-"`
+	Regions         []string `json:"regions,omitempty" jsonschema:"-"`
+	Languages       []string `json:"languages,omitempty" jsonschema:"-"`
+	DefaultTarget   int      `json:"default_target,omitempty" jsonschema:"-"`
+	Signals         []string `json:"signals,omitempty" jsonschema:"-"`
+	Unwanted        []string `json:"unwanted,omitempty" jsonschema:"-"`
+	UnwantedPenalty int      `json:"unwanted_penalty,omitempty" jsonschema:"-"`
+	Notes           string   `json:"notes,omitempty" jsonschema:"-"`
+	// Scoring is the parsed Jev rules; nil means they were not parsed. JSON carries the text.
+	Scoring      *Scoring `json:"-" jsonschema:"-"`
+	ContactTypes []string `json:"contact_types,omitempty" jsonschema:"-"`
 
 	// LegacyExcludes is the field Unwanted replaced; a stored profile or an older page may
 	// still carry it, and normalize moves it over.
@@ -156,19 +161,6 @@ func DefaultScoring() Scoring {
 	}
 }
 
-// summary is the scoring as the agents read it in the profile block.
-func (sc Scoring) summary() string {
-	parts := make([]string, 0, len(sc.Dimensions)+1)
-	for _, d := range sc.Dimensions {
-		parts = append(parts, fmt.Sprintf("%s +%d", strings.ToLower(d.Name), d.Points))
-	}
-	if sc.Recent != nil && sc.Recent.Points > 0 {
-		parts = append(parts, fmt.Sprintf("recent +%d (7 days; +%d within 30)", sc.Recent.Points, sc.Recent.Points/2))
-	}
-	return fmt.Sprintf("%s; qualified from %d, watchlist from %d, below that not saved",
-		strings.Join(parts, ", "), sc.Qualified, sc.Watchlist)
-}
-
 func (sc Scoring) maxScore() int {
 	total := 0
 	for _, d := range sc.Dimensions {
@@ -217,10 +209,13 @@ func contactType(t string) string {
 
 // ScoringOrDefault is the profile's scoring, or DefaultScoring when it sets none.
 func (p Profile) ScoringOrDefault() Scoring {
-	if p.Scoring == nil {
-		return DefaultScoring()
+	if p.Scoring != nil && len(p.Scoring.Dimensions) > 0 {
+		return *p.Scoring
 	}
-	return *p.Scoring
+	if sc, _, err := ParseScoring(string(p.ScoringText)); err == nil {
+		return sc
+	}
+	return DefaultScoring()
 }
 
 func (p Profile) UnwantedPenaltyOrDefault() int {
@@ -232,10 +227,13 @@ func (p Profile) UnwantedPenaltyOrDefault() int {
 
 // ProfileView is a stored profile. ID 0 is DefaultProfile standing in for a customer who
 // saved none. Knowledge is "seeded", "skipped: <reason>" or empty, and only set by a save.
+// EditedBy is who saved last; HasPrevious is set when an assistant edit can be restored.
 type ProfileView struct {
-	ID      int64  `json:"id"`
-	Title   string `json:"title"`
-	Default bool   `json:"default"`
+	ID          int64  `json:"id"`
+	Title       string `json:"title"`
+	Default     bool   `json:"default"`
+	EditedBy    string `json:"edited_by,omitempty"`
+	HasPrevious bool   `json:"has_previous,omitempty"`
 	Profile
 	UpdatedAt *time.Time `json:"updated_at"`
 	Knowledge string     `json:"knowledge,omitempty"`
@@ -293,6 +291,19 @@ func (p *Profile) normalize() {
 		sc.normalize()
 		p.Scoring = &sc
 	}
+	p.canonContacts()
+	_ = p.foldTexts()
+	p.canonContacts()
+}
+
+// WithPrompts fills the three prompts from the structured fields. A preset is stored
+// that way, and the profile form pastes the prompts in as text.
+func (p Profile) WithPrompts() Profile {
+	p.normalize()
+	return p
+}
+
+func (p *Profile) canonContacts() {
 	types := make([]string, 0, len(p.ContactTypes))
 	for _, t := range trimItems(p.ContactTypes) {
 		expanded := []string{contactType(t)}
@@ -346,9 +357,18 @@ func (sc *Scoring) normalize() {
 }
 
 func (p Profile) validate() error {
+	if err := (&p).limits(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(string(p.ScoringText)) != "" {
+		if _, _, err := ParseScoring(string(p.ScoringText)); err != nil {
+			return err
+		}
+	}
 	switch {
-	case p.Name == "" && p.Pitch == "" && len(p.Games) == 0:
-		return fmt.Errorf("%w: name, pitch or a product is required", ErrInvalidProfile)
+	case p.Name == "" && p.Pitch == "" && len(p.Games) == 0 && strings.TrimSpace(p.Need) == "" &&
+		strings.TrimSpace(p.Exclude) == "" && len(p.Sections) == 0:
+		return fmt.Errorf("%w: say what to look for, or name the business", ErrInvalidProfile)
 	case p.DefaultTarget < 0:
 		return fmt.Errorf("%w: default_target cannot be negative", ErrInvalidProfile)
 	case p.UnwantedPenalty < 0:
@@ -393,6 +413,8 @@ func profileView(row database.GrowthProfile) (ProfileView, error) {
 		return ProfileView{}, fmt.Errorf("%w: %w", errCorruptProfile, err)
 	}
 	v.normalize()
+	v.EditedBy = v.Editor
+	v.HasPrevious = v.Revision != nil
 	return v, nil
 }
 
@@ -472,14 +494,80 @@ func (s *Service) CreateProfile(ctx context.Context, userID int64, in ProfileInp
 // judged for another audience, and a message saved as evidence later is judged again.
 // Leads already saved keep their scores.
 func (s *Service) UpdateProfile(ctx context.Context, userID, id int64, in ProfileInput) (ProfileView, error) {
-	raw, err := in.prepare()
+	return s.writeProfile(ctx, userID, id, in, false)
+}
+
+// UpdateProfilePrompt applies one assistant edit and keeps the previous prompts so the
+// owner can restore them. id 0 is the owner's default profile.
+func (s *Service) UpdateProfilePrompt(ctx context.Context, userID, id int64, op ProfileOp) (ProfileView, error) {
+	cur, err := s.profileToEdit(ctx, userID, id)
 	if err != nil {
 		return ProfileView{}, err
 	}
+	rev := cur.snapshot(cur.Title)
+	next := cur.Profile
+	next.Sections = append([]ProfileSection(nil), next.Sections...)
+	if err := next.apply(op); err != nil {
+		return ProfileView{}, err
+	}
+	next.Revision = rev
+	next.Editor = editorAssistant
+	next.Legacy = cur.Legacy
+	title := cur.Title
+	if t := strings.TrimSpace(op.ProfileTitle); t != "" {
+		title = t
+	}
+	return s.writeProfile(ctx, userID, cur.ID, ProfileInput{Title: title, Profile: next}, true)
+}
+
+// RestoreProfile puts back the prompts from before the last assistant edit.
+func (s *Service) RestoreProfile(ctx context.Context, userID, id int64) (ProfileView, error) {
+	cur, err := s.GetProfile(ctx, userID, id)
+	if err != nil {
+		return ProfileView{}, err
+	}
+	if cur.Revision == nil {
+		return ProfileView{}, fmt.Errorf("%w: this profile has no earlier version", ErrInvalidProfile)
+	}
+	rev := cur.Revision
+	next := Profile{
+		Name: rev.Name, Need: rev.Need, Exclude: rev.Exclude, ScoringText: scoringText(rev.Scoring),
+		Sections: rev.Sections, Legacy: cur.Legacy, Editor: editorUser,
+	}
+	title := cmp.Or(strings.TrimSpace(rev.Title), cur.Title)
+	return s.writeProfile(ctx, userID, id, ProfileInput{Title: title, Profile: next}, true)
+}
+
+func (s *Service) profileToEdit(ctx context.Context, userID, id int64) (ProfileView, error) {
+	if id == 0 {
+		v, err := s.DefaultProfileOf(ctx, userID)
+		if errors.Is(err, ErrNoProfile) {
+			return ProfileView{}, fmt.Errorf("%w: save a profile before changing one", ErrNoProfile)
+		}
+		return v, err
+	}
+	return s.GetProfile(ctx, userID, id)
+}
+
+// keepRevision is set when the caller already put the history it wants on the profile.
+func (s *Service) writeProfile(ctx context.Context, userID, id int64, in ProfileInput, keepRevision bool) (ProfileView, error) {
 	prev, err := s.GetProfile(ctx, userID, id)
 	if errors.Is(err, errCorruptProfile) {
 		prev = builtInProfileView()
 	} else if err != nil {
+		return ProfileView{}, err
+	}
+	if len(in.Legacy) == 0 {
+		in.Legacy = prev.Legacy
+	}
+	if !keepRevision {
+		in.Editor = editorUser
+		if in.Revision == nil {
+			in.Revision = prev.Revision
+		}
+	}
+	raw, err := in.prepare()
+	if err != nil {
 		return ProfileView{}, err
 	}
 	var row database.GrowthProfile
@@ -762,6 +850,8 @@ func (v ProfileView) resourcePath() string {
 // compact with no file path is the whole profile, since nothing else holds what it cuts.
 // guide says the knowledge store holds this profile's lists.
 func (p Profile) compact(path string, guide bool) string {
+	p.Sections = append([]ProfileSection(nil), p.Sections...)
+	(&p).normalize()
 	withFile := path != ""
 	var b strings.Builder
 	cut := false
@@ -770,53 +860,29 @@ func (p Profile) compact(path string, guide bool) string {
 			fmt.Fprintf(&b, "%s: %s\n", label, value)
 		}
 	}
-	list := func(label string, items []string, sep string) {
-		shown := items
-		if withFile {
-			shown = head(items, compactItems)
-		}
-		text := strings.Join(shown, sep)
-		if len(shown) < len(items) {
-			text += sep + "…"
-			cut = true
-		}
-		line(label, text)
-	}
-	text := func(label, value string) {
-		short := value
-		if withFile {
-			short = truncateRunes(value, compactRunes)
-		}
-		if short != value {
-			cut = true
-		}
-		line(label, strings.Join(strings.Fields(short), " "))
-	}
 
 	b.WriteString("<business_profile>\n")
-	line("Business", p.Name)
-	text("Offer", p.Pitch)
-	list("Products", p.Games, ", ")
-	line("Category", p.Genre)
-	list("Regions", p.Regions, ", ")
-	list("Languages", p.Languages, ", ")
-	if p.DefaultTarget > 0 {
-		line("Lead target", fmt.Sprint(p.DefaultTarget))
+	if title := cmp.Or(p.Name, strings.Join(p.Games, ", ")); title != "" {
+		line("Name", title)
 	}
-	list("Signal words", p.Signals, "; ")
-	list("Competitors (reject)", p.Competitors, ", ")
-	list("Unwanted (score lower and flag, do not drop)", p.Unwanted, "; ")
+	body := p.promptBody()
+	if withFile {
+		short := truncateRunes(body, compactRunes*4)
+		if short != body {
+			cut = true
+			body = short
+		}
+	}
+	b.WriteString(body)
+	if !strings.HasSuffix(body, "\n") && body != "" {
+		b.WriteString("\n")
+	}
 	line("Always excluded, on explicit evidence only", strings.Join(ComplianceExcludes, "; "))
-	text("Notes", p.Notes)
-	if !slices.Equal(p.ContactTypes, []string{ContactPlatformHandle}) {
-		line("Contacts to find", strings.Join(p.ContactTypes, ", "))
-	}
-	line("Scoring", p.ScoringOrDefault().summary())
 	if withFile {
 		fmt.Fprintf(&b, "Full profile: %s/%s/%s", docker.WorkFolderPathInContainer, flowfiles.ResourcesDirName, path)
 		switch {
-		case cut && guide:
-			b.WriteString(" (the lines above are cut; read the file, or search_guide \"business profile\")")
+		case guide:
+			b.WriteString(" (read the file, or search_guide \"business profile\")")
 		case cut:
 			b.WriteString(" (the lines above are cut; read the file)")
 		}
@@ -828,62 +894,16 @@ func (p Profile) compact(path string, guide bool) string {
 
 // Markdown is the whole profile as the resource file holds it.
 func (p Profile) Markdown() string {
+	p.Sections = append([]ProfileSection(nil), p.Sections...)
+	(&p).normalize()
 	var b strings.Builder
 	title := p.Name
 	if title == "" {
 		title = strings.Join(p.Games, ", ")
 	}
-	fmt.Fprintf(&b, "# Business profile: %s\n\n", title)
-	field := func(label, value string) {
-		if value != "" {
-			fmt.Fprintf(&b, "- **%s:** %s\n", label, value)
-		}
-	}
-	field("Business", p.Name)
-	field("Products", strings.Join(p.Games, ", "))
-	field("Category", p.Genre)
-	field("Regions", strings.Join(p.Regions, ", "))
-	field("Languages", strings.Join(p.Languages, ", "))
-	if p.DefaultTarget > 0 {
-		field("Lead target", fmt.Sprint(p.DefaultTarget))
-	}
-	field("Contacts to find", strings.Join(p.ContactTypes, ", "))
-	if p.Pitch != "" {
-		fmt.Fprintf(&b, "\n## Offer\n\n%s\n", p.Pitch)
-	}
-	section := func(heading string, items []string) {
-		if len(items) == 0 {
-			return
-		}
-		fmt.Fprintf(&b, "\n## %s\n\n- %s\n", heading, strings.Join(items, "\n- "))
-	}
-	section("Signal words", p.Signals)
-	section("Competitors (reject their staff and promoters)", p.Competitors)
-	section("Unwanted (score lower and flag, do not drop)", p.Unwanted)
-	section("Always excluded, on explicit evidence only", ComplianceExcludes)
-	sc := p.ScoringOrDefault()
-	fmt.Fprintf(&b, "\n## Scoring\n\n")
-	for _, d := range sc.Dimensions {
-		fmt.Fprintf(&b, "- **%s** (+%d): %s\n", d.Name, d.Points, d.Description)
-	}
-	if sc.Recent != nil && sc.Recent.Points > 0 {
-		fmt.Fprintf(&b, "- **Recent** (+%d within 7 days, +%d within 30)\n", sc.Recent.Points, sc.Recent.Points/2)
-	}
-	if len(p.Unwanted) > 0 {
-		fmt.Fprintf(&b, "- **Unwanted** (-%d)\n", p.UnwantedPenaltyOrDefault())
-	}
-	fmt.Fprintf(&b, "\nQualified from %d, watchlist from %d.\n", sc.Qualified, sc.Watchlist)
-	if p.Notes != "" {
-		fmt.Fprintf(&b, "\n## Notes\n\n%s\n", p.Notes)
-	}
+	fmt.Fprintf(&b, "# Business profile: %s\n\n%s\n\n", title, p.promptBody())
+	fmt.Fprintf(&b, "Always excluded, on explicit evidence only: %s\n", strings.Join(ComplianceExcludes, "; "))
 	return b.String()
-}
-
-func head(items []string, n int) []string {
-	if len(items) > n {
-		return items[:n]
-	}
-	return items
 }
 
 // ProfileInput puts v's compact block at the start of input, replacing a block already

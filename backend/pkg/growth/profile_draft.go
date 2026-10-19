@@ -148,19 +148,23 @@ func (s *Service) SetFlowProfile(ctx context.Context, userID, flowID, profileID 
 }
 
 // ProfileGuide is how a profile is drafted; the assistant's profile tools carry it.
-const ProfileGuide = `A profile tells the lead-finding agents and the judgement model whom to look for.
-It has three parts:
-1. Wanted: who the customer wants (name, pitch, games = products, genre, regions, languages, signals = words
-   such people use, competitors, contact_types, default_target).
-2. Unwanted (optional): people the customer would rather not get. A hit lowers the score by unwanted_penalty and
-   flags the lead; it never drops it. Leave it empty unless the customer names someone. Never add under-18 or
-   gambling-help rules: the system always excludes those on explicit evidence, whatever the profile says.
-3. Scoring: dimensions, each a yes/no question about one message: key (lowercase slug), name (short label in
-   the customer's language), description (English, what counts as yes, judged from the message alone), points
-   (0-20). Usually 3-8 dimensions. recent.points adds for a message of the last 7 days (half within 30).
-   qualified is the score a lead counts toward the target from; watchlist (lower) is kept for review.
-   The points of all dimensions plus recent must reach qualified.
-Ask about what is missing one question at a time; do not ask about what the customer already said, and draft
-as soon as you know what they sell, to whom and where. When they ask for a change, change only that part.
-Write names and free text in the customer's language, signals in the languages the wanted people write in,
-and dimension descriptions in English.`
+const ProfileGuide = `A profile is three prompts, plus any prompts the user added:
+1. need — who to look for: the offer, the audience, regions, languages, signal words, contacts, notes.
+2. exclude — who scores lower. One person or group per line. A hit lowers the score and flags the lead; it never
+   drops the lead. Never add under-18 or gambling-help rules: the system always excludes those on explicit
+   evidence, whatever this prompt says.
+3. scoring — the Jev rules, one per line:
+   signal = points | name | what counts as yes
+   signal = points | what counts as yes
+   signal = points
+   recent = points          (message age: full points within 7 days, half within 30; not a Jev question)
+   qualified >= N           (a lead counts toward the target from this score)
+   watchlist >= M           (kept for review; 1 <= M < N, and the points must be able to reach N)
+   unwanted = -P            (points taken off for a hit on the exclude prompt; 0 to 20)
+   A line starting with # is a comment. Built-in signals are player, pain, paying and match; keep those keys
+   when the meaning is the same so Jev keeps its tuned question. points are 0-20.
+sections — extra prompts, each with an id, a title and a body, shown to the agents after the three.
+To change one saved profile in place, use growth_update_profile (set, append, add_section, remove_section).
+Use growth_draft_profile only when the user wants to review a whole new profile before it is saved.
+Ask about what is missing one question at a time. When they ask for a change, change only that part.
+Write the prompts in the user's language; write the "what counts as yes" part of a scoring line in English.`

@@ -43,7 +43,14 @@ function SettingsGrowthProfile() {
     const handleCopy = () =>
         profile &&
         run(async () => {
-            const { default: _default, id: _id, updated_at: _updated, ...input } = profile;
+            const {
+                default: _default,
+                edited_by: _edited,
+                has_previous: _previous,
+                id: _id,
+                updated_at: _updated,
+                ...input
+            } = profile;
             const created = await growthApi.createProfile({ ...input, title: `${profile.title}${list.copySuffix}` });
 
             await refetch();
@@ -151,7 +158,7 @@ function SettingsGrowthProfile() {
                             </div>
                         ) : (
                             <GrowthProfileForm
-                                key={profile?.id ?? 'new'}
+                                key={`${profile?.id ?? 'new'}-${profile?.updated_at ?? ''}`}
                                 onSaved={async (next) => {
                                     await refetch();
                                     setSelection(next.id);

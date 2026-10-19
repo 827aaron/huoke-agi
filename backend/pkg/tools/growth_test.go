@@ -253,6 +253,19 @@ func TestGrowth_Handle_TellsTheModelHowToFixAnInvalidDraft(t *testing.T) {
 	assert.Contains(t, out, "call growth_draft_profile again")
 }
 
+func TestGrowth_Handle_UpdatesOnePromptOnTheSavedProfile(t *testing.T) {
+	backend := &fakeGrowthBackend{profile: growth.ProfileView{ID: 3, Title: "agents", EditedBy: "assistant", HasPrevious: true,
+		Profile: growth.Profile{Need: "players", Exclude: "bots\nresellers"}}}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthUpdateProfileToolName,
+		json.RawMessage(`{"profile_id":"3","action":"append","field":"exclude","text":"people in Singapore","message":"m"}`))
+
+	require.NoError(t, err)
+	assert.Equal(t, int64(3), backend.lastProfile)
+	assert.Equal(t, growth.ProfileOp{Action: "append", Field: "exclude", Text: "people in Singapore"}, backend.lastOp)
+	assert.Contains(t, out, `"has_previous":true`)
+	assert.Contains(t, out, `"exclude":"bots\nresellers"`)
+}
+
 func TestGrowth_Handle_SavesTheDraftWithTheChosenOptions(t *testing.T) {
 	backend := &fakeGrowthBackend{profile: growth.ProfileView{ID: 9, Title: "MY agents"}}
 	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSaveProfileToolName,

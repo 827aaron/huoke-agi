@@ -159,6 +159,9 @@ const live = {
 
         return { sources: (sources ?? []).map(fromWireSource), total, warnings };
     },
+    // Puts back the prompts from before the last assistant edit.
+    restoreProfile: async (id: number) =>
+        unwrapApiResponse(await api.post<GrowthProfile>(`/growth/profiles/${id}/restore`)),
     // Saves over the profile the draft changes unless as_new, and discards the draft.
     saveProfileDraft: async (flowId: number | string, options: GrowthProfileDraftSave) =>
         unwrapApiResponse(await api.post<GrowthProfile>(`/growth/flows/${flowId}/profile-draft/save`, options)),

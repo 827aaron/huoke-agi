@@ -9,96 +9,74 @@ import { baseQueries, baseRest } from '../../mocks/cassettes/base.ts';
 // The mock tier answers /api/v1/growth from the bundle's in-memory sample data, which starts with no profile.
 const growthCassette = (): Cassette => ({ queries: baseQueries(), rest: baseRest() });
 
-// A new profile is filled from the default template once the templates arrive; typing before that would
-// be overwritten.
-const openNewProfile = async (page: Page) => {
+const openProfile = async (page: Page) => {
     await page.goto('/settings/business-profile');
-    await expect(page.getByRole('combobox', { name: '从模板开始（可选）' })).toHaveText('持牌线上娱乐城找玩家');
+    await expect(page.getByText('还没有用户画像')).toBeVisible();
+    await expect(page.getByLabel('需要什么')).toBeVisible();
 };
 
 test.describe('growth user profiles', { tag: '@settings' }, () => {
     test.use({ cassette: growthCassette() });
 
-    test('starts from the casino template and flags what it leaves to the owner', async ({ page, pageErrorLog }) => {
-        await page.goto('/settings/business-profile');
+    test('starts blank and refuses a save with nothing to look for', async ({ page, pageErrorLog }) => {
+        await openProfile(page);
 
-        await expect(page.getByText('还没有用户画像')).toBeVisible();
-        await expect(page.getByRole('combobox', { name: '从模板开始（可选）' })).toHaveText('持牌线上娱乐城找玩家');
-        await expect(page.getByLabel('产品类型')).toHaveValue('Licensed online gaming platform');
+        await expect(page.getByRole('combobox')).toHaveCount(0);
+        await expect(page.getByLabel('需要什么')).toHaveValue('');
+        await expect(page.getByLabel('排除什么')).toHaveValue('');
+        await expect(page.getByLabel('Jev 分数')).toHaveValue('');
 
         await page.getByRole('button', { name: '保存' }).click();
 
-        await expect(page.getByText('请填写业务名称')).toBeVisible();
-        await expect(page.getByText('请填写目标地区')).toBeVisible();
-        await expect(page.getByText('请至少选择一种目标语言')).toBeVisible();
+        await expect(page.getByText('请至少填写需要什么、排除什么，或添加一段')).toBeVisible();
         await expect(page.getByText('用户画像已保存')).toHaveCount(0);
 
         expectCleanPage(pageErrorLog);
     });
 
-    test('rejects a round target outside 1 to 1000', async ({ page, pageErrorLog }) => {
-        await openNewProfile(page);
+    test('fills the example prompts and rejects a scoring line that cannot qualify anyone', async ({
+        page,
+        pageErrorLog,
+    }) => {
+        await openProfile(page);
 
-        await page.getByLabel('默认每轮目标数').fill('1001');
+        await page.getByRole('button', { name: '填入示例' }).click();
+
+        await expect(page.getByLabel('需要什么')).toHaveValue(/Offer: A licensed/);
+        await expect(page.getByLabel('排除什么')).toHaveValue(/bots and spam/);
+        await expect(page.getByLabel('Jev 分数')).toHaveValue(/qualified >= 8/);
+        await expect(page.getByText('qualified >= 7、watchlist >= 4')).toBeVisible();
+
+        await page.getByLabel('Jev 分数').fill('player = 3\nqualified >= 9\nwatchlist >= 1');
         await page.getByRole('button', { name: '保存' }).click();
 
-        await expect(page.getByText('目标数请输入 1–1000 之间的整数')).toBeVisible();
-
-        await page.getByLabel('默认每轮目标数').fill('0');
-
-        await expect(page.getByText('目标数请输入 1–1000 之间的整数')).toBeVisible();
-
-        await page.getByLabel('默认每轮目标数').fill('50');
-
-        await expect(page.getByText('目标数请输入 1–1000 之间的整数')).toHaveCount(0);
+        await expect(page.getByText('各项分数加起来低于合格线，没有潜客能合格')).toBeVisible();
+        await expect(page.getByText('用户画像已保存')).toHaveCount(0);
 
         expectCleanPage(pageErrorLog);
     });
 
-    test('saves a complete profile', async ({ page, pageErrorLog }) => {
-        await openNewProfile(page);
-
-        await page.getByLabel('业务名称').fill('星穹纪元');
-        await page.getByLabel('产品名称').fill('星穹纪元, Star Era');
-        await page.getByLabel('产品类型').fill('MMORPG');
-        await page.getByLabel('你想让目标人群知道什么').fill('新服开启，老玩家回归送礼包');
-        await page.getByLabel('目标地区').fill('东南亚、台湾');
-        await page.getByRole('button', { name: '中文' }).click();
-        await page.getByRole('button', { name: '英语' }).click();
-        await page.getByLabel('默认每轮目标数').fill('30');
-        await page.getByRole('button', { name: '保存' }).click();
-
-        await expect(page.getByText('用户画像已保存，下一轮起生效。')).toBeVisible();
-        await expect(page.getByText('请填写业务名称')).toHaveCount(0);
-        await expect(page.getByLabel('业务名称')).toHaveValue('星穹纪元');
-        await expect(page.getByLabel('默认每轮目标数')).toHaveValue('30');
-
-        expectCleanPage(pageErrorLog);
-    });
-
-    test('switches to the game template and keeps the name typed before', async ({ page, pageErrorLog }) => {
-        await openNewProfile(page);
-
-        await page.getByLabel('业务名称').fill('Star Era');
-        await page.getByRole('combobox', { name: '从模板开始（可选）' }).click();
-        await page.getByRole('option', { name: '游戏厂商找玩家' }).click();
-
-        await expect(page.getByLabel('业务名称')).toHaveValue('Star Era');
-        await expect(page.getByLabel('产品类型')).toHaveValue('Mobile and PC games');
-
-        expectCleanPage(pageErrorLog);
-    });
-
-    test('keeps several profiles and copies, defaults and deletes them', async ({ page, pageErrorLog }) => {
-        await openNewProfile(page);
+    test('saves a profile, adds a prompt, and copies, defaults and deletes profiles', async ({
+        page,
+        pageErrorLog,
+    }) => {
+        await openProfile(page);
 
         await page.getByLabel('画像名称').fill('泰国玩家');
-        await page.getByLabel('业务名称').fill('Lucky Star');
-        await page.getByLabel('目标地区').fill('泰国');
-        await page.getByRole('button', { name: '泰语' }).click();
+        await page.getByLabel('需要什么').fill('找泰国的 MOBA 玩家');
+        await page.getByRole('button', { name: '添加一项' }).click();
+        await page.getByLabel('标题 1').fill('预算');
+        await page.getByLabel('内容 1').fill('只找愿意付费的');
         await page.getByRole('button', { name: '保存' }).click();
+
         await expect(page.getByText('用户画像已保存，下一轮起生效。')).toBeVisible();
         await expect(page.getByRole('button', { name: /泰国玩家.*默认/ })).toBeVisible();
+        await expect(page.getByLabel('需要什么')).toHaveValue('找泰国的 MOBA 玩家');
+        await expect(page.getByLabel('标题 1')).toHaveValue('预算');
+
+        await page.getByLabel('需要什么').fill('改过还没保存');
+
+        await expect(page.getByText('有未保存的修改')).toBeVisible();
 
         await page.getByRole('button', { name: '复制' }).click();
         await expect(page.getByRole('button', { name: '泰国玩家（副本）' })).toBeVisible();

@@ -216,30 +216,24 @@ export interface GrowthFlowProfile {
     title: string;
 }
 
+// The three prompts the agents and Jev read, plus any prompts added after them.
+// scoring is the Jev rules as text (see profile-scoring.ts).
 export interface GrowthProfile {
-    competitors: string[];
-    // Empty means the platform account alone. Anything not a GrowthContactType is a name the owner added.
-    contact_types?: string[];
     // The one a task uses when none is chosen.
     default: boolean;
-    default_target: number;
-    games: string[];
-    genre: string;
+    // Read back from a "Lead target: N" line in need. Absent means the usual 50.
+    default_target?: number;
+    edited_by?: '' | 'assistant' | 'user';
+    exclude: string;
+    // Set when the last assistant edit can be restored.
+    has_previous?: boolean;
     id: number;
-    languages: string[];
     name: string;
-    // Free text handed to the agents as written.
-    notes: string;
-    pitch: string;
-    regions: string[];
-    // Absent means the server's default weighting.
-    scoring?: GrowthScoring | null;
-    signals: string[];
+    need: string;
+    scoring: string;
+    sections?: GrowthProfileSection[];
     // The name the owner knows the profile by; the server falls back to the business name.
     title: string;
-    // A hit lowers the score by unwanted_penalty (0 is the server's default) and flags the lead.
-    unwanted: string[];
-    unwanted_penalty: number;
     updated_at: string;
 }
 
@@ -260,15 +254,28 @@ export interface GrowthProfileDraftSave {
     use_for_flow?: boolean;
 }
 
-export type GrowthProfileInput = Omit<GrowthProfile, 'default' | 'id' | 'updated_at'>;
+export type GrowthProfileInput = Omit<GrowthProfile, 'default' | 'edited_by' | 'has_previous' | 'id' | 'updated_at'>;
 
-// A starting profile in English, the language the agents read; the page names it by its id. A list
-// the preset leaves to the owner, such as the regions, comes back null.
+// A starting profile in English, the language the agents read; the page names it by its id.
+// The three prompts are the text the form pastes in. A preset leaves a prompt null when it has none.
 export interface GrowthProfilePreset {
     // The one a new profile starts from; without it the first preset is.
     default?: boolean;
     id: string;
-    profile: { [K in keyof GrowthProfileInput]: GrowthProfileInput[K] | null };
+    profile: {
+        exclude: null | string;
+        name: null | string;
+        need: null | string;
+        scoring: null | string;
+        sections?: GrowthProfileSection[] | null;
+        title: null | string;
+    };
+}
+
+export interface GrowthProfileSection {
+    body: string;
+    id: string;
+    title: string;
 }
 
 export type GrowthProxySource = 'account' | 'direct' | 'global';
@@ -376,23 +383,6 @@ export interface GrowthScheduleLastRun {
 export interface GrowthSchedulesResponse {
     schedules: GrowthSchedule[];
     total: number;
-}
-
-// Each dimension the judgement model answers yes for a message adds its points; `recent` adds its points for a
-// message of the last 7 days and half of them for one of the last 30.
-export interface GrowthScoring {
-    dimensions: GrowthScoringDimension[];
-    qualified: number;
-    recent?: null | { points: number };
-    watchlist: number;
-}
-
-// An empty key is made from the name by the server. The description is what the judgement model reads.
-export interface GrowthScoringDimension {
-    description: string;
-    key: string;
-    name: string;
-    points: number;
 }
 
 // One card of the "Keys & connections" page. Secret fields come back masked ("••••abcd"); `source` says

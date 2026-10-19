@@ -168,11 +168,13 @@ func (s sheetStore) GetUserGrowthSchedules(ctx context.Context, p database.GetUs
 }
 
 func TestExport_LeadsCSVContext_GathersLanguageDimensionNamesSourcesAndZone(t *testing.T) {
-	profile, err := json.Marshal(Profile{Scoring: &Scoring{Dimensions: []ScoringDimension{
+	stored := Profile{Scoring: &Scoring{Dimensions: []ScoringDimension{
 		{Key: "player", Name: "renamed built-in", Points: 3},
 		{Key: "vip", Name: "VIP 玩家", Points: 2},
 		{Key: "nameless", Points: 1},
-	}, Qualified: 5, Watchlist: 2}})
+	}, Qualified: 5, Watchlist: 2}}
+	stored.normalize()
+	profile, err := json.Marshal(stored)
 	require.NoError(t, err)
 	flowSchedule := sql.NullInt64{Int64: 10, Valid: true}
 	svc := NewService(sheetStore{

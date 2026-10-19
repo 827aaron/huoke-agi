@@ -63,6 +63,7 @@ const (
 	GrowthGetProfileToolName    = "growth_get_profile"
 	GrowthDraftProfileToolName  = "growth_draft_profile"
 	GrowthSaveProfileToolName   = "growth_save_profile"
+	GrowthUpdateProfileToolName = "growth_update_profile"
 )
 
 type ToolType int
@@ -161,6 +162,7 @@ var toolsTypeMapping = map[string]ToolType{
 	GrowthGetProfileToolName:    EnvironmentToolType,
 	GrowthDraftProfileToolName:  EnvironmentToolType,
 	GrowthSaveProfileToolName:   EnvironmentToolType,
+	GrowthUpdateProfileToolName: EnvironmentToolType,
 }
 
 var reflector = &jsonschema.Reflector{
@@ -505,7 +507,7 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"the excerpts of any other lead are scored by the judgement model (Jev), whose score replaces the one given. " +
 			"A person is stored once per customer however often they are saved: a repeat adds evidence and contacts and may raise the score. " +
 			"Returns per lead NEW, EXISTING, UPGRADED (watchlist to qualified) or REJECTED with the reason, and the progress line. " +
-			"Only qualified leads (at the qualified line of the business profile's Scoring line) count toward the target.",
+			"Only qualified leads (at the qualified line of the business profile's Jev score section) count toward the target.",
 		Parameters: reflector.Reflect(&GrowthUpsertLeadsAction{}),
 	},
 	GrowthGetProgressToolName: {
@@ -545,6 +547,16 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 		Description: "Save the current draft once the user confirmed it: over the profile it changes, or as a new one. " +
 			"use_for_task makes this task use it from its next step on. Returns the saved profile with its profile_id.",
 		Parameters: reflector.Reflect(&GrowthSaveProfileAction{}),
+	},
+	GrowthUpdateProfileToolName: {
+		Name: GrowthUpdateProfileToolName,
+		Description: "Change one saved profile immediately: one of the three prompts (need, exclude, scoring) or an added prompt. " +
+			"Use it when the user asks to change an existing profile, including \"add this to the exclusions\". " +
+			"action=set replaces the text, action=append adds a line, action=add_section adds a prompt (section_title and text), " +
+			"action=remove_section deletes one by section_id or section_title. set with section_id and new_title renames an added prompt; " +
+			"set with section_id and text replaces its body. The previous text is kept so the user can restore it on the profile page.\n" +
+			growth.ProfileGuide,
+		Parameters: reflector.Reflect(&GrowthUpdateProfileAction{}),
 	},
 	WaitFlowCompletionToolName: {
 		Name: WaitFlowCompletionToolName,
@@ -588,7 +600,7 @@ func getMessageResultFormat(name string) database.MsglogResultFormat {
 	case FileToolName, BrowserToolName,
 		GrowthSearchSourcesToolName, GrowthAddSourcesToolName, GrowthJoinSourceToolName, GrowthSyncSourceToolName,
 		GrowthUpsertLeadsToolName, GrowthGetProgressToolName, GrowthDeliverLeadsToolName, GrowthListLeadsToolName,
-		GrowthGetProfileToolName, GrowthDraftProfileToolName, GrowthSaveProfileToolName:
+		GrowthGetProfileToolName, GrowthDraftProfileToolName, GrowthSaveProfileToolName, GrowthUpdateProfileToolName:
 		// The growth tools answer in JSON, which the Markdown view runs together.
 		return database.MsglogResultFormatPlain
 	default:

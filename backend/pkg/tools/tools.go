@@ -1068,7 +1068,7 @@ func (fte *flowToolsExecutor) GetAssistantExecutor(cfg AssistantExecutorConfig) 
 	fte.addGrowthTools(ce, nil,
 		GrowthSearchSourcesToolName, GrowthAddSourcesToolName, GrowthJoinSourceToolName, GrowthSyncSourceToolName,
 		GrowthUpsertLeadsToolName, GrowthGetProgressToolName, GrowthDeliverLeadsToolName, GrowthListLeadsToolName,
-		GrowthGetProfileToolName, GrowthDraftProfileToolName, GrowthSaveProfileToolName)
+		GrowthGetProfileToolName, GrowthDraftProfileToolName, GrowthSaveProfileToolName, GrowthUpdateProfileToolName)
 
 	return ce, nil
 }

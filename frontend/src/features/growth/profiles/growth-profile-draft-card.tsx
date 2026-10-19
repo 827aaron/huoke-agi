@@ -11,11 +11,8 @@ import type { GrowthProfileInput } from '../growth-types';
 
 import { growthApi } from '../growth-api';
 import { useGrowthFlow } from '../growth-flow-provider';
-import { DEFAULT_SCORING } from '../settings/growth-profile-form';
 
 const text = copy.flowProfile.draft;
-
-const joined = (items: null | string[] | undefined) => (items ?? []).filter(Boolean).join('、');
 
 // The profile the flow's assistant drafted, until the owner saves it.
 export function GrowthProfileDraftCard() {
@@ -93,60 +90,25 @@ function Block({ children, title }: { children: React.ReactNode; title: string }
 }
 
 function DraftBlocks({ profile }: { profile: GrowthProfileInput }) {
-    const { field } = copy.profile;
-    const scoring = profile.scoring?.dimensions?.length ? profile.scoring : DEFAULT_SCORING;
-
     return (
         <>
             <Block title={copy.profile.section.wanted}>
-                <Line
-                    label={field.name.label}
-                    value={profile.name}
-                />
-                <Line
-                    label={field.pitch.label}
-                    value={profile.pitch}
-                />
-                <Line
-                    label={field.regions.label}
-                    value={joined(profile.regions)}
-                />
-                <Line
-                    label={field.languages.label}
-                    value={joined(profile.languages)}
-                />
-                <Line
-                    label={field.signals.label}
-                    value={joined(profile.signals)}
-                />
+                <span className="whitespace-pre-wrap">{profile.need || text.noUnwanted}</span>
             </Block>
             <Block title={copy.profile.section.unwanted}>
-                <span>{joined(profile.unwanted) || text.noUnwanted}</span>
-                <span className="text-xs">
-                    {copy.profile.compliance.title}：{copy.profile.compliance.lines.join('；')}
-                </span>
+                <span className="whitespace-pre-wrap">{profile.exclude || text.noUnwanted}</span>
             </Block>
             <Block title={copy.profile.section.scoring}>
-                {scoring.dimensions.map((dimension) => (
-                    <span key={dimension.key || dimension.name}>
-                        {copy.profile.scoring.defaultNames[dimension.name] ?? dimension.name} +{dimension.points}
-                    </span>
-                ))}
-                {!!scoring.recent?.points && (
-                    <span>
-                        {copy.profile.scoring.recent} +{scoring.recent.points}
-                    </span>
-                )}
-                <span>{text.lines(scoring.qualified, scoring.watchlist)}</span>
+                <span className="whitespace-pre-wrap">{profile.scoring}</span>
             </Block>
+            {(profile.sections ?? []).map((section) => (
+                <Block
+                    key={section.id || section.title}
+                    title={section.title}
+                >
+                    <span className="whitespace-pre-wrap">{section.body}</span>
+                </Block>
+            ))}
         </>
     );
-}
-
-function Line({ label, value }: { label: string; value: string }) {
-    return value ? (
-        <span>
-            {label}：{value}
-        </span>
-    ) : null;
 }

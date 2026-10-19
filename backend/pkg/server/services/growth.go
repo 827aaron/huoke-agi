@@ -1222,7 +1222,11 @@ func (s *GrowthService) ListProfiles(c *gin.Context) {
 // @Failure 403 {object} response.errorResp "getting the presets not permitted"
 // @Router /growth/profiles/presets [get]
 func (s *GrowthService) ListProfilePresets(c *gin.Context) {
-	response.Success(c, http.StatusOK, growth.ProfilePresets())
+	presets := growth.ProfilePresets()
+	for i := range presets {
+		presets[i].Profile = presets[i].Profile.WithPrompts()
+	}
+	response.Success(c, http.StatusOK, presets)
 }
 
 // CreateProfile is a function to store a new business profile
@@ -1344,6 +1348,33 @@ func (s *GrowthService) SetDefaultProfile(c *gin.Context) {
 		return
 	}
 
+	response.Success(c, http.StatusOK, v)
+}
+
+// RestoreProfile puts back the prompts from before the last assistant edit.
+// @Summary Restore the previous version of a business profile
+// @Tags Growth
+// @Produce json
+// @Security BearerAuth
+// @Param profileID path int true "profile id" minimum(0)
+// @Success 200 {object} response.successResp{data=growth.ProfileView} "profile restored successful"
+// @Failure 400 {object} response.errorResp "profile has no earlier version"
+// @Failure 403 {object} response.errorResp "restoring the profile not permitted"
+// @Failure 404 {object} response.errorResp "profile not found"
+// @Failure 500 {object} response.errorResp "internal error on restoring the profile"
+// @Router /growth/profiles/{profileID}/restore [post]
+func (s *GrowthService) RestoreProfile(c *gin.Context) {
+	uid := int64(c.GetUint64("uid"))
+	id, err := strconv.ParseInt(c.Param("profileID"), 10, 64)
+	if err != nil {
+		invalidRequest(c, err)
+		return
+	}
+	v, err := s.svc.RestoreProfile(c, uid, id)
+	if err != nil {
+		profileError(c, err)
+		return
+	}
 	response.Success(c, http.StatusOK, v)
 }
 

@@ -934,6 +934,7 @@ type fakeGrowthBackend struct {
 	lastTitle   string
 	lastBase    *int64
 	lastApply   growth.ApplyDraftOptions
+	lastOp      growth.ProfileOp
 }
 
 func (f *fakeGrowthBackend) SearchSources(_ context.Context, scope growth.Scope, _ connectors.Platform, _ string, _ int) ([]growth.SourceView, error) {
@@ -1042,6 +1043,11 @@ func (f *fakeGrowthBackend) SaveProfileDraft(
 
 func (f *fakeGrowthBackend) ApplyProfileDraft(_ context.Context, userID, flowID int64, opt growth.ApplyDraftOptions) (growth.ProfileView, error) {
 	f.lastScope, f.lastApply = growth.Scope{UserID: userID, FlowID: flowID}, opt
+	return f.profile, f.err
+}
+
+func (f *fakeGrowthBackend) UpdateProfilePrompt(_ context.Context, userID, id int64, op growth.ProfileOp) (growth.ProfileView, error) {
+	f.lastScope, f.lastProfile, f.lastOp = growth.Scope{UserID: userID}, id, op
 	return f.profile, f.err
 }
 

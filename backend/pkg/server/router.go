@@ -488,6 +488,7 @@ func setGrowthGroup(parent *gin.RouterGroup, svc *services.GrowthService) {
 		gg.PUT("/profiles/:profileID", auth.PrivilegesRequired("growth.edit"), svc.UpdateProfile)
 		gg.DELETE("/profiles/:profileID", auth.PrivilegesRequired("growth.edit"), svc.DeleteProfile)
 		gg.POST("/profiles/:profileID/default", auth.PrivilegesRequired("growth.edit"), svc.SetDefaultProfile)
+		gg.POST("/profiles/:profileID/restore", auth.PrivilegesRequired("growth.edit"), svc.RestoreProfile)
 		gg.GET("/flows/:flowID/profile", auth.PrivilegesRequired("growth.view"), svc.GetFlowProfile)
 		gg.PUT("/flows/:flowID/profile", auth.PrivilegesRequired("growth.edit"), svc.SetFlowProfile)
 		gg.GET("/flows/:flowID/profile-draft", auth.PrivilegesRequired("growth.view"), svc.GetFlowProfileDraft)
