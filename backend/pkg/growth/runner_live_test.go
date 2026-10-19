@@ -287,3 +287,41 @@ func TestRunner_RunLeads_CountsWhatEachRoundFoundAndDelivered(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, other, "another customer's rounds")
 }
+
+// The page shows RunLeads and DeliveredCount of a finished round side by side.
+func TestRunner_RunLeads_KeepsCountingQualifiedLeadsSavedAfterAPartialDelivery(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	src := w.mustAddTelegramGroup(t, scope, tgGroup("721", "late_finds", "Late"))
+	_, err := w.svc.SetTarget(ctx, scope, 20)
+	require.NoError(t, err)
+	w.mustSaveQualified(t, scope, src, 1, 1)
+
+	d, err := w.svc.Deliver(ctx, scope, DeliverOptions{AllowPartial: true})
+	require.NoError(t, err)
+	require.Equal(t, RunStatusPartial, d.Status)
+	require.Equal(t, 1, d.Delivered)
+
+	w.mustSaveQualified(t, scope, src, 2, 15)
+	res, err := w.svc.UpsertLeads(ctx, scope, []LeadInput{qualified("40", src, "m40")})
+	require.NoError(t, err)
+	watchlist := TierWatchlist
+	_, err = w.svc.UpdateLead(ctx, w.user, res[0].LeadID, LeadUpdate{Tier: &watchlist})
+	require.NoError(t, err)
+
+	runs, err := w.svc.ListRuns(ctx, w.user, &scope.FlowID)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	assert.Equal(t, RunStatusPartial, runs[0].Status)
+	assert.Equal(t, int32(1), runs[0].DeliveredCount, "the delivery stays what the call handed over")
+
+	counts, err := w.svc.RunLeads(ctx, w.user, []int64{runs[0].ID})
+	require.NoError(t, err)
+	assert.Equal(t, RunLeads{Found: 16, Watch: 1}, counts[runs[0].ID])
+
+	p, err := w.svc.Progress(ctx, scope)
+	require.NoError(t, err)
+	assert.Equal(t, "PROGRESS: new_leads_this_task=16 target=20", p.Line())
+	assert.Equal(t, 1, p.DeliveredThisRun)
+}
