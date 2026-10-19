@@ -71,6 +71,11 @@ type Service struct {
 	readMu sync.Mutex
 	// lastRead is each account's latest source read: which source, and when it started or is scheduled to.
 	lastRead map[int64]sourceRead
+
+	fallbackMu sync.Mutex
+	// fallbacks tallies per round the pre-screen batches Jev failed on since this process
+	// started; nil until the first one. It is not stored: a restart starts the count over.
+	fallbacks map[roundKey]int
 }
 
 func NewService(db database.Querier, cfg *config.Config) *Service {

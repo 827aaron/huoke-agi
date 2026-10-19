@@ -57,22 +57,103 @@ type screener struct {
 	now        func() time.Time
 	// task is what the customer asked of the scope's flow; it defines whom to look for.
 	task string
+	// fallbacks counts the batches of this read Jev failed on: their messages went to
+	// the agent unscreened, which the read's result and the round's progress report.
+	fallbacks int
 }
 
-// screenerFor builds the owner's Jev client, judging by the profile of scope's flow.
-func (s *Service) screenerFor(ctx context.Context, scope Scope) (*screener, error) {
-	cfg, err := s.ConfigFor(ctx, scope.UserID)
+// judgeConfig is the owner's settings when they hold a Jev key, else ErrNoJudge: the one
+// check every path that would otherwise read unscreened goes through.
+func (s *Service) judgeConfig(ctx context.Context, userID int64) (*config.Config, error) {
+	cfg, err := s.ConfigFor(ctx, userID)
 	if err != nil {
 		logrus.WithContext(ctx).WithError(err).Warn("pre-screen runs on the server's settings")
 	}
 	if cfg.TypeSafeAPIKey == "" {
 		return nil, ErrNoJudge
 	}
+	return cfg, nil
+}
+
+// JudgeReady is ErrNoJudge while the owner has no Jev key, so a round is refused before
+// it starts rather than after its agents have read.
+func (s *Service) JudgeReady(ctx context.Context, userID int64) error {
+	_, err := s.judgeConfig(ctx, userID)
+	return err
+}
+
+// screenerFor builds the owner's Jev client, judging by the profile of scope's flow.
+func (s *Service) screenerFor(ctx context.Context, scope Scope) (*screener, error) {
+	cfg, err := s.judgeConfig(ctx, scope.UserID)
+	if err != nil {
+		return nil, err
+	}
 	profile, err := s.judgingProfile(ctx, scope)
 	if err != nil {
 		return nil, err
 	}
 	return &screener{client: newJevClient(cfg), profile: profile, task: s.taskGoal(ctx, scope), now: time.Now}, nil
+}
+
+type roundKey struct{ userID, flowID, taskID int64 }
+
+func (sc Scope) roundKey() roundKey {
+	k := roundKey{userID: sc.UserID, flowID: sc.FlowID}
+	if sc.TaskID != nil {
+		k.taskID = *sc.TaskID
+	}
+	return k
+}
+
+func (s *Service) notePrescreenFallbacks(scope Scope, n int) {
+	if n == 0 {
+		return
+	}
+	s.fallbackMu.Lock()
+	defer s.fallbackMu.Unlock()
+	if s.fallbacks == nil {
+		s.fallbacks = map[roundKey]int{}
+	}
+	s.fallbacks[scope.roundKey()] += n
+}
+
+// PrescreenFallbacks is how many pre-screen batches Jev failed on in scope's round since
+// this process started; outside a task it is the sum over the owner's rounds, of the
+// flow when one is given.
+func (s *Service) PrescreenFallbacks(scope Scope) int {
+	s.fallbackMu.Lock()
+	defer s.fallbackMu.Unlock()
+	if scope.TaskID != nil {
+		return s.fallbacks[scope.roundKey()]
+	}
+	total := 0
+	for k, n := range s.fallbacks {
+		if k.userID == scope.UserID && (scope.FlowID == 0 || k.flowID == scope.FlowID) {
+			total += n
+		}
+	}
+	return total
+}
+
+func prescreenFallbackWarning(n int, span string) string {
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf("the pre-screen (Jev) failed on %d batch(es) %s: those messages came back unscreened and unscored, "+
+		"so the two-stage judgement did not save tokens on them; check the Jev key and model on the settings page", n, span)
+}
+
+// judgeWarning is the progress payload's warning: the missing key, which blocks every
+// read, and the round's pre-screen fallbacks, which do not block but cost tokens.
+func (s *Service) judgeWarning(ctx context.Context, userID int64, fallbacks int) string {
+	var parts []string
+	if err := s.JudgeReady(ctx, userID); err != nil {
+		parts = append(parts, err.Error())
+	}
+	if w := prescreenFallbackWarning(fallbacks, "this round"); w != "" {
+		parts = append(parts, w)
+	}
+	return strings.Join(parts, "; ")
 }
 
 // taskGoalRunes bounds each instruction: a preset template runs to a page, and its
@@ -145,6 +226,7 @@ func (s *Service) screen(
 		case ctx.Err() != nil:
 			return nil, ctx.Err()
 		case err != nil:
+			sc.fallbacks++
 			logrus.WithContext(ctx).WithError(err).WithField("source_id", sourceID).
 				Warn("pre-screen failed; the batch goes to scoring unscreened")
 			kept = append(kept, batch...)

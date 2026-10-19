@@ -50,8 +50,11 @@ type Progress struct {
 	Delivered int         `json:"delivered,omitempty"`
 	Since     string      `json:"since,omitempty"`
 	Sources   SourceStats `json:"sources"`
-	// Warning names a blocker only the customer can clear, such as a missing Jev key.
-	Warning string `json:"warning,omitempty"`
+	// PrescreenFallbacks counts the pre-screen batches Jev failed on this round, whose
+	// messages reached the agents unscreened; Warning names it, and a blocker only the
+	// customer can clear, such as a missing Jev key.
+	PrescreenFallbacks int    `json:"prescreen_fallback_batches,omitempty"`
+	Warning            string `json:"warning,omitempty"`
 }
 
 // Line is the one line every lead-collecting agent copies into its result; the
@@ -164,9 +167,8 @@ func (s *Service) ProgressSince(ctx context.Context, scope Scope, since time.Tim
 	if scope.TaskID == nil {
 		p.Qualified, p.Delivered = int(counts.Deliverable+counts.Delivered), int(counts.Delivered)
 	}
-	if cfg, _ := s.ConfigFor(ctx, scope.UserID); cfg.TypeSafeAPIKey == "" {
-		p.Warning = ErrNoJudge.Error()
-	}
+	p.PrescreenFallbacks = s.PrescreenFallbacks(scope)
+	p.Warning = s.judgeWarning(ctx, scope.UserID, p.PrescreenFallbacks)
 
 	if p.Sources, err = s.SourceStats(ctx, scope.UserID); err != nil {
 		return p, err

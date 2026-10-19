@@ -1,15 +1,118 @@
 package growth
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"pentagi/pkg/config"
+	"pentagi/pkg/database"
 	"pentagi/pkg/growth/screening"
 )
+
+// judgeStore is a store with no saved settings, so the server's config decides the Jev
+// key; a score write is recorded and otherwise refused, as screening a failed batch must not score.
+type judgeStore struct {
+	database.Querier
+	scores atomic.Int32
+}
+
+func (s *judgeStore) GetUserGrowthSettings(ctx context.Context, _ int64) ([]database.GrowthSetting, error) {
+	return nil, ctx.Err()
+}
+
+func (s *judgeStore) UpsertMessageScore(ctx context.Context, _ database.UpsertMessageScoreParams) error {
+	s.scores.Add(1)
+	return ctx.Err()
+}
+
+func TestScreen_ScreenerFor_RefusesWithoutAJevKey(t *testing.T) {
+	svc := NewService(&judgeStore{}, &config.Config{})
+	scope := Scope{UserID: 1, FlowID: 10}
+
+	_, err := svc.screenerFor(context.Background(), scope)
+	assert.ErrorIs(t, err, ErrNoJudge)
+	assert.ErrorIs(t, svc.JudgeReady(context.Background(), 1), ErrNoJudge)
+	assert.Contains(t, svc.judgeWarning(context.Background(), 1, 0), "no judgement model (Jev) is configured")
+
+	assert.NoError(t, NewService(&judgeStore{}, &config.Config{TypeSafeAPIKey: "k"}).JudgeReady(context.Background(), 1))
+}
+
+// failingJev answers the first `fail` batches with 500 and every later one with no answers.
+func failingJev(t *testing.T, fail int) *httptest.Server {
+	t.Helper()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		if int(calls.Add(1)) <= fail {
+			http.Error(rw, "upstream down", http.StatusInternalServerError)
+			return
+		}
+		_ = json.NewEncoder(rw).Encode(map[string]any{"answers": map[string]any{}})
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestScreen_Screen_CountsTheBatchesJevFailedOnAndKeepsThemWhole(t *testing.T) {
+	store := &judgeStore{}
+	svc := NewService(store, &config.Config{TypeSafeAPIKey: "k"})
+	sc := &screener{
+		client:  &screening.Client{URL: failingJev(t, 1).URL, Key: "k", Retries: 0},
+		profile: ProfileView{ID: 4, Profile: Profile{Scoring: &Scoring{Dimensions: defaultDimensions(3, 3, 2, 3), Qualified: 7, Watchlist: 4}}},
+		now:     time.Now,
+	}
+	msgs := make([]MessageView, 0, screenBatch+1)
+	for i := 0; i < screenBatch+1; i++ {
+		msgs = append(msgs, MessageView{MessageID: fmt.Sprint(i), SenderID: "s", Text: "hello"})
+	}
+
+	kept, err := svc.screen(context.Background(), 1, sc, 7, "telegram", "Fans", msgs)
+	require.NoError(t, err)
+	assert.Len(t, kept, screenBatch+1, "a failed batch and an unjudged one are both kept whole")
+	assert.Equal(t, 1, sc.fallbacks, "only the batch that failed counts, not the one Jev answered")
+	assert.Equal(t, int32(0), store.scores.Load())
+}
+
+func TestScreen_Screen_FailsTheReadWhenTheKeyIsRefused(t *testing.T) {
+	refused := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		http.Error(rw, "bad key", http.StatusUnauthorized)
+	}))
+	t.Cleanup(refused.Close)
+	svc := NewService(&judgeStore{}, &config.Config{TypeSafeAPIKey: "k"})
+	sc := &screener{client: &screening.Client{URL: refused.URL, Key: "k"}, now: time.Now}
+
+	_, err := svc.screen(context.Background(), 1, sc, 7, "telegram", "Fans", []MessageView{{MessageID: "1", Text: "hi"}})
+	assert.ErrorIs(t, err, ErrNoJudge)
+	assert.Equal(t, 0, sc.fallbacks, "a refused key blocks the read; it is not a fallback")
+}
+
+func TestScreen_PrescreenFallbacks_TalliesPerRoundAndSumsOutsideOne(t *testing.T) {
+	svc := NewService(&judgeStore{}, &config.Config{})
+	task1, task2 := int64(100), int64(200)
+	svc.notePrescreenFallbacks(Scope{UserID: 1, FlowID: 10, TaskID: &task1}, 2)
+	svc.notePrescreenFallbacks(Scope{UserID: 1, FlowID: 10, TaskID: &task1}, 1)
+	svc.notePrescreenFallbacks(Scope{UserID: 1, FlowID: 11, TaskID: &task2}, 4)
+	svc.notePrescreenFallbacks(Scope{UserID: 2, FlowID: 10}, 8)
+	svc.notePrescreenFallbacks(Scope{UserID: 1, FlowID: 10}, 0)
+
+	assert.Equal(t, 3, svc.PrescreenFallbacks(Scope{UserID: 1, FlowID: 10, TaskID: &task1}))
+	assert.Equal(t, 0, svc.PrescreenFallbacks(Scope{UserID: 1, FlowID: 10, TaskID: &task2}), "another round of the same owner")
+	assert.Equal(t, 3, svc.PrescreenFallbacks(Scope{UserID: 1, FlowID: 10}), "the flow's rounds")
+	assert.Equal(t, 7, svc.PrescreenFallbacks(Scope{UserID: 1}), "all the owner's rounds")
+	assert.Equal(t, 0, svc.PrescreenFallbacks(Scope{UserID: 3}))
+	assert.Equal(t, "", prescreenFallbackWarning(0, "this round"))
+	assert.Equal(t, "the pre-screen (Jev) failed on 3 batch(es) this round: those messages came back unscreened and unscored, "+
+		"so the two-stage judgement did not save tokens on them; check the Jev key and model on the settings page",
+		prescreenFallbackWarning(3, "this round"))
+}
 
 func TestScreen_ScreenMessages_NamesEachSender(t *testing.T) {
 	got := screenMessages([]MessageView{

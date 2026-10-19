@@ -236,6 +236,10 @@ func syncPayload(res growth.SyncResult) map[string]any {
 	if res.CaughtUp != nil && !*res.CaughtUp {
 		payload["note"] = "more new messages are waiting: call again with direction=newer"
 	}
+	if res.PrescreenFallbacks > 0 {
+		payload["prescreen_fallback_batches"] = res.PrescreenFallbacks
+		payload["warning"] = res.Warning
+	}
 	return payload
 }
 

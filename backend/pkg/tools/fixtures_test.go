@@ -911,9 +911,11 @@ func fakeScraper(t *testing.T, target string, pages map[string]scraperAnswer) *h
 type fakeGrowthBackend struct {
 	err      error
 	progress growth.Progress
-	delivery growth.Delivery
-	upserted []growth.LeadInput
-	added    []growth.AddSourceResult
+	// fallbacks is reported on every synced source as its pre-screen fallback count.
+	fallbacks int
+	delivery  growth.Delivery
+	upserted  []growth.LeadInput
+	added     []growth.AddSourceResult
 
 	lastScope        growth.Scope
 	lastOrigin       string
@@ -968,7 +970,11 @@ func (f *fakeGrowthBackend) SyncSources(_ context.Context, scope growth.Scope, i
 			results = append(results, growth.SyncResult{Source: growth.SourceView{ID: id}, Err: f.err, Messages: []growth.MessageView{}})
 			return results, f.err
 		}
-		results = append(results, growth.SyncResult{Source: growth.SourceView{ID: id}, Messages: []growth.MessageView{}, Read: 3, Skipped: 3})
+		res := growth.SyncResult{Source: growth.SourceView{ID: id}, Messages: []growth.MessageView{}, Read: 3, Skipped: 3}
+		if f.fallbacks > 0 {
+			res.PrescreenFallbacks, res.Warning = f.fallbacks, fmt.Sprintf("the pre-screen (Jev) failed on %d batch(es) in this read", f.fallbacks)
+		}
+		results = append(results, res)
 	}
 	return results, nil
 }

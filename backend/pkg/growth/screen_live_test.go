@@ -263,3 +263,37 @@ func TestScreen_SyncSources_AsksTheProfilesOwnDimensionsAndFlagsTheUnwanted(t *t
 	require.NoError(t, err)
 	require.Len(t, again, 1, "a later clean message keeps the flag")
 }
+
+func TestScreen_SyncSources_ReportsTheBatchesJevFailedOnToTheReadAndTheRound(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	w.savePace(t, map[string]string{"read_interval_seconds": "0", "first_sync_days": "90"})
+	down := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		http.Error(rw, "upstream down", http.StatusInternalServerError)
+	}))
+	t.Cleanup(down.Close)
+	w.svc.cfg.TypeSafeAPIURL = down.URL
+	jevBackoff = time.Millisecond
+	t.Cleanup(func() { jevBackoff = 2 * time.Second })
+
+	scope := w.seedTask(t)
+	src := w.mustAddTelegramGroup(t, scope, tgGroup("960", "rpg_down", "RPG down"),
+		tgMessage(1, "61", "I play RPG"), tgMessage(2, "62", "bored of my RPG"))
+
+	results, err := w.svc.SyncSources(ctx, scope, []int64{src}, SyncOptions{})
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	assert.Len(t, results[0].Messages, 2, "the failed batch is kept whole")
+	assert.Equal(t, 1, results[0].PrescreenFallbacks)
+	assert.Contains(t, results[0].Warning, "failed on 1 batch(es) in this read")
+
+	p, err := w.svc.Progress(ctx, scope)
+	require.NoError(t, err)
+	assert.Equal(t, 1, p.PrescreenFallbacks)
+	assert.Contains(t, p.Warning, "failed on 1 batch(es) this round")
+
+	other := w.seedTask(t)
+	p, err = w.svc.Progress(ctx, other)
+	require.NoError(t, err)
+	assert.Equal(t, 0, p.PrescreenFallbacks, "another round of the owner is not charged")
+}

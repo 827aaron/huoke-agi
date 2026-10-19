@@ -116,6 +116,20 @@ func TestGrowth_Handle_SyncWithoutIDsAsksForEveryJoinedSource(t *testing.T) {
 	assert.Equal(t, "no source in the pool is joined yet. Join sources with growth_join_source first, or pass source_ids.", out)
 }
 
+func TestGrowth_Handle_SyncReportsThePrescreenFallbacksOfARead(t *testing.T) {
+	out, err := newGrowthTools(&fakeGrowthBackend{fallbacks: 2}, 1, 42, nil).Handle(t.Context(),
+		GrowthSyncSourceToolName, json.RawMessage(`{"source_id":5}`))
+	require.NoError(t, err)
+	assert.Contains(t, out, `"prescreen_fallback_batches":2`)
+	assert.Contains(t, out, `"warning":"the pre-screen (Jev) failed on 2 batch(es) in this read"`)
+
+	out, err = newGrowthTools(&fakeGrowthBackend{}, 1, 42, nil).Handle(t.Context(),
+		GrowthSyncSourceToolName, json.RawMessage(`{"source_id":5}`))
+	require.NoError(t, err)
+	assert.NotContains(t, out, "prescreen_fallback_batches")
+	assert.NotContains(t, out, `"warning"`)
+}
+
 func TestGrowth_Handle_ReturnsTheErrorOfACancelledCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
