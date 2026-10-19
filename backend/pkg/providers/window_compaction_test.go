@@ -29,7 +29,8 @@ func TestWindowCompaction_CompactChainForWindow_SummarisesOnlyAChainThatOutgrewT
 		wantSummaries bool
 	}{
 		{name: "a chain that fits is left alone", window: windowCompactionWindow(200000), turns: 4},
-		{name: "an unknown window leaves the chain alone", window: nil, turns: 40},
+		{name: "an unknown window leaves a chain inside 128k tokens alone", window: nil, turns: 40},
+		{name: "an unknown window summarises a chain past 128k tokens", window: nil, turns: 80, wantDone: true, wantSummaries: true},
 		{name: "a window with no room for an answer leaves the chain alone", window: windowCompactionWindow(512), turns: 40},
 		{name: "a chain far above the window is summarised", window: windowCompactionWindow(8000), turns: 40, wantDone: true, wantSummaries: true},
 		{name: "a failed summarisation keeps the chain", window: windowCompactionWindow(8000), turns: 40, failing: true, wantSummaries: true},
