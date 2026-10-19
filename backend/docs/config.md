@@ -1228,10 +1228,10 @@ These settings control the text summarization behavior used for condensing long 
 | SummarizerPreserveLast   | `SUMMARIZER_PRESERVE_LAST`       | `true`        | Preserve the last message in summarization                 |
 | SummarizerUseQA          | `SUMMARIZER_USE_QA`              | `true`        | Use question-answer format for summarization               |
 | SummarizerSumHumanInQA   | `SUMMARIZER_SUM_MSG_HUMAN_IN_QA` | `false`       | Include human messages in QA summaries                     |
-| SummarizerLastSecBytes   | `SUMMARIZER_LAST_SEC_BYTES`      | `51200`       | Bytes to preserve from the last section (50KB)             |
-| SummarizerMaxBPBytes     | `SUMMARIZER_MAX_BP_BYTES`        | `16384`       | Maximum bytes for bullet points summarization (16KB)       |
-| SummarizerMaxQASections  | `SUMMARIZER_MAX_QA_SECTIONS`     | `10`          | Maximum QA sections to include                             |
-| SummarizerMaxQABytes     | `SUMMARIZER_MAX_QA_BYTES`        | `65536`       | Maximum bytes for QA summarization (64KB)                  |
+| SummarizerLastSecBytes   | `SUMMARIZER_LAST_SEC_BYTES`      | `20480`       | Bytes to preserve from the last section (20KB)             |
+| SummarizerMaxBPBytes     | `SUMMARIZER_MAX_BP_BYTES`        | `8192`        | Maximum bytes for bullet points summarization (8KB)        |
+| SummarizerMaxQASections  | `SUMMARIZER_MAX_QA_SECTIONS`     | `4`           | Maximum QA sections to include                             |
+| SummarizerMaxQABytes     | `SUMMARIZER_MAX_QA_BYTES`        | `24576`       | Maximum bytes for QA summarization (24KB)                  |
 | SummarizerKeepQASections | `SUMMARIZER_KEEP_QA_SECTIONS`    | `1`           | Number of recent QA sections to keep without summarization |
 
 ### Usage Details and Impact on System Behavior
@@ -1865,7 +1865,7 @@ These settings control HTTP proxy, SSL configuration, and network timeouts for o
 | ProxyURL            | `PROXY_URL`             | *(none)*      | URL for HTTP proxy (e.g., `http://user:pass@proxy:8080`)         |
 | ExternalSSLCAPath   | `EXTERNAL_SSL_CA_PATH`  | *(none)*      | Path to trusted CA certificate for external LLM SSL connections  |
 | ExternalSSLInsecure | `EXTERNAL_SSL_INSECURE` | `false`       | Skip SSL certificate verification for external connections       |
-| HTTPClientTimeout   | `HTTP_CLIENT_TIMEOUT`   | `600`         | Timeout in seconds for external API calls (0 = no timeout). The shipped `docker-compose.yml` sets `300` |
+| HTTPClientTimeout   | `HTTP_CLIENT_TIMEOUT`   | `240`         | Timeout in seconds for external API calls (0 = no timeout) |
 
 ### Usage Details
 
@@ -2013,8 +2013,8 @@ These settings control the agent supervision system, including execution monitor
 | ExecutionMonitorEnabled        | `EXECUTION_MONITOR_ENABLED`         | `false`       | Enable automatic execution monitoring (mentor/adviser supervision)     |
 | ExecutionMonitorSameToolLimit  | `EXECUTION_MONITOR_SAME_TOOL_LIMIT` | `5`           | Threshold for consecutive identical tool calls before mentor review    |
 | ExecutionMonitorTotalToolLimit | `EXECUTION_MONITOR_TOTAL_TOOL_LIMIT`| `10`          | Threshold for total tool calls before mentor review                    |
-| MaxGeneralAgentToolCalls       | `MAX_GENERAL_AGENT_TOOL_CALLS`      | `100`         | Maximum tool calls for general agents (Assistant, Primary, Researcher, Coder, Installer) |
-| MaxLimitedAgentToolCalls       | `MAX_LIMITED_AGENT_TOOL_CALLS`      | `20`          | Maximum tool calls for limited agents (Searcher, Enricher, etc.)       |
+| MaxGeneralAgentToolCalls       | `MAX_GENERAL_AGENT_TOOL_CALLS`      | `50`          | Maximum tool calls for general agents (Assistant, Primary, Researcher, Coder, Installer) |
+| MaxLimitedAgentToolCalls       | `MAX_LIMITED_AGENT_TOOL_CALLS`      | `15`          | Maximum tool calls for limited agents (Searcher, Enricher, etc.)       |
 | AgentPlanningStepEnabled       | `AGENT_PLANNING_STEP_ENABLED`       | `false`       | Enable automatic task planning for specialist agents                   |
 
 ### Usage Details
