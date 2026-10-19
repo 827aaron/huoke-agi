@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,17 +38,21 @@ const (
 
 	maxSearchLimit   = 50
 	maxHistoryLimit  = 60
-	maxMessageRunes  = 1500
+	maxMessageRunes  = 400
 	maxDescRunes     = 300
 	defaultPageLimit = 30
+	// maxFullMessageRunes bounds one message fetched for an evidence excerpt. A page read
+	// stays at maxMessageRunes, the opening lines the pre-screen judges.
+	maxFullMessageRunes = 8000
 )
 
 var (
 	ErrSourceNotFound = errors.New("source not found in the pool")
 	// ErrBrowserSource is returned for operations a web source does not support:
 	// its pages are read with the browser tool, not through a connector.
-	ErrBrowserSource  = errors.New("web sources are read with the browser tool")
-	ErrNoJoinedSource = errors.New("no source in the pool is joined yet")
+	ErrBrowserSource   = errors.New("web sources are read with the browser tool")
+	ErrNoJoinedSource  = errors.New("no source in the pool is joined yet")
+	ErrMessageNotFound = errors.New("message not found in this source")
 )
 
 type SourceView struct {
@@ -1237,6 +1242,51 @@ func (s *Service) GetUser(
 		return err
 	})
 	return profile, err
+}
+
+// ReadMessage returns one message's full text. It does not move the source's read cursor
+// and does not screen the message again: an evidence excerpt quotes this text.
+func (s *Service) ReadMessage(ctx context.Context, scope Scope, sourceID int64, messageID string) (MessageView, error) {
+	id, err := strconv.ParseInt(strings.TrimSpace(messageID), 10, 64)
+	if err != nil || id <= 0 {
+		return MessageView{}, fmt.Errorf("message_id %q is not a message id", messageID)
+	}
+	src, err := s.userSource(ctx, scope.UserID, sourceID)
+	if err != nil {
+		return MessageView{}, err
+	}
+	if src.Platform == string(connectors.PlatformWeb) {
+		return MessageView{}, fmt.Errorf("%w: open %s", ErrBrowserSource, src.Link)
+	}
+
+	var view MessageView
+	err = s.withAccount(ctx, scope.UserID, connectors.Platform(src.Platform), src.ID, nil,
+		func(conn connectors.Connector, acc database.ChannelAccount) error {
+			if !connectors.Has(conn, connectors.CapReadHistory) {
+				return fmt.Errorf("%w: reading history on %s", connectors.ErrUnsupported, src.Platform)
+			}
+			var err error
+			if src, err = s.ensureResolved(ctx, scope, conn, acc, src); err != nil {
+				return err
+			}
+			if src.Platform == string(connectors.PlatformTelegram) {
+				if err := s.awaitReadGap(ctx, acc.ID, src.ID, s.telegramPace(ctx, scope.UserID)); err != nil {
+					return err
+				}
+			}
+			page, err := conn.ReadHistory(ctx, s.sourceRef(ctx, acc.ID, src), connectors.HistoryRequest{OffsetID: id + 1, Limit: 1})
+			if err != nil {
+				return err
+			}
+			for _, m := range page.Messages {
+				if m.ID == id {
+					view = messageView(m, maxFullMessageRunes)
+					return nil
+				}
+			}
+			return fmt.Errorf("%w: %s", ErrMessageNotFound, messageID)
+		})
+	return view, err
 }
 
 // ListSources returns the pool with the membership of the user's accounts folded in:

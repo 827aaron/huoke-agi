@@ -20,6 +20,7 @@ type GrowthBackend interface {
 	AddSources(ctx context.Context, scope growth.Scope, links []string, origin string, discoveredFrom *int64) ([]growth.AddSourceResult, error)
 	JoinSources(ctx context.Context, scope growth.Scope, sourceIDs []int64) ([]growth.JoinOutcome, error)
 	SyncSources(ctx context.Context, scope growth.Scope, sourceIDs []int64, opt growth.SyncOptions) ([]growth.SyncResult, error)
+	ReadMessage(ctx context.Context, scope growth.Scope, sourceID int64, messageID string) (growth.MessageView, error)
 	GetUser(ctx context.Context, scope growth.Scope, platform connectors.Platform, userID string) (connectors.UserProfile, error)
 	UpsertLeads(ctx context.Context, scope growth.Scope, leads []growth.LeadInput) ([]growth.LeadResult, error)
 	Progress(ctx context.Context, scope growth.Scope) (growth.Progress, error)
@@ -236,39 +237,53 @@ func (g *growthTools) syncSource(ctx context.Context, args json.RawMessage) (str
 			return g.failure(ctx, err)
 		}
 		return g.respond(ctx, map[string]any{"user": profile})
+	case "message":
+		if action.SourceID.Int64() <= 0 {
+			return "", errors.New("source_id is required for action=message")
+		}
+		if strings.TrimSpace(action.MessageID.String()) == "" {
+			return "", errors.New("message_id is required for action=message")
+		}
+		msg, err := g.backend.ReadMessage(ctx, g.scope, action.SourceID.Int64(), action.MessageID.String())
+		if err != nil {
+			return g.failure(ctx, err)
+		}
+		return g.respond(ctx, map[string]any{"message": msg})
 	default:
-		return "", fmt.Errorf("unknown action %q: use history or user", action.Action)
+		return "", fmt.Errorf("unknown action %q: use history, user or message", action.Action)
 	}
 }
 
-// syncSourceView is the source as a read reports it: its identity and reading state,
-// without the description and discovery fields growth_search_sources already gave.
+// syncMessageRunes is how much of a message a page read hands the model. The opening
+// lines are what the pre-screen judged; action=message returns the rest of the text.
+const syncMessageRunes = 400
+
+// syncSourceView is the source as a page read reports it. Reading state goes back through
+// growth_get_progress; the description already came from growth_search_sources.
 type syncSourceView struct {
-	ID               int64  `json:"source_id"`
-	Platform         string `json:"platform"`
-	Title            string `json:"title,omitempty"`
-	Username         string `json:"username,omitempty"`
-	Link             string `json:"link,omitempty"`
-	Status           string `json:"status"`
-	JoinStatus       string `json:"join_status"`
-	MessagesRead     int64  `json:"messages_read"`
-	HistoryExhausted bool   `json:"history_exhausted"`
-	QualifiedLeads   int    `json:"qualified_leads"`
-	EmptyStreak      int    `json:"empty_streak"`
-	Health           string `json:"health"`
-	Note             string `json:"note,omitempty"`
+	ID    int64  `json:"source_id"`
+	Title string `json:"title,omitempty"`
+}
+
+// syncMessage is one message on a page. sender_is_bot and reply_to stay off it; the full
+// message, fetched by id, still carries them.
+type syncMessage struct {
+	MessageID      string    `json:"message_id"`
+	SenderID       string    `json:"sender_id"`
+	SenderUsername string    `json:"sender_username,omitempty"`
+	SenderName     string    `json:"sender_name,omitempty"`
+	Time           time.Time `json:"time"`
+	Link           string    `json:"link,omitempty"`
+	Text           string    `json:"text"`
+	Score          int       `json:"score,omitempty"`
+	Tier           string    `json:"tier,omitempty"`
+	Signals        string    `json:"signals,omitempty"`
 }
 
 func syncPayload(res growth.SyncResult, direction string) map[string]any {
-	src := res.Source
 	payload := map[string]any{
-		"source": syncSourceView{
-			ID: src.ID, Platform: src.Platform, Title: src.Title, Username: src.Username, Link: src.Link,
-			Status: src.Status, JoinStatus: src.JoinStatus, MessagesRead: src.MessagesRead,
-			HistoryExhausted: src.HistoryExhausted, QualifiedLeads: src.QualifiedLeads,
-			EmptyStreak: src.EmptyStreak, Health: src.Health, Note: src.Note,
-		},
-		"messages": res.Messages, "count": len(res.Messages),
+		"source":   syncSourceView{ID: res.Source.ID, Title: res.Source.Title},
+		"messages": syncMessages(res.Messages), "count": len(res.Messages),
 		"read": res.Read, "skipped_count": res.Skipped,
 	}
 	if res.CaughtUp != nil {
@@ -300,6 +315,26 @@ func syncPayload(res growth.SyncResult, direction string) map[string]any {
 		payload["warning"] = res.Warning
 	}
 	return payload
+}
+
+func syncMessages(in []growth.MessageView) []syncMessage {
+	out := make([]syncMessage, len(in))
+	for i, m := range in {
+		out[i] = syncMessage{
+			MessageID: m.MessageID, SenderID: m.SenderID, SenderUsername: m.SenderUsername,
+			SenderName: m.SenderName, Time: m.Time, Link: m.Link, Text: cutRunes(m.Text, syncMessageRunes),
+			Score: m.Score, Tier: m.Tier, Signals: m.Signals,
+		}
+	}
+	return out
+}
+
+func cutRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }
 
 // fitItems returns the longest prefix of items whose JSON fits in budget bytes, the
@@ -651,6 +686,8 @@ func growthFailureText(err error) string {
 		return fmt.Sprintf("%v. Use another mode or tool for this source.", err)
 	case errors.Is(err, growth.ErrSourceNotFound):
 		return fmt.Sprintf("%v. Use a source_id returned by %s or %s.", err, GrowthSearchSourcesToolName, GrowthAddSourcesToolName)
+	case errors.Is(err, growth.ErrMessageNotFound):
+		return fmt.Sprintf("%v. Use a message_id from a %s history page.", err, GrowthSyncSourceToolName)
 	case errors.Is(err, growth.ErrNoJudge):
 		return fmt.Sprintf("%v. Retrying will not help: report exactly this to the user and end this subtask.", err)
 	case errors.Is(err, growth.ErrNoJoinedSource):

@@ -918,6 +918,7 @@ type fakeGrowthBackend struct {
 	added     []growth.AddSourceResult
 	synced    map[int64]growth.SyncResult
 	leads     []growth.LeadView
+	message   growth.MessageView
 
 	lastScope        growth.Scope
 	lastOrigin       string
@@ -984,6 +985,11 @@ func (f *fakeGrowthBackend) SyncSources(_ context.Context, scope growth.Scope, i
 		results = append(results, res)
 	}
 	return results, nil
+}
+
+func (f *fakeGrowthBackend) ReadMessage(_ context.Context, scope growth.Scope, _ int64, _ string) (growth.MessageView, error) {
+	f.lastScope = scope
+	return f.message, f.err
 }
 
 func (f *fakeGrowthBackend) GetUser(_ context.Context, scope growth.Scope, _ connectors.Platform, _ string) (connectors.UserProfile, error) {
