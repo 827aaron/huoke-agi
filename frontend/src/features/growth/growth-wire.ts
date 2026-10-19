@@ -191,6 +191,7 @@ export const fromWireLeads = (leads: WireLead[], runs: WireRun[], sources: Growt
             flags: lead.flags ?? [],
             id: lead.lead_id,
             last_active_at: newest?.posted_at ?? null,
+            match_reason: lead.match_reason || undefined,
             note: lead.note ?? '',
             origin: lead.origin === 'manual' ? 'manual' : 'ai',
             platform: lead.platform as GrowthPlatform,
