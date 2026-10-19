@@ -117,6 +117,7 @@ All of these can also be entered on the settings page:
 - YouTube: `YOUTUBE_API_KEY`.
 - Search: `TAVILY_API_KEY`, `GOOGLE_API_KEY` and others. DuckDuckGo works without a key.
 - Proxy: `GROWTH_PROXY_URL`, the default proxy for platform accounts.
+- Sync result size: `GROWTH_TOOL_RESULT_LIMIT`, how many bytes one `growth_sync_source` or `growth_list_leads` call may hand the agent (default 32768); what does not fit waits for the next call.
 - Email: see below.
 
 ### Email for lead lists

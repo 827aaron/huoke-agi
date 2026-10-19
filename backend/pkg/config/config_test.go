@@ -122,7 +122,7 @@ func clearConfigEnv(t *testing.T) {
 	t.Helper()
 
 	envVars := []string{
-		"GROWTH_ENABLED", "TG_API_ID", "TG_API_HASH", "TG_SESSION_DIR", "YOUTUBE_API_KEY", "GROWTH_PROXY_URL", "BROWSER_SERVICE_URL", "BROWSER_TOKEN",
+		"GROWTH_ENABLED", "TG_API_ID", "TG_API_HASH", "TG_SESSION_DIR", "YOUTUBE_API_KEY", "GROWTH_PROXY_URL", "GROWTH_TOOL_RESULT_LIMIT", "BROWSER_SERVICE_URL", "BROWSER_TOKEN",
 		"GROWTH_SECRET_KEY", "TYPESAFE_API_KEY", "TYPESAFE_API_URL", "TYPESAFE_MODEL",
 		"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_TLS",
 		"DATABASE_URL", "DEBUG", "DATA_DIR", "ASK_USER", "TENANT_ID", "INSTALLATION_ID", "LICENSE_KEY",
@@ -193,6 +193,7 @@ func TestConfig_NewConfig_FillsDefaultsForAnEmptyEnvironment(t *testing.T) {
 
 	assert.Equal(t, 8080, config.ServerPort)
 	assert.True(t, config.GrowthEnabled)
+	assert.Equal(t, 32768, config.GrowthToolResultLimit)
 	assert.Equal(t, "./data/tg-session", config.TGSessionDir)
 	assert.Equal(t, "0.0.0.0", config.ServerHost)
 	assert.Equal(t, false, config.Debug)

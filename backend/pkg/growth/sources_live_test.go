@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -430,7 +431,7 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	})
 	require.NoError(t, err)
 	fail = true
-	results, err := w.svc.SyncSources(ctx, scope, []int64{a, 999999, b}, SyncOptions{})
+	results, err := w.svc.SyncSources(ctx, scope, []int64{a, 999999, b}, SyncOptions{Limit: 45})
 	require.NoError(t, err)
 	require.Len(t, results, 3)
 	require.Len(t, requests, 3, "45 messages in two requests, then the other source")
@@ -514,10 +515,11 @@ func TestSources_SyncSource_KeepsTheCursorWhenTheJudgeKeyIsRefused(t *testing.T)
 	assert.Len(t, res.Messages, 2, "the refused read is read again")
 }
 
-func TestSources_SyncSource_ReadsEveryNewMessageSinceTheCursor(t *testing.T) {
+func TestSources_SyncSource_ReadsOnePageForwardPerCallUntilCaughtUp(t *testing.T) {
 	w := newWorld(t)
 	ctx := context.Background()
 	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
 	id := w.mustAddTelegramGroup(t, scope, tgGroup("370", "busy", "Busy"), tgMessage(1, "11", "a"), tgMessage(2, "12", "b"))
 	_, err := w.svc.SyncSource(ctx, scope, id, DirectionOlder, 10)
 	require.NoError(t, err)
@@ -528,17 +530,157 @@ func TestSources_SyncSource_ReadsEveryNewMessageSinceTheCursor(t *testing.T) {
 	}
 	w.tg.AddSource(tgGroup("370", "busy", "Busy"), more...)
 
+	for _, want := range []struct {
+		first, last string
+		count       int
+		caughtUp    bool
+	}{{"12", "3", 10, false}, {"22", "13", 10, false}, {"27", "23", 5, true}} {
+		page, err := w.svc.SyncSource(ctx, scope, id, DirectionNewer, 10)
+		require.NoError(t, err)
+		require.Len(t, page.Messages, want.count, "one page per call, none skipped")
+		assert.Equal(t, want.first, page.Messages[0].MessageID)
+		assert.Equal(t, want.last, page.Messages[want.count-1].MessageID)
+		require.NotNil(t, page.CaughtUp)
+		assert.Equal(t, want.caughtUp, *page.CaughtUp)
+	}
+
 	page, err := w.svc.SyncSource(ctx, scope, id, DirectionNewer, 10)
 	require.NoError(t, err)
-	require.Len(t, page.Messages, 25, "three forward pages, none skipped")
-	assert.Equal(t, "27", page.Messages[0].MessageID)
-	assert.Equal(t, "3", page.Messages[24].MessageID)
-	require.NotNil(t, page.CaughtUp)
-	assert.True(t, *page.CaughtUp)
-
-	page, err = w.svc.SyncSource(ctx, scope, id, DirectionNewer, 10)
-	require.NoError(t, err)
 	assert.Empty(t, page.Messages)
+}
+
+// acceptingJev serves a judgement model that excludes nothing, so the pre-screen keeps
+// every message, and counts its requests.
+func acceptingJev(t *testing.T, w *world) *atomic.Int32 {
+	t.Helper()
+	var calls atomic.Int32
+	jev := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		calls.Add(1)
+		answers := map[string]any{}
+		for qid := range body["state"].(map[string]any)["messages"].(map[string]any) {
+			answers[qid] = map[string]any{"type": "noul", "noul": 0.1}
+		}
+		_ = json.NewEncoder(rw).Encode(map[string]any{"answers": answers})
+	}))
+	t.Cleanup(jev.Close)
+	w.svc.cfg.TypeSafeAPIURL = jev.URL
+	_, err := w.svc.SaveSetting(context.Background(), w.user, SettingScreening, screeningCustom,
+		map[string]string{"api_key": "ts-key", "api_url": jev.URL})
+	require.NoError(t, err)
+	return &calls
+}
+
+func messageBytes(t *testing.T, msgs []MessageView) int {
+	t.Helper()
+	raw, err := json.Marshal(msgs)
+	require.NoError(t, err)
+	return len(raw)
+}
+
+func TestSources_SyncSources_BoundedReadStopsAtItsBudgetAndTheNextCallContinues(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
+	calls := acceptingJev(t, w)
+	msgs := make([]connectors.Message, 0, 50)
+	for i := int64(1); i <= 50; i++ {
+		msgs = append(msgs, tgMessage(i, fmt.Sprint(100+i), strings.Repeat("buy ", 150)))
+	}
+	id := w.mustAddTelegramGroup(t, scope, tgGroup("390", "bounded", "Bounded"), msgs...)
+
+	opt := SyncOptions{Limit: 50, MaxBytes: 4096}
+	first, err := w.svc.SyncSources(ctx, scope, []int64{id}, opt)
+	require.NoError(t, err)
+	res := first[0]
+	require.NotEmpty(t, res.Messages)
+	assert.LessOrEqual(t, messageBytes(t, res.Messages), 3584, "the messages stay inside the budget less the source overhead")
+	assert.Equal(t, res.Read, len(res.Messages), "every message read is returned: nothing is skipped")
+	assert.Equal(t, 50-res.Read, res.Pending)
+	assert.Equal(t, "50", res.Messages[0].MessageID, "a back-read starts from the message nearest the cursor")
+	last := 51 - len(res.Messages)
+	assert.Equal(t, fmt.Sprint(last), res.Messages[len(res.Messages)-1].MessageID)
+	assert.Equal(t, fmt.Sprint(last-1), res.NextFrom)
+	assert.Len(t, []rune(res.Messages[0].Text), 401, "a bounded read returns the opening lines the pre-screen judged")
+	assert.False(t, res.Source.HistoryExhausted)
+	assert.EqualValues(t, 1, calls.Load(), "only the batch the read consumed was judged")
+
+	second, err := w.svc.SyncSources(ctx, scope, []int64{id}, opt)
+	require.NoError(t, err)
+	require.NotEmpty(t, second[0].Messages)
+	assert.Equal(t, res.NextFrom, second[0].Messages[0].MessageID, "the next read continues with the first pending message")
+	assert.Equal(t, 50-res.Read-second[0].Read, second[0].Pending)
+
+	rest, err := w.svc.SyncSources(ctx, scope, []int64{id}, SyncOptions{Limit: 50})
+	require.NoError(t, err)
+	assert.Zero(t, rest[0].Pending)
+	assert.Empty(t, rest[0].NextFrom)
+	assert.Equal(t, 50, res.Read+second[0].Read+rest[0].Read, "every message is read exactly once")
+	assert.Equal(t, fmt.Sprint(second[0].NextFrom), rest[0].Messages[0].MessageID)
+	assert.True(t, rest[0].Source.HistoryExhausted)
+	assert.Len(t, []rune(rest[0].Messages[0].Text), 600, "an unbounded read keeps the full text")
+	assert.EqualValues(t, 3, calls.Load())
+}
+
+func TestSources_SyncSources_HandsAnUnusedShareToTheNextSource(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
+	acceptingJev(t, w)
+	a := w.mustAddTelegramGroup(t, scope, tgGroup("391", "quiet", "Quiet"), tgMessage(1, "11", "hi"))
+	msgs := make([]connectors.Message, 0, 50)
+	for i := int64(1); i <= 50; i++ {
+		msgs = append(msgs, tgMessage(i, fmt.Sprint(200+i), strings.Repeat("buy ", 150)))
+	}
+	b := w.mustAddTelegramGroup(t, scope, tgGroup("392", "busy", "Busy"), msgs...)
+
+	results, err := w.svc.SyncSources(ctx, scope, []int64{a, b}, SyncOptions{Limit: 50, MaxBytes: 8192})
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+	assert.Len(t, results[0].Messages, 1)
+	assert.Zero(t, results[0].Pending)
+	used := messageBytes(t, results[1].Messages)
+	assert.Greater(t, used, 3584, "the second source takes what the first left of the budget")
+	assert.LessOrEqual(t, used, 7168)
+	assert.Positive(t, results[1].Pending)
+}
+
+func TestSources_SyncSource_BoundedForwardReadStopsBeforeThePendingMessages(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
+	acceptingJev(t, w)
+	id := w.mustAddTelegramGroup(t, scope, tgGroup("393", "forward", "Forward"), tgMessage(1, "11", "a"), tgMessage(2, "12", "b"))
+	_, err := w.svc.SyncSource(ctx, scope, id, DirectionOlder, 10)
+	require.NoError(t, err)
+	more := make([]connectors.Message, 0, 20)
+	for i := int64(3); i <= 22; i++ {
+		more = append(more, tgMessage(i, fmt.Sprint(i), strings.Repeat("buy ", 150)))
+	}
+	w.tg.AddSource(tgGroup("393", "forward", "Forward"), more...)
+
+	opt := SyncOptions{Direction: DirectionNewer, Limit: 30, MaxBytes: 4096}
+	results, err := w.svc.SyncSources(ctx, scope, []int64{id}, opt)
+	require.NoError(t, err)
+	res := results[0]
+	n := len(res.Messages)
+	require.Positive(t, n)
+	require.NotNil(t, res.CaughtUp)
+	assert.False(t, *res.CaughtUp, "a read that stopped before pending messages has not caught up")
+	assert.Equal(t, "3", res.Messages[n-1].MessageID, "a forward read consumes from the cursor upwards")
+	assert.Equal(t, fmt.Sprint(2+n), res.Messages[0].MessageID)
+	assert.Equal(t, fmt.Sprint(3+n), res.NextFrom)
+	assert.Equal(t, 20-n, res.Pending)
+
+	results, err = w.svc.SyncSources(ctx, scope, []int64{id}, opt)
+	require.NoError(t, err)
+	next := results[0]
+	require.NotEmpty(t, next.Messages)
+	assert.Equal(t, res.NextFrom, next.Messages[len(next.Messages)-1].MessageID, "the next read continues with the first pending message")
 }
 
 func TestSources_SyncSources_WaitsBetweenTwoSourcesOfOneAccount(t *testing.T) {

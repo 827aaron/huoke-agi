@@ -971,7 +971,7 @@ type GrowthSyncSourceAction struct {
 	SourceID       Int64    `json:"source_id,omitempty" jsonschema:"type=integer" jsonschema_description:"history only: the pool source_id to read"`
 	SourceIDs      []Int64  `json:"source_ids,omitempty" jsonschema:"type=array" jsonschema_description:"history only: several pool source_ids to read in one call, instead of source_id. With neither, every source an account has joined is read in turn"`
 	Direction      String   `json:"direction,omitempty" jsonschema:"type=string,enum=older,enum=newer" jsonschema_description:"history only: 'older' (default) continues backwards from the oldest message read so far until the source's back-read is done; 'newer' reads what was posted after the newest message read, page by page until caught up. Once older reading is done, come back with 'newer' to monitor the source. The position is kept between calls."`
-	Limit          Int64    `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"history only: messages per page (1-200, default 100)"`
+	Limit          Int64    `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"history only: messages per page (1-60, default 30)"`
 	AllMessages    Bool     `json:"all_messages,omitempty" jsonschema:"type=boolean" jsonschema_description:"history only: true returns every message read; by default only the messages the judgement model (Jev) picks as worth a closer look are returned and the rest are counted in skipped_count"`
 	PlatformUserID IDString `json:"platform_user_id,omitempty" jsonschema:"type=string" jsonschema_description:"user only: the sender id from a history page"`
 	Message        string   `json:"message" jsonschema:"required,title=Sync source message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on what you are reading and why. Written in the engagement language declared by your system prompt."`
@@ -1046,5 +1046,6 @@ type GrowthListLeadsAction struct {
 	Tier       String `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist,enum=all" jsonschema_description:"Filter by tier (default all)"`
 	HasContact Bool   `json:"has_contact,omitempty" jsonschema:"type=boolean" jsonschema_description:"true lists only leads with a contact beside their platform account"`
 	Limit      Int64  `json:"limit,omitempty" jsonschema:"type=integer" jsonschema_description:"Maximum leads (1-500, default 100)"`
+	Offset     Int64  `json:"offset,omitempty" jsonschema:"type=integer" jsonschema_description:"Skip this many leads (default 0): continue a list whose result was full with the offset its note gives"`
 	Message    string `json:"message" jsonschema:"required,title=List leads message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on why you are listing leads. Written in the engagement language declared by your system prompt."`
 }

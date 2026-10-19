@@ -462,6 +462,9 @@ func (fte *flowToolsExecutor) addGrowthTools(ce *customExecutor, taskID *int64, 
 		return
 	}
 	g := newGrowthTools(fte.growth, fte.userID, fte.flowID, taskID)
+	if fte.cfg != nil && fte.cfg.GrowthToolResultLimit > 0 {
+		g.resultLimit = fte.cfg.GrowthToolResultLimit
+	}
 	for _, name := range names {
 		ce.definitions = append(ce.definitions, registryDefinitions[name])
 		ce.handlers[name] = g.Handle
