@@ -1026,8 +1026,8 @@ To prevent runaway executions, each agent has a hard limit on tool calls. The li
 4. **Forced Exit**: After reflector guidance, execution terminates gracefully
 
 **Configuration**:
-- `MAX_GENERAL_AGENT_TOOL_CALLS` (default: 100) - Maximum tool calls for general agents before forced termination
-- `MAX_LIMITED_AGENT_TOOL_CALLS` (default: 20) - Maximum tool calls for limited agents before forced termination
+- `MAX_GENERAL_AGENT_TOOL_CALLS` (default: 50) - Maximum tool calls for general agents before forced termination
+- `MAX_LIMITED_AGENT_TOOL_CALLS` (default: 15) - Maximum tool calls for limited agents before forced termination
 
 **Why Differentiated Limits**:
 - **Resource Efficiency**: Limited agents handle focused tasks and don't require extensive iteration

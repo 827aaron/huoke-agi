@@ -138,7 +138,7 @@ SMTP_TLS=starttls
 The defaults already in `.env.example` keep these:
 
 - `ASSISTANT_USE_AGENTS=true`
-- `HTTP_CLIENT_TIMEOUT=300`
+- `HTTP_CLIENT_TIMEOUT=240`
 - `UPDATE_CHECK_INTERVAL` empty: the server sends nothing out on its own.
 
 ## 6. Build and start
@@ -178,6 +178,10 @@ Every card in Settings → Keys & connections has a test button and says whether
 4. **Model services** (optional): a different model per agent role.
 
 To start work, open New task, pick a preset from Templates and send it. When using the assistant, keep the switch that lets specialists collaborate turned on. Only the specialists can join groups, read messages and save leads.
+
+### Task input: keep it small
+
+Name 1–2 sources per task and ask for a realistic number of leads. One task reads each source in pages and every page is sent to the model, so a long source list or a very large target makes the task slow and costly, and it can stop at the per-chain tool-call limit before it reaches the target. If more sources or leads are needed, run another task: sources already read continue from where they stopped, and leads already saved are not saved twice.
 
 ## 9. Accounts for colleagues and customers
 
@@ -281,7 +285,7 @@ Back up first. Database changes apply by themselves when the application starts,
 | Memory and knowledge base never show up | No embedding model. Fill in the embedding model under the language model card on the settings page, set `EMBEDDING_KEY`, or choose OpenAI or OpenRouter as the language model |
 | A forum such as Pantip shows "not allowed to access this page" and the researcher skips it | The site blocks data-centre IP addresses. The proxy on the Accounts page covers platform accounts, not the researcher's own browsing, so run the server on a residential connection or route the host's outbound traffic through a residential proxy or VPN |
 | A task cannot start its sandbox | The worker image is missing: run `docker compose build growth-worker`. `pentagi` needs `/var/run/docker.sock`, mounted by the compose file |
-| A specialist hangs for minutes | A model call waits at most `HTTP_CLIENT_TIMEOUT` seconds, 300 by default. Check the model provider's status and key |
+| A specialist hangs for minutes | A model call waits at most `HTTP_CLIENT_TIMEOUT` seconds, 240 by default. Check the model provider's status and key |
 | Port 8443 is taken | Set `PENTAGI_LISTEN_PORT` to another port and update `PUBLIC_URL` |
 | Disk fills up | Run `docker builder prune` after building, and delete finished tasks you no longer need: each keeps a sandbox container |
 | Image downloads fail or crawl | Configure a Docker registry mirror close to the server, then run the build again |

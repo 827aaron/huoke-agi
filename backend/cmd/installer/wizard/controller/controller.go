@@ -2203,7 +2203,7 @@ func (c *controller) GetServerSettingsConfig() *ServerSettingsConfig {
 		"CORS_ORIGINS":                     "https://localhost:8443",
 		"PENTAGI_DATA_DIR":                 "pentagi-data",
 		"PENTAGI_SSL_DIR":                  "pentagi-ssl",
-		"HTTP_CLIENT_TIMEOUT":              "600",
+		"HTTP_CLIENT_TIMEOUT":              "240",
 		"TERMINAL_TOOL_TIMEOUT":            "600",
 		"EXTERNAL_SSL_INSECURE":            "false",
 		"DATABASE_EXTENSIONS_SCHEMA":       "public",
