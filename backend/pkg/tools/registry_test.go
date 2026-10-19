@@ -249,6 +249,7 @@ func TestRegistry_AllowedToolListsNameKnownToolsOnce(t *testing.T) {
 
 	validate(t, "allowedSummarizingToolsResult", allowedSummarizingToolsResult)
 	validate(t, "allowedStoringInMemoryTools", allowedStoringInMemoryTools)
+	validate(t, "structuredResultTools", structuredResultTools)
 
 	// Pinned because losing either entry fails no call and only degrades the agents quietly.
 	if !slices.Contains(allowedSummarizingToolsResult, BrowserToolName) {
