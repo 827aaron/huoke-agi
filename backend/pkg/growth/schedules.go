@@ -464,6 +464,13 @@ func (s *Service) DueStarts(ctx context.Context, now time.Time) ([]ScheduledStar
 			logger.WithField("start", start).Warn("scheduled start missed: its end time has passed")
 			continue
 		}
+		// Without Jev the round's first read would fail anyway, after the planner has spent
+		// its tokens; refusing here puts the reason on the schedule instead.
+		if err := s.JudgeReady(ctx, row.UserID); err != nil {
+			logger.WithError(err).Warn("scheduled start refused")
+			s.FailedSchedule(ctx, ScheduledStart{ScheduleID: row.ID, UserID: row.UserID}, err)
+			continue
+		}
 		out = append(out, ScheduledStart{
 			ScheduleID:   row.ID,
 			UserID:       row.UserID,

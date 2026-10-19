@@ -1,9 +1,14 @@
 package growth
 
 import (
+	"context"
+	"database/sql"
 	"testing"
 	"time"
 	_ "time/tzdata"
+
+	"pentagi/pkg/config"
+	"pentagi/pkg/database"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -144,4 +149,52 @@ func TestSchedules_ScheduledInput_GivesTheDeadlineInTheZoneAndInUTC(t *testing.T
 		"before then call growth_deliver_leads, with allow_partial=true if the target is not reached, and report. "+
 		"At that time the qualified leads found so far are delivered and the task is stopped.\n"+
 		"</scheduled_round>\n\nfind 50 players", got)
+}
+
+// dueStore holds one due schedule and records what the pass writes back to it.
+type dueStore struct {
+	database.Querier
+	row      database.GrowthSchedule
+	advanced int
+	errors   []string
+}
+
+func (s *dueStore) GetDueGrowthSchedules(ctx context.Context, _ time.Time) ([]database.GrowthSchedule, error) {
+	return []database.GrowthSchedule{s.row}, ctx.Err()
+}
+
+func (s *dueStore) AdvanceGrowthSchedule(ctx context.Context, _ database.AdvanceGrowthScheduleParams) (int64, error) {
+	s.advanced++
+	return 1, ctx.Err()
+}
+
+func (s *dueStore) RecordGrowthScheduleStart(ctx context.Context, p database.RecordGrowthScheduleStartParams) error {
+	s.errors = append(s.errors, p.LastError)
+	return ctx.Err()
+}
+
+func (s *dueStore) GetUserGrowthSettings(ctx context.Context, _ int64) ([]database.GrowthSetting, error) {
+	return nil, ctx.Err()
+}
+
+func TestSchedules_DueStarts_RefusesAStartWithoutAJevKey(t *testing.T) {
+	now := time.Date(2026, 10, 19, 9, 0, 30, 0, time.UTC)
+	row := database.GrowthSchedule{
+		ID: 5, UserID: 1, Days: ScheduleDaily, StartTime: "09:00", EndTime: "18:00", Timezone: "UTC", Enabled: true,
+		NextStartAt: sql.NullTime{Time: time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC), Valid: true},
+	}
+
+	unkeyed := &dueStore{row: row}
+	starts, err := NewService(unkeyed, &config.Config{}).DueStarts(context.Background(), now)
+	require.NoError(t, err)
+	assert.Empty(t, starts, "the round is not started")
+	assert.Equal(t, 1, unkeyed.advanced, "the start is still claimed, so the next pass does not retry it")
+	assert.Equal(t, []string{"no judgement model (Jev) is configured: ask the user to fill in its key on the settings page"}, unkeyed.errors)
+
+	keyed := &dueStore{row: row}
+	starts, err = NewService(keyed, &config.Config{TypeSafeAPIKey: "k"}).DueStarts(context.Background(), now)
+	require.NoError(t, err)
+	require.Len(t, starts, 1)
+	assert.Equal(t, int64(5), starts[0].ScheduleID)
+	assert.Empty(t, keyed.errors)
 }

@@ -134,6 +134,10 @@ type SyncResult struct {
 	CaughtUp *bool         `json:"caught_up,omitempty"`
 	Error    string        `json:"error,omitempty"`
 	Err      error         `json:"-"`
+	// PrescreenFallbacks counts the batches of this read Jev failed on, whose messages
+	// are returned unscreened and unscored; Warning says so in a sentence.
+	PrescreenFallbacks int    `json:"prescreen_fallback_batches,omitempty"`
+	Warning            string `json:"warning,omitempty"`
 }
 
 // DetectPlatform tells a Telegram reference and a Facebook group from a web page;
@@ -851,6 +855,11 @@ func (s *Service) syncOne(ctx context.Context, scope Scope, sourceID int64, opt 
 		})
 	if judgeErr != nil {
 		return SyncResult{Source: s.viewSource(ctx, src, 0)}, judgeErr
+	}
+	if err == nil && sc.fallbacks > 0 {
+		s.notePrescreenFallbacks(scope, sc.fallbacks)
+		result.PrescreenFallbacks = sc.fallbacks
+		result.Warning = prescreenFallbackWarning(sc.fallbacks, "in this read")
 	}
 	return result, err
 }
