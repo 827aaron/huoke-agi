@@ -26,11 +26,14 @@ function GrowthProgressBar() {
     }
 
     const target = run.target;
-    const isDeliveredState = run.status === 'delivered' || run.status === 'missed';
-    const count = isDeliveredState ? run.delivered : run.found;
-    const line = isDeliveredState ? copy.progress.deliveredLine(count, target) : copy.progress.foundLine(count, target);
-    const percent = target > 0 ? Math.min(100, (count / target) * 100) : 0;
-    const isReached = count >= target;
+    const isFinished = run.status === 'delivered' || run.status === 'missed';
+    // The target counts qualified leads, as the Prospects tab does; delivery is a separate hand-over step, so
+    // a finished round shows it beside the count, not in its place.
+    const line = isFinished
+        ? copy.progress.qualifiedLine(run.found, target)
+        : copy.progress.foundLine(run.found, target);
+    const percent = target > 0 ? Math.min(100, (run.found / target) * 100) : 0;
+    const isReached = run.found >= target;
 
     const banner = accounts && isActive(run) ? accountsBanner(accounts) : null;
     const action = banner
@@ -48,6 +51,7 @@ function GrowthProgressBar() {
                     {line.prefix} <strong className="text-base tabular-nums">{line.count}</strong>
                     {line.suffix}
                 </span>
+                {isFinished && <span className="text-muted-foreground">{copy.progress.delivered(run.delivered)}</span>}
                 {isActive(run) && (
                     <>
                         <button

@@ -70,7 +70,7 @@ function GrowthChatActionsContent({
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="text-muted-foreground flex flex-col gap-1 px-4 text-sm">
-                        <p>{copy.delivery.qualified(run.delivered, run.watch)}</p>
+                        <p>{copy.delivery.qualified(run.found, run.watch)}</p>
                         <p>{copy.delivery.sources(sourceCount)}</p>
                         <p>{copy.delivery.evidence}</p>
                         <div className="flex flex-wrap gap-2 pt-2">
