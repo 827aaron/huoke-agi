@@ -992,7 +992,7 @@ type GrowthLeadArg struct {
 	PlatformUserID IDString            `json:"platform_user_id" jsonschema:"required,type=string" jsonschema_description:"Telegram: the stable numeric sender id from the tool output. Web: the author's profile URL, or 'host:username' (e.g. forum.example.com:alice) when no profile link exists."`
 	Username       string              `json:"username,omitempty" jsonschema_description:"Username exactly as the tool output or page shows it"`
 	DisplayName    string              `json:"display_name,omitempty" jsonschema_description:"Display name exactly as shown"`
-	Score          Int64               `json:"score,omitempty" jsonschema:"type=integer" jsonschema_description:"Your total signal score, needed only when no evidence message carries a score from growth_sync_source (web pages read with the browser). A scored message's score is used instead. At the qualified line of the business profile's Scoring line or above the lead counts toward the target; from its watchlist line it is kept for review; below it is not saved."`
+	Score          Int64               `json:"score,omitempty" jsonschema:"type=integer" jsonschema_description:"Your total signal score, needed only when no evidence message carries a score from growth_sync_source (web pages read with the browser). A scored message's score is used instead. At the qualified line of the business profile's Jev score section or above the lead counts toward the target; from its watchlist line it is kept for review; below it is not saved."`
 	Tier           String              `json:"tier,omitempty" jsonschema:"type=string,enum=qualified,enum=watchlist" jsonschema_description:"Your tier; the stored tier always follows from the score"`
 	MatchReason    string              `json:"match_reason" jsonschema:"required" jsonschema_description:"One or two sentences on why this person may become a customer, citing the signals of the evidence. Written in the engagement language declared by your system prompt."`
 	Contacts       []GrowthContactArg  `json:"contacts,omitempty" jsonschema:"type=array" jsonschema_description:"Ways to reach this person beside the platform account, only of the types the business profile asks for and only as the person published them in the evidence or their public profile; never guessed"`
@@ -1031,6 +1031,18 @@ type GrowthDraftProfileAction struct {
 	ProfileID Int64          `json:"profile_id,omitempty" jsonschema:"type=integer" jsonschema_description:"The saved profile this draft changes, from growth_get_profile; omit to draft a new profile"`
 	Profile   growth.Profile `json:"profile" jsonschema:"required" jsonschema_description:"The whole profile, not only the changed fields"`
 	Message   string         `json:"message" jsonschema:"required,title=Draft profile message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on what the draft says or changes. Written in the engagement language declared by your system prompt."`
+}
+
+type GrowthUpdateProfileAction struct {
+	ProfileID    Int64  `json:"profile_id,omitempty" jsonschema:"type=integer" jsonschema_description:"The saved profile to change; omit for the user's default profile"`
+	Action       string `json:"action" jsonschema:"required,enum=set,enum=append,enum=add_section,enum=remove_section" jsonschema_description:"set replaces a prompt, append adds text, add_section adds a prompt, remove_section deletes one"`
+	Field        string `json:"field,omitempty" jsonschema:"enum=need,enum=exclude,enum=scoring" jsonschema_description:"Which of the three prompts set or append changes. Omit when the change is an added prompt"`
+	SectionID    string `json:"section_id,omitempty" jsonschema_description:"Id of an added prompt, from growth_get_profile. Use this when two prompts share a title"`
+	SectionTitle string `json:"section_title,omitempty" jsonschema_description:"Title of the added prompt to change or remove, or the title of a prompt add_section creates"`
+	NewTitle     string `json:"new_title,omitempty" jsonschema_description:"New title for an added prompt. Set it with action=set and the prompt's id or current title"`
+	Text         string `json:"text,omitempty" jsonschema_description:"The new text, or the text to append. For scoring, use the line format from the tool description"`
+	ProfileTitle string `json:"profile_title,omitempty" jsonschema_description:"Rename the profile. Only when the user asked to rename it"`
+	Message      string `json:"message" jsonschema:"required,title=Update profile message" jsonschema_description:"Engagement-log entry — a 1-2 short sentence running commentary on the change. Written in the engagement language declared by your system prompt."`
 }
 
 type GrowthSaveProfileAction struct {

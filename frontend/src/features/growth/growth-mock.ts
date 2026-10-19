@@ -429,105 +429,54 @@ const runs: GrowthRun[] = [
     },
 ];
 
+const casinoNeed = [
+    'Offer: A licensed, regulated online gaming operator (casino games and sports) serving the regions its license covers. Leads are adult players who already discuss online gaming platforms in public and say what they want from one; they are delivered to the operator, and nobody is contacted on its behalf.',
+    'Products: casino games, live dealer games, sports',
+    'Category: Licensed online gaming platform',
+    'Lead target: 50',
+    'Signal words: deposit experience; withdrawal speed; bonus terms; cashback; VIP program; odds; platform reliability; looking for a new platform; platform recommendation',
+    'Contacts to find: platform_handle, whatsapp, line, telegram',
+    'Notes: The licensed regions are the ones under Regions. Exclusions apply only on explicit evidence in the message; never infer them from style, age cues or platform.',
+].join('\n');
+
+const casinoScoring = [
+    'player = 3 | Audience | The sender uses or follows this kind of product or service themselves.',
+    'pain = 3 | Pain or switching | The sender is unhappy with, bored of or leaving what they use now, or asks for an alternative.',
+    'paying = 3 | Paying | The sender mentions paying for this kind of product: purchases, deposits, top-ups, subscriptions.',
+    'match = 3 | Fit | What the sender wants or uses fits the offer: its category, platform, region and style.',
+    'recent = 2',
+    'qualified >= 8',
+    'watchlist >= 4',
+    'unwanted = -3',
+].join('\n');
+
 const profilePresets: GrowthProfilePreset[] = [
     {
         default: true,
         id: 'licensed_casino',
         profile: {
-            competitors: null,
-            contact_types: ['platform_handle', 'whatsapp', 'line', 'telegram'],
-            default_target: 50,
-            games: ['casino games', 'live dealer games', 'sports'],
-            genre: 'Licensed online gaming platform',
-            languages: null,
+            exclude:
+                'a stated location outside the licensed regions\naffiliates and agents promoting other platforms\nbots and spam',
             name: '',
-            notes: 'The licensed regions are the ones under Regions. Exclusions apply only on explicit evidence in the message; never infer them from style, age cues or platform.',
-            pitch: 'A licensed, regulated online gaming operator (casino games and sports) serving the regions its license covers. Leads are adult players who already discuss online gaming platforms in public and say what they want from one; they are delivered to the operator, and nobody is contacted on its behalf.',
-            regions: null,
-            scoring: {
-                dimensions: [
-                    {
-                        description: 'The sender plays or follows online casino games or sports betting.',
-                        key: 'player',
-                        name: 'Audience',
-                        points: 3,
-                    },
-                    {
-                        description: 'The sender complains about a platform or wants to switch.',
-                        key: 'pain',
-                        name: 'Pain or switching',
-                        points: 3,
-                    },
-                    {
-                        description: 'The sender deposits, tops up or bets money.',
-                        key: 'paying',
-                        name: 'Paying',
-                        points: 3,
-                    },
-                    {
-                        description: 'The region, language or product fits the profile.',
-                        key: 'match',
-                        name: 'Fit',
-                        points: 3,
-                    },
-                ],
-                qualified: 8,
-                recent: { points: 2 },
-                watchlist: 4,
-            },
-            signals: [
-                'deposit experience',
-                'withdrawal speed',
-                'bonus terms',
-                'cashback',
-                'VIP program',
-                'odds',
-                'platform reliability',
-                'looking for a new platform',
-                'platform recommendation',
-            ],
+            need: casinoNeed,
+            scoring: casinoScoring,
             title: '',
-            unwanted: [
-                'a stated location outside the licensed regions',
-                'affiliates and agents promoting other platforms',
-                'bots and spam',
-            ],
-            unwanted_penalty: null,
         },
     },
     {
         default: false,
         id: 'game_publisher',
         profile: {
-            competitors: null,
-            contact_types: ['platform_handle'],
-            default_target: 50,
-            games: null,
-            genre: 'Mobile and PC games',
-            languages: null,
+            exclude: 'accounts selling or boosting services\nbots and spam\ndevelopers advertising their own game',
             name: '',
-            notes: '',
-            pitch: 'A mobile or PC game looking for players who play similar games and are open to a new one.',
-            regions: null,
-            signals: [
-                'looking for a new game',
-                'any game like',
-                'bored of',
-                'quitting',
-                'top up',
-                'skins',
-                'battle pass',
-                'guide',
-                'build',
-                'rank',
-            ],
+            need: [
+                'Offer: A mobile or PC game looking for players who play similar games and are open to a new one.',
+                'Category: Mobile and PC games',
+                'Lead target: 50',
+                'Signal words: looking for a new game; any game like; bored of; quitting; top up; skins; battle pass; guide; build; rank',
+            ].join('\n'),
+            scoring: casinoScoring.replace('paying = 3', 'paying = 2').replace('qualified >= 8', 'qualified >= 7'),
             title: '',
-            unwanted: [
-                'accounts selling or boosting services',
-                'bots and spam',
-                'developers advertising their own game',
-            ],
-            unwanted_penalty: null,
         },
     },
 ];
@@ -818,6 +767,7 @@ export const growthMock = {
         const profile = {
             ...input,
             default: !profiles.length,
+            edited_by: 'user' as const,
             id: Math.max(0, ...profiles.map((item) => item.id)) + 1,
             title: input.title || input.name,
             updated_at: new Date().toISOString(),
@@ -939,6 +889,19 @@ export const growthMock = {
         delay(schedules.map((schedule) => ({ ...schedule, flow_id: Number(flowId) }))),
     listSettings: () => delay(settings.map(onWire)),
     listSources: () => delay({ sources, total: sources.length, warnings: [] }),
+    restoreProfile: (id: number): Promise<GrowthProfile> => {
+        const current = profiles.find((item) => item.id === id);
+
+        if (!current?.has_previous) {
+            return Promise.reject(new Error('this profile has no earlier version'));
+        }
+
+        const profile = { ...current, edited_by: 'user' as const, has_previous: false };
+
+        profiles = profiles.map((item) => (item.id === id ? profile : item));
+
+        return delay(profile);
+    },
     saveProfileDraft: async (flowId: number | string, options: GrowthProfileDraftSave): Promise<GrowthProfile> => {
         const draft = profileDrafts.get(String(flowId));
 
@@ -1096,6 +1059,8 @@ export const growthMock = {
         const profile = {
             ...input,
             default: current.default,
+            edited_by: 'user' as const,
+            has_previous: current.has_previous,
             id,
             title: input.title || input.name,
             updated_at: new Date().toISOString(),

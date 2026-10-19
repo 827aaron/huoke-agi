@@ -271,7 +271,7 @@ func (s *Service) screen(
 func (sc *screener) batch(platform, source string, msgs []screening.Message) screening.Batch {
 	return screening.Batch{
 		Platform: platform, Source: source, Task: sc.task, Business: businessSummary(sc.profile.Profile),
-		Excluded: ComplianceExcludes, Unwanted: sc.profile.Unwanted, Messages: msgs,
+		Excluded: ComplianceExcludes, Unwanted: sc.profile.UnwantedLines(), Messages: msgs,
 		Signals: signalsFor(sc.profile.ScoringOrDefault()),
 	}
 }
@@ -464,6 +464,16 @@ func screenMessages(batch []MessageView) []screening.Message {
 // businessSummary is the profile as Jev reads it; signal words are hints to its
 // judgment, not a filter. The exclusions and the unwanted list travel as their own state.
 func businessSummary(p Profile) string {
+	if strings.TrimSpace(p.Need) != "" || len(p.Sections) > 0 {
+		var b strings.Builder
+		b.WriteString(strings.TrimSpace(p.Need))
+		for _, s := range p.Sections {
+			if body := strings.TrimSpace(s.Body); body != "" {
+				fmt.Fprintf(&b, "\n%s: %s", s.Title, strings.Join(strings.Fields(body), " "))
+			}
+		}
+		return strings.TrimSpace(b.String())
+	}
 	var b strings.Builder
 	line := func(label, value string) {
 		if value = strings.Join(strings.Fields(value), " "); value != "" {

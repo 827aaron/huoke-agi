@@ -136,7 +136,7 @@ describe('FlowLeads', () => {
 
     it('shows the signals a prospect scored on and the points of each', async () => {
         flow.profiles = [
-            { scoring: { dimensions: [{ description: '', key: 'agency', name: '代理经验', points: 5 }] } },
+            { scoring: 'agency = 5 | 代理经验 | Has run a betting agency.\nqualified >= 5\nwatchlist >= 1' },
         ];
         flow.leads = [
             lead(1, 'Ace', {

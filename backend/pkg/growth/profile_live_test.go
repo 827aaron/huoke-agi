@@ -227,12 +227,12 @@ func TestProfile_ProfileInput_PutsTheFlowsCompactBlockFirstOnce(t *testing.T) {
 	builtIn, err := w.svc.ResolveProfile(ctx, w.user, nil)
 	require.NoError(t, err)
 	input, res := w.svc.ProfileInput(ctx, w.user, builtIn, "find 50 players", nil)
-	require.True(t, strings.HasPrefix(input, "<business_profile>\nOffer: A licensed, regulated online gaming operator"), input)
-	assert.Contains(t, input, "Scoring: audience +3, pain or switching +3, paying +3, fit +3, recent +2 (7 days; +1 within 30); "+
-		"qualified from 8, watchlist from 4, below that not saved\n")
+	require.True(t, strings.HasPrefix(input, "<business_profile>\n## Need\nOffer: A licensed, regulated online gaming operator"), input)
+	assert.Contains(t, input, "## Jev score\nplayer = 3 | Audience |")
+	assert.Contains(t, input, "qualified >= 8\nwatchlist >= 4")
 	assert.Contains(t, input, "Always excluded, on explicit evidence only: a stated age under 18; "+
 		"an explicit request for help to stop gambling, or a stated self-exclusion\n")
-	assert.Contains(t, input, "Full profile: /work/resources/business_profile.md (the lines above are cut; read the file, or search_guide")
+	assert.Contains(t, input, "Full profile: /work/resources/business_profile.md (read the file, or search_guide")
 	assert.True(t, strings.HasSuffix(input, "</business_profile>\n\nfind 50 players"), input)
 	require.Len(t, res, 1)
 	assert.Equal(t, "business_profile.md", res[0].Path)
@@ -240,13 +240,12 @@ func TestProfile_ProfileInput_PutsTheFlowsCompactBlockFirstOnce(t *testing.T) {
 	game := w.mustCreateProfile(t, "game", gameProfile())
 	second := w.mustCreateProfile(t, "second", gameProfile())
 	input, res = w.svc.ProfileInput(ctx, w.user, game, "find 50 players", []database.UserResource{{Path: "notes.md"}})
-	require.True(t, strings.HasPrefix(input, "<business_profile>\nBusiness: Starfall Studio\n"), input)
-	assert.Contains(t, input, "Signal words: s1; s2; s3; s4; s5; …\n")
-	assert.Contains(t, input, "Competitors (reject): Rival Saga\n")
-	assert.Contains(t, input, "Unwanted (score lower and flag, do not drop): account sellers\n")
+	require.True(t, strings.HasPrefix(input, "<business_profile>\nName: Starfall Studio\n"), input)
+	assert.Contains(t, input, "Signal words: s1; s2; s3; s4; s5; s6\n")
+	assert.Contains(t, input, "Competitor: Rival Saga\n")
+	assert.Contains(t, input, "account sellers\n")
 	assert.Contains(t, input, "Lead target: 50\n")
-	assert.Contains(t, input, "Scoring: audience +3, pain or switching +3, paying +2, fit +3, recent +2 (7 days; +1 within 30); "+
-		"qualified from 7, watchlist from 4, below that not saved\n")
+	assert.Contains(t, input, "qualified >= 7\nwatchlist >= 4")
 	fileName := fmt.Sprintf("business_profile_%d.md", game.ID)
 	assert.Contains(t, input, "Full profile: /work/resources/"+fileName+" (the lines above are cut; read the file, or search_guide")
 	require.Len(t, res, 2)
@@ -254,13 +253,13 @@ func TestProfile_ProfileInput_PutsTheFlowsCompactBlockFirstOnce(t *testing.T) {
 	body, err := os.ReadFile(resources.BlobPath(w.svc.cfg.DataDir, res[1].Hash))
 	require.NoError(t, err)
 	assert.Contains(t, string(body), "# Business profile: Starfall Studio")
-	assert.Contains(t, string(body), "## Unwanted (score lower and flag, do not drop)\n\n- account sellers")
-	assert.Contains(t, string(body), "- **Audience** (+3): The sender uses or follows")
+	assert.Contains(t, string(body), "## Exclude\nCompetitor: Rival Saga\naccount sellers")
+	assert.Contains(t, string(body), "player = 3 | Audience | The sender uses or follows")
 	assert.Equal(t, int64(len(body)), res[1].Size)
 
 	again, _ := w.svc.ProfileInput(ctx, w.user, second, input, nil)
 	assert.Equal(t, 1, strings.Count(again, "<business_profile>"))
-	assert.Contains(t, again, "(the lines above are cut; read the file)\n", "only the default profile's lists are in the knowledge store")
+	assert.NotContains(t, again, "search_guide", "only the default profile's lists are in the knowledge store")
 	assert.True(t, strings.HasSuffix(again, "\n\nfind 50 players"))
 }
 
@@ -330,7 +329,8 @@ func TestProfile_UpdateProfile_ChecksTheScoringAndTheContactTypes(t *testing.T) 
 		{Key: "d3", Name: "下线", Points: 2},
 	}, saved.Scoring.Dimensions, "keys are unique slugs, an empty dimension is dropped")
 	assert.Contains(t, saved.Compact(), "Contacts to find: phone, email")
-	assert.Contains(t, saved.Compact(), "Scoring: agent experience +5, downline +3, 下线 +2; qualified from 7")
+	assert.Contains(t, saved.Compact(), "agent_experience = 5 | Agent experience |")
+	assert.Contains(t, saved.Compact(), "qualified >= 7")
 
 	p.ContactTypes = []string{"LINE", "messenger", " WeChat", "wechat"}
 	saved, err = w.svc.UpdateProfile(ctx, w.user, saved.ID, ProfileInput{Profile: p})
@@ -383,11 +383,9 @@ func TestProfile_UpdateProfile_DropsTheMessageScoresOfThatProfileWhenTheAudience
 	score(game.ID)
 	score(other.ID)
 
-	same := gameProfile()
-	same.DefaultTarget = 80
-	_, err := w.svc.UpdateProfile(ctx, w.user, game.ID, ProfileInput{Profile: same})
+	_, err := w.svc.UpdateProfile(ctx, w.user, game.ID, ProfileInput{Title: "renamed", Profile: gameProfile()})
 	require.NoError(t, err)
-	assert.Equal(t, 1, scored(game.ID), "a change the judgement model does not read keeps the scores")
+	assert.Equal(t, 1, scored(game.ID), "renaming the profile does not change what leads are judged by")
 
 	casino := gameProfile()
 	casino.Pitch = "A licensed online casino"

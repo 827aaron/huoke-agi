@@ -21,18 +21,11 @@ const draft = (base: null | number) => ({
     base_profile_id: base,
     flow_id: 9,
     profile: {
-        languages: ['ms'],
+        exclude: '',
         name: 'Lucky Star',
-        pitch: 'A licensed casino looking for agents.',
-        regions: ['Malaysia'],
-        scoring: {
-            dimensions: [{ description: 'Has run a betting agency.', key: 'agency', name: '代理经验', points: 5 }],
-            qualified: 5,
-            recent: { points: 2 },
-            watchlist: 2,
-        },
-        signals: ['agent wanted'],
-        unwanted: [],
+        need: 'A licensed casino looking for agents in Malaysia.',
+        scoring: 'agency = 5 | 代理经验 |\nrecent = 2\nqualified >= 5\nwatchlist >= 2',
+        title: '',
     },
     title: 'Malaysian agents',
     updated_at: '2026-10-18T00:00:00Z',
@@ -53,11 +46,10 @@ describe('GrowthProfileDraftCard', () => {
         render(<GrowthProfileDraftCard />);
 
         expect(screen.getByText('助手起草的画像：Malaysian agents')).toBeInTheDocument();
-        expect(screen.getByText('目标地区：Malaysia')).toBeInTheDocument();
+        expect(screen.getByText('A licensed casino looking for agents in Malaysia.')).toBeInTheDocument();
         expect(screen.getByText('没有')).toBeInTheDocument();
-        expect(screen.getByText('代理经验 +5')).toBeInTheDocument();
-        expect(screen.getByText('近期活跃加分 +2')).toBeInTheDocument();
-        expect(screen.getByText('合格线 5，待观察线 2')).toBeInTheDocument();
+        expect(screen.getByText(/agency = 5 \| 代理经验/)).toBeInTheDocument();
+        expect(screen.getByText(/qualified >= 5/)).toBeInTheDocument();
         expect(screen.queryByText(/保存会更新画像/)).not.toBeInTheDocument();
     });
 

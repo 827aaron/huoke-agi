@@ -32,6 +32,7 @@ type GrowthBackend interface {
 	ListProfiles(ctx context.Context, userID int64) ([]growth.ProfileView, error)
 	SaveProfileDraft(ctx context.Context, scope growth.Scope, title string, baseID *int64, p growth.Profile) (growth.ProfileDraftView, error)
 	ApplyProfileDraft(ctx context.Context, userID, flowID int64, opt growth.ApplyDraftOptions) (growth.ProfileView, error)
+	UpdateProfilePrompt(ctx context.Context, userID, id int64, op growth.ProfileOp) (growth.ProfileView, error)
 }
 
 // growthTools are the lead-generation tools, bound per role in tools.go: the searcher
@@ -72,6 +73,8 @@ func (g *growthTools) Handle(ctx context.Context, name string, args json.RawMess
 		return g.draftProfile(ctx, args)
 	case GrowthSaveProfileToolName:
 		return g.saveProfile(ctx, args)
+	case GrowthUpdateProfileToolName:
+		return g.updateProfile(ctx, args)
 	default:
 		return "", fmt.Errorf("unknown growth tool: %s", name)
 	}
@@ -502,6 +505,27 @@ func (g *growthTools) saveProfile(ctx context.Context, args json.RawMessage) (st
 	}
 	return g.respond(ctx, map[string]any{
 		"profile_id": v.ID, "title": v.Title, "default": v.Default, "used_by_this_task": action.UseForTask.Bool(),
+	})
+}
+
+func (g *growthTools) updateProfile(ctx context.Context, args json.RawMessage) (string, error) {
+	var action GrowthUpdateProfileAction
+	if err := json.Unmarshal(args, &action); err != nil {
+		return "", fmt.Errorf("failed to parse %s args: %w", GrowthUpdateProfileToolName, err)
+	}
+	v, err := g.backend.UpdateProfilePrompt(ctx, g.scope.UserID, action.ProfileID.Int64(), growth.ProfileOp{
+		Action: action.Action, Field: action.Field, SectionID: action.SectionID, SectionTitle: action.SectionTitle,
+		NewTitle: action.NewTitle, Text: action.Text, ProfileTitle: action.ProfileTitle,
+	})
+	if errors.Is(err, growth.ErrInvalidProfile) && ctx.Err() == nil {
+		return fmt.Sprintf("%v. Fix it and call %s again.", err, GrowthUpdateProfileToolName), nil
+	}
+	if err != nil {
+		return g.failure(ctx, err)
+	}
+	return g.respond(ctx, map[string]any{
+		"profile_id": v.ID, "title": v.Title, "edited_by": v.EditedBy, "has_previous": v.HasPrevious,
+		"need": v.Need, "exclude": v.Exclude, "scoring": string(v.ScoringText), "sections": v.Sections,
 	})
 }
 
