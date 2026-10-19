@@ -1,11 +1,16 @@
 package growth
 
 import (
+	"context"
+	"database/sql"
 	"testing"
+	"time"
 
+	"pentagi/pkg/database"
 	"pentagi/pkg/growth/connectors"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSources_CanonicalLink_OneSpellingPerSource(t *testing.T) {
@@ -44,4 +49,58 @@ func TestSources_CanonicalLink_OneSpellingPerSource(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+type cursorFakeQuerier struct {
+	database.Querier
+
+	sources []database.GrowthSource
+	states  []database.AccountSource
+}
+
+func (q cursorFakeQuerier) GetUserGrowthSources(ctx context.Context, _ int64) ([]database.GrowthSource, error) {
+	return q.sources, ctx.Err()
+}
+
+func (q cursorFakeQuerier) GetUserAccountSources(ctx context.Context, _ int64) ([]database.AccountSource, error) {
+	return q.states, ctx.Err()
+}
+
+func TestSources_SourceCursors_ReportsTheLastReadingAccountsCursor(t *testing.T) {
+	at := func(hour int) sql.NullTime {
+		return sql.NullTime{Time: time.Date(2026, 10, 18, hour, 0, 0, 0, time.UTC), Valid: true}
+	}
+	q := cursorFakeQuerier{
+		sources: []database.GrowthSource{
+			{ID: 12, Title: "RPG Fans"},
+			{ID: 15, Link: "t.me/gachatalk"},
+			{ID: 20, Title: "Never read"},
+		},
+		states: []database.AccountSource{
+			{AccountID: 1, SourceID: 12, NewestMessageID: 900, OldestMessageID: 100, MessagesRead: 800, SyncedAt: at(9)},
+			{AccountID: 2, SourceID: 12, NewestMessageID: 48213, OldestMessageID: 47001, MessagesRead: 1212, SyncedAt: at(11)},
+			{AccountID: 1, SourceID: 15, NewestMessageID: 7300, OldestMessageID: 6100, HistoryExhausted: true,
+				MessagesRead: 1200, SyncedAt: at(10)},
+			{AccountID: 1, SourceID: 20},
+		},
+	}
+	svc := NewService(q, nil)
+	source12 := SourceCursor{SourceID: 12, Title: "RPG Fans", NewestMessageID: 48213, OldestMessageID: 47001,
+		MessagesRead: 1212, SyncedAt: at(11).Time}
+	source15 := SourceCursor{SourceID: 15, Title: "t.me/gachatalk", NewestMessageID: 7300, OldestMessageID: 6100,
+		HistoryExhausted: true, MessagesRead: 1200, SyncedAt: at(10).Time}
+
+	t.Run("named ids keep their order and skip ids outside the pool", func(t *testing.T) {
+		got, err := svc.SourceCursors(context.Background(), 3, []int64{15, 99, 12, 20, 15})
+
+		require.NoError(t, err)
+		assert.Equal(t, []SourceCursor{source15, source12, {SourceID: 20, Title: "Never read"}}, got)
+	})
+
+	t.Run("no ids lists every read source, latest first", func(t *testing.T) {
+		got, err := svc.SourceCursors(context.Background(), 3, nil)
+
+		require.NoError(t, err)
+		assert.Equal(t, []SourceCursor{source12, source15}, got)
+	})
 }

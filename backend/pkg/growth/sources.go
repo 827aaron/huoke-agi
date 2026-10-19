@@ -1114,6 +1114,75 @@ func (s *Service) ListSources(ctx context.Context, userID int64) ([]SourceView, 
 	return views, nil
 }
 
+// SourceCursor is where reading a source stands, as the next sync would continue it:
+// direction=newer reads after NewestMessageID, direction=older before OldestMessageID.
+// The cursor is per account, so this is the account that read the source last; zero ids
+// mean no account has read it yet.
+type SourceCursor struct {
+	SourceID         int64     `json:"source_id"`
+	Title            string    `json:"title,omitempty"`
+	NewestMessageID  int64     `json:"newest_message_id"`
+	OldestMessageID  int64     `json:"oldest_message_id"`
+	HistoryExhausted bool      `json:"history_exhausted"`
+	MessagesRead     int64     `json:"messages_read"`
+	SyncedAt         time.Time `json:"synced_at,omitzero"`
+}
+
+// SourceCursors reads the cursors of the owner's sources from the database, in the order
+// of sourceIDs; ids outside the owner's pool are left out. No ids returns every source an
+// account has read, most recently read first.
+func (s *Service) SourceCursors(ctx context.Context, userID int64, sourceIDs []int64) ([]SourceCursor, error) {
+	sources, err := s.db.GetUserGrowthSources(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sources: %w", err)
+	}
+	states, err := s.db.GetUserAccountSources(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list account sources: %w", err)
+	}
+	last := make(map[int64]database.AccountSource, len(states))
+	for _, st := range states {
+		cur, ok := last[st.SourceID]
+		if !ok || st.SyncedAt.Time.After(cur.SyncedAt.Time) {
+			last[st.SourceID] = st
+		}
+	}
+
+	byID := make(map[int64]SourceCursor, len(sources))
+	for _, src := range sources {
+		c := SourceCursor{SourceID: src.ID, Title: sourceLabel(src)}
+		if st, ok := last[src.ID]; ok {
+			c.NewestMessageID, c.OldestMessageID = st.NewestMessageID, st.OldestMessageID
+			c.HistoryExhausted, c.MessagesRead = st.HistoryExhausted, st.MessagesRead
+			if st.SyncedAt.Valid {
+				c.SyncedAt = st.SyncedAt.Time
+			}
+		}
+		byID[src.ID] = c
+	}
+
+	var cursors []SourceCursor
+	if len(sourceIDs) == 0 {
+		for _, c := range byID {
+			if !c.SyncedAt.IsZero() {
+				cursors = append(cursors, c)
+			}
+		}
+		slices.SortFunc(cursors, func(a, b SourceCursor) int {
+			return cmp.Or(b.SyncedAt.Compare(a.SyncedAt), cmp.Compare(a.SourceID, b.SourceID))
+		})
+		return cursors, nil
+	}
+	seen := make(map[int64]bool, len(sourceIDs))
+	for _, id := range sourceIDs {
+		if c, ok := byID[id]; ok && !seen[id] {
+			seen[id] = true
+			cursors = append(cursors, c)
+		}
+	}
+	return cursors, nil
+}
+
 func (s *Service) DeleteSource(ctx context.Context, userID, sourceID int64) error {
 	_, err := s.db.DeleteUserGrowthSource(ctx, database.DeleteUserGrowthSourceParams{ID: sourceID, UserID: userID})
 	if errors.Is(err, sql.ErrNoRows) {

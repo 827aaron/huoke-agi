@@ -31,6 +31,9 @@ type FlowContext struct {
 	TermLog    FlowTermLogWorker
 	MsgLog     FlowMsgLogWorker
 	Screenshot FlowScreenshotWorker
+
+	// Growth is nil with GROWTH_ENABLED off; a failed subtask then records no resume state.
+	Growth ResumeSource
 }
 
 type TaskContext struct {
