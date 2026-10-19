@@ -916,6 +916,8 @@ type fakeGrowthBackend struct {
 	delivery  growth.Delivery
 	upserted  []growth.LeadInput
 	added     []growth.AddSourceResult
+	synced    map[int64]growth.SyncResult
+	leads     []growth.LeadView
 
 	lastScope        growth.Scope
 	lastOrigin       string
@@ -971,6 +973,10 @@ func (f *fakeGrowthBackend) SyncSources(_ context.Context, scope growth.Scope, i
 			results = append(results, growth.SyncResult{Source: growth.SourceView{ID: id}, Err: f.err, Messages: []growth.MessageView{}})
 			return results, f.err
 		}
+		if res, ok := f.synced[id]; ok {
+			results = append(results, res)
+			continue
+		}
 		res := growth.SyncResult{Source: growth.SourceView{ID: id}, Messages: []growth.MessageView{}, Read: 3, Skipped: 3}
 		if f.fallbacks > 0 {
 			res.PrescreenFallbacks, res.Warning = f.fallbacks, fmt.Sprintf("the pre-screen (Jev) failed on %d batch(es) in this read", f.fallbacks)
@@ -1017,7 +1023,10 @@ func (f *fakeGrowthBackend) Deliver(_ context.Context, scope growth.Scope, opt g
 
 func (f *fakeGrowthBackend) ListLeads(_ context.Context, _ int64, filter growth.LeadFilter) ([]growth.LeadView, error) {
 	f.lastFilter = filter
-	return []growth.LeadView{}, f.err
+	if f.leads == nil {
+		return []growth.LeadView{}, f.err
+	}
+	return f.leads, f.err
 }
 
 func (f *fakeGrowthBackend) ProfileForFlow(_ context.Context, userID, flowID int64) (growth.ProfileView, error) {

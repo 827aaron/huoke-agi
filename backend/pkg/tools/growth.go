@@ -35,16 +35,35 @@ type GrowthBackend interface {
 	UpdateProfilePrompt(ctx context.Context, userID, id int64, op growth.ProfileOp) (growth.ProfileView, error)
 }
 
+// DefaultGrowthResultLimit bounds what a growth tool that lists messages or leads hands
+// the model in one call, in bytes; GROWTH_TOOL_RESULT_LIMIT overrides it. A source read
+// that runs past it stops with its cursor before the first message left out, a lead list
+// says the offset the next page starts at.
+const DefaultGrowthResultLimit = 32 * 1024
+
+// growthResultOverhead is the part of the limit kept for the outer object and the
+// progress line around the listed items.
+const growthResultOverhead = 512
+
 // growthTools are the lead-generation tools, bound per role in tools.go: the searcher
 // writes the source pool, the lead researcher (the pentester role) reads sources and
 // writes leads, the primary agent delivers, and every planner or reporter reads progress.
 type growthTools struct {
-	backend GrowthBackend
-	scope   growth.Scope
+	backend     GrowthBackend
+	scope       growth.Scope
+	resultLimit int
 }
 
 func newGrowthTools(backend GrowthBackend, userID, flowID int64, taskID *int64) *growthTools {
-	return &growthTools{backend: backend, scope: growth.Scope{UserID: userID, FlowID: flowID, TaskID: taskID}}
+	return &growthTools{
+		backend:     backend,
+		scope:       growth.Scope{UserID: userID, FlowID: flowID, TaskID: taskID},
+		resultLimit: DefaultGrowthResultLimit,
+	}
+}
+
+func (g *growthTools) itemBudget() int {
+	return max(g.resultLimit-growthResultOverhead, 1)
 }
 
 func (g *growthTools) IsAvailable() bool { return g.backend != nil }
@@ -178,7 +197,10 @@ func (g *growthTools) syncSource(ctx context.Context, args json.RawMessage) (str
 		if len(ids) == 0 && action.SourceID.Int64() > 0 {
 			ids = append(ids, action.SourceID.Int64())
 		}
-		opt := growth.SyncOptions{Direction: action.Direction.String(), Limit: action.Limit.Int(), All: action.AllMessages.Bool()}
+		opt := growth.SyncOptions{
+			Direction: action.Direction.String(), Limit: action.Limit.Int(), All: action.AllMessages.Bool(),
+			MaxBytes: g.itemBudget(),
+		}
 		results, err := g.backend.SyncSources(ctx, g.scope, ids, opt)
 		if len(ids) == 1 {
 			if len(results) == 1 && results[0].Err != nil {
@@ -187,7 +209,7 @@ func (g *growthTools) syncSource(ctx context.Context, args json.RawMessage) (str
 			if err != nil || len(results) != 1 {
 				return g.failure(ctx, err)
 			}
-			return g.respond(ctx, syncPayload(results[0]))
+			return g.respond(ctx, syncPayload(results[0], opt.Direction))
 		}
 		if err != nil && len(results) == 0 {
 			return g.failure(ctx, err)
@@ -198,7 +220,7 @@ func (g *growthTools) syncSource(ctx context.Context, args json.RawMessage) (str
 				items = append(items, map[string]any{"source_id": res.Source.ID, "error": growthFailureText(res.Err)})
 				continue
 			}
-			items = append(items, syncPayload(res))
+			items = append(items, syncPayload(res, opt.Direction))
 		}
 		payload := map[string]any{"results": items}
 		if err != nil {
@@ -219,9 +241,34 @@ func (g *growthTools) syncSource(ctx context.Context, args json.RawMessage) (str
 	}
 }
 
-func syncPayload(res growth.SyncResult) map[string]any {
+// syncSourceView is the source as a read reports it: its identity and reading state,
+// without the description and discovery fields growth_search_sources already gave.
+type syncSourceView struct {
+	ID               int64  `json:"source_id"`
+	Platform         string `json:"platform"`
+	Title            string `json:"title,omitempty"`
+	Username         string `json:"username,omitempty"`
+	Link             string `json:"link,omitempty"`
+	Status           string `json:"status"`
+	JoinStatus       string `json:"join_status"`
+	MessagesRead     int64  `json:"messages_read"`
+	HistoryExhausted bool   `json:"history_exhausted"`
+	QualifiedLeads   int    `json:"qualified_leads"`
+	EmptyStreak      int    `json:"empty_streak"`
+	Health           string `json:"health"`
+	Note             string `json:"note,omitempty"`
+}
+
+func syncPayload(res growth.SyncResult, direction string) map[string]any {
+	src := res.Source
 	payload := map[string]any{
-		"source": res.Source, "messages": res.Messages, "count": len(res.Messages),
+		"source": syncSourceView{
+			ID: src.ID, Platform: src.Platform, Title: src.Title, Username: src.Username, Link: src.Link,
+			Status: src.Status, JoinStatus: src.JoinStatus, MessagesRead: src.MessagesRead,
+			HistoryExhausted: src.HistoryExhausted, QualifiedLeads: src.QualifiedLeads,
+			EmptyStreak: src.EmptyStreak, Health: src.Health, Note: src.Note,
+		},
+		"messages": res.Messages, "count": len(res.Messages),
 		"read": res.Read, "skipped_count": res.Skipped,
 	}
 	if res.CaughtUp != nil {
@@ -239,11 +286,36 @@ func syncPayload(res growth.SyncResult) map[string]any {
 	if res.CaughtUp != nil && !*res.CaughtUp {
 		payload["note"] = "more new messages are waiting: call again with direction=newer"
 	}
+	if res.Pending > 0 {
+		if direction == "" {
+			direction = growth.DirectionOlder
+		}
+		payload["pending"] = res.Pending
+		payload["next_from_message_id"] = res.NextFrom
+		payload["note"] = fmt.Sprintf("this result is full: %d more messages wait, next from message_id %s, none skipped; "+
+			"call again with direction=%s to continue with them", res.Pending, res.NextFrom, direction)
+	}
 	if res.PrescreenFallbacks > 0 {
 		payload["prescreen_fallback_batches"] = res.PrescreenFallbacks
 		payload["warning"] = res.Warning
 	}
 	return payload
+}
+
+// fitItems returns the longest prefix of items whose JSON fits in budget bytes, the
+// first item always, and how many were left out.
+func fitItems[T any](items []T, budget int) ([]T, int) {
+	used := 0
+	for i, item := range items {
+		raw, err := json.Marshal(item)
+		if err != nil {
+			continue
+		}
+		if used += len(raw) + 1; i > 0 && used > budget {
+			return items[:i], len(items) - i
+		}
+	}
+	return items, 0
 }
 
 func (g *growthTools) upsertLeads(ctx context.Context, args json.RawMessage) (string, error) {
@@ -347,7 +419,7 @@ func (g *growthTools) listLeads(ctx context.Context, args json.RawMessage) (stri
 	if err != nil {
 		return "", err
 	}
-	filter := growth.LeadFilter{Limit: action.Limit.Int(), Since: since}
+	filter := growth.LeadFilter{Limit: action.Limit.Int(), Offset: max(action.Offset.Int(), 0), Since: since}
 	if action.HasContact.Bool() {
 		hasContact := true
 		filter.HasContact = &hasContact
@@ -381,7 +453,14 @@ func (g *growthTools) listLeads(ctx context.Context, args json.RawMessage) (stri
 	if err != nil {
 		return g.failure(ctx, err)
 	}
-	return g.respond(ctx, map[string]any{"count": len(leads), "leads": leads})
+	shown, left := fitItems(leads, g.itemBudget())
+	payload := map[string]any{"count": len(shown), "leads": shown}
+	if left > 0 {
+		payload["offset"] = filter.Offset
+		payload["note"] = fmt.Sprintf("this result is full: %d more of the %d leads listed did not fit; "+
+			"call again with offset=%d and the same filters for the next ones", left, len(leads), filter.Offset+len(shown))
+	}
+	return g.respond(ctx, payload)
 }
 
 func contactInputs(args []GrowthContactArg) []growth.Contact {

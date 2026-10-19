@@ -316,6 +316,10 @@ type Config struct {
 	// optionally with user:pass@); an account's own proxy wins. PROXY_URL is unrelated:
 	// it carries the server's own outbound calls.
 	GrowthProxyURL string `env:"GROWTH_PROXY_URL"`
+	// GrowthToolResultLimit bounds, in bytes, what one call of a growth tool that lists
+	// messages or leads hands the model; the rest waits for the next call. Zero or less
+	// keeps the built-in limit.
+	GrowthToolResultLimit int `env:"GROWTH_TOOL_RESULT_LIMIT" envDefault:"32768"`
 	// TypeSafeAPIKey is the key of Jev, the model every synced message is pre-screened
 	// with; without it no source is read. The URL is TypeSafe's own when empty, or
 	// https://openrouter.ai/api for Jev through OpenRouter. An empty model is the newest

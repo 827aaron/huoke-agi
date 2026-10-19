@@ -130,6 +130,140 @@ func TestGrowth_Handle_SyncReportsThePrescreenFallbacksOfARead(t *testing.T) {
 	assert.NotContains(t, out, `"warning"`)
 }
 
+func TestGrowth_Handle_SyncPassesTheResultBudgetAndReportsWhatIsPending(t *testing.T) {
+	caughtUp := false
+	tests := []struct {
+		name string
+		args string
+		res  growth.SyncResult
+		want []string
+	}{
+		{
+			name: "back-read",
+			args: `{"source_id":5,"direction":"older"}`,
+			res: growth.SyncResult{
+				Source:   growth.SourceView{ID: 5, Title: "MOBA talk", Description: strings.Repeat("d", 300), Health: "active"},
+				Messages: []growth.MessageView{{MessageID: "50", SenderID: "1", Text: "buy"}},
+				Read:     1, Pending: 49, NextFrom: "49",
+			},
+			want: []string{`"pending":49`, `"next_from_message_id":"49"`, "49 more messages wait, next from message_id 49", "direction=older"},
+		},
+		{
+			name: "forward read",
+			args: `{"source_id":5,"direction":"newer"}`,
+			res: growth.SyncResult{
+				Source:   growth.SourceView{ID: 5, Title: "MOBA talk"},
+				Messages: []growth.MessageView{{MessageID: "3", SenderID: "1", Text: "buy"}},
+				Read:     1, Pending: 19, NextFrom: "4", CaughtUp: &caughtUp,
+			},
+			want: []string{`"pending":19`, `"caught_up":false`, "next from message_id 4", "direction=newer"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			backend := &fakeGrowthBackend{synced: map[int64]growth.SyncResult{5: tt.res}}
+			tools := newGrowthTools(backend, 1, 42, nil)
+			tools.resultLimit = 10_000
+
+			out, err := tools.Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(tt.args))
+			require.NoError(t, err)
+			assert.Equal(t, 9_488, backend.lastSync.MaxBytes, "the limit less the room for the outer object")
+			for _, want := range tt.want {
+				assert.Contains(t, out, want)
+			}
+			assert.Contains(t, out, `"title":"MOBA talk"`)
+			assert.NotContains(t, out, strings.Repeat("d", 300), "the source line carries no description")
+		})
+	}
+}
+
+func TestGrowth_Handle_SyncReturnsAFittingReadUnchanged(t *testing.T) {
+	msgs := []growth.MessageView{
+		{MessageID: "7", SenderID: "1", Text: strings.Repeat("a", 1500), Score: 8, Tier: "qualified"},
+		{MessageID: "6", SenderID: "2", Text: "b"},
+	}
+	backend := &fakeGrowthBackend{synced: map[int64]growth.SyncResult{5: {
+		Source: growth.SourceView{ID: 5}, Messages: msgs, Read: 30, Skipped: 28,
+	}}}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(`{"source_id":5}`))
+	require.NoError(t, err)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &payload))
+	assert.EqualValues(t, 2, payload["count"])
+	assert.EqualValues(t, 30, payload["read"])
+	assert.EqualValues(t, 28, payload["skipped_count"])
+	assert.NotContains(t, payload, "pending")
+	assert.NotContains(t, payload, "next_from_message_id")
+	assert.NotContains(t, payload, "note")
+	raw, err := json.Marshal(payload["messages"])
+	require.NoError(t, err)
+	want, err := json.Marshal(msgs)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(want), string(raw), "the messages reach the model as the read returned them")
+}
+
+func TestGrowth_Handle_ListLeadsStopsAtTheResultLimitAndNamesTheNextOffset(t *testing.T) {
+	leads := make([]growth.LeadView, 12)
+	for i := range leads {
+		leads[i] = growth.LeadView{ID: int64(i + 1), PlatformUserID: fmt.Sprint(1000 + i), MatchReason: strings.Repeat("r", 200)}
+	}
+	backend := &fakeGrowthBackend{leads: leads}
+	tools := newGrowthTools(backend, 1, 42, nil)
+	tools.resultLimit = 2048
+
+	out, err := tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{"offset":"4"}`))
+	require.NoError(t, err)
+	assert.Equal(t, 4, backend.lastFilter.Offset)
+	assert.LessOrEqual(t, len(out), 2048)
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &payload))
+	shown := payload["leads"].([]any)
+	require.NotEmpty(t, shown)
+	assert.Less(t, len(shown), 12)
+	assert.EqualValues(t, len(shown), payload["count"])
+	assert.EqualValues(t, 4, payload["offset"])
+	assert.Contains(t, payload["note"], fmt.Sprintf("%d more of the 12 leads", 12-len(shown)))
+	assert.Contains(t, payload["note"], fmt.Sprintf("offset=%d", 4+len(shown)))
+	assert.EqualValues(t, 1, shown[0].(map[string]any)["lead_id"])
+
+	tools.resultLimit = 100_000
+	out, err = tools.Handle(t.Context(), GrowthListLeadsToolName, json.RawMessage(`{}`))
+	require.NoError(t, err)
+	assert.Equal(t, 0, backend.lastFilter.Offset)
+	payload = map[string]any{}
+	require.NoError(t, json.Unmarshal([]byte(out), &payload))
+	assert.EqualValues(t, 12, payload["count"])
+	assert.Len(t, payload["leads"], 12)
+	assert.NotContains(t, payload, "note")
+	assert.NotContains(t, payload, "offset")
+}
+
+func TestGrowth_FitItems_KeepsTheFirstAndCutsAtTheBudget(t *testing.T) {
+	// Each item serializes to 6 bytes and is charged 7 with its separator.
+	items := []string{"aaaa", "bbbb", "cccc"}
+	tests := []struct {
+		name     string
+		items    []string
+		budget   int
+		wantKept int
+		wantLeft int
+	}{
+		{"nothing to show", nil, 100, 0, 0},
+		{"everything fits", items, 21, 3, 0},
+		{"the budget ends between items", items, 20, 2, 1},
+		{"one less than two items", items, 13, 1, 2},
+		{"the first item alone is over budget", items, 1, 1, 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			kept, left := fitItems(tt.items, tt.budget)
+			assert.Len(t, kept, tt.wantKept)
+			assert.Equal(t, tt.wantLeft, left)
+		})
+	}
+}
+
 func TestGrowth_Handle_ReturnsTheErrorOfACancelledCall(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()

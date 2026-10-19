@@ -36,10 +36,10 @@ const (
 	deadAfterEmptyReads  = 6
 
 	maxSearchLimit   = 50
-	maxHistoryLimit  = 200
+	maxHistoryLimit  = 60
 	maxMessageRunes  = 1500
 	maxDescRunes     = 300
-	defaultPageLimit = 100
+	defaultPageLimit = 30
 )
 
 var (
@@ -123,14 +123,18 @@ type MessageView struct {
 	Signals string `json:"signals,omitempty"`
 }
 
-// SyncResult is one source's read. Read counts every message read, Skipped those the
-// pre-screen left out; CaughtUp is set on a forward read. Error is set instead when a
-// batch read of this source failed.
+// SyncResult is one source's read. Read counts every message the cursor moved past,
+// Skipped those of them the pre-screen left out. Pending counts the messages fetched
+// after the point a bounded read stopped at, which the next read continues with, and
+// NextFrom is the first of them. CaughtUp is set on a forward read. Error is set instead
+// when a batch read of this source failed.
 type SyncResult struct {
 	Source   SourceView    `json:"source"`
 	Messages []MessageView `json:"messages"`
 	Read     int           `json:"read"`
 	Skipped  int           `json:"skipped_count"`
+	Pending  int           `json:"pending,omitempty"`
+	NextFrom string        `json:"next_from_message_id,omitempty"`
 	CaughtUp *bool         `json:"caught_up,omitempty"`
 	Error    string        `json:"error,omitempty"`
 	Err      error         `json:"-"`
@@ -138,6 +142,8 @@ type SyncResult struct {
 	// are returned unscreened and unscored; Warning says so in a sentence.
 	PrescreenFallbacks int    `json:"prescreen_fallback_batches,omitempty"`
 	Warning            string `json:"warning,omitempty"`
+	// bytes is the serialized size of Messages, charged to the budget of a bounded read.
+	bytes int
 }
 
 // DetectPlatform tells a Telegram reference and a Facebook group from a web page;
@@ -759,11 +765,44 @@ func (s *Service) joinWith(
 	return outcome, nil
 }
 
-// SyncOptions shape a read. All skips the pre-screen.
+// SyncOptions shape a read. All skips the pre-screen. MaxBytes bounds what one call
+// returns over all its sources, in bytes of serialized messages: a read stops where the
+// bound is reached and its cursor stays before the first message left out, so the next
+// call continues with it and nothing is skipped; each message's text is then cut to the
+// opening lines the pre-screen judges. Zero is no bound.
 type SyncOptions struct {
 	Direction string
 	Limit     int
 	All       bool
+	MaxBytes  int
+}
+
+// syncSourceOverhead is the part of a bounded read's budget set aside per source for
+// what the caller wraps around the messages: the source line and the counts.
+const syncSourceOverhead = 512
+
+// syncBudget is the room a bounded read still has, shared by the sources of one call in
+// equal shares of what is left, so a source with little to show leaves its share to the
+// next ones.
+type syncBudget struct {
+	left    int
+	sources int
+}
+
+func newSyncBudget(maxBytes, sources int) *syncBudget {
+	if maxBytes <= 0 {
+		return nil
+	}
+	return &syncBudget{left: max(maxBytes-sources*syncSourceOverhead, 0), sources: max(sources, 1)}
+}
+
+func (b *syncBudget) share() int {
+	return b.left / b.sources
+}
+
+func (b *syncBudget) spend(used int) {
+	b.left = max(b.left-used, 0)
+	b.sources = max(b.sources-1, 1)
 }
 
 // SyncSource reads a source's history and advances the per-account cursor: "older"
@@ -776,7 +815,7 @@ func (s *Service) SyncSource(
 	direction string,
 	limit int,
 ) (SyncResult, error) {
-	return s.syncOne(ctx, scope, sourceID, SyncOptions{Direction: direction, Limit: limit})
+	return s.syncOne(ctx, scope, sourceID, SyncOptions{Direction: direction, Limit: limit}, nil)
 }
 
 // SyncSources reads each source in turn; no ids reads every source an account of the
@@ -790,9 +829,13 @@ func (s *Service) SyncSources(ctx context.Context, scope Scope, sourceIDs []int6
 		}
 		sourceIDs = joined
 	}
+	budget := newSyncBudget(opt.MaxBytes, len(sourceIDs))
 	results := make([]SyncResult, 0, len(sourceIDs))
 	for _, id := range sourceIDs {
-		res, err := s.syncOne(ctx, scope, id, opt)
+		res, err := s.syncOne(ctx, scope, id, opt, budget)
+		if budget != nil {
+			budget.spend(res.bytes)
+		}
 		if err != nil {
 			res.Source.ID, res.Error, res.Err, res.Messages = id, err.Error(), err, []MessageView{}
 			results = append(results, res)
@@ -827,7 +870,7 @@ func (s *Service) joinedSourceIDs(ctx context.Context, userID int64) ([]int64, e
 	return ids, nil
 }
 
-func (s *Service) syncOne(ctx context.Context, scope Scope, sourceID int64, opt SyncOptions) (SyncResult, error) {
+func (s *Service) syncOne(ctx context.Context, scope Scope, sourceID int64, opt SyncOptions, budget *syncBudget) (SyncResult, error) {
 	src, err := s.userSource(ctx, scope.UserID, sourceID)
 	if err != nil {
 		return SyncResult{}, err
@@ -846,7 +889,7 @@ func (s *Service) syncOne(ctx context.Context, scope Scope, sourceID int64, opt 
 	err = s.withAccount(ctx, scope.UserID, connectors.Platform(src.Platform), src.ID, nil,
 		func(conn connectors.Connector, acc database.ChannelAccount) error {
 			var err error
-			result, err = s.syncWith(ctx, scope, conn, acc, src, opt, sc)
+			result, err = s.syncWith(ctx, scope, conn, acc, src, opt, sc, budget)
 			// A refused judgement key says nothing about the platform account.
 			if errors.Is(err, ErrNoJudge) {
 				judgeErr, err = err, nil
@@ -866,7 +909,7 @@ func (s *Service) syncOne(ctx context.Context, scope Scope, sourceID int64, opt 
 
 // maxCatchUpPages bounds one forward read; a source further behind says so and the next
 // call continues from where this one stopped.
-const maxCatchUpPages = 10
+const maxCatchUpPages = 1
 
 // syncWith reads with one account. The cursor is per account, so an account that takes
 // over a source starts from its newest message; leads and evidence it finds again are
@@ -879,6 +922,7 @@ func (s *Service) syncWith(
 	src database.GrowthSource,
 	opt SyncOptions,
 	sc *screener,
+	budget *syncBudget,
 ) (SyncResult, error) {
 	var err error
 	if !connectors.Has(conn, connectors.CapReadHistory) {
@@ -900,8 +944,15 @@ func (s *Service) syncWith(
 		pace = s.telegramPace(ctx, scope.UserID)
 	}
 
+	label := src.Title
+	if label == "" {
+		label = src.Link
+	}
+	take := &syncTake{s: s, ctx: ctx, scope: scope, sc: sc, src: src, label: label, all: opt.All, runes: maxMessageRunes}
+	if budget != nil {
+		take.bounded, take.share, take.runes = true, budget.share(), screenRunes
+	}
 	var (
-		messages  []connectors.Message
 		exhausted bool
 		caughtUp  bool
 	)
@@ -915,40 +966,38 @@ func (s *Service) syncWith(
 				return SyncResult{}, err
 			}
 		}
-		messages, exhausted, err = s.readOlder(ctx, conn, acc, src, as, limit, telegram, pace)
+		page, done, err := s.readOlder(ctx, conn, acc, src, as, limit, telegram, pace)
+		if err != nil {
+			return SyncResult{}, err
+		}
+		// A back-read continues from its oldest message, so the newest of the page is nearest the cursor.
+		slices.SortFunc(page, func(a, b connectors.Message) int { return cmp.Compare(b.ID, a.ID) })
+		if err := take.page(page); err != nil {
+			return SyncResult{}, err
+		}
+		exhausted = done && take.pending == 0
 	case DirectionNewer:
 		if telegram {
 			if err := s.awaitReadGap(ctx, acc.ID, src.ID, pace); err != nil {
 				return SyncResult{}, err
 			}
 		}
-		messages, caughtUp, err = s.readNewer(ctx, conn, acc, src, as, limit)
+		caughtUp, err = s.readNewer(ctx, conn, acc, src, as, limit, func(page []connectors.Message) (bool, error) {
+			slices.SortFunc(page, func(a, b connectors.Message) int { return cmp.Compare(a.ID, b.ID) })
+			if err := take.page(page); err != nil {
+				return false, err
+			}
+			return take.full, nil
+		})
+		if err != nil {
+			return SyncResult{}, err
+		}
 	default:
 		return SyncResult{}, fmt.Errorf("unknown direction %q: use %q or %q", opt.Direction, DirectionOlder, DirectionNewer)
 	}
-	if err != nil {
-		return SyncResult{}, err
-	}
-
-	// The pre-screen runs before the cursor moves, so a read it refuses is read again.
-	slices.SortFunc(messages, func(a, b connectors.Message) int { return cmp.Compare(b.ID, a.ID) })
-	views := make([]MessageView, 0, len(messages))
-	for _, m := range messages {
-		views = append(views, messageView(m))
-	}
-	kept := views
-	if !opt.All {
-		source := src.Title
-		if source == "" {
-			source = src.Link
-		}
-		if kept, err = s.screen(ctx, scope.UserID, sc, src.ID, src.Platform, source, views); err != nil {
-			return SyncResult{}, err
-		}
-	}
 
 	var newest, oldest int64
-	for _, m := range messages {
+	for _, m := range take.consumed {
 		newest = max(newest, m.ID)
 		if oldest == 0 || m.ID < oldest {
 			oldest = m.ID
@@ -963,7 +1012,7 @@ func (s *Service) syncWith(
 		NewestMessageID:  newest,
 		OldestMessageID:  oldest,
 		HistoryExhausted: exhausted,
-		MessagesRead:     int64(len(messages)),
+		MessagesRead:     int64(len(take.consumed)),
 	}); err != nil {
 		return SyncResult{}, fmt.Errorf("failed to advance cursor of source %d: %w", src.ID, err)
 	}
@@ -975,13 +1024,113 @@ func (s *Service) syncWith(
 		return SyncResult{}, fmt.Errorf("failed to record read of source %d: %w", src.ID, err)
 	}
 
+	kept := take.messages()
 	res := SyncResult{
-		Source: s.viewSource(ctx, src, acc.ID), Messages: kept, Read: len(messages), Skipped: len(messages) - len(kept),
+		Source: s.viewSource(ctx, src, acc.ID), Messages: kept, Read: len(take.consumed),
+		Skipped: len(take.consumed) - len(kept), Pending: take.pending, bytes: take.used,
+	}
+	if take.pending > 0 {
+		res.NextFrom = fmt.Sprint(take.next)
 	}
 	if opt.Direction == DirectionNewer {
 		res.CaughtUp = &caughtUp
 	}
 	return res, nil
+}
+
+// syncTake walks the pages of one read in cursor order, the message nearest the cursor
+// first, and keeps what the pre-screen picks while it fits the share. The cursor moves
+// past every message examined; a kept message that does not fit stops the read before
+// it, and it and the rest of the fetched pages are pending for the next call. The first
+// kept message of a source always fits, so a read always makes progress. The pre-screen
+// runs before the cursor moves, so a read it refuses is read again.
+type syncTake struct {
+	s     *Service
+	ctx   context.Context
+	scope Scope
+	sc    *screener
+	src   database.GrowthSource
+	label string
+	all   bool
+	runes int
+
+	bounded bool
+	share   int
+	used    int
+
+	consumed []connectors.Message
+	kept     []keptMessage
+	pending  int
+	next     int64
+	full     bool
+}
+
+type keptMessage struct {
+	id   int64
+	view MessageView
+}
+
+func (t *syncTake) page(msgs []connectors.Message) error {
+	for start := 0; start < len(msgs); start += screenBatch {
+		end := min(start+screenBatch, len(msgs))
+		if t.full {
+			t.pending += end - start
+			continue
+		}
+		batch := msgs[start:end]
+		views := make([]MessageView, 0, len(batch))
+		for _, m := range batch {
+			views = append(views, messageView(m, t.runes))
+		}
+		picked := views
+		if !t.all {
+			var err error
+			picked, err = t.s.screen(t.ctx, t.scope.UserID, t.sc, t.src.ID, t.src.Platform, t.label, views)
+			if err != nil {
+				return err
+			}
+		}
+		next := 0
+		for i, m := range batch {
+			if next < len(picked) && picked[next].MessageID == views[i].MessageID {
+				if !t.fits(picked[next]) {
+					t.full, t.next = true, m.ID
+					t.pending += len(batch) - i
+					break
+				}
+				t.kept = append(t.kept, keptMessage{id: m.ID, view: picked[next]})
+				next++
+			}
+			t.consumed = append(t.consumed, m)
+		}
+	}
+	return nil
+}
+
+func (t *syncTake) fits(m MessageView) bool {
+	if !t.bounded {
+		return true
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return true
+	}
+	n := len(raw) + 1
+	if len(t.kept) > 0 && t.used+n > t.share {
+		return false
+	}
+	t.used += n
+	return true
+}
+
+// messages returns what was kept, newest first.
+func (t *syncTake) messages() []MessageView {
+	slices.SortFunc(t.kept, func(a, b keptMessage) int { return cmp.Compare(b.id, a.id) })
+	out := make([]MessageView, 0, len(t.kept))
+	for _, k := range t.kept {
+		out = append(out, k.view)
+	}
+	return out
 }
 
 // readOlder reads one page backwards. On Telegram the back-read of a source stops at the
@@ -1034,7 +1183,8 @@ func (s *Service) readOlder(
 }
 
 // readNewer pages forward from the cursor, each page the messages just above the last,
-// until a short page shows it has caught up.
+// handing each page to take as it arrives, until the page allowance runs out, a short
+// page shows it has caught up, or take reports it is full.
 func (s *Service) readNewer(
 	ctx context.Context,
 	conn connectors.Connector,
@@ -1042,27 +1192,33 @@ func (s *Service) readNewer(
 	src database.GrowthSource,
 	as database.AccountSource,
 	limit int,
-) ([]connectors.Message, bool, error) {
+	take func(page []connectors.Message) (full bool, err error),
+) (bool, error) {
 	ref := s.sourceRef(ctx, acc.ID, src)
 	cursor := as.NewestMessageID
-	var messages []connectors.Message
 	for range maxCatchUpPages {
 		page, err := conn.ReadHistory(ctx, ref, connectors.HistoryRequest{MinID: cursor, Limit: limit})
 		if err != nil {
-			return nil, false, err
+			return false, err
 		}
-		messages = append(messages, page.Messages...)
 		next := cursor
 		for _, m := range page.Messages {
 			next = max(next, m.ID)
 		}
+		full, err := take(page.Messages)
+		if err != nil {
+			return false, err
+		}
+		if full {
+			return false, nil
+		}
 		// A never-read source starts from its newest page: there is nothing above it.
 		if cursor == 0 || len(page.Messages) < limit || next == cursor {
-			return messages, true, nil
+			return true, nil
 		}
 		cursor = next
 	}
-	return messages, false, nil
+	return false, nil
 }
 
 func (s *Service) GetUser(
@@ -1321,7 +1477,7 @@ func (s *Service) sourceRef(ctx context.Context, accountID int64, src database.G
 	return ref
 }
 
-func messageView(m connectors.Message) MessageView {
+func messageView(m connectors.Message, textRunes int) MessageView {
 	v := MessageView{
 		MessageID:      fmt.Sprint(m.ID),
 		SenderID:       m.SenderID,
@@ -1330,7 +1486,7 @@ func messageView(m connectors.Message) MessageView {
 		SenderIsBot:    m.SenderIsBot,
 		Time:           m.Time.UTC(),
 		Link:           m.Link,
-		Text:           truncateRunes(m.Text, maxMessageRunes),
+		Text:           truncateRunes(m.Text, textRunes),
 	}
 	if m.ReplyToID != 0 {
 		v.ReplyTo = fmt.Sprint(m.ReplyToID)
