@@ -21,6 +21,8 @@ import (
 const (
 	screenBatch = 40
 	screenRunes = 400
+	// unscoredRunes is how much of a message is kept when its batch could not be judged.
+	unscoredRunes = 200
 )
 
 // retiredScreeningThreshold is a screening field a page may still send; it is dropped,
@@ -202,8 +204,8 @@ func newJevClient(cfg *config.Config) *screening.Client {
 
 // screen drops the messages Jev finds explicit evidence of exclusion in and scores the
 // rest by the owner's weights, dropping those below the watchlist line. A batch Jev fails on
-// is kept whole and unscored, since a missed buyer costs more than scoring a few extra
-// messages; a refused key fails the read.
+// is kept, shortened and marked unscored, since a missed buyer costs more than passing a
+// few extra opening lines on; a refused key fails the read.
 func (s *Service) screen(
 	ctx context.Context,
 	userID int64,
@@ -228,7 +230,11 @@ func (s *Service) screen(
 		case err != nil:
 			sc.fallbacks++
 			logrus.WithContext(ctx).WithError(err).WithField("source_id", sourceID).
-				Warn("pre-screen failed; the batch goes to scoring unscreened")
+				Warn("pre-screen failed; the batch is kept unscored and shortened")
+			for i := range batch {
+				batch[i].Text = truncateRunes(batch[i].Text, unscoredRunes)
+				batch[i].Unscored = true
+			}
 			kept = append(kept, batch...)
 			continue
 		}

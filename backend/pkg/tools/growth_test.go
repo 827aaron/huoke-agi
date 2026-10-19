@@ -230,6 +230,17 @@ func TestGrowth_Handle_SyncCutsTheTextAndDropsTheFieldsAPageDoesNotNeed(t *testi
 	assert.Less(t, len(raw), 2000, "400 characters, not the 900 that were read")
 }
 
+func TestGrowth_Handle_SyncPassesTheUnscoredMark(t *testing.T) {
+	backend := &fakeGrowthBackend{synced: map[int64]growth.SyncResult{5: {
+		Source:   growth.SourceView{ID: 5, Title: "MOBA talk"},
+		Messages: []growth.MessageView{{MessageID: "1", SenderID: "1", Text: "hi", Unscored: true}},
+		Read:     1,
+	}}}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSyncSourceToolName, json.RawMessage(`{"source_id":5}`))
+	require.NoError(t, err)
+	assert.Contains(t, out, `"unscored":true`)
+}
+
 func TestGrowth_Handle_MessageReturnsTheFullTextAndLeavesTheReadAlone(t *testing.T) {
 	full := strings.Repeat("买", 900)
 	backend := &fakeGrowthBackend{message: growth.MessageView{
