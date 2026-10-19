@@ -51,21 +51,24 @@ const newestEvidence = (lead: GrowthLead): GrowthLeadEvidence | null =>
         null,
     );
 
+// The column order the backend's sheet (`backend/pkg/growth/leadscsv.json`) writes too;
+// the two are kept equal by test.
+export const LEADS_CSV_COLUMNS = [
+    'name',
+    'username',
+    'platform',
+    'contacts',
+    'score',
+    'signals',
+    'reason',
+    'source',
+    'quote',
+    'quoteUrl',
+    'quoteTime',
+] as const satisfies readonly (keyof typeof copy.export.header)[];
+
 export function buildLeadsCsv(leads: GrowthLead[], { signalLabel, sourceLinks }: LeadsCsvOptions = {}): string {
-    const header = copy.export.header;
-    const columns = [
-        header.name,
-        header.username,
-        header.platform,
-        header.contacts,
-        header.score,
-        header.signals,
-        header.reason,
-        header.source,
-        header.quote,
-        header.quoteUrl,
-        header.quoteTime,
-    ];
+    const columns = LEADS_CSV_COLUMNS.map((column) => copy.export.header[column]);
 
     const rows = leads.map((lead) => {
         const evidence = newestEvidence(lead);

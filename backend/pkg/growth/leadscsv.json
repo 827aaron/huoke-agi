@@ -1,0 +1,53 @@
+{
+  "columns": ["name", "username", "platform", "contacts", "score", "signals", "reason", "source", "quote", "quoteUrl", "quoteTime"],
+  "header": {
+    "name": {"english": "Name", "chinese": "昵称", "traditional chinese": "暱稱"},
+    "username": {"english": "Username", "chinese": "用户名", "traditional chinese": "用戶名"},
+    "platform": {"english": "Platform", "chinese": "平台", "traditional chinese": "平台"},
+    "contacts": {"english": "Contact", "chinese": "联系方式", "traditional chinese": "聯絡方式"},
+    "score": {"english": "Score", "chinese": "评分", "traditional chinese": "評分"},
+    "signals": {"english": "Signals", "chinese": "信号", "traditional chinese": "訊號"},
+    "reason": {"english": "Profile", "chinese": "画像", "traditional chinese": "畫像"},
+    "source": {"english": "Source", "chinese": "来源", "traditional chinese": "來源"},
+    "quote": {"english": "Quote", "chinese": "原话", "traditional chinese": "原話"},
+    "quoteUrl": {"english": "Link", "chinese": "原文链接", "traditional chinese": "原文連結"},
+    "quoteTime": {"english": "Posted at", "chinese": "发言时间", "traditional chinese": "發言時間"}
+  },
+  "tier": {
+    "qualified": {"english": "Qualified", "chinese": "合格", "traditional chinese": "合格"},
+    "watchlist": {"english": "Watch list", "chinese": "待观察", "traditional chinese": "待觀察"}
+  },
+  "signal": {
+    "player": {"english": "In the audience", "chinese": "属于目标人群", "traditional chinese": "屬於目標人群"},
+    "pain": {"english": "Has a pain point", "chinese": "有痛点", "traditional chinese": "有痛點"},
+    "paying": {"english": "Shows deal intent", "chinese": "有成交迹象", "traditional chinese": "有成交跡象"},
+    "match": {"english": "Fits the business", "chinese": "匹配客户业务", "traditional chinese": "匹配客戶業務"},
+    "active": {"english": "Recently active", "chinese": "近期活跃", "traditional chinese": "近期活躍"}
+  },
+  "platform": {
+    "telegram": {"english": "Telegram", "chinese": "Telegram", "traditional chinese": "Telegram"},
+    "web": {"english": "Web / forums", "chinese": "网页 / 论坛", "traditional chinese": "網頁 / 論壇"},
+    "facebook": {"english": "Facebook", "chinese": "Facebook", "traditional chinese": "Facebook"},
+    "instagram": {"english": "Instagram", "chinese": "Instagram", "traditional chinese": "Instagram"},
+    "youtube": {"english": "YouTube", "chinese": "YouTube", "traditional chinese": "YouTube"},
+    "tiktok": {"english": "TikTok", "chinese": "TikTok", "traditional chinese": "TikTok"}
+  },
+  "contact": {
+    "email": {"english": "Email", "chinese": "邮箱", "traditional chinese": "電郵"},
+    "phone": {"english": "Phone", "chinese": "手机号", "traditional chinese": "手機號"},
+    "telegram": {"english": "Telegram", "chinese": "Telegram", "traditional chinese": "Telegram"},
+    "whatsapp": {"english": "WhatsApp", "chinese": "WhatsApp", "traditional chinese": "WhatsApp"},
+    "line": {"english": "Line", "chinese": "Line", "traditional chinese": "Line"},
+    "messenger": {"english": "Messenger", "chinese": "即时通讯", "traditional chinese": "即時通訊"},
+    "platform_handle": {"english": "Platform account", "chinese": "平台账号", "traditional chinese": "平台帳號"},
+    "other": {"english": "Other", "chinese": "其他", "traditional chinese": "其他"}
+  },
+  "file": {
+    "prefix": {"english": "Prospects", "chinese": "潜客", "traditional chinese": "潛客"},
+    "round": {"english": "round-%d", "chinese": "第%d轮", "traditional chinese": "第%d輪"},
+    "filtered": {"english": "Current filter results", "chinese": "当前筛选结果", "traditional chinese": "當前篩選結果"},
+    "delivered": {"english": "All delivered", "chinese": "全部已交付", "traditional chinese": "全部已交付"},
+    "unnamed": {"english": "Unnamed business", "chinese": "未命名业务", "traditional chinese": "未命名業務"}
+  },
+  "contactSeparator": {"english": ": ", "chinese": "：", "traditional chinese": "："}
+}

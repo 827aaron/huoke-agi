@@ -7167,7 +7167,7 @@ paths:
             $ref: '#/definitions/ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Download leads as CSV, one row per lead with its first evidence
+      summary: Download leads as CSV, one row per lead with its newest evidence
       tags:
       - Growth
   /growth/profiles:

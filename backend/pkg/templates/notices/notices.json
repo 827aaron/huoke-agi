@@ -68,10 +68,5 @@
     "english": "This is a test message. Lead lists will be delivered to this address when a round finishes.",
     "chinese": "这是一封测试邮件。每轮任务结束时，线索名单会发到这个地址。",
     "traditional chinese": "這是一封測試郵件。每輪任務結束時，線索名單會發到這個地址。"
-  },
-  "csv_platform_only": {
-    "english": "platform account only",
-    "chinese": "仅平台账号",
-    "traditional chinese": "僅平台帳號"
   }
 }

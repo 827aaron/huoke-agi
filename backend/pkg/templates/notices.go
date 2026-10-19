@@ -27,7 +27,6 @@ const (
 	NoticeMailAttached        Notice = "mail_attached"
 	NoticeMailTestSubject     Notice = "mail_test_subject"
 	NoticeMailTestBody        Notice = "mail_test_body"
-	NoticeCSVPlatformOnly     Notice = "csv_platform_only"
 )
 
 // Notices lists every notice, for the check that each has every language.
@@ -35,7 +34,6 @@ var Notices = []Notice{
 	NoticeAssistantFailed, NoticeToolFailed, NoticeToolStopped, NoticeDeadlineDelivered,
 	NoticeMailSubject, NoticeMailDefaultBusiness, NoticeMailBusiness, NoticeMailDelivered, NoticeMailAtDeadline,
 	NoticeMailScoreHeader, NoticeMailScoreLine, NoticeMailAttached, NoticeMailTestSubject, NoticeMailTestBody,
-	NoticeCSVPlatformOnly,
 }
 
 //go:embed notices/notices.json
@@ -63,12 +61,18 @@ func mustNotices() map[Notice]map[string]string {
 // returns, falling back to English for a language without a translation.
 func NoticeText(n Notice, lang string) string {
 	texts := notices[n]
-	key := strings.ToLower(strings.TrimSpace(lang))
-	if alias, ok := languageAliases[key]; ok {
-		key = alias
-	}
-	if text, ok := texts[key]; ok {
+	if text, ok := texts[LanguageKey(lang)]; ok {
 		return text
 	}
 	return texts["english"]
+}
+
+// LanguageKey is the translation-table key of a language name the language chooser
+// returns: lower-cased, with the names it also gives mapped to the key the tables use.
+func LanguageKey(lang string) string {
+	key := strings.ToLower(strings.TrimSpace(lang))
+	if alias, ok := languageAliases[key]; ok {
+		return alias
+	}
+	return key
 }

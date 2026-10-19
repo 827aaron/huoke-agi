@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { dictionaries } from '@/lib/copy';
+
 import type { GrowthLead } from '../growth-types';
 
-import { buildLeadsCsv, leadsCsvFileName } from './leads-csv';
+import spec from '../../../../../backend/pkg/growth/leadscsv.json';
+import { buildLeadsCsv, LEADS_CSV_COLUMNS, leadsCsvFileName } from './leads-csv';
 
 // Zone-less timestamps read the same clock under any TZ.
 const evidence = (n: number, postedAt: string) => ({
@@ -115,6 +118,39 @@ describe('buildLeadsCsv', () => {
         const [, cells] = rows(buildLeadsCsv([manual]));
 
         expect(cells?.endsWith(',属于目标人群、agent_identity、近期活跃,,,,,')).toBe(true);
+    });
+});
+
+// The e-mail attachment and the REST export write the same sheet from this spec; a label
+// changed on one side only shows up here.
+describe('the backend sheet spec', () => {
+    type Table = Record<string, Record<string, string>>;
+    const languages = [
+        ['chinese', dictionaries.zh],
+        ['english', dictionaries.en],
+    ] as const;
+    const pick = (table: Table, language: string) =>
+        Object.fromEntries(Object.entries(table).map(([key, texts]) => [key, texts[language]]));
+
+    it('orders the columns as the web export does', () => {
+        expect(spec.columns).toEqual([...LEADS_CSV_COLUMNS]);
+    });
+
+    it.each(languages)('carries the %s labels of copy.ts', (language, dictionary) => {
+        expect(pick(spec.header, language)).toEqual(dictionary.export.header);
+        expect(pick(spec.tier, language)).toEqual({
+            qualified: dictionary.leads.tier.qualified,
+            watchlist: dictionary.leads.tier.watch,
+        });
+        expect(pick(spec.signal, language)).toEqual(dictionary.leads.signal);
+        expect(pick(spec.platform, language)).toEqual(dictionary.telegram.health.platform);
+        expect(pick(spec.contact, language)).toEqual(dictionary.profile.contactType);
+        expect(dictionary.leads.contactText('T', 'V')).toBe(`T${spec.contactSeparator[language]}V`);
+        expect(dictionary.export.fileName('B', 'S', 'D')).toBe(`${spec.file.prefix[language]}_B_S_D.csv`);
+        expect(spec.file.round[language].replace('%d', '7')).toBe(dictionary.export.roundScope(7));
+        expect(spec.file.filtered[language]).toBe(dictionary.export.filtered);
+        expect(spec.file.delivered[language]).toBe(dictionary.export.allDelivered);
+        expect(spec.file.unnamed[language]).toBe(dictionary.export.unnamedBusiness);
     });
 });
 

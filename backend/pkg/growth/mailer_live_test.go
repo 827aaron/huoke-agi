@@ -32,7 +32,7 @@ func TestMailer_EmailLeads_MailsTheRoundOrItsQualifiedLeads(t *testing.T) {
 	assert.Equal(t, []string{"boss@example.test"}, to)
 	msgs := sink.Messages()
 	require.Len(t, msgs, 1)
-	assert.Contains(t, decodeAttachment(t, msgs[0].Data), "telegram,2,u2")
+	assert.Contains(t, decodeAttachment(t, msgs[0].Data), "u2,@u2,Telegram,https://t.me/u2,")
 
 	_, err = w.svc.SetTarget(ctx, scope, 1)
 	require.NoError(t, err)
@@ -42,7 +42,7 @@ func TestMailer_EmailLeads_MailsTheRoundOrItsQualifiedLeads(t *testing.T) {
 	require.NoError(t, err)
 	msgs = sink.Messages()
 	require.Len(t, msgs, 3, "the delivery mail and the one asked for")
-	assert.Contains(t, msgs[2].Data, "filename=leads-round-")
+	assert.Contains(t, msgs[2].Data, "filename=Prospects_Unnamed_business_round-")
 	rows, err := csv.NewReader(strings.NewReader(decodeAttachment(t, msgs[2].Data))).ReadAll()
 	require.NoError(t, err)
 	assert.Len(t, rows, 2, "the header and the round's one delivered lead")

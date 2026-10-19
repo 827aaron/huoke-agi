@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"strconv"
+	"time"
 
 	"pentagi/pkg/growth"
 	"pentagi/pkg/growth/connectors"
@@ -574,7 +576,7 @@ func optionalInt(c *gin.Context, name string) (int, error) {
 const exportPageSize = 500
 
 // ExportLeads is a function to download leads as CSV
-// @Summary Download leads as CSV, one row per lead with its first evidence
+// @Summary Download leads as CSV, one row per lead with its newest evidence
 // @Tags Growth
 // @Produce text/csv
 // @Security BearerAuth
@@ -613,12 +615,18 @@ func (s *GrowthService) ExportLeads(c *gin.Context) {
 		filter.Offset += exportPageSize
 	}
 
-	c.Header("Content-Disposition", `attachment; filename="leads.csv"`)
 	var flowID int64
 	if filter.FlowID != nil {
 		flowID = *filter.FlowID
 	}
-	c.Data(http.StatusOK, "text/csv; charset=utf-8", growth.LeadsCSV(all, s.svc.Language(c, uid, flowID)))
+	sheet := s.svc.LeadsCSVContext(c, uid, flowID)
+	business := ""
+	if profile, err := s.svc.ProfileForFlow(c, uid, flowID); err == nil {
+		business = profile.Name
+	}
+	name := growth.LeadsCSVFileName(business, sheet.FilteredScope(), sheet, time.Now())
+	c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	c.Data(http.StatusOK, "text/csv; charset=utf-8", growth.LeadsCSV(all, sheet))
 }
 
 type growthAccounts struct {

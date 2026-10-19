@@ -25,8 +25,10 @@ func TestNotices_NoticeText_EveryNoticeHasEveryLanguageWithTheSameVerbs(t *testi
 }
 
 func TestNotices_NoticeText_FallsBackToEnglishAndReadsAliases(t *testing.T) {
-	assert.Equal(t, "仅平台账号", NoticeText(NoticeCSVPlatformOnly, " Simplified Chinese "))
-	assert.Equal(t, "僅平台帳號", NoticeText(NoticeCSVPlatformOnly, "Chinese Traditional"))
-	assert.Equal(t, "platform account only", NoticeText(NoticeCSVPlatformOnly, "Thai"))
-	assert.Equal(t, "platform account only", NoticeText(NoticeCSVPlatformOnly, ""))
+	assert.Equal(t, "线索交付邮件测试", NoticeText(NoticeMailTestSubject, " Simplified Chinese "))
+	assert.Equal(t, "線索交付郵件測試", NoticeText(NoticeMailTestSubject, "Chinese Traditional"))
+	assert.Equal(t, "Lead delivery email test", NoticeText(NoticeMailTestSubject, "Thai"))
+	assert.Equal(t, "Lead delivery email test", NoticeText(NoticeMailTestSubject, ""))
+	assert.Equal(t, "chinese", LanguageKey("Mandarin"))
+	assert.Equal(t, "english", LanguageKey(" English "))
 }
