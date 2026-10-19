@@ -147,6 +147,11 @@ func TestSources_SyncSource_PagesBackwardsAndTracksYield(t *testing.T) {
 	assert.Equal(t, 1, page.Source.QualifiedLeads)
 	assert.Equal(t, 0, page.Source.EmptyStreak, "the previous read produced a qualified lead")
 
+	// The caught-up cooldown would answer the repeats from memory; this loop counts reads
+	// the cooldown has let through.
+	prev := caughtUpCooldown
+	caughtUpCooldown = 0
+	t.Cleanup(func() { caughtUpCooldown = prev })
 	for range 3 {
 		page, err = w.svc.SyncSource(ctx, scope, id, DirectionNewer, 2)
 		require.NoError(t, err)
@@ -752,6 +757,70 @@ func TestSources_ReadMessage_ReturnsTheFullTextWithoutMovingTheCursor(t *testing
 	assert.Equal(t, "2", again.Messages[0].MessageID, "the next page continues where the first stopped")
 	assert.Equal(t, "1", again.Messages[1].MessageID)
 	assert.Equal(t, read+2, again.Source.MessagesRead, "fetching one message is not a page read")
+}
+
+func TestSources_SyncSource_ACaughtUpSourceIsNotReadAgainUntilTheCooldownPasses(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
+	acceptingJev(t, w)
+	id := w.mustAddTelegramGroup(t, scope, tgGroup("396", "quiet", "Quiet"), tgMessage(1, "11", "where to buy one"))
+	conn := w.tg
+
+	prev := caughtUpCooldown
+	caughtUpCooldown = time.Hour
+	t.Cleanup(func() { caughtUpCooldown = prev })
+
+	first, err := w.svc.SyncSources(ctx, scope, []int64{id}, SyncOptions{Direction: DirectionNewer, Limit: 10})
+	require.NoError(t, err)
+	require.NotNil(t, first[0].CaughtUp)
+	require.True(t, *first[0].CaughtUp)
+	reads := conn.Reads
+
+	second, err := w.svc.SyncSources(ctx, scope, []int64{id}, SyncOptions{Direction: DirectionNewer, Limit: 10})
+	require.NoError(t, err)
+	require.NotNil(t, second[0].CaughtUp)
+	assert.True(t, *second[0].CaughtUp)
+	assert.Empty(t, second[0].Messages)
+	assert.Equal(t, reads, conn.Reads, "a caught-up source is answered without another platform read")
+
+	progress, err := w.svc.Progress(ctx, scope)
+	require.NoError(t, err)
+	require.Len(t, progress.Reading, 1)
+	assert.Equal(t, id, progress.Reading[0].SourceID)
+	assert.True(t, progress.Reading[0].CaughtUp)
+
+	w.svc.clearQuiet(scope.UserID, id)
+	_, err = w.svc.SyncSources(ctx, scope, []int64{id}, SyncOptions{Direction: DirectionNewer, Limit: 10})
+	require.NoError(t, err)
+	assert.Equal(t, reads+1, conn.Reads, "once the cooldown is over the source is read again")
+}
+
+func TestSources_SyncSource_AnExhaustedBackReadDoesNotOpenThePlatform(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
+	acceptingJev(t, w)
+	id := w.mustAddTelegramGroup(t, scope, tgGroup("397", "done", "Done"), tgMessage(1, "11", "where to buy one"))
+
+	page, err := w.svc.SyncSource(ctx, scope, id, DirectionOlder, 10)
+	require.NoError(t, err)
+	require.True(t, page.Source.HistoryExhausted)
+	reads := w.tg.Reads
+
+	again, err := w.svc.SyncSource(ctx, scope, id, DirectionOlder, 10)
+	require.NoError(t, err)
+	assert.Empty(t, again.Messages)
+	assert.True(t, again.Source.HistoryExhausted)
+	assert.Equal(t, reads, w.tg.Reads, "a finished back-read does not open the platform")
+
+	progress, err := w.svc.Progress(ctx, scope)
+	require.NoError(t, err)
+	require.Len(t, progress.Reading, 1)
+	assert.Equal(t, id, progress.Reading[0].SourceID)
+	assert.True(t, progress.Reading[0].HistoryExhausted)
 }
 
 func TestSources_SyncSources_WaitsBetweenTwoSourcesOfOneAccount(t *testing.T) {

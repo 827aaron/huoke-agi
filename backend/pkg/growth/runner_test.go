@@ -32,6 +32,10 @@ func (progressStore) GetUserSourceStats(ctx context.Context, _ int64) (database.
 	return database.GetUserSourceStatsRow{}, ctx.Err()
 }
 
+func (progressStore) GetUserAccountSources(ctx context.Context, _ int64) ([]database.AccountSource, error) {
+	return nil, ctx.Err()
+}
+
 func (progressStore) GetUserGrowthSettings(ctx context.Context, _ int64) ([]database.GrowthSetting, error) {
 	return nil, ctx.Err()
 }

@@ -55,6 +55,16 @@ type Progress struct {
 	// customer can clear, such as a missing Jev key.
 	PrescreenFallbacks int    `json:"prescreen_fallback_batches,omitempty"`
 	Warning            string `json:"warning,omitempty"`
+	// Reading lists sources answered without a platform call: the back-read is done, or a
+	// forward read just caught up and is inside its cooldown.
+	Reading []SourceReadState `json:"reading,omitempty"`
+}
+
+// SourceReadState is one source growth_get_progress tells the agent not to read again yet.
+type SourceReadState struct {
+	SourceID         int64 `json:"source_id"`
+	HistoryExhausted bool  `json:"history_exhausted"`
+	CaughtUp         bool  `json:"caught_up"`
 }
 
 // Line is the one line every lead-collecting agent copies into its result; the
@@ -173,7 +183,35 @@ func (s *Service) ProgressSince(ctx context.Context, scope Scope, since time.Tim
 	if p.Sources, err = s.SourceStats(ctx, scope.UserID); err != nil {
 		return p, err
 	}
+	if p.Reading, err = s.readingState(ctx, scope.UserID); err != nil {
+		return p, err
+	}
 	return p, nil
+}
+
+func (s *Service) readingState(ctx context.Context, userID int64) ([]SourceReadState, error) {
+	states, err := s.db.GetUserAccountSources(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read source cursors: %w", err)
+	}
+	out := make([]SourceReadState, 0)
+	seen := map[int64]int{}
+	for _, st := range states {
+		_, quiet := s.quietRemaining(userID, st.SourceID)
+		if !st.HistoryExhausted && !quiet {
+			continue
+		}
+		if i, ok := seen[st.SourceID]; ok {
+			out[i].HistoryExhausted = out[i].HistoryExhausted || st.HistoryExhausted
+			out[i].CaughtUp = out[i].CaughtUp || quiet
+			continue
+		}
+		seen[st.SourceID] = len(out)
+		out = append(out, SourceReadState{
+			SourceID: st.SourceID, HistoryExhausted: st.HistoryExhausted, CaughtUp: quiet,
+		})
+	}
+	return out, nil
 }
 
 // DeliverOptions: HasContact delivers only leads with a contact beside their platform

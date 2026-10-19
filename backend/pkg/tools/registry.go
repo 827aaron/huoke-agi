@@ -510,6 +510,7 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"A result holds as many messages as fit its size limit: when more wait, 'pending' says how many and the read position " +
 			"stays before them, so the next call with the same direction continues there and nothing is skipped. " +
 			"action=message returns one message's full text for an evidence excerpt and does not move the read position. " +
+			"A source whose back-read is done, or that just caught up, is answered without another platform read; growth_get_progress lists those sources. " +
 			"action=user returns a sender's public profile. Web sources are read with the browser tool instead.",
 		Parameters: reflector.Reflect(&GrowthSyncSourceAction{}),
 	},

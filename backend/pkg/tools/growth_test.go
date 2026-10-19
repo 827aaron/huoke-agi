@@ -230,6 +230,17 @@ func TestGrowth_Handle_SyncCutsTheTextAndDropsTheFieldsAPageDoesNotNeed(t *testi
 	assert.Less(t, len(raw), 2000, "400 characters, not the 900 that were read")
 }
 
+func TestGrowth_Handle_SyncTellsTheAgentToSwitchSourceWhenCaughtUp(t *testing.T) {
+	caught := true
+	backend := &fakeGrowthBackend{synced: map[int64]growth.SyncResult{5: {
+		Source: growth.SourceView{ID: 5, Title: "MOBA talk"}, CaughtUp: &caught,
+	}}}
+	out, err := newGrowthTools(backend, 1, 42, nil).Handle(t.Context(), GrowthSyncSourceToolName,
+		json.RawMessage(`{"source_id":5,"direction":"newer"}`))
+	require.NoError(t, err)
+	assert.Contains(t, out, "no new messages; read another source and come back to this one later")
+}
+
 func TestGrowth_Handle_SyncPassesTheUnscoredMark(t *testing.T) {
 	backend := &fakeGrowthBackend{synced: map[int64]growth.SyncResult{5: {
 		Source:   growth.SourceView{ID: 5, Title: "MOBA talk"},

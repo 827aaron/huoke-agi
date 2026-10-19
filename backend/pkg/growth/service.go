@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"pentagi/pkg/config"
 	"pentagi/pkg/database"
@@ -71,6 +72,9 @@ type Service struct {
 	readMu sync.Mutex
 	// lastRead is each account's latest source read: which source, and when it started or is scheduled to.
 	lastRead map[int64]sourceRead
+	// quietUntil is a source a forward read just caught up on: the next forward read before
+	// that time is answered from here, without another platform call.
+	quietUntil map[readQuiet]time.Time
 
 	fallbackMu sync.Mutex
 	// fallbacks tallies per round the pre-screen batches Jev failed on since this process
