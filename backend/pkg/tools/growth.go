@@ -278,6 +278,7 @@ type syncMessage struct {
 	Score          int       `json:"score,omitempty"`
 	Tier           string    `json:"tier,omitempty"`
 	Signals        string    `json:"signals,omitempty"`
+	Unscored       bool      `json:"unscored,omitempty"`
 }
 
 func syncPayload(res growth.SyncResult, direction string) map[string]any {
@@ -323,7 +324,7 @@ func syncMessages(in []growth.MessageView) []syncMessage {
 		out[i] = syncMessage{
 			MessageID: m.MessageID, SenderID: m.SenderID, SenderUsername: m.SenderUsername,
 			SenderName: m.SenderName, Time: m.Time, Link: m.Link, Text: cutRunes(m.Text, syncMessageRunes),
-			Score: m.Score, Tier: m.Tier, Signals: m.Signals,
+			Score: m.Score, Tier: m.Tier, Signals: m.Signals, Unscored: m.Unscored,
 		}
 	}
 	return out

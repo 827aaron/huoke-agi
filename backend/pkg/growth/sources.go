@@ -126,6 +126,9 @@ type MessageView struct {
 	Score   int    `json:"score,omitempty"`
 	Tier    string `json:"tier,omitempty"`
 	Signals string `json:"signals,omitempty"`
+	// Unscored is set when the pre-screen could not judge this message, so it is kept
+	// on its opening lines instead of dropped.
+	Unscored bool `json:"unscored,omitempty"`
 }
 
 // SyncResult is one source's read. Read counts every message the cursor moved past,
@@ -943,6 +946,9 @@ func (s *Service) syncWith(
 	}
 
 	limit := clampLimit(opt.Limit, defaultPageLimit, maxHistoryLimit)
+	if opt.All {
+		limit = min(limit, defaultPageLimit)
+	}
 	telegram := src.Platform == string(connectors.PlatformTelegram)
 	pace := defaultTelegramPace
 	if telegram {

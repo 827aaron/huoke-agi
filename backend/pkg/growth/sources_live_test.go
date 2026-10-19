@@ -416,6 +416,9 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 		if i%10 == 0 {
 			text = fmt.Sprintf("where to buy %d", i)
 		}
+		if i == 1 {
+			text = strings.Repeat("buy ", 150)
+		}
 		msgs = append(msgs, tgMessage(i, fmt.Sprint(100+i), text))
 	}
 	a := w.mustAddTelegramGroup(t, scope, tgGroup("360", "screen_a", "Screen A"), msgs...)
@@ -446,7 +449,16 @@ func TestSources_SyncSources_ReturnsWhatThePreScreenPicks(t *testing.T) {
 	for _, m := range results[0].Messages {
 		ids = append(ids, m.MessageID)
 	}
-	assert.Equal(t, []string{"40", "30", "20", "10", "5", "4", "3", "2", "1"}, ids, "a batch Jev fails on is kept whole")
+	assert.Equal(t, []string{"40", "30", "20", "10", "5", "4", "3", "2", "1"}, ids, "a batch Jev fails on is kept")
+	byID := map[string]MessageView{}
+	for _, m := range results[0].Messages {
+		byID[m.MessageID] = m
+	}
+	for _, id := range []string{"5", "4", "3", "2", "1"} {
+		assert.True(t, byID[id].Unscored, id)
+	}
+	assert.False(t, byID["40"].Unscored)
+	assert.Len(t, []rune(byID["1"].Text), 201, "an unscored message keeps its opening 200 characters")
 	assert.Equal(t, 45, results[0].Read)
 	assert.Equal(t, 36, results[0].Skipped)
 	assert.ErrorIs(t, results[1].Err, ErrSourceNotFound, "a bad id does not stop the batch")
@@ -681,6 +693,31 @@ func TestSources_SyncSource_BoundedForwardReadStopsBeforeThePendingMessages(t *t
 	next := results[0]
 	require.NotEmpty(t, next.Messages)
 	assert.Equal(t, res.NextFrom, next.Messages[len(next.Messages)-1].MessageID, "the next read continues with the first pending message")
+}
+
+func TestSources_SyncSource_AllMessagesReadsAtMostOneDefaultPage(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	scope := w.seedTask(t)
+	w.savePace(t, map[string]string{"read_interval_seconds": "0"})
+	acceptingJev(t, w)
+	msgs := make([]connectors.Message, 0, 40)
+	for i := int64(1); i <= 40; i++ {
+		msgs = append(msgs, tgMessage(i, fmt.Sprint(i), "hello"))
+	}
+	id := w.mustAddTelegramGroup(t, scope, tgGroup("395", "allmsgs", "All"), msgs...)
+
+	first, err := w.svc.SyncSources(ctx, scope, []int64{id}, SyncOptions{Limit: 60, All: true})
+	require.NoError(t, err)
+	require.Len(t, first[0].Messages, 30)
+	assert.Equal(t, 30, first[0].Read)
+	assert.Zero(t, first[0].Skipped)
+	assert.False(t, first[0].Source.HistoryExhausted)
+
+	second, err := w.svc.SyncSources(ctx, scope, []int64{id}, SyncOptions{Limit: 60, All: true})
+	require.NoError(t, err)
+	require.Len(t, second[0].Messages, 10, "the next call continues with what the cap left")
+	assert.True(t, second[0].Source.HistoryExhausted)
 }
 
 func TestSources_ReadMessage_ReturnsTheFullTextWithoutMovingTheCursor(t *testing.T) {

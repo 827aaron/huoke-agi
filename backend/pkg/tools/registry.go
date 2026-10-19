@@ -498,6 +498,7 @@ var registryDefinitions = map[string]llms.FunctionDefinition{
 			"page by page until caught up, which is how a source is monitored. The read position is kept between calls. " +
 			"Only the messages the judgement model (Jev) picks as worth a closer look are returned unless all_messages is true; " +
 			"each has its sender id, username, time, link, its opening 400 characters as text, and its score, tier and signals weighted by the business profile. " +
+			"A message the pre-screen could not judge is marked unscored and shortened to its opening 200 characters. " +
 			"A result holds as many messages as fit its size limit: when more wait, 'pending' says how many and the read position " +
 			"stays before them, so the next call with the same direction continues there and nothing is skipped. " +
 			"action=message returns one message's full text for an evidence excerpt and does not move the read position. " +
