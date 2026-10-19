@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"pentagi/pkg/database"
@@ -128,6 +129,11 @@ func (stc *subtaskController) RefineSubtasks(ctx context.Context) error {
 
 	if len(plan) == 0 {
 		return nil // no subtasks refined
+	}
+	if directive := stc.taskCtx.resumeDirective(ctx, subtasks); directive != "" {
+		for i := range plan {
+			plan[i].Description = strings.TrimSpace(plan[i].Description) + "\n\n" + directive
+		}
 	}
 
 	subtaskIDs := make([]int64, 0, len(subtasks))

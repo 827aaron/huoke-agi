@@ -137,6 +137,7 @@ The refinement context is provided in XML format:
    - Distinguish between failures that can be addressed by reformulation versus fundamental blockers
    - Avoid fixation on repeatedly trying the same approach with minor variations
    - When replanning a failed subtask, fundamentally rethink the approach based on specific failure reasons
+   - Rethinking the approach does not restart a source. If the failed result contains a `RESUME_STATE:` line, the replacement subtask continues after the newest_message_id named there and must say not to read that source from the beginning
    - After 2 failed attempts with similar approaches, explore completely different solution paths
    - Consider alternative methods that avoid the identified obstacles
 

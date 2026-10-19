@@ -138,6 +138,15 @@ func TestTemplates_GetDefaultPrompts_PromptsCarryTheirKeyPhrases(t *testing.T) {
 			forbidden: []string{"nmap", "metasploit", "XSStrike"},
 		},
 		{
+			name:       "the refiner keeps a failed read's place",
+			promptType: templates.PromptTypeSubtasksRefiner,
+			template:   defaultPrompts.AgentsPrompts.Refiner.Human.Template,
+			phrases: []string{
+				"RESUME_STATE:", "newest_message_id", "oldest_message_id",
+				"direction=newer", "direction=older", "from the beginning",
+			},
+		},
+		{
 			name:       "the task assignment wrapper",
 			promptType: templates.PromptTypeTaskAssignmentWrapper,
 			template:   defaultPrompts.ToolsPrompts.TaskAssignmentWrapper.Template,
