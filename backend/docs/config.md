@@ -74,6 +74,7 @@ This document serves as a comprehensive guide to the configuration system in Pen
     - [Sploitus Search](#sploitus-search)
     - [Google Search](#google-search)
     - [Traversaal Search](#traversaal-search)
+    - [Brave Search](#brave-search)
     - [Tavily Search](#tavily-search)
     - [Firecrawl Search](#firecrawl-search)
     - [Perplexity Search](#perplexity-search)
@@ -141,7 +142,7 @@ These web-console features do not replace the environment variables in this guid
 The environment variables documented below remain the source of truth for configuration that is not currently editable from the web console:
 
 - **LLM credentials and connection settings**: API keys, base URLs, auth modes, and provider-specific connection settings for OpenAI, Anthropic, Bedrock, Ollama, custom providers, and similar backends; config-path settings apply only where supported, such as `OLLAMA_SERVER_CONFIG_PATH`, `LLM_SERVER_CONFIG_PATH`, and `BEDROCK_CONFIG_PATH`.
-- **Search provider credentials and options**: DuckDuckGo, Google, Tavily, Traversaal, Perplexity, SearXNG, Sploitus, and related search configuration.
+- **Search provider credentials and options**: DuckDuckGo, Google, Brave, Tavily, Traversaal, Perplexity, SearXNG, Sploitus, and related search configuration.
 - **Third-party integrations**: Langfuse, Graphiti, and other external observability or knowledge services.
 
 ## General Settings
@@ -1731,6 +1732,14 @@ DuckDuckGo needs no key, but it throttles IPs it finds suspicious: it answers `2
 | Option           | Environment Variable | Default Value | Description                          |
 | ---------------- | -------------------- | ------------- | ------------------------------------ |
 | TraversaalAPIKey | `TRAVERSAAL_API_KEY` | *(none)*      | API key for Traversaal search engine |
+
+### Brave Search
+
+| Option      | Environment Variable | Default Value | Description                                            |
+| ----------- | -------------------- | ------------- | ------------------------------------------------------ |
+| BraveAPIKey | `BRAVE_API_KEY`      | *(none)*      | Brave Search API key; a comma-separated list rotates   |
+
+Brave is a link index queried at `api.search.brave.com/res/v1/web/search`, placed just ahead of DuckDuckGo in every chain. A `429` whose exhausted window is the per-second one is retried after the reset Brave reports in `X-RateLimit-Reset`; a `429` on the monthly window is treated as a spent key, which rotates to the next key or falls back to the next engine without retrying.
 
 ### Tavily Search
 

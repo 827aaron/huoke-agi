@@ -107,6 +107,7 @@ var searchTargets = map[string]func(c *config.Config) *string{
 	"perplexity": func(c *config.Config) *string { return &c.PerplexityAPIKey },
 	"firecrawl":  func(c *config.Config) *string { return &c.FirecrawlAPIKey },
 	"traversaal": func(c *config.Config) *string { return &c.TraversaalAPIKey },
+	"brave":      func(c *config.Config) *string { return &c.BraveAPIKey },
 }
 
 var settingSpecs = map[string]settingSpec{
@@ -807,6 +808,7 @@ var (
 	tavilyAPIURL     = "https://api.tavily.com"
 	googleSearchURL  = "https://www.googleapis.com/customsearch/v1"
 	perplexityAPIURL = "https://api.perplexity.ai"
+	braveSearchURL   = "https://api.search.brave.com/res/v1/web/search"
 )
 
 // TestSetting checks the credential a customer's work would run with (saved, else .env)
@@ -1071,6 +1073,14 @@ func probeRequest(ctx context.Context, cfg *config.Config, kind, provider string
 			req, err := get(googleSearchURL + "?" + q.Encode())
 			if err == nil {
 				req.Header.Set("x-goog-api-key", cfg.GoogleAPIKey)
+			}
+			return req, err
+		case "brave":
+			q := url.Values{"q": {"game"}, "count": {"1"}}
+			req, err := get(braveSearchURL + "?" + q.Encode())
+			if err == nil {
+				req.Header.Set("Accept", "application/json")
+				req.Header.Set("X-Subscription-Token", cfg.BraveAPIKey)
 			}
 			return req, err
 		case "perplexity":

@@ -22,10 +22,12 @@ var keyedEngines = map[database.SearchengineType]func(c *config.Config) *string{
 	EngineFirecrawl:  func(c *config.Config) *string { return &c.FirecrawlAPIKey },
 	EngineTraversaal: func(c *config.Config) *string { return &c.TraversaalAPIKey },
 	EnginePerplexity: func(c *config.Config) *string { return &c.PerplexityAPIKey },
+	EngineBrave:      func(c *config.Config) *string { return &c.BraveAPIKey },
 }
 
 func newGoogle(c *config.Config) searchers.Searcher     { return searchers.NewGoogle(c) }
 func newTraversaal(c *config.Config) searchers.Searcher { return searchers.NewTraversaal(c) }
+func newBrave(c *config.Config) searchers.Searcher      { return searchers.NewBrave(c) }
 
 func newFirecrawl(sum searchers.SummarizeHandler) func(*config.Config) searchers.Searcher {
 	return func(c *config.Config) searchers.Searcher { return searchers.NewFirecrawl(c, sum) }
@@ -131,7 +133,7 @@ func markKeySpent(id string, err error) {
 // quotaMarkers are the texts the engines in searchers put in a quota or rate-limit
 // error; the engines classify by status code, not by key, so the text is all there is.
 var quotaMarkers = []string{
-	"HTTP 429",                              // google
+	"HTTP 429",                              // google, brave
 	"there are requesting too many results", // tavily, firecrawl, perplexity on 429
 	"unexpected status code: 429",           // traversaal
 	"insufficient credits",                  // firecrawl on 402

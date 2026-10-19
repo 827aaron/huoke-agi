@@ -41,7 +41,7 @@ var duckduckgoEndpoints = []struct{ origin, path string }{
 // bot-check page instead of results, and a different query will not help.
 var errDuckduckgoThrottled = errors.New("DuckDuckGo is rate-limiting this server's IP and answered " +
 	"with a bot check instead of results; route search through another IP with PROXY_URL, or add " +
-	"another search engine (Google, Tavily, Perplexity, Firecrawl, Traversaal) as a fallback")
+	"another search engine (Tavily, Brave, Perplexity, Firecrawl, Traversaal) as a fallback")
 
 // Region constants for DuckDuckGo search
 const (
